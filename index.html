@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Boss Gauntlet</title>
+<title>Boss Gauntlet - Math Edition</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body {
@@ -25,6 +25,38 @@ canvas {
   width:100%; height:auto; touch-action:none;
 }
 #info { margin-top:5px; font-size:11px; color:#444; text-align:center; padding:0 8px; }
+/* ---- Math Quiz Overlay ---- */
+#mathQuiz {
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.88);
+  align-items:center; justify-content:center;
+  z-index:100; font-family:'Courier New',monospace;
+}
+#mathQuiz.active { display:flex; }
+#mathBox {
+  background:#111; border:2px solid #fff;
+  padding:32px 40px; text-align:center;
+  max-width:340px; width:90%;
+}
+#mathBox h2 { color:#fff; font-size:14px; margin-bottom:8px; letter-spacing:1px; }
+#mathBox p { color:#aaa; font-size:12px; margin-bottom:20px; }
+#mathQuestion { color:#ffe066; font-size:28px; margin-bottom:18px; }
+#mathInput {
+  background:#000; color:#fff; border:2px solid #555;
+  font-family:'Courier New',monospace; font-size:22px;
+  width:100px; text-align:center; padding:6px;
+  outline:none;
+}
+#mathInput:focus { border-color:#fff; }
+#mathSubmit {
+  display:block; margin:16px auto 0;
+  background:#fff; color:#000;
+  font-family:'Courier New',monospace; font-size:14px;
+  border:none; padding:8px 24px; cursor:pointer;
+  letter-spacing:1px;
+}
+#mathSubmit:hover { background:#ffe066; }
+#mathError { color:#ff4444; font-size:12px; margin-top:10px; min-height:16px; }
 /* ---- On-screen controls ---- */
 #controls {
   display:flex; gap:18px; margin-top:10px; margin-bottom:6px;
@@ -70,6 +102,16 @@ canvas {
 </style>
 </head>
 <body>
+<div id="mathQuiz">
+  <div id="mathBox">
+    <h2>* MATH CHECK *</h2>
+    <p>Answer correctly to begin the boss fight.</p>
+    <div id="mathQuestion"></div>
+    <input id="mathInput" type="number" autocomplete="off" autofocus/>
+    <button id="mathSubmit">FIGHT</button>
+    <div id="mathError"></div>
+  </div>
+</div>
 <div id="wrap">
 <canvas id="c" width="600" height="520"></canvas>
 <div id="info">
@@ -849,20 +891,66 @@ function drawFightBox() {
   cx.shadowBlur=0;
 }
 
+// ---- MATH QUIZ --------------------------------------------------
+(function(){
+  const ops = [
+    { sym:'+', fn:(a,b)=>a+b },
+    { sym:'-', fn:(a,b)=>a-b },
+    { sym:'×', fn:(a,b)=>a*b },
+  ];
+  let _pendingIdx = null;
+
+  function showQuiz(idx, onPass) {
+    const op = ops[Math.floor(Math.random()*ops.length)];
+    const a = Math.floor(Math.random()*10)+1;
+    const b = op.sym==='-' ? Math.floor(Math.random()*a)+1 : Math.floor(Math.random()*10)+1;
+    const answer = op.fn(a,b);
+
+    const overlay = document.getElementById('mathQuiz');
+    const qEl     = document.getElementById('mathQuestion');
+    const input   = document.getElementById('mathInput');
+    const errEl   = document.getElementById('mathError');
+    const btn     = document.getElementById('mathSubmit');
+
+    qEl.textContent = a + ' ' + op.sym + ' ' + b + ' = ?';
+    input.value = '';
+    errEl.textContent = '';
+    overlay.classList.add('active');
+    setTimeout(()=>input.focus(),50);
+
+    function attempt() {
+      if(parseInt(input.value,10) === answer) {
+        overlay.classList.remove('active');
+        onPass();
+      } else {
+        errEl.textContent = '* Wrong! Try again.';
+        input.value='';
+        input.focus();
+      }
+    }
+    btn.onclick = attempt;
+    input.onkeydown = e => { if(e.key==='Enter') attempt(); };
+  }
+
+  window._showMathQuiz = showQuiz;
+})();
+
 // ---- GAME LOGIC -------------------------------------------------
 function startFight(idx) {
   if(!gs.unlocked[idx]) return;
-  const boss=BOSSES[idx];
-  gs.bossIdx=idx; gs.boss=boss;
-  gs.bossHP=boss.hp; gs.bossHP2=boss.hp2||0;
-  gs.bossPhase=0; gs.fakeDied=false;
-  gs.projs=[]; gs.php=100; gs.items=5; gs.invTimer=0;
-  gs.reversed=false; gs.invisible=false;
-  gs.menuSel=0; gs.memPos=[];
-  gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
-  gs.fakeDieTimer=0;
-  const box=gs.box; gs.px=box.x+box.w/2; gs.py=box.y+box.h/2;
-  dialogue(boss.ds||['* ...'], startEnemyTurn);
+  window._showMathQuiz(idx, function(){
+    const boss=BOSSES[idx];
+    gs.bossIdx=idx; gs.boss=boss;
+    gs.bossHP=boss.hp; gs.bossHP2=boss.hp2||0;
+    gs.bossPhase=0; gs.fakeDied=false;
+    gs.projs=[]; gs.php=100; gs.items=5; gs.invTimer=0;
+    gs.reversed=false; gs.invisible=false;
+    gs.menuSel=0; gs.memPos=[];
+    gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
+    gs.fakeDieTimer=0;
+    const box=gs.box; gs.px=box.x+box.w/2; gs.py=box.y+box.h/2;
+    dialogue(boss.ds||['* ...'], startEnemyTurn);
+  });
 }
 
 function startEnemyTurn() {
