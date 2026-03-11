@@ -2173,7 +2173,7 @@ function updTitle() {
     } else if(gs.titleSel===1) {
       gs.campaign='s'; gs.state='select'; gs.menuSel=0;
     } else if(gs.titleSel===2) {
-      if(gs.beaten_u[1]) {
+      if(gs.beaten_u[1] || gs.obbyUnlocked[1]) {
         gs.state='obby_select'; gs.obbyMenuSel=0;
       } else {
         sfxDeny();
@@ -2308,7 +2308,7 @@ function drawTitle() {
   tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,176,'#777',11,'center');
 
   // Main menu
-  const obbyUnlk = gs.beaten_u[1];
+  const obbyUnlk = gs.beaten_u[1] || gs.obbyUnlocked[1];
   const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES', obbyUnlk?'🏃  OBBY RUN':'🔒  OBBY RUN','🔑  ENTER CODE'];
   const MENU_C=[null,null,obbyUnlk?'#ff88ff':null,'#ffe066'];
   for(let i=0;i<4;i++){
