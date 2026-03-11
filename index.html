@@ -25,33 +25,6 @@ canvas {
   width:100%; height:auto; touch-action:none;
 }
 #info { margin-top:5px; font-size:11px; color:#444; text-align:center; padding:0 8px; }
-/* ---- Math Quiz Overlay ---- */
-#mathQuiz {
-  display:none; position:fixed; inset:0;
-  background:rgba(0,0,0,0.88);
-  align-items:center; justify-content:center;
-  z-index:100; font-family:'Courier New',monospace;
-}
-#mathQuiz.active { display:flex; }
-#mathBox {
-  background:#111; border:2px solid #fff;
-  padding:32px 40px; text-align:center;
-  max-width:340px; width:90%;
-}
-#mathBox h2 { color:#fff; font-size:14px; margin-bottom:8px; letter-spacing:2px; }
-#mathBox p  { color:#aaa; font-size:12px; margin-bottom:18px; }
-#mathQuestion { color:#ffe066; font-size:17px; margin-bottom:18px; line-height:1.65; white-space:pre-line; }
-.fbtn {
-  background:#111; color:#fff; border:2px solid #555;
-  font-family:'Courier New',monospace; font-size:14px;
-  padding:10px 20px; cursor:pointer; border-radius:6px;
-  transition:background 0.1s, border-color 0.1s;
-  letter-spacing:1px;
-}
-.fbtn:hover { background:#222; border-color:#fff; }
-.fbtn.correct { background:#004400; border-color:#00cc00; color:#00ff88; }
-.fbtn.wrong   { background:#440000; border-color:#cc0000; color:#ff4444; }
-#mathError { color:#ff4444; font-size:12px; margin-top:14px; min-height:16px; white-space:pre-line; }
 /* ---- Username Overlay ---- */
 #nameOverlay {
   display:none; position:fixed; inset:0;
@@ -153,19 +126,6 @@ canvas {
     <div id="nameError"></div>
   </div>
 </div>
-<div id="mathQuiz">
-  <div id="mathBox">
-    <h2>* FLOAT OR SINK? *</h2>
-    <p id="mathSub">Answer all 5 questions correctly to begin the boss fight.</p>
-    <div id="mathQuestion"></div>
-    <div id="mathBtns" style="display:flex;gap:14px;justify-content:center;margin-top:6px;">
-      <button class="fbtn" id="btnFloat">🌊 FLOATS</button>
-      <button class="fbtn" id="btnSink">🪨 SINKS</button>
-    </div>
-    <div id="mathError"></div>
-    <div id="mathProgress" style="margin-top:12px;color:#555;font-size:11px;letter-spacing:1px;"></div>
-  </div>
-</div>
 <div id="wrap">
 <canvas id="c" width="600" height="520"></canvas>
 <div id="info">
@@ -228,7 +188,11 @@ function saveGame() {
 function loadGame() {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (d) { gs.unlocked = d.ul; gs.beaten = d.bt; }
+    if (d) {
+      gs.unlocked = d.ul; gs.beaten = d.bt;
+      while(gs.unlocked.length < 9) gs.unlocked.push(false);
+      while(gs.beaten.length < 9)   gs.beaten.push(false);
+    }
   } catch(e) {}
   gs.username = localStorage.getItem(NAME_KEY) || '';
 }
@@ -253,18 +217,17 @@ async function fbSet(path, arr) {
 }
 
 async function submitScore() {
-  const name  = gs.username;
-  const score = gs.sessionCorrect;
-  const boss  = gs.maxBossReached;
-  gs.sessionCorrect = 0;   // reset immediately so double-calls don't re-submit
+  const name   = gs.username;
+  const boss   = gs.maxBossReached;
+  const beaten = gs.beaten.filter(b=>b).length;
   gs.maxBossReached = -1;
-  if (!name || score <= 0) return;
+  if (!name || boss < 0) return;
 
   const date = new Date().toLocaleDateString();
 
   const [lbQ, lbB] = await Promise.all([fbGet('lb_q'), fbGet('lb_b')]);
 
-  lbQ.push({ n: name, s: score, d: date });
+  lbQ.push({ n: name, s: beaten, d: date });
   lbQ.sort((a, b) => b.s - a.s);
   lbQ.splice(100);
 
@@ -357,6 +320,30 @@ const BOSSES = [
     ds:["* ...","* Every boss. Every attack. ×100.","* This ends here.","* Let's. Go."],
     dw:["* ...","* You did it.","* I don't believe it.","* ...Well done. Champion."],
     atks:['x_hell','x_ultra','x_omega']
+  },
+  {
+    id:'sans15', name:'Sans 15.0', subtitle:'THE REAL FINAL BOSS',
+    color:'#00ffff', ec:'#ffffff',
+    hp:20000, atk:[20,50], phases:[0.85,0.70,0.55,0.40,0.20,0.08],
+    ds:[
+      "* ...15.0.",
+      "* you've beaten every version of me.",
+      "* sans. toriel. chara. markiplier. everything times a hundred.",
+      "* heh.",
+      "* time to find out what i'm REALLY capable of.",
+      "* this is gonna hurt."
+    ],
+    dw:[
+      "* ...",
+      "* heh heh heh...",
+      "* ...not bad.",
+      "* i mean it this time.",
+      "* ...well done, kiddo.",
+      "* you're something else."
+    ],
+    atks:['s15_bones','s15_blasters','s15_blue','s15_rain','s15_flung',
+          's15_diagonal','s15_multi_blasters','s15_flash','s15_circle',
+          's15_wave','s15_gatling','s15_wall','s15_spiral','s15_chaos','s15_finale']
   }
 ];
 
@@ -365,8 +352,8 @@ const gs = {
   state: 'title',   // title|select|cutscene|enemy|player|slider|result|dead|boss_dead|fakedie|win
   frame: 0,
   bossIdx: 0,
-  unlocked: [true,false,false,false,false,false,false,false],
-  beaten:   [false,false,false,false,false,false,false,false],
+  unlocked: [true,false,false,false,false,false,false,false,false],
+  beaten:   [false,false,false,false,false,false,false,false,false],
 
   boss: null,
   bossHP: 0, bossHP2: 0,
@@ -413,8 +400,8 @@ const gs = {
 
   // Player identity & scoring
   username: '',
-  sessionCorrect: 0,   // questions right this run
   maxBossReached: -1,  // highest bossIdx attempted this run
+  flashbangTimer: 0,   // frames remaining of flashbang blindness
   titleSel: 0,         // 0=PLAY 1=LEADERBOARD 2=CHANGE NAME
 
   // Leaderboard cache (populated async from Firebase)
@@ -925,6 +912,241 @@ const AT = {
     AT.x_ultra();   gs.spawnTimer=2;
     AT.mk_troll();  gs.spawnTimer=2;
     AT.imp_grid();  gs.spawnTimer=2;
+  },
+
+  // ---- SANS 15.0 ATTACKS ----
+  // Attack available pool grows with each phase (0–5)
+  s15_bones() {
+    // Rapid multi-bone barrages from all sides, speed scales with phase
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    const p=ph(), spd=3.5+p*0.8;
+    gs.spawnTimer = Math.max(6, 20-p*3);
+    const count = 1 + Math.floor(p/2);
+    for(let i=0;i<count;i++){
+      const offset = (i-(count-1)/2)*32;
+      if(Math.random()<0.5){
+        spawnBone(randBY()+offset, Math.random()<0.5?1:-1, spd);
+      } else {
+        spawnVBone(randBX()+offset, Math.random()<0.5?1:-1, spd);
+      }
+    }
+  },
+  s15_blasters() {
+    // 3+ aimed blasters, spread shot at higher phases
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(12, 30-ph()*4);
+    const p=ph(), sides=2+Math.floor(p/2);
+    for(let i=0;i<sides;i++){
+      const [sx,sy]=randSide();
+      spawnAimedBlaster(sx,sy,3.5+p*0.5,'#00ffff');
+      if(p>=3){
+        const spd=3+p*0.4, [vx,vy]=aimAt(sx,sy,spd);
+        const a=0.35;
+        addP('blaster',sx,sy,vx*Math.cos(a)-vy*Math.sin(a),vx*Math.sin(a)+vy*Math.cos(a),{r:7,col:'#88ffff'});
+        addP('blaster',sx,sy,vx*Math.cos(-a)-vy*Math.sin(-a),vx*Math.sin(-a)+vy*Math.cos(-a),{r:7,col:'#88ffff'});
+      }
+    }
+  },
+  s15_blue() {
+    // Dense blue bone corridor — must stand still or take damage
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 28;
+    const p=ph(), spd=2.8+p*0.4, rows=3+Math.floor(p/2);
+    const gapRow = Math.floor(Math.random()*rows);
+    for(let i=0;i<rows;i++){
+      if(i===gapRow) continue;
+      addP('bone_blue',bx()-20, by_()+18+i*((bh_()-20)/(rows-1)),spd,0,{bw:bw()+40,bh:14,dmg:bossDmg()});
+    }
+  },
+  s15_rain() {
+    // 8–12 bones falling from top simultaneously
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    const p=ph();
+    gs.spawnTimer = Math.max(8, 22-p*3);
+    const count=8+p*1;
+    for(let i=0;i<count;i++){
+      const x=bx()+10+Math.random()*(bw()-20);
+      const spd=3+p*0.5+Math.random()*1.5;
+      spawnVBone(x,1,spd);
+    }
+  },
+  s15_flung() {
+    // 5–8 high-speed aimed bones hurled at player
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    const p=ph();
+    gs.spawnTimer = Math.max(5, 16-p*2);
+    const count=5+Math.floor(p/2);
+    for(let i=0;i<count;i++){
+      const [sx,sy]=randSide(), spd=6+p*0.8+Math.random()*2;
+      const [vx,vy]=aimAt(sx,sy,spd);
+      addP('bone',sx,sy,vx,vy,{bw:68,bh:10,ang:Math.atan2(vy,vx)});
+    }
+  },
+  s15_diagonal() {
+    // Diagonal bone sweeps at rotating angles
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(10, 22-ph()*3);
+    const p=ph(), t=gs.frame*0.035+p*0.5;
+    const spd=3+p*0.5;
+    for(let i=0;i<3+p;i++){
+      const a=t+i*(Math.PI*2/(3+p));
+      const sx=bcx()+Math.cos(a+Math.PI)*(bw()/2+30);
+      const sy=bcy()+Math.sin(a+Math.PI)*(bh_()/2+30);
+      addP('bone',sx,sy,Math.cos(a)*spd,Math.sin(a)*spd,{bw:72,bh:11,ang:a});
+    }
+  },
+  s15_multi_blasters() {
+    // 6+ blasters from all angles around the fight box
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(18, 40-ph()*5);
+    const count=6+ph()*2, spd=3+ph()*0.5;
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2;
+      const dist=bw()*0.75+30;
+      const sx=bcx()+Math.cos(a)*dist, sy=bcy()+Math.sin(a)*dist;
+      spawnAimedBlaster(sx,sy,spd,'#ff88ff');
+    }
+  },
+  s15_flash() {
+    // FLASHBANG: white screen for ~1.4s while bones spawn in darkness
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 120;
+    gs.flashbangTimer = 86;
+    shake(12);
+    // Spawn a barrage of bones during the blindness
+    const p=ph(), spd=3+p*0.6;
+    for(let i=0;i<8+p*2;i++){
+      const y=by_()+15+Math.random()*(bh_()-30);
+      spawnBone(y, Math.random()<0.5?1:-1, spd);
+    }
+    for(let i=0;i<4+p;i++){
+      spawnVBone(bx()+15+Math.random()*(bw()-30), Math.random()<0.5?1:-1, spd);
+    }
+  },
+  s15_circle() {
+    // Ring of blasters contracting toward the center
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(20, 45-ph()*5);
+    const count=8+ph()*2, spd=2.5+ph()*0.4;
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2;
+      const r=bw()*0.7+20;
+      const sx=bcx()+Math.cos(a)*r, sy=bcy()+Math.sin(a)*r;
+      const [vx,vy]=aimAt(sx,sy,spd);
+      addP('blaster',sx,sy,vx,vy,{r:8,col:`hsl(${i*(360/count)},100%,60%)`});
+    }
+  },
+  s15_wave() {
+    // Sine-wave bones from left; counter-wave from right in phase 2+
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(4, 10-ph());
+    const p=ph(), t=gs.frame*0.12, amp=28+p*6, spd=2.5+p*0.4;
+    const y1=bcy()+Math.sin(t)*amp;
+    spawnBone(y1, 1, spd);
+    if(p>=2){
+      const y2=bcy()+Math.sin(t+Math.PI)*amp;
+      spawnBone(y2, -1, spd);
+    }
+    if(p>=4){
+      const y3=bcy()+Math.sin(t+Math.PI/2)*amp;
+      spawnVBone(bx()+bw()/2+Math.sin(t)*40, 1, spd*0.8);
+    }
+  },
+  s15_gatling() {
+    // Rapid fire from all 4 sides cycling quickly
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(3, 8-ph());
+    const p=ph(), spd=3+p*0.5, side=Math.floor(gs.frame/4)%4;
+    if(side===0) spawnBone(randBY(),1,spd);
+    else if(side===1) spawnBone(randBY(),-1,spd);
+    else if(side===2) spawnVBone(randBX(),1,spd);
+    else spawnVBone(randBX(),-1,spd);
+    if(p>=3){ // Additional blasters at high phase
+      if(Math.random()<0.3) spawnAimedBlaster(...randSide(),3+p*0.4,'#ff8800');
+    }
+  },
+  s15_wall() {
+    // Full bone wall from left/right with exactly one random gap
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(24, 50-ph()*5);
+    const p=ph(), rows=7+Math.floor(p/2), gapRow=Math.floor(Math.random()*rows);
+    const spd=2.5+p*0.4, dir=Math.random()<0.5?1:-1;
+    for(let i=0;i<rows;i++){
+      if(i===gapRow) continue;
+      const y=by_()+(i/(rows-1))*bh_();
+      spawnBone(y, dir, spd);
+    }
+  },
+  s15_spiral() {
+    // 3-arm bone spiral rotating from center
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(5, 12-ph()*1.5);
+    const p=ph(), arms=3+Math.floor(p/3), spd=3+p*0.5, t=gs.frame*0.08;
+    for(let i=0;i<arms;i++){
+      const a=t+(i/arms)*Math.PI*2;
+      const dist=bw()*0.45;
+      const sx=bcx()+Math.cos(a)*dist, sy=bcy()+Math.sin(a)*dist;
+      addP('bone',sx,sy,Math.cos(a)*spd,Math.sin(a)*spd,{bw:66,bh:10,ang:a});
+    }
+  },
+  s15_chaos() {
+    // Random mix of multiple attacks simultaneously
+    shake(Math.random()*7);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(5, 14-ph()*2);
+    const picks=['s15_bones','s15_rain','s15_flung','s15_gatling','s15_wave','s15_diagonal'];
+    const chosen=picks[Math.floor(Math.random()*picks.length)];
+    const prevT=gs.spawnTimer;
+    AT[chosen]();
+    gs.spawnTimer=prevT;
+    if(ph()>=4 && Math.random()<0.4) {
+      AT.s15_blasters(); gs.spawnTimer=prevT;
+    }
+    if(ph()>=5 && Math.random()<0.3) {
+      spawnRing(bcx(),bcy(),3,'#ff00ff');
+    }
+  },
+  s15_finale() {
+    // Phase 6 (index 5) only — EVERYTHING simultaneously, constant shake+flash
+    shake(10+Math.random()*6);
+    if(gs.frame%20===0) flash(0.6);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 2;
+    // Bones from all sides
+    spawnBone(randBY(),1,5+Math.random());
+    spawnBone(randBY(),-1,5+Math.random());
+    spawnVBone(randBX(),1,4+Math.random());
+    spawnVBone(randBX(),-1,4+Math.random());
+    // Aimed blasters
+    if(gs.frame%10===0) spawnAimedBlaster(...randSide(),5,'#ff00ff');
+    // Ring bursts every 2s
+    if(gs.frame%120===0) spawnRing(bcx(),bcy(),4,'#ffffff');
+    // Diagonal bones
+    const a=gs.frame*0.06;
+    addP('bone',bcx()+Math.cos(a)*90,bcy()+Math.sin(a)*90,Math.cos(a)*4,Math.sin(a)*4,{bw:60,bh:9,ang:a});
+    // Spiral blasters
+    if(gs.frame%8===0){
+      const a2=gs.frame*0.09+Math.PI;
+      addP('blaster',bcx()+Math.cos(a2)*70,bcy()+Math.sin(a2)*70,
+           Math.cos(a2)*4,Math.sin(a2)*4,{r:7,col:'#00ffff'});
+    }
+    // Occasional flashbang
+    if(gs.frame%240===0) { gs.flashbangTimer=60; shake(15); }
   }
 };
 
@@ -1010,237 +1232,21 @@ function drawFightBox() {
   cx.shadowBlur=0;
 }
 
-// ---- FLOAT OR SINK QUIZ -----------------------------------------
-(function(){
-  // Each entry: { q: question text, a: true=floats false=sinks, fact: explanation }
-  const QUESTIONS = [
-    // --- Tricky material density ---
-    { q:'Pumice is a volcanic rock full of tiny air pockets.\nDoes a chunk of pumice float in water?',
-      a:true,  fact:'Pumice\'s porous structure gives it a density below 1 g/cm³ — it floats, sometimes for years!' },
-    { q:'Osmium is the densest naturally occurring element\n(22.6 g/cm³ — about 22× heavier than water).\nDoes solid osmium float?',
-      a:false, fact:'At 22.6 g/cm³ osmium sinks instantly. It\'s the densest stable element on Earth.' },
-    { q:'Balsa wood has a density of roughly 0.12 g/cm³.\nDoes balsa wood float in liquid mercury (13.6 g/cm³)?',
-      a:true,  fact:'Almost everything floats in mercury! Balsa\'s density is ~100× less than mercury.' },
-    { q:'Gallium is a metal that melts in your hand (29 °C).\nIts density is 5.9 g/cm³. Does solid gallium float in water?',
-      a:false, fact:'Gallium is 5.9× denser than water — it sinks completely.' },
-    { q:'Aerogel is called "frozen smoke" — the lightest\nsolid ever made (~0.002 g/cm³).\nDoes aerogel float on water?',
-      a:true,  fact:'Aerogel is so light it can balance on a soap bubble. It easily floats on water.' },
-    { q:'Ebony is one of the densest woods (1.1–1.2 g/cm³).\nDoes a block of ebony wood float in water?',
-      a:false, fact:'Ebony is denser than water (1.0 g/cm³) — unlike most woods, it actually sinks!' },
-    { q:'Dry ice is solid carbon dioxide with a\ndensity of 1.56 g/cm³.\nDoes dry ice float in water?',
-      a:false, fact:'Dry ice is 1.56× denser than water so it sinks — though it rapidly turns to CO₂ gas.' },
-    { q:'A solid block of aluminum has a density\nof 2.7 g/cm³. Liquid mercury is 13.6 g/cm³.\nDoes solid aluminum float in liquid mercury?',
-      a:true,  fact:'Mercury is so dense that aluminum (2.7 g/cm³) floats on it — even iron floats on mercury!' },
-
-    // --- Shape vs material ---
-    { q:'The same lump of clay can be shaped two ways.\nAs a solid ball it sinks. Shaped into a hollow bowl —\ndoes the clay bowl float?',
-      a:true,  fact:'Shape changes average density! The bowl displaces more water, creating enough buoyant force to float.' },
-    { q:'A steel ship weighs thousands of tonnes.\nDoes it float in water?',
-      a:true,  fact:'Archimedes\' principle: the ship\'s hollow shape displaces water weighing MORE than the ship itself.' },
-    { q:'A steel ball bearing (solid, no air) is dropped\ninto water. Does it float?',
-      a:false, fact:'Without any hollow space, the steel\'s density (~7.9 g/cm³) is far too high to float.' },
-    { q:'A needle placed VERY carefully flat on a\nwater surface — does it float?',
-      a:true,  fact:'Surface tension! Water molecules create a "skin" strong enough to support a steel needle laid flat.' },
-
-    // --- Fruits and everyday surprises ---
-    { q:'An unpeeled orange (with its porous rind)\nis placed in water. Does it float?',
-      a:true,  fact:'The orange rind is full of air pockets, lowering average density below 1 g/cm³.' },
-    { q:'The same orange is now PEELED — no rind.\nDoes the peeled orange float in water?',
-      a:false, fact:'Without the air-filled rind, the orange flesh is slightly denser than water and sinks!' },
-    { q:'A can of DIET soda and a can of REGULAR soda\nare placed in water. Which floats?\n(Answer: Does DIET soda float?)',
-      a:true,  fact:'Diet soda uses artificial sweetener (much less mass than sugar), making it less dense than water.' },
-    { q:'A can of REGULAR soda (with ~40g of sugar)\nis placed in water. Does it float?',
-      a:false, fact:'Dissolved sugar significantly increases the density past 1 g/cm³ — regular soda sinks.' },
-    { q:'A whole, uncooked egg is placed in plain\nfresh water. Does it float?',
-      a:false, fact:'Fresh eggs are slightly denser than fresh water. A floating egg is actually a sign it\'s gone bad!' },
-    { q:'The same egg is placed in VERY salty water\n(like the Dead Sea, ~34% salt). Does it float?',
-      a:true,  fact:'Dissolved salt raises water density above the egg\'s density — making the egg float easily.' },
-    { q:'A lemon is placed in water. Does it float?',
-      a:true,  fact:'Lemons have a spongy, air-filled rind similar to oranges — density stays below 1 g/cm³.' },
-    { q:'A watermelon\'s flesh (no rind) is denser\nthan its average whole density.\nDoes a whole watermelon float?',
-      a:true,  fact:'The thick rind and internal air pockets bring the whole watermelon\'s average density below 1 g/cm³.' },
-
-    // --- Liquids and layering ---
-    { q:'Fresh water (1.00 g/cm³) is slowly poured\ninto a container of salt water (1.03 g/cm³).\nDoes the fresh water float on top?',
-      a:true,  fact:'Less dense fluids float on denser ones. Rivers entering the ocean stay layered for miles!' },
-    { q:'Hot water is less dense than cold water.\nDoes hot water float on top of cold water?',
-      a:true,  fact:'This is why oceans have thermoclines — warm surface water floats on colder, denser deep water.' },
-    { q:'Vegetable oil (0.92 g/cm³) is poured into\nwater (1.00 g/cm³). Does the oil float?',
-      a:true,  fact:'Oil is less dense than water AND doesn\'t mix with it — so it always floats on top.' },
-    { q:'Honey has a density of about 1.4 g/cm³.\nDoes honey float on water?',
-      a:false, fact:'Honey is 40% denser than water — it sinks and sits at the bottom (until it slowly dissolves).' },
-
-    // --- Ice and temperature ---
-    { q:'An ice cube (0.92 g/cm³) is dropped into\nethanol / rubbing alcohol (0.79 g/cm³).\nDoes the ice float in the alcohol?',
-      a:false, fact:'Ice is actually DENSER than alcohol — so it sinks in it, unlike in water. Surprising!' },
-    { q:'A block of ice (density 0.92 g/cm³) is placed\nin liquid mercury (13.6 g/cm³).\nDoes the ice float in mercury?',
-      a:true,  fact:'Almost anything floats in mercury — ice is ~15× less dense than mercury!' },
-    { q:'Water expands when it freezes. This means ice\nis LESS dense than liquid water.\nDoes this make ice float in liquid water?',
-      a:true,  fact:'Correct! Ice is 9% less dense than water. This is rare — most substances sink in their liquid form.' },
-
-    // --- Physics concepts ---
-    { q:'A submarine is designed to both float AND sink.\nWhen its ballast tanks are FILLED with water,\ndoes the submarine float?',
-      a:false, fact:'Filling ballast tanks increases the sub\'s average density above water — it submerges. Pump them out and it rises.' },
-    { q:'Archimedes\' principle says an object floats\nif the weight of water it displaces equals its own weight.\nDoes a 1kg object displacing 1.1kg of water float?',
-      a:true,  fact:'Yes! If displaced water weighs MORE than the object, buoyancy wins and the object floats.' },
-    { q:'A block of wood floats with 90% of its volume\nsubmerged. Is it still floating?',
-      a:true,  fact:'Yes — as long as ANY part stays above the surface, it\'s floating. Density determines how deep it sits.' },
-    { q:'Saturn (the planet) has an average density of\n0.687 g/cm³ — less than water.\nIf you had an ocean big enough, would Saturn float?',
-      a:true,  fact:'Saturn is the only planet in our solar system with a density lower than water — it would technically float!' },
-    { q:'A person holds their breath and fills their\nlungs with air. Does the average human body\nthen become less dense than water?',
-      a:true,  fact:'Lungs full of air lower your average density to just below 1 g/cm³ — that\'s why you can float on your back!' },
-    { q:'A waterlogged piece of driftwood has absorbed\nso much water its pores are completely full.\nDoes it still float?',
-      a:false, fact:'Once all air pockets are filled with water, the wood\'s density exceeds 1 g/cm³ and it sinks.' },
-
-    // --- Advanced / counter-intuitive ---
-    { q:'Titanium has a density of 4.5 g/cm³ — far\nlighter than most metals but still heavier than water.\nDoes a solid titanium rod float in water?',
-      a:false, fact:'At 4.5× the density of water, solid titanium sinks — but its strength-to-weight ratio makes it great for aircraft.' },
-    { q:'A large block of iron (7.9 g/cm³) is shaped\ninto a flat plate and placed on water very gently.\nCan it float due to surface tension?',
-      a:false, fact:'A flat iron plate is too heavy — surface tension can only support tiny, light objects like needles. The plate sinks.' },
-    { q:'Magnesium is a metal with density 1.74 g/cm³.\nDoes solid magnesium float in water?',
-      a:false, fact:'Magnesium at 1.74 g/cm³ is denser than water — it sinks. It also reacts violently with water!' },
-    { q:'Lithium is the lightest metal, density 0.53 g/cm³.\nDoes solid lithium float on water?',
-      a:true,  fact:'Lithium is less dense than water so it floats — but it reacts explosively with water, so you\'d never see it floating calmly!' },
-    { q:'A solid block of pure gold (19.3 g/cm³)\nis placed in water. Does it float?',
-      a:false, fact:'Gold is nearly 20× denser than water — it sinks faster than almost any common material.' },
-    { q:'Paraffin wax (density ~0.9 g/cm³)\nis placed in water. Does it float?',
-      a:true,  fact:'Paraffin wax is slightly less dense than water so it floats — candle wax on water is a real phenomenon.' },
-    { q:'A sealed hollow titanium sphere (average\ndensity 0.5 g/cm³ including the hollow interior)\nis placed in water. Does it float?',
-      a:true,  fact:'Average density is what matters, not material density. The hollow interior brings average density below 1 g/cm³.' },
-    { q:'A neutron star has a density of about\n4×10¹⁷ kg/m³ — incomprehensibly dense.\nWould a teaspoon of neutron star material float?',
-      a:false, fact:'A teaspoon of neutron star material would weigh about a billion tonnes — the most extreme sinking possible!' },
-    { q:'Cork oak bark has a density of 0.12–0.25 g/cm³.\nDoes cork float in liquid gallium (6.1 g/cm³)?',
-      a:true,  fact:'Everything with density under 6.1 g/cm³ floats on gallium. Cork at 0.2 g/cm³ floats easily on it.' },
-    { q:'A sealed block of aerogel coated in wax\n(so water can\'t soak in) has density 0.002 g/cm³.\nDoes it float in liquid mercury?',
-      a:true,  fact:'Aerogel is so light (500× less dense than mercury) it would barely even touch the mercury\'s surface.' },
-
-    // --- Fluid layering & density columns ---
-    { q:'You layer these liquids in order:\nhoney, corn syrup, water, oil, and alcohol.\nDoes the honey float above the water?',
-      a:false, fact:'Honey (1.4 g/cm³) is denser than water — it sinks below it. Density determines layers: honey sits at the bottom.' },
-    { q:'Mercury (13.6 g/cm³), water (1.0), and\nalcohol (0.79) are poured into a container.\nDoes the water float above the mercury?',
-      a:true,  fact:'Yes — water is far less dense than mercury, so it floats on top of mercury (but below the alcohol layer).' },
-    { q:'Supercritical CO₂ (at high pressure/temp)\nhas density ~0.47 g/cm³.\nDoes it float on top of liquid water?',
-      a:true,  fact:'At 0.47 g/cm³, supercritical CO₂ is less than half as dense as water — it floats on it.' },
-    { q:'Deep ocean water at 4 km depth is denser\nthan surface ocean water due to pressure.\nDoes warm surface water float on this cold deep water?',
-      a:true,  fact:'Yes — this stratification (thermocline/halocline) is why deep ocean water almost never mixes with the surface.' },
-
-    // --- Real-world physics scenarios ---
-    { q:'A glass of water is filled to the brim.\nAn ice cube is placed in it — the ice floats.\nWhen the ice melts, does the water overflow?',
-      a:false, fact:'No! Ice floats because it\'s less dense than water. When it melts back to liquid, the volume decreases perfectly — no overflow.' },
-    { q:'A rubber ball is pushed 1 meter underwater\nand released. Does it float back up?',
-      a:true,  fact:'The buoyant force (water pressure pushing up) is greater than gravity — the ball shoots back up rapidly.' },
-    { q:'Two identical cups of water are weighed.\nA heavy steel bolt hanging from a string is\nsubmerged in one cup (not touching the bottom).\nDoes that cup weigh more?',
-      a:true,  fact:'Yes! This is Archimedes: the water pushes up on the bolt AND the bolt pushes down on the water equally — adding measurable weight.' },
-    { q:'A helium balloon is sealed inside a car.\nWhen the car accelerates forward,\ndoes the balloon lean forward or backward?',
-      a:true,  fact:'The balloon floats toward the front! Air inside acts like a heavy fluid — it surges backward, pushing the lighter helium balloon forward.' },
-    { q:'An astronaut opens a water bottle in zero gravity.\nThe water forms a floating sphere.\nIf a bubble of air forms inside the water sphere,\ndoes the air bubble move to the center?',
-      a:false, fact:'In zero-g there\'s no buoyancy — air bubbles don\'t "float" anywhere. They stay wherever placed. Buoyancy requires gravity!' },
-    { q:'A 1kg piece of foam (density 0.05 g/cm³)\nand a 1kg block of lead (density 11.3 g/cm³)\nare both placed in water. Does the foam float?',
-      a:true,  fact:'Both weigh 1kg, but the foam\'s much lower density (and huge volume) displaces far more water than its weight — it floats.' },
-    { q:'A submarine dives to 300m depth. The water\npressure compresses the submarine slightly,\nincreasing its average density.\nDoes this make it harder to return to the surface?',
-      a:true,  fact:'Yes! Deep-diving subs must account for hull compression — it slightly increases density, requiring ballast adjustments to resurface.' },
-    { q:'Crude oil (0.85 g/cm³) is spilled into\nsalt water (1.025 g/cm³). Does the oil float?',
-      a:true,  fact:'This is exactly why oil spills spread across ocean surfaces — oil is always less dense than seawater.' },
-    { q:'A block of wood with a large steel bolt\ndriven through its center sinks when tested.\nThe steel bolt is removed and the hole is sealed.\nDoes the wood float now?',
-      a:true,  fact:'The steel bolt made the combined average density exceed 1 g/cm³. Remove it and the wood\'s own density (~0.6) floats easily.' },
-  ];
-
-  function pick5() {
-    const pool = [...QUESTIONS];
-    const result = [];
-    for (let i = 0; i < 5; i++) {
-      const idx = Math.floor(Math.random() * pool.length);
-      result.push(pool.splice(idx, 1)[0]);
-    }
-    return result;
-  }
-
-  const overlay  = document.getElementById('mathQuiz');
-  const qEl      = document.getElementById('mathQuestion');
-  const errEl    = document.getElementById('mathError');
-  const progEl   = document.getElementById('mathProgress');
-  const subEl    = document.getElementById('mathSub');
-  const btnFloat = document.getElementById('btnFloat');
-  const btnSink  = document.getElementById('btnSink');
-
-  function showQuiz(idx, onPass) {
-    const queue = pick5();
-    let current = 0;
-    let locked = false;
-
-    function loadQ() {
-      const q = queue[current];
-      qEl.textContent = q.q;
-      errEl.textContent = '';
-      progEl.textContent = `Question ${current+1} of 5`;
-      btnFloat.className = 'fbtn';
-      btnSink.className  = 'fbtn';
-      locked = false;
-    }
-
-    function attempt(userSaysFloat) {
-      if (locked) return;
-      locked = true;
-      const q = queue[current];
-      const correct = (userSaysFloat === q.a);
-
-      if (correct) {
-        gs.sessionCorrect++;
-        (userSaysFloat ? btnFloat : btnSink).className = 'fbtn correct';
-        errEl.style.color = '#00ff88';
-        errEl.textContent = '✓ ' + q.fact;
-        setTimeout(() => {
-          current++;
-          if (current >= queue.length) {
-            overlay.classList.remove('active');
-            onPass();
-          } else {
-            loadQ();
-          }
-        }, 1200);
-      } else {
-        (userSaysFloat ? btnFloat : btnSink).className = 'fbtn wrong';
-        errEl.style.color = '#ff4444';
-        errEl.textContent = '✗ Wrong!\n' + q.fact + '\n\nSending you back to the title...';
-        submitScore();   // record whatever was earned this run
-        setTimeout(() => {
-          overlay.classList.remove('active');
-          btnFloat.className = 'fbtn';
-          btnSink.className  = 'fbtn';
-          errEl.textContent = '';
-          errEl.style.color = '#ff4444';
-          gs.state = 'title';
-        }, 2800);
-      }
-    }
-
-    btnFloat.onclick = () => attempt(true);
-    btnSink.onclick  = () => attempt(false);
-
-    overlay.classList.add('active');
-    loadQ();
-  }
-
-  window._showMathQuiz = showQuiz;
-})();
-
 // ---- GAME LOGIC -------------------------------------------------
 function startFight(idx) {
   if(!gs.unlocked[idx]) return;
   gs.maxBossReached = Math.max(gs.maxBossReached, idx);
-  window._showMathQuiz(idx, function(){
-    const boss=BOSSES[idx];
-    gs.bossIdx=idx; gs.boss=boss;
-    gs.bossHP=boss.hp; gs.bossHP2=boss.hp2||0;
-    gs.bossPhase=0; gs.fakeDied=false;
-    gs.projs=[]; gs.php=100; gs.items=5; gs.invTimer=0;
-    gs.reversed=false; gs.invisible=false;
-    gs.menuSel=0; gs.memPos=[];
-    gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
-    gs.fakeDieTimer=0;
-    const box=gs.box; gs.px=box.x+box.w/2; gs.py=box.y+box.h/2;
-    dialogue(boss.ds||['* ...'], startEnemyTurn);
-  });
+  const boss=BOSSES[idx];
+  gs.bossIdx=idx; gs.boss=boss;
+  gs.bossHP=boss.hp; gs.bossHP2=boss.hp2||0;
+  gs.bossPhase=0; gs.fakeDied=false;
+  gs.projs=[]; gs.php=100; gs.items=5; gs.invTimer=0;
+  gs.reversed=false; gs.invisible=false;
+  gs.menuSel=0; gs.memPos=[]; gs.flashbangTimer=0;
+  gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
+  gs.fakeDieTimer=0;
+  const box=gs.box; gs.px=box.x+box.w/2; gs.py=box.y+box.h/2;
+  dialogue(boss.ds||['* ...'], startEnemyTurn);
 }
 
 function startEnemyTurn() {
@@ -1269,7 +1275,7 @@ function confirmSlider() {
   gs.sliderLocked=true;
   gs.sliderShowTimer=50;
   const acc=1-Math.abs(gs.sliderX-0.5)*2;
-  const base=[80,70,90,100,120,130,150,800][gs.bossIdx]||80;
+  const base=[80,70,90,100,120,130,150,800,1500][gs.bossIdx]||80;
   gs.sliderDamage=Math.floor(base*(0.25+acc*1.75));
   sfxConfirm();
 }
@@ -1324,7 +1330,7 @@ function updTitle() {
     sfxConfirm();
     if(gs.titleSel===0) {
       // Reset run stats when starting fresh
-      gs.sessionCorrect=0; gs.maxBossReached=-1;
+      gs.maxBossReached=-1;
       gs.state='select'; gs.menuSel=0;
     } else if(gs.titleSel===1) {
       enterLeaderboard();
@@ -1352,7 +1358,7 @@ function updLeaderboard() {
 }
 function updSelect() {
   if(hit('ArrowUp','KeyW')){ gs.menuSel=Math.max(0,gs.menuSel-1); sfxSelect(); }
-  if(hit('ArrowDown','KeyS')){ gs.menuSel=Math.min(7,gs.menuSel+1); sfxSelect(); }
+  if(hit('ArrowDown','KeyS')){ gs.menuSel=Math.min(8,gs.menuSel+1); sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')){
     if(gs.unlocked[gs.menuSel]){ sfxConfirm(); startFight(gs.menuSel); }
     else sfxDeny();
@@ -1386,10 +1392,11 @@ function updEnemy() {
   gs.px=Math.max(box.x+5,Math.min(box.x+box.w-5,gs.px+dx));
   gs.py=Math.max(box.y+5,Math.min(box.y+box.h-5,gs.py+dy));
   if(gs.invTimer>0) gs.invTimer--;
+  if(gs.flashbangTimer>0){ gs.flashbangTimer--; gs.flashA=1.0; }
   const atk=AT[gs.attackName]; if(atk) atk();
   updateProjs();
   gs.shakeX*=0.75; gs.shakeY*=0.75;
-  if(gs.flashA>0) gs.flashA=Math.max(0,gs.flashA-0.025);
+  if(gs.flashbangTimer<=0&&gs.flashA>0) gs.flashA=Math.max(0,gs.flashA-0.025);
   gs.attackTimer--;
   if(gs.attackTimer<=0) startPlayerTurn();
 }
@@ -1473,14 +1480,14 @@ function drawLeaderboard() {
     return;
   }
 
-  const bossNames=['Sans','Toriel','???','Sans+Pap','Asgore+Tor','Chara','Markiplier','×100','—'];
+  const bossNames=['Sans','Toriel','???','Sans+Pap','Asgore+Tor','Chara','Markiplier','×100','Sans 15.0','—'];
   const lbQ = gs.lbCache.q;
   const lbB = gs.lbCache.b;
 
   // Left panel — Most Correct
   const lx=18, rx=W/2+8, py_=54, rh=40, pw=W/2-26;
   fr(lx,py_,pw,22,'#1a1a1a'); sr(lx,py_,pw,22,'#555',1);
-  tx('MOST QUESTIONS CORRECT',lx+pw/2,py_+15,'#ffe066',11,'center');
+  tx('MOST BOSSES BEATEN',lx+pw/2,py_+15,'#ffe066',11,'center');
 
   for(let i=0;i<10;i++){
     const e=lbQ[i];
@@ -1494,7 +1501,7 @@ function drawLeaderboard() {
       // Truncate long names
       const nm=e.n.length>14?e.n.substring(0,13)+'…':e.n;
       tx(nm,        lx+38, ey+25, '#fff',  12);
-      tx(`${e.s} ✓`,lx+pw-6,ey+25,'#00ff88',12,'right');
+      tx(`${e.s}/9 ✓`,lx+pw-6,ey+25,'#00ff88',12,'right');
     } else {
       tx('—',lx+pw/2,ey+25,'#333',11,'center');
     }
@@ -1515,8 +1522,8 @@ function drawLeaderboard() {
       tx(medal,       rx+4,  ey+25, nc,     12);
       const nm=e.n.length>13?e.n.substring(0,12)+'…':e.n;
       tx(nm,          rx+38, ey+25,'#fff',  12);
-      const bn=e.b>=0?(e.b===7?'ALL DONE!':'Boss '+(e.b+1)+': '+bossNames[e.b]):'—';
-      const bc=e.b===7?'#ffd700':e.b>=5?'#ff4444':e.b>=3?'#ff8800':'#aaa';
+      const bn=e.b>=0?(e.b===8?'ALL DONE!':'Boss '+(e.b+1)+': '+bossNames[e.b]):'—';
+      const bc=e.b===8?'#ffd700':e.b>=6?'#ff4444':e.b>=3?'#ff8800':'#aaa';
       tx(bn,          rx+pw-6,ey+25,bc,11,'right');
     } else {
       tx('—',rx+pw/2,ey+25,'#333',11,'center');
@@ -1538,10 +1545,10 @@ function drawTitle() {
   const hue=gs.frame%360;
   cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=22; cx.shadowColor=cx.fillStyle;
   cx.fillText('BOSS GAUNTLET',W/2,130); cx.shadowBlur=0; cx.restore();
-  tx('8 Bosses. Progressive Unlocks. Undertale-style.',W/2,170,'#999',14,'center');
+  tx('9 Bosses. Progressive Unlocks. Undertale-style.',W/2,170,'#999',14,'center');
 
   const beaten=gs.beaten.filter(b=>b).length;
-  tx(`Progress: ${beaten} / 8 bosses cleared`,W/2,210,'#777',13,'center');
+  tx(`Progress: ${beaten} / 9 bosses cleared`,W/2,210,'#777',13,'center');
   if(gs.username) tx(`Player: ${gs.username}`,W/2,232,'#ffe066',12,'center');
 
   // Main menu
@@ -1555,17 +1562,16 @@ function drawTitle() {
   }
 
   tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,445,'#444',11,'center');
-  tx('Answer 5 float-or-sink questions before each boss!',W/2,465,'#4488ff',11,'center');
-  tx('Wrong answer = back to title screen.',W/2,483,'#ff6666',11,'center');
+  tx('Boss 9 — Sans 15.0 — awaits the worthy.',W/2,465,'#00ffff',11,'center');
 }
 
 function drawSelect() {
   fr(0,0,W,H,'#000');
   tx('SELECT BOSS',W/2,34,'#fff',20,'center');
   tx('↑ ↓ to navigate   Z / Enter to fight   X / Esc back',W/2,56,'#666',12,'center');
-  for(let i=0;i<8;i++){
+  for(let i=0;i<9;i++){
     const b=BOSSES[i], lk=!gs.unlocked[i], bt=gs.beaten[i], sel=gs.menuSel===i;
-    const bx_=70, by__=72+i*54, bw_=460, bh_=48;
+    const bx_=70, by__=72+i*50, bw_=460, bh_=44;
     fr(bx_,by__,bw_,bh_,sel?'#111833':lk?'#050505':'#0d0d0d');
     sr(bx_,by__,bw_,bh_,sel?'#fff':bt?'#ffaa00':'#2a2a2a',sel?2:1);
     if(sel&&!lk) tx('❤',bx_+8,by__+31,'#ff4444',15);
@@ -1696,13 +1702,14 @@ function drawWin() {
   const hue=gs.frame%360;
   cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=28; cx.shadowColor=cx.fillStyle;
   cx.fillText('YOU WIN!!!',W/2,130); cx.shadowBlur=0; cx.restore();
-  tx('You defeated ALL 8 bosses!',W/2,180,'#fff',16,'center');
+  tx('You defeated ALL 9 bosses!',W/2,180,'#fff',16,'center');
   cx.save(); cx.font="bold 22px 'Courier New',monospace"; cx.textAlign='center';
-  cx.fillStyle='#ffd700'; cx.fillText('✦ TRUE CHAMPION ✦',W/2,218); cx.restore();
-  const bnames=['Hard Sans','Story','Troll Hard','Double Boss','Double Story','Impossible','Markiplier','100× Everything'];
-  for(let i=0;i<8;i++){
-    const x=i<4?W/2-120:W/2+20, y=268+((i%4)*26);
-    tx(`★ ${bnames[i]}`,x,y,'#88ff88',13);
+  cx.fillStyle='#00ffff'; cx.shadowBlur=16; cx.shadowColor='#00ffff';
+  cx.fillText('✦ TRUE CHAMPION — SANS 15.0 SLAIN ✦',W/2,218); cx.shadowBlur=0; cx.restore();
+  const bnames=['Hard Sans','Story','Troll Hard','Double Boss','Double Story','Impossible','Markiplier','100× Everything','Sans 15.0'];
+  for(let i=0;i<9;i++){
+    const x=i<5?W/2-130:W/2+20, y=250+((i%5)*26);
+    tx(`★ ${bnames[i]}`,x,y,i===8?'#00ffff':'#88ff88',13);
   }
   if(Math.floor(gs.frame/25)%2===0)
     tx('Press Z to return to title',W/2,H-24,'#aaa',13,'center');
