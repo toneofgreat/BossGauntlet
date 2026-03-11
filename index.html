@@ -167,7 +167,8 @@ const SAVE_KEY = 'bossGauntlet_v1';
 function saveGame() {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
     ul_u: gs.unlocked_u, bt_u: gs.beaten_u,
-    ul_s: gs.unlocked_s, bt_s: gs.beaten_s
+    ul_s: gs.unlocked_s, bt_s: gs.beaten_s,
+    ob_u: gs.obbyUnlocked, ob_b: gs.obbyBeaten
   }));
 }
 function loadGame() {
@@ -177,6 +178,7 @@ function loadGame() {
       if(d.ul_u){ gs.unlocked_u=d.ul_u; gs.beaten_u=d.bt_u; }
       else if(d.ul){ gs.unlocked_u=d.ul; gs.beaten_u=d.bt; } // migrate old saves
       if(d.ul_s){ gs.unlocked_s=d.ul_s; gs.beaten_s=d.bt_s; }
+      if(d.ob_u){ gs.obbyUnlocked=d.ob_u; gs.obbyBeaten=d.ob_b; }
       while(gs.unlocked_u.length<9) gs.unlocked_u.push(false);
       while(gs.beaten_u.length<9)   gs.beaten_u.push(false);
       while(gs.unlocked_s.length<6) gs.unlocked_s.push(false);
@@ -373,6 +375,25 @@ const BOSSES_S = [
   }
 ];
 
+// ---- OBBY LEVELS --------------------------------------------------
+const OBBY_LEVELS = [
+  {name:'Flowey',       color:'#ffff44',ec:'#ffff00',subtitle:'still half asleep...',   spd:0.8, fr:90, dur:600 },
+  {name:'Napstablook',  color:'#888888',ec:'#aaaaaa',subtitle:'...not terrible',        spd:1.0, fr:75, dur:660 },
+  {name:'Monster Kid',  color:'#ff8844',ec:'#ffaa66',subtitle:'whoa dude!!',            spd:1.2, fr:68, dur:720 },
+  {name:'Papyrus',      color:'#ffffff',ec:'#ffcccc',subtitle:'NYEH HEH HEH!',          spd:1.4, fr:60, dur:720 },
+  {name:'Muffet',       color:'#dd44ff',ec:'#ff88ff',subtitle:'Teeheehee~',             spd:1.6, fr:54, dur:780 },
+  {name:'Mettaton',     color:'#ff44aa',ec:'#ff88cc',subtitle:'\u266a RATINGS! \u266a', spd:1.8, fr:48, dur:780 },
+  {name:'Undyne',       color:'#44aaff',ec:'#88ccff',subtitle:'NGAAAH!!',               spd:2.1, fr:42, dur:840 },
+  {name:'Asgore',       color:'#ee8800',ec:'#ffaa44',subtitle:'CEASE FIRE!!!',          spd:2.3, fr:38, dur:900 },
+  {name:'Chara',        color:'#aa0000',ec:'#ff4444',subtitle:'...',                    spd:2.6, fr:32, dur:960 },
+  {name:'Omega Flowey', color:'#00ff44',ec:'#88ff88',subtitle:'YOU IDIOT.',             spd:2.7, fr:28, dur:1020},
+  {name:'Error Sans',   color:'#4444ff',ec:'#8888ff',subtitle:'StOp.',                 spd:2.9, fr:24, dur:1080},
+  {name:'Ink Sans',     color:'#ff8800',ec:'#ffcc44',subtitle:'STAY DETERMINED',        spd:3.1, fr:20, dur:1080},
+  {name:'Gaster',       color:'#aaaaaa',ec:'#ffffff',subtitle:'\u2593\u2591\u2592',     spd:3.4, fr:17, dur:1200},
+  {name:'True Chara',   color:'#ff0000',ec:'#ff8888',subtitle:'ERASE.',                spd:3.7, fr:13, dur:1200},
+  {name:'THE WORLD',    color:'#ff00ff',ec:'#ffffff',subtitle:'YOUR WORST NIGHTMARE',  spd:4.5, fr:9,  dur:1440},
+];
+
 // ---- GAME STATE ---------------------------------------------------
 const gs = {
   state: 'title',   // title|select|cutscene|enemy|player|slider|result|dead|boss_dead|fakedie|win
@@ -429,7 +450,17 @@ const gs = {
   fakeDieTimer: 0,
 
   flashbangTimer: 0,   // frames remaining of flashbang blindness
-  titleSel: 0,         // 0=UNDERTALE 1=SPACE MARINES
+  titleSel: 0,         // 0=UNDERTALE 1=SPACE MARINES 2=OBBY RUN 3=ENTER CODE
+
+  // Obby Run mode
+  obbyLevel: 0,
+  obbyBeaten:   [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+  obbyUnlocked: [true, false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+  obbyMenuSel: 0,
+  obbyHP: 3, obbyMaxHP: 3, obbyInv: 0,
+  obbyTimer: 0, obbyFrame: 0, obbyDeathTimer: 0,
+  obbyBx: 60, obbyBy: 60,
+  obbyProjs: [], obbySpawnT: 0,
 };
 
 function bossArr(){ return gs.campaign==='s' ? BOSSES_S : BOSSES; }
@@ -1737,19 +1768,416 @@ function dealDamageToBoss(dmg) {
   }
 }
 
+// ---- OBBY HELPERS -------------------------------------------------
+function obbyLvl() { return OBBY_LEVELS[gs.obbyLevel]; }
+function startObby(level) {
+  gs.obbyLevel = level;
+  const lv = obbyLvl();
+  gs.obbyHP = gs.obbyMaxHP = 3;
+  gs.obbyInv = 0;
+  gs.obbyTimer = lv.dur;
+  gs.obbyFrame = 0;
+  gs.obbyProjs = [];
+  gs.obbySpawnT = lv.fr;
+  gs.obbyDeathTimer = 0;
+  // Boss starts at top-left, player at bottom-right
+  gs.obbyBx = 60; gs.obbyBy = 60;
+  gs.px = 540; gs.py = 460;
+  gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
+  gs.state = 'obby';
+}
+
+function spawnObbyProj(bx, by, vx, vy, type, opts) {
+  gs.obbyProjs.push(Object.assign({x:bx,y:by,vx,vy,type,life:0},opts||{}));
+}
+function obbyAim(bx,by,spd) {
+  const dx=gs.px-bx, dy=gs.py-by, d=Math.sqrt(dx*dx+dy*dy)||1;
+  return [(dx/d)*spd,(dy/d)*spd];
+}
+function obbyAttack() {
+  const lv = obbyLvl(), lv_=gs.obbyLevel, bx=gs.obbyBx, by=gs.obbyBy;
+  gs.obbySpawnT = lv.fr;
+  const spd=3.5+lv_*0.2;
+  if(lv_===0) {
+    // Flowey: single aimed bullet
+    const [vx,vy]=obbyAim(bx,by,spd*0.8);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:7,col:'#ffff44'});
+  } else if(lv_===1) {
+    // Napstablook: slow drifting 3-way
+    for(let i=-1;i<=1;i++){
+      const [vx,vy]=obbyAim(bx,by,spd*0.7);
+      spawnObbyProj(bx,by,vx+i*0.8,vy,  'bullet',{r:6,col:'#888888'});
+    }
+  } else if(lv_===2) {
+    // Monster Kid: scatter 5-way
+    for(let i=-2;i<=2;i++){
+      const [vx,vy]=obbyAim(bx,by,spd*0.9);
+      spawnObbyProj(bx,by,vx+i*1.1,vy+i*0.3,'bullet',{r:5,col:'#ff8844'});
+    }
+  } else if(lv_===3) {
+    // Papyrus: 2 horizontal bones
+    spawnObbyProj(bx,by,spd,0,'bone',{bw:80,bh:12});
+    spawnObbyProj(bx,by+30,spd*0.9,0,'bone',{bw:80,bh:12});
+  } else if(lv_===4) {
+    // Muffet: 6-way spider spread
+    for(let i=0;i<6;i++){
+      const a=(i/6)*Math.PI*2;
+      spawnObbyProj(bx,by,Math.cos(a)*spd,Math.sin(a)*spd,'bullet',{r:7,col:'#dd44ff'});
+    }
+  } else if(lv_===5) {
+    // Mettaton: 8-way star + aimed
+    for(let i=0;i<8;i++){
+      const a=(i/8)*Math.PI*2;
+      spawnObbyProj(bx,by,Math.cos(a)*(spd*0.9),Math.sin(a)*(spd*0.9),'bullet',{r:6,col:'#ff44aa'});
+    }
+    const [vx,vy]=obbyAim(bx,by,spd*1.2);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:9,col:'#ffffff'});
+  } else if(lv_===6) {
+    // Undyne: aimed spear (fast bone) + flanking
+    const [vx,vy]=obbyAim(bx,by,spd*1.5);
+    spawnObbyProj(bx,by,vx,vy,'bone',{bw:70,bh:10,ang:Math.atan2(vy,vx)});
+    const a2=Math.atan2(vy,vx)+0.5;
+    spawnObbyProj(bx,by,Math.cos(a2)*spd,Math.sin(a2)*spd,'bone',{bw:60,bh:10,ang:a2});
+    const a3=Math.atan2(vy,vx)-0.5;
+    spawnObbyProj(bx,by,Math.cos(a3)*spd,Math.sin(a3)*spd,'bone',{bw:60,bh:10,ang:a3});
+  } else if(lv_===7) {
+    // Asgore: triangle (3-way) + rings
+    for(let i=0;i<3;i++){
+      const [vx,vy]=obbyAim(bx,by,spd);
+      const a=Math.atan2(vy,vx)+(i-1)*0.45;
+      spawnObbyProj(bx,by,Math.cos(a)*spd,Math.sin(a)*spd,'bullet',{r:8,col:'#ee8800'});
+    }
+    gs.obbyProjs.push({x:bx,y:by,vx:0,vy:0,type:'ring',r:10,col:'#ee8800',life:0,
+      upd:p=>{ p.r+=3; if(p.r>180)p.dead=true; }});
+  } else if(lv_===8) {
+    // Chara: precise aimed + 2 silent flankers
+    const [vx,vy]=obbyAim(bx,by,spd*1.4);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:10,col:'#aa0000'});
+    const ang=Math.atan2(vy,vx);
+    spawnObbyProj(bx,by,Math.cos(ang+0.3)*spd,Math.sin(ang+0.3)*spd,'bullet',{r:7,col:'#880000'});
+    spawnObbyProj(bx,by,Math.cos(ang-0.3)*spd,Math.sin(ang-0.3)*spd,'bullet',{r:7,col:'#880000'});
+  } else if(lv_===9) {
+    // Omega Flowey: 12-way ring burst + aimed
+    for(let i=0;i<12;i++){
+      const a=(i/12)*Math.PI*2;
+      spawnObbyProj(bx,by,Math.cos(a)*spd,Math.sin(a)*spd,'bullet',{r:6,col:'#00ff44'});
+    }
+    const [vx,vy]=obbyAim(bx,by,spd*1.5);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:10,col:'#ffffff'});
+  } else if(lv_===10) {
+    // Error Sans: glitch - random positions near player, aimed
+    for(let i=0;i<4;i++){
+      const rx=gs.px+(Math.random()-0.5)*120, ry=gs.py+(Math.random()-0.5)*120;
+      const [vx,vy]=obbyAim(rx,ry,spd*1.2);
+      spawnObbyProj(rx,ry,vx,vy,'bullet',{r:7,col:'#4444ff'});
+    }
+    // Also aimed from boss
+    const [vx2,vy2]=obbyAim(bx,by,spd*1.5);
+    spawnObbyProj(bx,by,vx2,vy2,'bone',{bw:72,bh:11,ang:Math.atan2(vy2,vx2)});
+  } else if(lv_===11) {
+    // Ink Sans: colorful splash + aimed burst
+    for(let i=0;i<10;i++){
+      const a=(i/10)*Math.PI*2+gs.obbyFrame*0.05;
+      spawnObbyProj(bx,by,Math.cos(a)*spd,Math.sin(a)*spd,'bullet',{r:6,col:`hsl(${i*36},100%,60%)`});
+    }
+    const [vx,vy]=obbyAim(bx,by,spd*1.6);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:11,col:'#ffffff'});
+  } else if(lv_===12) {
+    // Gaster: 2 hand blasters from offset positions + 16-way burst
+    spawnObbyProj(bx-60,by,  ...obbyAim(bx-60,by,spd*1.3),'bullet',{r:9,col:'#aaaaaa'});
+    spawnObbyProj(bx+60,by,  ...obbyAim(bx+60,by,spd*1.3),'bullet',{r:9,col:'#aaaaaa'});
+    for(let i=0;i<16;i++){
+      const a=(i/16)*Math.PI*2;
+      spawnObbyProj(bx,by,Math.cos(a)*(spd*0.8),Math.sin(a)*(spd*0.8),'bullet',{r:5,col:'#ffffff'});
+    }
+  } else if(lv_===13) {
+    // True Chara: everything at once, fast
+    for(let i=0;i<8;i++){
+      const a=(i/8)*Math.PI*2;
+      spawnObbyProj(bx,by,Math.cos(a)*spd*1.1,Math.sin(a)*spd*1.1,'bullet',{r:8,col:'#ff0000'});
+    }
+    const [vx,vy]=obbyAim(bx,by,spd*2);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:13,col:'#ff4444'});
+    for(let i=0;i<3;i++){
+      const [vx2,vy2]=obbyAim(bx,by,spd*1.5);
+      const ang=Math.atan2(vy2,vx2)+(i-1)*0.3;
+      spawnObbyProj(bx,by,Math.cos(ang)*spd*1.5,Math.sin(ang)*spd*1.5,'bone',{bw:70,bh:10,ang});
+    }
+  } else {
+    // THE WORLD (lv_===14): absolute chaos, every frame is agony
+    // 20-way burst
+    for(let i=0;i<20;i++){
+      const a=(i/20)*Math.PI*2+gs.obbyFrame*0.08;
+      spawnObbyProj(bx,by,Math.cos(a)*spd,Math.sin(a)*spd,'bullet',{r:7,col:`hsl(${i*18+gs.obbyFrame*3},100%,60%)`});
+    }
+    // Fast aimed
+    const [vx,vy]=obbyAim(bx,by,spd*2.2);
+    spawnObbyProj(bx,by,vx,vy,'bullet',{r:14,col:'#ffffff'});
+    // Glitch positions
+    for(let i=0;i<3;i++){
+      const rx=Math.random()*600,ry=Math.random()*520;
+      const [vx2,vy2]=obbyAim(rx,ry,spd*1.5);
+      spawnObbyProj(rx,ry,vx2,vy2,'bullet',{r:8,col:'#ff00ff'});
+    }
+    // Rings
+    gs.obbyProjs.push({x:bx,y:by,vx:0,vy:0,type:'ring',r:10,col:'#ff00ff',life:0,
+      upd:p=>{ p.r+=4; if(p.r>200)p.dead=true; }});
+  }
+}
+
+function updObbySelect() {
+  if(hit('ArrowUp','KeyW')){ gs.obbyMenuSel=Math.max(0,gs.obbyMenuSel-1); sfxSelect(); }
+  if(hit('ArrowDown','KeyS')){ gs.obbyMenuSel=Math.min(14,gs.obbyMenuSel+1); sfxSelect(); }
+  if(hit('KeyZ','Enter')||hit('Space')){
+    if(gs.obbyUnlocked[gs.obbyMenuSel]){ sfxConfirm(); startObby(gs.obbyMenuSel); }
+    else sfxDeny();
+  }
+  if(hit('KeyX','Escape')){ gs.state='title'; }
+}
+
+function updObby() {
+  const spd=3.5;
+  let dx=0, dy=0;
+  if(dn('ArrowLeft','KeyA'))  dx-=spd;
+  if(dn('ArrowRight','KeyD')) dx+=spd;
+  if(dn('ArrowUp','KeyW'))    dy-=spd;
+  if(dn('ArrowDown','KeyS'))  dy+=spd;
+  gs.px=Math.max(8,Math.min(W-8,gs.px+dx));
+  gs.py=Math.max(8,Math.min(H-8,gs.py+dy));
+
+  gs.obbyFrame++;
+  if(gs.obbyInv>0) gs.obbyInv--;
+  gs.shakeX*=0.8; gs.shakeY*=0.8;
+  if(gs.flashA>0) gs.flashA=Math.max(0,gs.flashA-0.03);
+
+  // Boss chases player
+  const lv=obbyLvl();
+  const bdx=gs.px-gs.obbyBx, bdy=gs.py-gs.obbyBy;
+  const bd=Math.sqrt(bdx*bdx+bdy*bdy)||1;
+  gs.obbyBx+=( bdx/bd)*lv.spd;
+  gs.obbyBy+=(bdy/bd)*lv.spd;
+
+  // Boss touches player
+  if(gs.obbyInv<=0){
+    const dist2=(gs.px-gs.obbyBx)**2+(gs.py-gs.obbyBy)**2;
+    if(dist2<(30+8)**2){
+      gs.obbyHP--;
+      gs.obbyInv=90;
+      gs.shakeX=8; gs.shakeY=8; gs.flashA=0.4;
+      sfxHit();
+      if(gs.obbyHP<=0){ gs.state='obby_dead'; gs.obbyDeathTimer=180; sfxDie(); return; }
+    }
+  }
+
+  // Spawn attack
+  gs.obbySpawnT--;
+  if(gs.obbySpawnT<=0) obbyAttack();
+
+  // Update projectiles
+  const np=[];
+  for(const p of gs.obbyProjs){
+    if(p.upd) p.upd(p);
+    p.x+=p.vx; p.y+=p.vy; p.life++;
+    if(p.dead||p.x<-150||p.x>W+150||p.y<-150||p.y>H+150){ continue; }
+
+    // Hit player
+    if(gs.obbyInv<=0){
+      let hit_=false;
+      const dx_=p.x-gs.px, dy_=p.y-gs.py;
+      if(p.type==='bone'){
+        const cosA=Math.cos(-(p.ang||0)), sinA=Math.sin(-(p.ang||0));
+        const rx=cosA*dx_-sinA*dy_, ry=sinA*dx_+cosA*dy_;
+        hit_=Math.abs(rx)<(p.bw||70)/2+5 && Math.abs(ry)<(p.bh||12)/2+5;
+      } else if(p.type==='ring'){
+        const d=Math.sqrt(dx_*dx_+dy_*dy_);
+        hit_=Math.abs(d-p.r)<10;
+      } else {
+        hit_=dx_*dx_+dy_*dy_<((p.r||7)+6)**2;
+      }
+      if(hit_){
+        gs.obbyHP--;
+        gs.obbyInv=90;
+        gs.shakeX=6; gs.shakeY=6; gs.flashA=0.35;
+        sfxHit();
+        p.dead=true;
+        if(gs.obbyHP<=0){ gs.state='obby_dead'; gs.obbyDeathTimer=180; sfxDie(); return; }
+      }
+    }
+    np.push(p);
+  }
+  gs.obbyProjs=np;
+
+  // Countdown
+  gs.obbyTimer--;
+  if(gs.obbyTimer<=0){
+    // WIN
+    gs.obbyBeaten[gs.obbyLevel]=true;
+    if(gs.obbyLevel+1<15) gs.obbyUnlocked[gs.obbyLevel+1]=true;
+    saveGame(); sfxWin();
+    gs.state='obby_clear';
+  }
+}
+
+function updObbyDead() {
+  gs.obbyDeathTimer--;
+  gs.shakeX*=0.9; gs.shakeY*=0.9; gs.flashA=Math.max(0,gs.flashA-0.02);
+  if(gs.obbyDeathTimer<120&&hit('KeyR')){ startObby(gs.obbyLevel); return; }
+  if(gs.obbyDeathTimer<120&&(hit('KeyZ','Enter')||hit('Space'))){ gs.state='obby_select'; }
+  if(gs.obbyDeathTimer<120&&hit('KeyX','Escape')){ gs.state='title'; }
+}
+
+function updObbyClear() {
+  if(hit('KeyZ','Enter')||hit('Space')) gs.state='obby_select';
+  if(hit('KeyX','Escape')) gs.state='title';
+}
+
+function drawObbySelect() {
+  fr(0,0,W,H,'#000');
+  tx('OBBY RUN — SELECT LEVEL',W/2,30,'#ff88ff',18,'center');
+  tx('↑ ↓  Z/Enter to run  X/Esc back',W/2,52,'#555',11,'center');
+  const beaten=gs.obbyBeaten.filter(b=>b).length;
+  tx(`Cleared: ${beaten}/15`,W/2,68,'#777',11,'center');
+  for(let i=0;i<15;i++){
+    const lv=OBBY_LEVELS[i];
+    const lk=!gs.obbyUnlocked[i], bt=gs.obbyBeaten[i], sel=gs.obbyMenuSel===i;
+    const bx_=50, by__=82+i*28, bw_=500, bh_=25;
+    fr(bx_,by__,bw_,bh_,sel?'#1a0a2a':lk?'#050505':'#0d0d0d');
+    sr(bx_,by__,bw_,bh_,sel?'#ff88ff':bt?'#88ff88':'#222',sel?2:1);
+    if(sel&&!lk) tx('❤',bx_+6,by__+17,'#ff4444',12);
+    tx(`${i+1}.`,bx_+18,by__+17,sel?'#aaa':'#444',11);
+    const nameCol=lk?'#333':bt?'#88ff88':lv.color;
+    tx(lv.name,bx_+40,by__+17,nameCol,13);
+    tx(lk?'LOCKED':lv.subtitle,bx_+180,by__+17,lk?'#222':sel?'#aaa':'#444',10);
+    if(bt) tx('✓',bx_+bw_-20,by__+17,'#88ff88',13,'center');
+    else if(!lk){ cx.fillStyle=lv.color; _arc2(bx_+bw_-20,by__+12,5); }
+  }
+}
+
+function drawObby() {
+  fr(0,0,W,H,'#111');
+  const lv=obbyLvl();
+
+  // Timer bar at top
+  const maxDur=lv.dur, pct=gs.obbyTimer/maxDur;
+  fr(0,0,W,18,'#000');
+  const barColor=pct>0.5?'#00ff88':pct>0.25?'#ffaa00':'#ff4444';
+  fr(0,0,W*pct,18,barColor);
+  const secs=Math.ceil(gs.obbyTimer/60);
+  tx(`SURVIVE: ${secs}s`,W/2,13,'#fff',11,'center');
+
+  // Boss name at top-left
+  tx(lv.name,6,13,lv.color,11);
+
+  // Hearts top-right
+  for(let i=0;i<gs.obbyMaxHP;i++){
+    const filled=i<gs.obbyHP;
+    cx.font='16px serif'; cx.textAlign='left';
+    cx.fillStyle=filled?'#ff4444':'#333';
+    cx.fillText('♥',W-22-i*20,14);
+  }
+
+  // Draw boss
+  cx.save();
+  if(gs.obbyInv>0&&Math.floor(gs.obbyInv/8)%2===0) cx.globalAlpha=0.5;
+  cx.shadowBlur=18; cx.shadowColor=lv.color;
+  cx.fillStyle=lv.color;
+  _arc2(gs.obbyBx,gs.obbyBy,26);
+  // Boss eyes
+  cx.fillStyle=lv.ec||'#000';
+  cx.shadowBlur=0;
+  _arc2(gs.obbyBx-8,gs.obbyBy-6,5);
+  _arc2(gs.obbyBx+8,gs.obbyBy-6,5);
+  cx.restore();
+
+  // Draw projectiles
+  for(const p of gs.obbyProjs){
+    cx.save();
+    if(p.type==='bone'){
+      cx.fillStyle='#ffffff'; cx.shadowBlur=6; cx.shadowColor='#aaaaff';
+      cx.save(); cx.translate(p.x,p.y); cx.rotate(p.ang||0);
+      cx.fillRect(-(p.bw||70)/2,-(p.bh||12)/2,p.bw||70,p.bh||12);
+      cx.restore();
+    } else if(p.type==='ring'){
+      cx.strokeStyle=p.col||'#ff0088'; cx.lineWidth=4;
+      cx.shadowBlur=8; cx.shadowColor=p.col;
+      cx.beginPath(); cx.arc(p.x,p.y,p.r||10,0,Math.PI*2); cx.stroke();
+    } else {
+      cx.fillStyle=p.col||'#ff8800'; cx.shadowBlur=10; cx.shadowColor=p.col||'#ff8800';
+      _arc2(p.x,p.y,p.r||7);
+    }
+    cx.restore();
+  }
+
+  // Draw player heart
+  cx.save();
+  if(gs.obbyInv>0&&Math.floor(gs.obbyInv/6)%2===0) cx.globalAlpha=0.2;
+  cx.font='bold 18px serif'; cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillStyle='#ff4444'; cx.shadowBlur=10; cx.shadowColor='#ff0000';
+  cx.fillText('❤',gs.px,gs.py);
+  cx.restore();
+  cx.textBaseline='alphabetic';
+
+  // Shake/flash
+  if(gs.flashA>0){ cx.fillStyle=`rgba(255,255,255,${gs.flashA})`; cx.fillRect(0,0,W,H); }
+}
+
+function drawObbyDead() {
+  fr(0,0,W,H,'#000');
+  cx.save(); cx.font="bold 36px 'Courier New',monospace"; cx.textAlign='center';
+  cx.fillStyle='#ff4444'; cx.shadowBlur=20; cx.shadowColor='#ff0000';
+  cx.fillText('YOU DIED',W/2,160); cx.shadowBlur=0; cx.restore();
+  const lv=obbyLvl();
+  tx(lv.name,W/2,210,lv.color,15,'center');
+  tx(lv.subtitle,W/2,232,'#555',12,'center');
+  const secs=Math.ceil((lv.dur-gs.obbyTimer)/60);
+  tx(`Survived: ${secs}s / ${lv.dur/60}s`,W/2,260,'#777',13,'center');
+  if(gs.obbyDeathTimer<120){
+    if(Math.floor(gs.frame/25)%2===0){
+      tx('R — Try Again',W/2,320,'#aaa',13,'center');
+      tx('Z — Level Select',W/2,342,'#777',12,'center');
+      tx('X — Title',W/2,362,'#555',12,'center');
+    }
+  }
+}
+
+function drawObbyClear() {
+  fr(0,0,W,H,'#000');
+  const lv=obbyLvl();
+  cx.save(); cx.font="bold 32px 'Courier New',monospace"; cx.textAlign='center';
+  const hue=gs.frame%360;
+  cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=18; cx.shadowColor=cx.fillStyle;
+  cx.fillText('LEVEL CLEARED!',W/2,150); cx.shadowBlur=0; cx.restore();
+  tx(lv.name,W/2,200,lv.color,18,'center');
+  tx(lv.subtitle,W/2,226,'#aaa',13,'center');
+  const beaten=gs.obbyBeaten.filter(b=>b).length;
+  tx(`Total cleared: ${beaten}/15`,W/2,264,'#777',13,'center');
+  if(gs.obbyLevel===14){
+    tx('★ ALL 15 LEVELS CONQUERED ★',W/2,300,'#ffd700',14,'center');
+  } else {
+    tx(`Next: Level ${gs.obbyLevel+2} — ${OBBY_LEVELS[gs.obbyLevel+1].name}`,W/2,300,'#aaa',12,'center');
+  }
+  if(Math.floor(gs.frame/25)%2===0){
+    tx('Z — Continue   X — Title',W/2,360,'#666',12,'center');
+  }
+}
+
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  const n = 3; // UNDERTALE BOSSES / SPACE MARINES / ENTER CODE
+  const n = 4; // UNDERTALE / SPACE MARINES / OBBY RUN / ENTER CODE
   if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
   if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')) {
     sfxConfirm();
     if(gs.titleSel===0) {
-      gs.campaign='u';
-      gs.state='select'; gs.menuSel=0;
+      gs.campaign='u'; gs.state='select'; gs.menuSel=0;
     } else if(gs.titleSel===1) {
-      gs.campaign='s';
-      gs.state='select'; gs.menuSel=0;
+      gs.campaign='s'; gs.state='select'; gs.menuSel=0;
+    } else if(gs.titleSel===2) {
+      if(gs.beaten_u[1]) {
+        gs.state='obby_select'; gs.obbyMenuSel=0;
+      } else {
+        sfxDeny();
+      }
     } else {
       showCodeOverlay();
     }
@@ -1873,25 +2301,31 @@ function drawTitle() {
   const hue=gs.frame%360;
   cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=22; cx.shadowColor=cx.fillStyle;
   cx.fillText('BOSS GAUNTLET',W/2,130); cx.shadowBlur=0; cx.restore();
-  tx('Two campaigns. Progressive Unlocks. Undertale-style.',W/2,170,'#999',14,'center');
+  tx('Two campaigns. Progressive Unlocks. Undertale-style.',W/2,158,'#999',12,'center');
 
   const u_beaten = gs.beaten_u.filter(b=>b).length;
   const s_beaten = gs.beaten_s.filter(b=>b).length;
-  tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,210,'#777',13,'center');
+  tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,176,'#777',11,'center');
 
   // Main menu
-  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES','🔑  ENTER CODE'];
-  const MENU_C=[null,null,'#ffe066'];
-  for(let i=0;i<3;i++){
+  const obbyUnlk = gs.beaten_u[1];
+  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES', obbyUnlk?'🏃  OBBY RUN':'🔒  OBBY RUN','🔑  ENTER CODE'];
+  const MENU_C=[null,null,obbyUnlk?'#ff88ff':null,'#ffe066'];
+  for(let i=0;i<4;i++){
     const sel=gs.titleSel===i;
-    const bx_=W/2-130, by__=265+i*56, bw_=260, bh_=44;
+    const bx_=W/2-130, by__=192+i*52, bw_=260, bh_=44;
     fr(bx_,by__,bw_,bh_,sel?'#1a1a3a':'#0a0a0a');
-    sr(bx_,by__,bw_,bh_,sel?(MENU_C[i]||'#fff'):(MENU_C[i]?'#443300':'#333'),sel?2:1);
-    tx(MENU_T[i],W/2,by__+26,sel?(MENU_C[i]||'#fff'):(MENU_C[i]?'#665500':'#777'),13,'center');
+    const borderCol=sel?(MENU_C[i]||'#fff'):(i===2?(obbyUnlk?'#441144':'#333'):(MENU_C[i]?'#443300':'#333'));
+    sr(bx_,by__,bw_,bh_,borderCol,sel?2:1);
+    const col=sel?(MENU_C[i]||'#fff'):(i===2?(obbyUnlk?'#884488':'#333'):(MENU_C[i]?'#665500':'#777'));
+    tx(MENU_T[i],W/2,by__+26,col,13,'center');
+  }
+  if(!obbyUnlk){
+    tx('Beat Toriel to unlock Obby Run',W/2,192+2*52+48,'#444',10,'center');
   }
 
-  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,422,'#444',11,'center');
-  tx('Sans 15.0 & Space God await the worthy.',W/2,440,'#00ffff',11,'center');
+  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,434,'#444',11,'center');
+  tx('Sans 15.0 & Space God await the worthy.',W/2,452,'#00ffff',11,'center');
 }
 
 function drawSelect() {
@@ -2054,6 +2488,10 @@ function update() {
   gs.frame++;
   switch(gs.state){
     case 'title':       updTitle();       break;
+    case 'obby_select': updObbySelect();  break;
+    case 'obby':        updObby();        break;
+    case 'obby_dead':   updObbyDead();    break;
+    case 'obby_clear':  updObbyClear();   break;
     case 'select':      updSelect();      break;
     case 'cutscene': updCutscene(); break;
     case 'enemy':    updEnemy();    break;
@@ -2070,10 +2508,14 @@ function update() {
 function draw() {
   cx.clearRect(0,0,W,H);
   cx.save();
-  if(gs.state==='enemy'||gs.state==='player'||gs.state==='dead')
+  if(gs.state==='enemy'||gs.state==='player'||gs.state==='dead'||gs.state==='obby'||gs.state==='obby_dead')
     cx.translate(gs.shakeX,gs.shakeY);
   switch(gs.state){
     case 'title':       drawTitle();       break;
+    case 'obby_select': drawObbySelect();  break;
+    case 'obby':        drawObby();        break;
+    case 'obby_dead':   drawObbyDead();    break;
+    case 'obby_clear':  drawObbyClear();   break;
     case 'select':      drawSelect();      break;
     case 'cutscene': drawCutscene(); break;
     case 'enemy':    drawBattle();   break;
