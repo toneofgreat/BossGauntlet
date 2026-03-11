@@ -62,8 +62,8 @@ canvas {
 #nameOverlay.active { display:flex; }
 #nameBox {
   background:#111; border:2px solid #ffe066;
-  padding:32px 40px; text-align:center;
-  max-width:380px; width:92%;
+  padding:24px 18px; text-align:center;
+  max-width:380px; width:96%;
 }
 #nameBox h2 { color:#ffe066; font-size:15px; margin-bottom:8px; letter-spacing:2px; }
 #nameBox p  { color:#888; font-size:12px; margin-bottom:18px; line-height:1.6; }
@@ -83,6 +83,22 @@ canvas {
 }
 #nameSubmit:hover { background:#fff; }
 #nameError { color:#ff4444; font-size:12px; margin-top:10px; min-height:16px; }
+/* ---- Virtual Keyboard ---- */
+#vkb { margin-top:12px; }
+.vkb-row { display:flex; justify-content:center; gap:3px; margin-bottom:3px; }
+.vkb-key {
+  background:#1e1e1e; border:1px solid #555; color:#fff;
+  font-family:'Courier New',monospace; font-size:13px; font-weight:bold;
+  width:29px; height:32px; cursor:pointer; border-radius:4px;
+  display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-user-select:none; touch-action:manipulation;
+  flex-shrink:0;
+}
+.vkb-key:active { background:#444; border-color:#fff; }
+.vkb-key.k-back  { width:46px; font-size:15px; color:#ff8888; border-color:#884444; }
+.vkb-key.k-space { flex:1; max-width:160px; font-size:11px; letter-spacing:2px; }
+.vkb-key.k-confirm { flex:1; max-width:130px; background:#ffe066; color:#000; border-color:#ffe066; font-size:11px; letter-spacing:1px; }
+.vkb-key.k-sym { color:#aaa; }
 /* ---- On-screen controls ---- */
 #controls {
   display:flex; gap:18px; margin-top:10px; margin-bottom:6px;
@@ -1782,19 +1798,12 @@ function showNameOverlay() {
   input.value = gs.username || '';
   errEl.textContent = '';
   overlay.classList.add('active');
-  setTimeout(() => input.focus(), 60);
 
   function attempt() {
     const raw = input.value.trim();
-    if (raw.length < 3) {
-      errEl.textContent = '* Name must be at least 3 characters.'; return;
-    }
-    if (raw.length > 40) {
-      errEl.textContent = '* Name must be 40 characters or fewer.'; return;
-    }
-    if (!/^[a-zA-Z0-9 _\-]+$/.test(raw)) {
-      errEl.textContent = '* Letters, numbers, spaces, _ and - only.'; return;
-    }
+    if (raw.length < 3)  { errEl.textContent = '* At least 3 characters required.'; return; }
+    if (raw.length > 40) { errEl.textContent = '* Max 40 characters.'; return; }
+    if (!/^[a-zA-Z0-9 _\-]+$/.test(raw)) { errEl.textContent = '* Letters, numbers, spaces, _ and - only.'; return; }
     gs.username = raw;
     localStorage.setItem(NAME_KEY, raw);
     overlay.classList.remove('active');
@@ -1802,6 +1811,65 @@ function showNameOverlay() {
   }
   btn.onclick = attempt;
   input.onkeydown = e => { if (e.key === 'Enter') attempt(); };
+
+  // Build virtual keyboard once
+  if (document.getElementById('vkb')) return;
+  const ROWS = [
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L','⌫'],
+    ['Z','X','C','V','B','N','M','_','-'],
+  ];
+  const vkb = document.createElement('div');
+  vkb.id = 'vkb';
+
+  ROWS.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'vkb-row';
+    row.forEach(ch => {
+      const k = document.createElement('button');
+      k.type = 'button';
+      k.className = 'vkb-key' + (ch === '⌫' ? ' k-back' : '');
+      k.textContent = ch;
+      k.dataset.ch = ch;
+      rowEl.appendChild(k);
+    });
+    vkb.appendChild(rowEl);
+  });
+
+  // Bottom row: space + confirm
+  const botRow = document.createElement('div');
+  botRow.className = 'vkb-row';
+  const spaceK = document.createElement('button');
+  spaceK.type = 'button'; spaceK.className = 'vkb-key k-space';
+  spaceK.textContent = 'SPACE'; spaceK.dataset.ch = ' ';
+  const confirmK = document.createElement('button');
+  confirmK.type = 'button'; confirmK.className = 'vkb-key k-confirm';
+  confirmK.textContent = 'CONFIRM ✓'; confirmK.dataset.ch = 'CONFIRM';
+  botRow.appendChild(spaceK); botRow.appendChild(confirmK);
+  vkb.appendChild(botRow);
+
+  document.getElementById('nameBox').appendChild(vkb);
+
+  function handleKey(ch) {
+    if (ch === '⌫')      { input.value = input.value.slice(0, -1); }
+    else if (ch === 'CONFIRM') { attempt(); }
+    else if (input.value.length < 40) { input.value += ch; }
+    errEl.textContent = '';
+  }
+
+  vkb.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const k = e.target.closest('.vkb-key');
+    if (k) handleKey(k.dataset.ch);
+  });
+  vkb.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const k = el && el.closest('.vkb-key');
+    if (k) handleKey(k.dataset.ch);
+  }, { passive: false });
 }
 
 // ---- INIT -------------------------------------------------------
