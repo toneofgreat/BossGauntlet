@@ -409,7 +409,11 @@ const gs = {
 
 // ---- INPUT --------------------------------------------------------
 const keys = {}, jp = {}, jpu = {};
-window.addEventListener('keydown', e => { if (!keys[e.code]) jp[e.code]=true; keys[e.code]=true; e.preventDefault(); });
+window.addEventListener('keydown', e => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return; // let inputs type normally
+  if (!keys[e.code]) jp[e.code]=true; keys[e.code]=true; e.preventDefault();
+});
 window.addEventListener('keyup',   e => { keys[e.code]=false; jpu[e.code]=true; });
 function clearJP() { for (const k in jp) delete jp[k]; for (const k in jpu) delete jpu[k]; }
 const dn  = (a,b) => keys[a]||(b&&keys[b]);
