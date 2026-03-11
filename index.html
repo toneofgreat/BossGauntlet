@@ -25,6 +25,37 @@ canvas {
   width:100%; height:auto; touch-action:none;
 }
 #info { margin-top:5px; font-size:11px; color:#444; text-align:center; padding:0 8px; }
+/* ---- Code Overlay ---- */
+#codeOverlay {
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.92);
+  align-items:center; justify-content:center;
+  z-index:200; font-family:'Courier New',monospace;
+}
+#codeOverlay.active { display:flex; }
+#codeBox {
+  background:#111; border:2px solid #ffe066;
+  padding:28px 24px; text-align:center;
+  max-width:320px; width:90%;
+}
+#codeBox h2 { color:#ffe066; font-size:15px; margin-bottom:8px; letter-spacing:2px; }
+#codeBox p  { color:#888; font-size:12px; margin-bottom:16px; }
+#codeInput {
+  background:#000; color:#fff; border:2px solid #555;
+  font-family:'Courier New',monospace; font-size:26px;
+  width:140px; text-align:center; padding:8px;
+  outline:none; letter-spacing:6px;
+}
+#codeInput:focus { border-color:#ffe066; }
+#codeSubmit {
+  display:block; margin:14px auto 0;
+  background:#ffe066; color:#000;
+  font-family:'Courier New',monospace; font-size:13px;
+  border:none; padding:9px 28px; cursor:pointer;
+  letter-spacing:2px; font-weight:bold;
+}
+#codeSubmit:hover { background:#fff; }
+#codeMsg { margin-top:10px; font-size:13px; min-height:18px; }
 /* ---- On-screen controls ---- */
 #controls {
   display:flex; gap:18px; margin-top:10px; margin-bottom:6px;
@@ -70,6 +101,15 @@ canvas {
 </style>
 </head>
 <body>
+<div id="codeOverlay">
+  <div id="codeBox">
+    <h2>🔑 ENTER CODE</h2>
+    <p>Type the secret code to unlock all bosses.</p>
+    <input id="codeInput" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="???"/>
+    <button id="codeSubmit">CONFIRM</button>
+    <div id="codeMsg"></div>
+  </div>
+</div>
 <div id="wrap">
 <canvas id="c" width="600" height="520"></canvas>
 <div id="info">
@@ -1699,7 +1739,7 @@ function dealDamageToBoss(dmg) {
 
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  const n = 2; // UNDERTALE BOSSES / SPACE MARINES
+  const n = 3; // UNDERTALE BOSSES / SPACE MARINES / ENTER CODE
   if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
   if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')) {
@@ -1707,9 +1747,11 @@ function updTitle() {
     if(gs.titleSel===0) {
       gs.campaign='u';
       gs.state='select'; gs.menuSel=0;
-    } else {
+    } else if(gs.titleSel===1) {
       gs.campaign='s';
       gs.state='select'; gs.menuSel=0;
+    } else {
+      showCodeOverlay();
     }
   }
 }
@@ -1838,17 +1880,18 @@ function drawTitle() {
   tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,210,'#777',13,'center');
 
   // Main menu
-  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES'];
-  for(let i=0;i<2;i++){
+  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES','🔑  ENTER CODE'];
+  const MENU_C=[null,null,'#ffe066'];
+  for(let i=0;i<3;i++){
     const sel=gs.titleSel===i;
-    const bx_=W/2-130, by__=290+i*60, bw_=260, bh_=46;
+    const bx_=W/2-130, by__=265+i*56, bw_=260, bh_=44;
     fr(bx_,by__,bw_,bh_,sel?'#1a1a3a':'#0a0a0a');
-    sr(bx_,by__,bw_,bh_,sel?'#fff':'#333',sel?2:1);
-    tx(MENU_T[i],W/2,by__+26,sel?'#fff':'#777',14,'center');
+    sr(bx_,by__,bw_,bh_,sel?(MENU_C[i]||'#fff'):(MENU_C[i]?'#443300':'#333'),sel?2:1);
+    tx(MENU_T[i],W/2,by__+26,sel?(MENU_C[i]||'#fff'):(MENU_C[i]?'#665500':'#777'),13,'center');
   }
 
-  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,430,'#444',11,'center');
-  tx('Sans 15.0 & Space God await the worthy.',W/2,450,'#00ffff',11,'center');
+  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,422,'#444',11,'center');
+  tx('Sans 15.0 & Space God await the worthy.',W/2,440,'#00ffff',11,'center');
 }
 
 function drawSelect() {
@@ -2084,6 +2127,47 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+
+// ---- CODE OVERLAY -----------------------------------------------
+function unlockAll() {
+  gs.unlocked_u = gs.unlocked_u.map(()=>true);
+  gs.unlocked_s = gs.unlocked_s.map(()=>true);
+  saveGame();
+  sfxWin();
+}
+
+function showCodeOverlay() {
+  const overlay = document.getElementById('codeOverlay');
+  const input   = document.getElementById('codeInput');
+  const msg     = document.getElementById('codeMsg');
+  input.value = '';
+  msg.textContent = '';
+  msg.style.color = '#ff4444';
+  overlay.classList.add('active');
+  setTimeout(()=>input.focus(), 80);
+
+  function attempt() {
+    const code = input.value.trim();
+    if (code === '123') {
+      unlockAll();
+      msg.style.color = '#00ff88';
+      msg.textContent = '✓ ALL BOSSES UNLOCKED!';
+      setTimeout(()=>{ overlay.classList.remove('active'); }, 1400);
+    } else {
+      msg.style.color = '#ff4444';
+      msg.textContent = '✗ Wrong code. Try again.';
+      input.value = '';
+    }
+  }
+
+  document.getElementById('codeSubmit').onclick = attempt;
+  input.onkeydown = e => {
+    if (e.key === 'Enter') attempt();
+    if (e.key === 'Escape') overlay.classList.remove('active');
+  };
+  // Close if clicking outside the box
+  overlay.onclick = e => { if (e.target === overlay) overlay.classList.remove('active'); };
+}
 
 // ---- INIT -------------------------------------------------------
 loadGame();
