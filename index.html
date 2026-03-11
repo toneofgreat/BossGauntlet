@@ -2596,7 +2596,8 @@ function showCodeOverlay() {
       msg.textContent = '✓ ALL BOSSES UNLOCKED!';
       setTimeout(()=>{ overlay.classList.remove('active'); }, 1400);
     } else if (code === '321') {
-      gs.obbyUnlocked = gs.obbyUnlocked.map(()=>true);
+      gs.obbyUnlocked = Array(15).fill(true);
+      gs.beaten_u[1] = true;  // also unlocks the Obby Run button
       saveGame(); sfxWin();
       msg.style.color = '#ff88ff';
       msg.textContent = '✓ ALL OBBY LEVELS UNLOCKED!';
