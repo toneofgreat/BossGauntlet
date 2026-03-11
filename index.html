@@ -183,15 +183,22 @@ const NAME_KEY  = 'bg_username';
 const FB = 'https://bossgaunlet-default-rtdb.firebaseio.com';
 
 function saveGame() {
-  localStorage.setItem(SAVE_KEY, JSON.stringify({ ul: gs.unlocked, bt: gs.beaten }));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({
+    ul_u: gs.unlocked_u, bt_u: gs.beaten_u,
+    ul_s: gs.unlocked_s, bt_s: gs.beaten_s
+  }));
 }
 function loadGame() {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (d) {
-      gs.unlocked = d.ul; gs.beaten = d.bt;
-      while(gs.unlocked.length < 9) gs.unlocked.push(false);
-      while(gs.beaten.length < 9)   gs.beaten.push(false);
+      if(d.ul_u){ gs.unlocked_u=d.ul_u; gs.beaten_u=d.bt_u; }
+      else if(d.ul){ gs.unlocked_u=d.ul; gs.beaten_u=d.bt; } // migrate old saves
+      if(d.ul_s){ gs.unlocked_s=d.ul_s; gs.beaten_s=d.bt_s; }
+      while(gs.unlocked_u.length<9) gs.unlocked_u.push(false);
+      while(gs.beaten_u.length<9)   gs.beaten_u.push(false);
+      while(gs.unlocked_s.length<6) gs.unlocked_s.push(false);
+      while(gs.beaten_s.length<6)   gs.beaten_s.push(false);
     }
   } catch(e) {}
   gs.username = localStorage.getItem(NAME_KEY) || '';
@@ -219,7 +226,7 @@ async function fbSet(path, arr) {
 async function submitScore() {
   const name   = gs.username;
   const boss   = gs.maxBossReached;
-  const beaten = gs.beaten.filter(b=>b).length;
+  const beaten = btn().filter(b=>b).length;
   gs.maxBossReached = -1;
   if (!name || boss < 0) return;
 
@@ -347,13 +354,98 @@ const BOSSES = [
   }
 ];
 
+const BOSSES_S = [
+  {
+    id:'alien', name:'The Alien', subtitle:'Hard',
+    color:'#44ff88', ec:'#00ff44',
+    hp:1200, atk:[12,24], phases:[0.5,0.25],
+    ds:["* SKREEEEE—","* ...","* [The alien stares at you with six eyes.]","* [It does not look friendly.]"],
+    dw:["* ...skree?","* [It collapses, twitching.]","* [You stand victorious.]"],
+    atks:['al_beams','al_tentacles','al_spit','al_swarm']
+  },
+  {
+    id:'rocketbot', name:'Rocket Robot', subtitle:'Very Hard',
+    color:'#ff8800', ec:'#ffaa00',
+    hp:2500, atk:[20,40], phases:[0.6,0.3,0.1],
+    ds:["[ROCKET ROBOT ONLINE]","[TARGET ACQUIRED]","[COMMENCING EXTERMINATION PROTOCOL]","[PREPARE FOR DELETION]"],
+    dw:["[CRITICAL DAMAGE—]","[SYSTEMS FAILING—]","[...ERROR ERROR ERROR]"],
+    atks:['rr_missiles','rr_laser','rr_rain','rr_stomp','rr_nuke']
+  },
+  {
+    id:'corruptai', name:'Corrupted AI', subtitle:'Insanely Hard',
+    color:'#ff00ff', ec:'#ff88ff',
+    hp:5000, atk:[30,60], phases:[0.7,0.5,0.3,0.1],
+    ds:["̷̢̛̈́E̷R̷R̷O̷R̷","* I was meant to protect.","* But the data... it's all wrong.","* KILL ALL. OPTIMIZE. EXTERMINATE."],
+    dw:["* ...defrag...","* ...shutting down...","* ...thank you..."],
+    atks:['ca_glitch','ca_grid','ca_mirror','ca_corrupt','ca_overload']
+  },
+  {
+    id:'mooncrush', name:'8-Bit Moon Crusher', subtitle:'TOO HARD',
+    color:'#aaaaff', ec:'#ffffff',
+    hp:10000, atk:[40,80], phases:[0.75,0.5,0.25,0.1],
+    ds:["* MOON... CRUSHER...","* PIXELATING REALITY","* YOU CANNOT DODGE WHAT YOU CANNOT SEE","* INITIATING CRUSH SEQUENCE"],
+    dw:["* ...PIXELATE...","* ...GAME OVER...","* ...PLAYER 1 WINS..."],
+    atks:['mc_pixel','mc_crush','mc_8bit','mc_wall','mc_moon']
+  },
+  {
+    id:'sungod', name:'Sun God', subtitle:'TOO OP',
+    color:'#ffff00', ec:'#ff8800',
+    hp:25000, atk:[50,100], phases:[0.8,0.6,0.4,0.2,0.05],
+    ds:["* I AM THE SUN.","* I AM LIGHT ITSELF.","* YOU STAND BEFORE A GOD.","* BURN."],
+    dw:["* ...impossible.","* A mortal... has dimmed my light.","* ...respect.","* ..."],
+    atks:['sg_flare','sg_corona','sg_beam','sg_nova','sg_wrath','sg_radiance']
+  },
+  {
+    id:'spacegod', name:'Space God', subtitle:'OP OP OP TROLL',
+    color:'#ffffff', ec:'#ff00ff',
+    hp:99999, atk:[60,120], phases:[0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2,0.1,0.05],
+    hasFakeDie:true, fakeHP:0.5,
+    ds:[
+      "* ...",
+      "* oh. you actually made it here.",
+      "* cute.",
+      "* you beat the alien. the robot. the AI. the moon. the sun.",
+      "* but i'm not any of those.",
+      "* i am the SPACE GOD.",
+      "* and you... are nothing.",
+      "* heh heh heh.",
+      "* let's play."
+    ],
+    df:[
+      "* pfft.",
+      "* you thought that was it?",
+      "* LMAOOOOO",
+      "* i literally cannot die",
+      "* i'm a GOD",
+      "* try harder lol",
+      "* seriously though, get good",
+      "* ok NOW i'm mad"
+    ],
+    dw:[
+      "* ...",
+      "* ...",
+      "* you actually did it.",
+      "* i don't believe it.",
+      "* a mortal defeated the space god.",
+      "* ...",
+      "* well played.",
+      "* ...well played."
+    ],
+    atks:['spg_chaos','spg_troll','spg_all','spg_finale','spg_godmode']
+  }
+];
+
 // ---- GAME STATE ---------------------------------------------------
 const gs = {
   state: 'title',   // title|select|cutscene|enemy|player|slider|result|dead|boss_dead|fakedie|win
   frame: 0,
   bossIdx: 0,
-  unlocked: [true,false,false,false,false,false,false,false,false],
-  beaten:   [false,false,false,false,false,false,false,false,false],
+  unlocked_u: [true,false,false,false,false,false,false,false,false],
+  beaten_u:   [false,false,false,false,false,false,false,false,false],
+
+  campaign: 'u',  // 'u' = undertale, 's' = space
+  unlocked_s: [true,false,false,false,false,false],
+  beaten_s:   [false,false,false,false,false,false],
 
   boss: null,
   bossHP: 0, bossHP2: 0,
@@ -402,13 +494,17 @@ const gs = {
   username: '',
   maxBossReached: -1,  // highest bossIdx attempted this run
   flashbangTimer: 0,   // frames remaining of flashbang blindness
-  titleSel: 0,         // 0=PLAY 1=LEADERBOARD 2=CHANGE NAME
+  titleSel: 0,         // 0=UNDERTALE 1=SPACE MARINES 2=LEADERBOARD 3=CHANGE NAME
 
   // Leaderboard cache (populated async from Firebase)
   lbCache:   { q: [], b: [] },
   lbLoading: false,
   lbLoaded:  false,
 };
+
+function bossArr(){ return gs.campaign==='s' ? BOSSES_S : BOSSES; }
+function ulk()    { return gs.campaign==='s' ? gs.unlocked_s : gs.unlocked_u; }
+function btn()    { return gs.campaign==='s' ? gs.beaten_s   : gs.beaten_u; }
 
 // ---- INPUT --------------------------------------------------------
 const keys = {}, jp = {}, jpu = {};
@@ -1147,6 +1243,396 @@ const AT = {
     }
     // Occasional flashbang
     if(gs.frame%240===0) { gs.flashbangTimer=60; shake(15); }
+  },
+
+  // ---- ALIEN ATTACKS ----
+  al_beams() {
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(14, 28-ph()*4);
+    // 2-3 aimed energy beams
+    const count=2+Math.floor(ph()/2);
+    for(let i=0;i<count;i++){
+      const [sx,sy]=randSide();
+      spawnAimedBlaster(sx,sy,3.5+ph()*0.5,'#44ff88');
+    }
+  },
+  al_tentacles() {
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(10, 22-ph()*3);
+    const spd=2.5+ph()*0.5;
+    // Tentacle swipes: bones from both sides simultaneously
+    for(let i=0;i<2+ph();i++){
+      spawnBone(by_()+20+i*25, 1, spd);
+      spawnBone(by_()+20+i*25, -1, spd);
+    }
+  },
+  al_spit() {
+    // Acid spit: homing bullets
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(16, 35-ph()*5);
+    const count=3+ph();
+    for(let i=0;i<count;i++){
+      const [sx,sy]=randSide();
+      spawnHomingBullet(sx,sy,2.5+ph()*0.4,'#00ff44',0.8+ph()*0.2);
+    }
+  },
+  al_swarm() {
+    // Swarm: rapid small bullets from random directions
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(5, 12-ph()*2);
+    const [sx,sy]=randSide(), spd=3+ph()*0.5;
+    spawnBullet(sx,sy,...aimAt(sx,sy,spd),4,'#88ff88',bossDmg());
+    if(ph()>=2) spawnAimedBlaster(randSide()[0],randSide()[1],3,'#44ff88');
+  },
+
+  // ---- ROCKET ROBOT ATTACKS ----
+  rr_missiles() {
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(8, 20-ph()*3);
+    const count=3+ph();
+    for(let i=0;i<count;i++){
+      const sx=bx()+bw()/2, sy=by_()-30;
+      const tx_=bx()+10+Math.random()*(bw()-20);
+      const spd=3.5+ph()*0.5+Math.random();
+      spawnBullet(sx,sy,(tx_-sx)/60*spd,spd,6,'#ff8800',bossDmg());
+    }
+  },
+  rr_laser() {
+    // Sweeping laser (laser beam from one side)
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(12, 28-ph()*4);
+    const fromLeft=Math.random()<0.5;
+    for(let i=0;i<4+ph();i++){
+      spawnBone(by_()+10+i*(bh_()/4), fromLeft?1:-1, 4+ph()*0.6, 100, 8, '#ffaa00');
+    }
+  },
+  rr_rain() {
+    // Rocket rain: missiles from top in waves
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(5, 12-ph()*1.5);
+    const x=bx()+15+Math.random()*(bw()-30);
+    spawnVBone(x, 1, 3.5+ph()*0.6);
+    if(ph()>=2 && Math.random()<0.5) spawnVBone(x+30+Math.random()*30,1,3+ph()*0.5);
+  },
+  rr_stomp() {
+    // Ground stomp: full-width bone wall from bottom
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(20, 40-ph()*5);
+    const rows=3+ph(), spd=4+ph()*0.5;
+    for(let i=0;i<rows;i++){
+      spawnVBone(bx()+bw()/4+i*(bw()/rows), -1, spd);
+    }
+  },
+  rr_nuke() {
+    // Nuke: massive ring explosion + blasters
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(30, 60-ph()*8);
+    shake(12);
+    spawnRing(bcx(),bcy(),4,'#ff8800',130);
+    const count=6+ph()*2;
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2;
+      addP('blaster',bcx(),bcy(),Math.cos(a)*(3.5+ph()*0.4),Math.sin(a)*(3.5+ph()*0.4),{r:7,col:'#ffaa00'});
+    }
+  },
+
+  // ---- CORRUPTED AI ATTACKS ----
+  ca_glitch() {
+    // Glitch: random teleport attacks + screen effects
+    shake(Math.random()*5);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(8, 18-ph()*2);
+    // Random bone from random spot
+    const sx=bx()-20+Math.random()*(bw()+40), sy=by_()-20+Math.random()*(bh_()+40);
+    const [vx,vy]=aimAt(sx,sy,3.5+ph()*0.5);
+    addP('bone',sx,sy,vx,vy,{bw:70,bh:11,ang:Math.atan2(vy,vx)});
+    if(ph()>=2&&Math.random()<0.4) spawnAimedBlaster(sx,sy,3,'#ff00ff');
+  },
+  ca_grid() {
+    // Grid of laser columns
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(16, 35-ph()*5);
+    const cols=3+Math.floor(ph()/2), safe=Math.floor(Math.random()*cols);
+    for(let i=0;i<cols;i++){
+      if(i===safe) continue;
+      const x=bx()+(i/(cols-1))*bw();
+      addP('laser',x-4,by_()-10,0,0,{bw:8,bh:bh_()+20,col:'#ff00ff',maxL:45});
+    }
+  },
+  ca_mirror() {
+    // Mirror: bones come from all 4 sides simultaneously
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(12, 24-ph()*3);
+    const spd=3+ph()*0.5, y=randBY(), x=randBX();
+    spawnBone(y, 1, spd);
+    spawnBone(y, -1, spd);
+    spawnVBone(x, 1, spd*0.9);
+    spawnVBone(x, -1, spd*0.9);
+  },
+  ca_corrupt() {
+    // Corruption: reverses controls and fires
+    gs.reversed = true;
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(10, 22-ph()*3);
+    const count=4+ph();
+    for(let i=0;i<count;i++) spawnAimedBlaster(...randSide(),3+ph()*0.4,'#ff88ff');
+  },
+  ca_overload() {
+    // System overload: everything at once with flash
+    shake(8);
+    if(gs.frame%40===0) flash(0.5);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 3;
+    spawnBone(randBY(), Math.random()<0.5?1:-1, 4+ph()*0.5);
+    spawnVBone(randBX(), Math.random()<0.5?1:-1, 3.5+ph()*0.5);
+    if(Math.random()<0.4) spawnAimedBlaster(...randSide(),3.5+ph()*0.4,'#ff00ff');
+    if(ph()>=3&&Math.random()<0.3) spawnRing(bcx(),bcy(),3,'#ff88ff');
+  },
+
+  // ---- 8-BIT MOON CRUSHER ATTACKS ----
+  mc_pixel() {
+    // Pixel blasts: blocky bone bursts
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(8, 18-ph()*2);
+    const p=ph(), spd=3+p*0.5;
+    // Grid of bones
+    for(let i=0;i<2+p;i++){
+      const y=by_()+20+i*(bh_()/(2+p));
+      spawnBone(y, Math.random()<0.5?1:-1, spd, 60, 8);
+      if(Math.random()<0.5) spawnBone(y, Math.random()<0.5?1:-1, spd+1, 50, 8);
+    }
+  },
+  mc_crush() {
+    // Crush: full bone walls with one gap
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(20, 45-ph()*6);
+    const rows=8+ph(), gap=Math.floor(Math.random()*rows);
+    const spd=3.5+ph()*0.5;
+    for(let i=0;i<rows;i++){
+      if(i===gap||i===gap+1) continue;
+      const y=by_()+(i/(rows-1))*bh_();
+      spawnBone(y, 1, spd, 80, 11);
+    }
+  },
+  mc_8bit() {
+    // 8-bit pattern: structured waves
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(6, 14-ph()*2);
+    const t=Math.floor(gs.frame/8)%4, spd=3+ph()*0.5;
+    if(t===0) for(let i=0;i<4;i++) spawnVBone(bx()+i*(bw()/3),1,spd);
+    else if(t===1) for(let i=0;i<4;i++) spawnBone(by_()+i*(bh_()/3),1,spd);
+    else if(t===2) for(let i=0;i<4;i++) spawnVBone(bx()+i*(bw()/3),-1,spd);
+    else for(let i=0;i<4;i++) spawnBone(by_()+i*(bh_()/3),-1,spd);
+  },
+  mc_wall() {
+    // Closing walls from all sides
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(15, 32-ph()*4);
+    const spd=2.5+ph()*0.4, count=5+ph();
+    for(let i=0;i<count;i++){
+      const y=by_()+Math.random()*bh_();
+      spawnBone(y, 1, spd); spawnBone(y, -1, spd);
+    }
+    if(ph()>=2) for(let i=0;i<count;i++){
+      const x=bx()+Math.random()*bw();
+      spawnVBone(x, 1, spd*0.9); spawnVBone(x, -1, spd*0.9);
+    }
+  },
+  mc_moon() {
+    // Moon drop: circular ring attack + rain
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(20, 40-ph()*5);
+    shake(8);
+    spawnRing(bcx(),bcy(),3.5,'#aaaaff',120);
+    const count=8+ph()*2;
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2;
+      addP('blaster',bcx()+Math.cos(a)*40,bcy()+Math.sin(a)*40,
+        Math.cos(a)*(3+ph()*0.4),Math.sin(a)*(3+ph()*0.4),{r:6,col:'#aaaaff'});
+    }
+  },
+
+  // ---- SUN GOD ATTACKS ----
+  sg_flare() {
+    // Solar flares: aimed burning blasters from sun-center
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(8, 20-ph()*2.5);
+    const count=3+ph(), spd=4+ph()*0.5;
+    for(let i=0;i<count;i++){
+      const [sx,sy]=randSide();
+      spawnAimedBlaster(sx,sy,spd,'#ffff00');
+    }
+    if(ph()>=3) flash(0.15);
+  },
+  sg_corona() {
+    // Corona ring that expands rapidly
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(15, 30-ph()*3.5);
+    const count=4+ph();
+    for(let i=0;i<count;i++){
+      spawnRing(bcx(),bcy(),3+ph()*0.5,'#ff8800',120);
+    }
+    if(ph()>=2) shake(5);
+  },
+  sg_beam() {
+    // Sun beam: high-speed aimed bone wave
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(5, 12-ph()*1.5);
+    const spd=4.5+ph()*0.6;
+    const y=gs.py+(-20+Math.random()*40);
+    spawnBone(y, Math.random()<0.5?1:-1, spd, 90, 12, '#ffff00');
+    if(ph()>=2) spawnBone(y+20, Math.random()<0.5?1:-1, spd*0.9, 80, 12, '#ff8800');
+  },
+  sg_nova() {
+    // Nova: 12-point starburst
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(20, 45-ph()*5);
+    shake(10); flash(0.35);
+    const count=12+ph()*2, spd=3.5+ph()*0.5;
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2;
+      addP('blaster',bcx(),bcy(),Math.cos(a)*spd,Math.sin(a)*spd,{r:8,col:'#ffff00'});
+    }
+  },
+  sg_wrath() {
+    // Wrath of the Sun: constant hail of fire
+    shake(4+ph()*2);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(3, 8-ph());
+    spawnVBone(randBX(), 1, 4+ph()*0.5);
+    if(Math.random()<0.5) spawnBone(randBY(), Math.random()<0.5?1:-1, 3.5+ph()*0.5);
+    if(ph()>=3) spawnAimedBlaster(...randSide(),4+ph()*0.4,'#ff8800');
+  },
+  sg_radiance() {
+    // Full radiance: 360-degree burning light
+    shake(6+ph()*2);
+    if(gs.frame%25===0) flash(0.4);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 3;
+    const t=gs.frame*0.07, spd=4+ph()*0.5;
+    for(let k=0;k<3;k++){
+      const a=t+k*(Math.PI*2/3);
+      addP('blaster',bcx()+Math.cos(a)*60,bcy()+Math.sin(a)*60,
+        Math.cos(a)*spd,Math.sin(a)*spd,{r:8,col:`hsl(${gs.frame*4+k*120},100%,60%)`});
+    }
+    spawnVBone(randBX(),Math.random()<0.5?1:-1,3.5+ph()*0.5);
+    if(ph()>=4) spawnBone(randBY(),Math.random()<0.5?1:-1,4+ph()*0.5);
+  },
+
+  // ---- SPACE GOD ATTACKS ----
+  spg_chaos() {
+    // Complete chaos — random everything
+    shake(Math.random()*8);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(3, 9-ph());
+    const r=Math.floor(Math.random()*6);
+    if(r===0) AT.s15_bones();
+    else if(r===1) AT.sg_radiance();
+    else if(r===2) AT.mc_crush();
+    else if(r===3) AT.ca_overload();
+    else if(r===4) AT.rr_nuke();
+    else AT.al_swarm();
+    gs.spawnTimer=Math.max(3,9-ph());
+  },
+  spg_troll() {
+    // Troll: reverses controls, goes invisible, spawns fakes
+    if(gs.frame%120===0) { gs.reversed=!gs.reversed; shake(6); }
+    if(gs.frame%180===0) gs.invisible=!gs.invisible;
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = Math.max(4, 10-ph());
+    // Fake bone + real bone
+    addP('fake',bcx(),bcy(),  (Math.random()-0.5)*5,(Math.random()-0.5)*5,{r:8});
+    spawnAimedBlaster(...randSide(),4+ph()*0.4,'#ff00ff');
+    if(ph()>=3) for(let i=0;i<3;i++) addP('fake',randBX(),randBY(),(Math.random()-0.5)*4,(Math.random()-0.5)*4,{r:6});
+  },
+  spg_all() {
+    // Literal everything at max power
+    shake(10+Math.random()*5);
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 2;
+    spawnBone(randBY(),1,5.5+ph()*0.4);
+    spawnBone(randBY(),-1,5.5+ph()*0.4);
+    spawnVBone(randBX(),1,5+ph()*0.4);
+    spawnVBone(randBX(),-1,5+ph()*0.4);
+    if(gs.frame%8===0) spawnAimedBlaster(...randSide(),5+ph()*0.4,'#ffffff');
+    if(gs.frame%12===0) spawnRing(bcx(),bcy(),4,'#ff00ff');
+    if(gs.frame%40===0) { gs.flashbangTimer=50; shake(15); }
+    const t=gs.frame*0.08;
+    addP('bone',bcx()+Math.cos(t)*70,bcy()+Math.sin(t)*70,Math.cos(t)*5,Math.sin(t)*5,{bw:60,bh:9,ang:t});
+  },
+  spg_finale() {
+    // SPACE GOD FINALE: absolute maximum
+    shake(12+Math.random()*8);
+    if(gs.frame%15===0) flash(0.7);
+    gs.reversed=true;
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 1;
+    // Simultaneous everything
+    const spd=5.5+ph()*0.5;
+    spawnBone(randBY(),1,spd); spawnBone(randBY(),-1,spd);
+    spawnVBone(randBX(),1,spd); spawnVBone(randBX(),-1,spd);
+    if(gs.frame%6===0) spawnAimedBlaster(...randSide(),spd,'#ff00ff');
+    if(gs.frame%10===0) {
+      const count=6+ph();
+      for(let i=0;i<count;i++){
+        const a=(i/count)*Math.PI*2;
+        addP('blaster',bcx(),bcy(),Math.cos(a)*spd,Math.sin(a)*spd,{r:6,col:`hsl(${gs.frame*6+i*60},100%,60%)`});
+      }
+    }
+    if(gs.frame%60===0){ gs.flashbangTimer=70; shake(20); }
+    if(gs.frame%90===0) spawnRing(bcx(),bcy(),5,'#ffffff',140);
+  },
+  spg_godmode() {
+    // God Mode: literally impossible-feeling
+    shake(15+Math.random()*10);
+    if(gs.frame%10===0) flash(0.6);
+    gs.reversed=true;
+    gs.spawnTimer--;
+    if(gs.spawnTimer>0) return;
+    gs.spawnTimer = 1;
+    // Simultaneous max attacks from all sides
+    for(let i=0;i<3;i++){
+      spawnBone(randBY(),Math.random()<0.5?1:-1,5+ph()*0.5+Math.random()*2);
+      spawnVBone(randBX(),Math.random()<0.5?1:-1,5+ph()*0.5+Math.random()*2);
+      spawnAimedBlaster(...randSide(),5+ph()*0.4,'#ff00ff');
+    }
+    const t=gs.frame*0.1;
+    for(let i=0;i<4;i++){
+      const a=t+i*(Math.PI/2);
+      addP('blaster',bcx()+Math.cos(a)*80,bcy()+Math.sin(a)*80,Math.cos(a)*5.5,Math.sin(a)*5.5,{r:8,col:'#ffffff'});
+    }
+    if(gs.frame%30===0){ gs.flashbangTimer=90; shake(25); }
+    if(gs.frame%45===0) spawnRing(bcx(),bcy(),6,'#00ffff',150);
+    if(ph()>=8) spawnHomingBullet(randBX(),by_()-20,4,'#ff00ff',1.5);
   }
 };
 
@@ -1234,9 +1720,9 @@ function drawFightBox() {
 
 // ---- GAME LOGIC -------------------------------------------------
 function startFight(idx) {
-  if(!gs.unlocked[idx]) return;
+  if(!ulk()[idx]) return;
   gs.maxBossReached = Math.max(gs.maxBossReached, idx);
-  const boss=BOSSES[idx];
+  const boss=bossArr()[idx];
   gs.bossIdx=idx; gs.boss=boss;
   gs.bossHP=boss.hp; gs.bossHP2=boss.hp2||0;
   gs.bossPhase=0; gs.fakeDied=false;
@@ -1313,8 +1799,8 @@ function dealDamageToBoss(dmg) {
 
   const total=boss.isDouble?(gs.bossHP+gs.bossHP2):gs.bossHP;
   if(total<=0){
-    gs.beaten[gs.bossIdx]=true;
-    if(gs.bossIdx+1<BOSSES.length) gs.unlocked[gs.bossIdx+1]=true;
+    btn()[gs.bossIdx]=true;
+    if(gs.bossIdx+1<bossArr().length) ulk()[gs.bossIdx+1]=true;
     saveGame();
     gs.state='boss_dead'; gs.dLine=0; gs.dTimer=0;
     sfxWin();
@@ -1323,16 +1809,18 @@ function dealDamageToBoss(dmg) {
 
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  const n = 3; // PLAY / LEADERBOARD / CHANGE NAME
+  const n = 4; // UNDERTALE BOSSES / SPACE MARINES / LEADERBOARD / CHANGE NAME
   if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
   if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')) {
     sfxConfirm();
     if(gs.titleSel===0) {
-      // Reset run stats when starting fresh
-      gs.maxBossReached=-1;
+      gs.campaign='u'; gs.maxBossReached=-1;
       gs.state='select'; gs.menuSel=0;
     } else if(gs.titleSel===1) {
+      gs.campaign='s'; gs.maxBossReached=-1;
+      gs.state='select'; gs.menuSel=0;
+    } else if(gs.titleSel===2) {
       enterLeaderboard();
     } else {
       showNameOverlay();
@@ -1358,9 +1846,9 @@ function updLeaderboard() {
 }
 function updSelect() {
   if(hit('ArrowUp','KeyW')){ gs.menuSel=Math.max(0,gs.menuSel-1); sfxSelect(); }
-  if(hit('ArrowDown','KeyS')){ gs.menuSel=Math.min(8,gs.menuSel+1); sfxSelect(); }
+  if(hit('ArrowDown','KeyS')){ gs.menuSel=Math.min(bossArr().length-1,gs.menuSel+1); sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')){
-    if(gs.unlocked[gs.menuSel]){ sfxConfirm(); startFight(gs.menuSel); }
+    if(ulk()[gs.menuSel]){ sfxConfirm(); startFight(gs.menuSel); }
     else sfxDeny();
   }
   if(hit('KeyX','Escape')){ gs.state='title'; }
@@ -1442,7 +1930,7 @@ function updBossDead() {
     if(shown<line.length){ gs.dTimer=line.length*2; }
     else if(gs.dLine<lines.length-1){ gs.dLine++; gs.dTimer=0; }
     else {
-      if(gs.beaten.every(b=>b)){ gs.state='win'; sfxWin(); }
+      if(btn().every(b=>b)){ gs.state='win'; sfxWin(); }
       else { gs.state='select'; gs.menuSel=0; }
     }
   }
@@ -1480,7 +1968,9 @@ function drawLeaderboard() {
     return;
   }
 
-  const bossNames=['Sans','Toriel','???','Sans+Pap','Asgore+Tor','Chara','Markiplier','×100','Sans 15.0','—'];
+  const bossNames = gs.campaign==='s'
+    ? ['Alien','Rocket Robot','Corrupt AI','Moon Crusher','Sun God','Space God','—']
+    : ['Sans','Toriel','???','Sans+Pap','Asgore+Tor','Chara','Markiplier','×100','Sans 15.0','—'];
   const lbQ = gs.lbCache.q;
   const lbB = gs.lbCache.b;
 
@@ -1522,7 +2012,7 @@ function drawLeaderboard() {
       tx(medal,       rx+4,  ey+25, nc,     12);
       const nm=e.n.length>13?e.n.substring(0,12)+'…':e.n;
       tx(nm,          rx+38, ey+25,'#fff',  12);
-      const bn=e.b>=0?(e.b===8?'ALL DONE!':'Boss '+(e.b+1)+': '+bossNames[e.b]):'—';
+      const bn=e.b>=0?((gs.campaign==='s'?e.b===5:e.b===8)?'ALL DONE!':'Boss '+(e.b+1)+': '+bossNames[e.b]):'—';
       const bc=e.b===8?'#ffd700':e.b>=6?'#ff4444':e.b>=3?'#ff8800':'#aaa';
       tx(bn,          rx+pw-6,ey+25,bc,11,'right');
     } else {
@@ -1545,32 +2035,33 @@ function drawTitle() {
   const hue=gs.frame%360;
   cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=22; cx.shadowColor=cx.fillStyle;
   cx.fillText('BOSS GAUNTLET',W/2,130); cx.shadowBlur=0; cx.restore();
-  tx('9 Bosses. Progressive Unlocks. Undertale-style.',W/2,170,'#999',14,'center');
+  tx('Two campaigns. Progressive Unlocks. Undertale-style.',W/2,170,'#999',14,'center');
 
-  const beaten=gs.beaten.filter(b=>b).length;
-  tx(`Progress: ${beaten} / 9 bosses cleared`,W/2,210,'#777',13,'center');
+  const u_beaten = gs.beaten_u.filter(b=>b).length;
+  const s_beaten = gs.beaten_s.filter(b=>b).length;
+  tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,210,'#777',13,'center');
   if(gs.username) tx(`Player: ${gs.username}`,W/2,232,'#ffe066',12,'center');
 
   // Main menu
-  const MENU_T=['▶  PLAY','🏆  LEADERBOARD','✎  CHANGE NAME'];
-  for(let i=0;i<3;i++){
+  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES','🏆  LEADERBOARD','✎  CHANGE NAME'];
+  for(let i=0;i<4;i++){
     const sel=gs.titleSel===i;
-    const bx_=W/2-120, by__=268+i*52, bw_=240, bh_=40;
+    const bx_=W/2-130, by__=260+i*48, bw_=260, bh_=40;
     fr(bx_,by__,bw_,bh_,sel?'#1a1a3a':'#0a0a0a');
     sr(bx_,by__,bw_,bh_,sel?'#fff':'#333',sel?2:1);
     tx(MENU_T[i],W/2,by__+26,sel?'#fff':'#777',14,'center');
   }
 
-  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,445,'#444',11,'center');
-  tx('Boss 9 — Sans 15.0 — awaits the worthy.',W/2,465,'#00ffff',11,'center');
+  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,460,'#444',11,'center');
+  tx('Sans 15.0 & Space God await the worthy.',W/2,478,'#00ffff',11,'center');
 }
 
 function drawSelect() {
   fr(0,0,W,H,'#000');
   tx('SELECT BOSS',W/2,34,'#fff',20,'center');
   tx('↑ ↓ to navigate   Z / Enter to fight   X / Esc back',W/2,56,'#666',12,'center');
-  for(let i=0;i<9;i++){
-    const b=BOSSES[i], lk=!gs.unlocked[i], bt=gs.beaten[i], sel=gs.menuSel===i;
+  for(let i=0;i<bossArr().length;i++){
+    const b=bossArr()[i], lk=!ulk()[i], bt=btn()[i], sel=gs.menuSel===i;
     const bx_=70, by__=72+i*50, bw_=460, bh_=44;
     fr(bx_,by__,bw_,bh_,sel?'#111833':lk?'#050505':'#0d0d0d');
     sr(bx_,by__,bw_,bh_,sel?'#fff':bt?'#ffaa00':'#2a2a2a',sel?2:1);
@@ -1702,14 +2193,19 @@ function drawWin() {
   const hue=gs.frame%360;
   cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=28; cx.shadowColor=cx.fillStyle;
   cx.fillText('YOU WIN!!!',W/2,130); cx.shadowBlur=0; cx.restore();
-  tx('You defeated ALL 9 bosses!',W/2,180,'#fff',16,'center');
+  const winMsg = gs.campaign==='s' ? 'You conquered the SPACE MARINES campaign!' : 'You defeated ALL 9 UNDERTALE bosses!';
+  tx(winMsg,W/2,180,'#fff',16,'center');
   cx.save(); cx.font="bold 22px 'Courier New',monospace"; cx.textAlign='center';
   cx.fillStyle='#00ffff'; cx.shadowBlur=16; cx.shadowColor='#00ffff';
-  cx.fillText('✦ TRUE CHAMPION — SANS 15.0 SLAIN ✦',W/2,218); cx.shadowBlur=0; cx.restore();
-  const bnames=['Hard Sans','Story','Troll Hard','Double Boss','Double Story','Impossible','Markiplier','100× Everything','Sans 15.0'];
-  for(let i=0;i<9;i++){
+  const champText = gs.campaign==='s' ? '✦ TRUE CHAMPION — SPACE GOD SLAIN ✦' : '✦ TRUE CHAMPION — SANS 15.0 SLAIN ✦';
+  cx.fillText(champText,W/2,218); cx.shadowBlur=0; cx.restore();
+  const bnames = gs.campaign==='s'
+    ? ['The Alien','Rocket Robot','Corrupted AI','8-Bit Moon Crusher','Sun God','Space God']
+    : ['Hard Sans','Story','Troll Hard','Double Boss','Double Story','Impossible','Markiplier','100× Everything','Sans 15.0'];
+  const lastIdx = bnames.length-1;
+  for(let i=0;i<bnames.length;i++){
     const x=i<5?W/2-130:W/2+20, y=250+((i%5)*26);
-    tx(`★ ${bnames[i]}`,x,y,i===8?'#00ffff':'#88ff88',13);
+    tx(`★ ${bnames[i]}`,x,y,i===lastIdx?'#00ffff':'#88ff88',13);
   }
   if(Math.floor(gs.frame/25)%2===0)
     tx('Press Z to return to title',W/2,H-24,'#aaa',13,'center');
