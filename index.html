@@ -38,25 +38,51 @@ canvas {
   padding:32px 40px; text-align:center;
   max-width:340px; width:90%;
 }
-#mathBox h2 { color:#fff; font-size:14px; margin-bottom:8px; letter-spacing:1px; }
-#mathBox p { color:#aaa; font-size:12px; margin-bottom:20px; }
-#mathQuestion { color:#ffe066; font-size:28px; margin-bottom:18px; }
-#mathInput {
-  background:#000; color:#fff; border:2px solid #555;
-  font-family:'Courier New',monospace; font-size:22px;
-  width:100px; text-align:center; padding:6px;
-  outline:none;
-}
-#mathInput:focus { border-color:#fff; }
-#mathSubmit {
-  display:block; margin:16px auto 0;
-  background:#fff; color:#000;
+#mathBox h2 { color:#fff; font-size:14px; margin-bottom:8px; letter-spacing:2px; }
+#mathBox p  { color:#aaa; font-size:12px; margin-bottom:18px; }
+#mathQuestion { color:#ffe066; font-size:17px; margin-bottom:18px; line-height:1.65; white-space:pre-line; }
+.fbtn {
+  background:#111; color:#fff; border:2px solid #555;
   font-family:'Courier New',monospace; font-size:14px;
-  border:none; padding:8px 24px; cursor:pointer;
+  padding:10px 20px; cursor:pointer; border-radius:6px;
+  transition:background 0.1s, border-color 0.1s;
   letter-spacing:1px;
 }
-#mathSubmit:hover { background:#ffe066; }
-#mathError { color:#ff4444; font-size:12px; margin-top:10px; min-height:16px; }
+.fbtn:hover { background:#222; border-color:#fff; }
+.fbtn.correct { background:#004400; border-color:#00cc00; color:#00ff88; }
+.fbtn.wrong   { background:#440000; border-color:#cc0000; color:#ff4444; }
+#mathError { color:#ff4444; font-size:12px; margin-top:14px; min-height:16px; white-space:pre-line; }
+/* ---- Username Overlay ---- */
+#nameOverlay {
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.93);
+  align-items:center; justify-content:center;
+  z-index:200; font-family:'Courier New',monospace;
+}
+#nameOverlay.active { display:flex; }
+#nameBox {
+  background:#111; border:2px solid #ffe066;
+  padding:32px 40px; text-align:center;
+  max-width:380px; width:92%;
+}
+#nameBox h2 { color:#ffe066; font-size:15px; margin-bottom:8px; letter-spacing:2px; }
+#nameBox p  { color:#888; font-size:12px; margin-bottom:18px; line-height:1.6; }
+#nameInput {
+  background:#000; color:#fff; border:2px solid #555;
+  font-family:'Courier New',monospace; font-size:20px;
+  width:100%; text-align:center; padding:9px;
+  outline:none; letter-spacing:2px;
+}
+#nameInput:focus { border-color:#ffe066; }
+#nameSubmit {
+  display:block; margin:16px auto 0;
+  background:#ffe066; color:#000;
+  font-family:'Courier New',monospace; font-size:14px;
+  border:none; padding:9px 30px; cursor:pointer;
+  letter-spacing:2px; font-weight:bold;
+}
+#nameSubmit:hover { background:#fff; }
+#nameError { color:#ff4444; font-size:12px; margin-top:10px; min-height:16px; }
 /* ---- On-screen controls ---- */
 #controls {
   display:flex; gap:18px; margin-top:10px; margin-bottom:6px;
@@ -102,14 +128,26 @@ canvas {
 </style>
 </head>
 <body>
+<div id="nameOverlay">
+  <div id="nameBox">
+    <h2>* ENTER YOUR NAME *</h2>
+    <p>3 to 40 characters.<br>Letters, numbers, and spaces only.</p>
+    <input id="nameInput" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="YourName" />
+    <button id="nameSubmit">CONFIRM</button>
+    <div id="nameError"></div>
+  </div>
+</div>
 <div id="mathQuiz">
   <div id="mathBox">
-    <h2>* MATH CHECK *</h2>
-    <p>Answer correctly to begin the boss fight.</p>
+    <h2>* FLOAT OR SINK? *</h2>
+    <p id="mathSub">Answer all 5 questions correctly to begin the boss fight.</p>
     <div id="mathQuestion"></div>
-    <input id="mathInput" type="number" autocomplete="off" autofocus/>
-    <button id="mathSubmit">FIGHT</button>
+    <div id="mathBtns" style="display:flex;gap:14px;justify-content:center;margin-top:6px;">
+      <button class="fbtn" id="btnFloat">🌊 FLOATS</button>
+      <button class="fbtn" id="btnSink">🪨 SINKS</button>
+    </div>
     <div id="mathError"></div>
+    <div id="mathProgress" style="margin-top:12px;color:#555;font-size:11px;letter-spacing:1px;"></div>
   </div>
 </div>
 <div id="wrap">
@@ -165,6 +203,9 @@ function sfxDeny()    { tone(200,0.2,'square',0.1); }
 
 // ---- SAVE / LOAD --------------------------------------------------
 const SAVE_KEY = 'bossGauntlet_v1';
+const NAME_KEY  = 'bg_username';
+const FB = 'https://bossgaunlet-default-rtdb.firebaseio.com';
+
 function saveGame() {
   localStorage.setItem(SAVE_KEY, JSON.stringify({ ul: gs.unlocked, bt: gs.beaten }));
 }
@@ -173,6 +214,53 @@ function loadGame() {
     const d = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (d) { gs.unlocked = d.ul; gs.beaten = d.bt; }
   } catch(e) {}
+  gs.username = localStorage.getItem(NAME_KEY) || '';
+}
+
+// ---- FIREBASE LEADERBOARD ----------------------------------------
+async function fbGet(path) {
+  try {
+    const r = await fetch(`${FB}/${path}.json`);
+    const d = await r.json();
+    if (!d) return [];
+    return Array.isArray(d) ? d : Object.values(d);
+  } catch(e) { return []; }
+}
+async function fbSet(path, arr) {
+  try {
+    await fetch(`${FB}/${path}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(arr)
+    });
+  } catch(e) {}
+}
+
+async function submitScore() {
+  const name  = gs.username;
+  const score = gs.sessionCorrect;
+  const boss  = gs.maxBossReached;
+  gs.sessionCorrect = 0;   // reset immediately so double-calls don't re-submit
+  gs.maxBossReached = -1;
+  if (!name || score <= 0) return;
+
+  const date = new Date().toLocaleDateString();
+
+  const [lbQ, lbB] = await Promise.all([fbGet('lb_q'), fbGet('lb_b')]);
+
+  lbQ.push({ n: name, s: score, d: date });
+  lbQ.sort((a, b) => b.s - a.s);
+  lbQ.splice(100);
+
+  lbB.push({ n: name, b: boss, d: date });
+  lbB.sort((a, b) => b.b - a.b);
+  lbB.splice(100);
+
+  await Promise.all([fbSet('lb_q', lbQ), fbSet('lb_b', lbB)]);
+
+  gs.lbCache  = { q: lbQ.slice(0, 10), b: lbB.slice(0, 10) };
+  gs.lbLoaded = true;
+  gs.lbLoading = false;
 }
 
 // ---- BOSS DEFINITIONS ---------------------------------------------
@@ -306,6 +394,17 @@ const gs = {
   // Misc
   memPos: [],
   fakeDieTimer: 0,
+
+  // Player identity & scoring
+  username: '',
+  sessionCorrect: 0,   // questions right this run
+  maxBossReached: -1,  // highest bossIdx attempted this run
+  titleSel: 0,         // 0=PLAY 1=LEADERBOARD 2=CHANGE NAME
+
+  // Leaderboard cache (populated async from Firebase)
+  lbCache:   { q: [], b: [] },
+  lbLoading: false,
+  lbLoaded:  false,
 };
 
 // ---- INPUT --------------------------------------------------------
@@ -891,45 +990,215 @@ function drawFightBox() {
   cx.shadowBlur=0;
 }
 
-// ---- MATH QUIZ --------------------------------------------------
+// ---- FLOAT OR SINK QUIZ -----------------------------------------
 (function(){
-  const ops = [
-    { sym:'+', fn:(a,b)=>a+b },
-    { sym:'-', fn:(a,b)=>a-b },
-    { sym:'×', fn:(a,b)=>a*b },
+  // Each entry: { q: question text, a: true=floats false=sinks, fact: explanation }
+  const QUESTIONS = [
+    // --- Tricky material density ---
+    { q:'Pumice is a volcanic rock full of tiny air pockets.\nDoes a chunk of pumice float in water?',
+      a:true,  fact:'Pumice\'s porous structure gives it a density below 1 g/cm³ — it floats, sometimes for years!' },
+    { q:'Osmium is the densest naturally occurring element\n(22.6 g/cm³ — about 22× heavier than water).\nDoes solid osmium float?',
+      a:false, fact:'At 22.6 g/cm³ osmium sinks instantly. It\'s the densest stable element on Earth.' },
+    { q:'Balsa wood has a density of roughly 0.12 g/cm³.\nDoes balsa wood float in liquid mercury (13.6 g/cm³)?',
+      a:true,  fact:'Almost everything floats in mercury! Balsa\'s density is ~100× less than mercury.' },
+    { q:'Gallium is a metal that melts in your hand (29 °C).\nIts density is 5.9 g/cm³. Does solid gallium float in water?',
+      a:false, fact:'Gallium is 5.9× denser than water — it sinks completely.' },
+    { q:'Aerogel is called "frozen smoke" — the lightest\nsolid ever made (~0.002 g/cm³).\nDoes aerogel float on water?',
+      a:true,  fact:'Aerogel is so light it can balance on a soap bubble. It easily floats on water.' },
+    { q:'Ebony is one of the densest woods (1.1–1.2 g/cm³).\nDoes a block of ebony wood float in water?',
+      a:false, fact:'Ebony is denser than water (1.0 g/cm³) — unlike most woods, it actually sinks!' },
+    { q:'Dry ice is solid carbon dioxide with a\ndensity of 1.56 g/cm³.\nDoes dry ice float in water?',
+      a:false, fact:'Dry ice is 1.56× denser than water so it sinks — though it rapidly turns to CO₂ gas.' },
+    { q:'A solid block of aluminum has a density\nof 2.7 g/cm³. Liquid mercury is 13.6 g/cm³.\nDoes solid aluminum float in liquid mercury?',
+      a:true,  fact:'Mercury is so dense that aluminum (2.7 g/cm³) floats on it — even iron floats on mercury!' },
+
+    // --- Shape vs material ---
+    { q:'The same lump of clay can be shaped two ways.\nAs a solid ball it sinks. Shaped into a hollow bowl —\ndoes the clay bowl float?',
+      a:true,  fact:'Shape changes average density! The bowl displaces more water, creating enough buoyant force to float.' },
+    { q:'A steel ship weighs thousands of tonnes.\nDoes it float in water?',
+      a:true,  fact:'Archimedes\' principle: the ship\'s hollow shape displaces water weighing MORE than the ship itself.' },
+    { q:'A steel ball bearing (solid, no air) is dropped\ninto water. Does it float?',
+      a:false, fact:'Without any hollow space, the steel\'s density (~7.9 g/cm³) is far too high to float.' },
+    { q:'A needle placed VERY carefully flat on a\nwater surface — does it float?',
+      a:true,  fact:'Surface tension! Water molecules create a "skin" strong enough to support a steel needle laid flat.' },
+
+    // --- Fruits and everyday surprises ---
+    { q:'An unpeeled orange (with its porous rind)\nis placed in water. Does it float?',
+      a:true,  fact:'The orange rind is full of air pockets, lowering average density below 1 g/cm³.' },
+    { q:'The same orange is now PEELED — no rind.\nDoes the peeled orange float in water?',
+      a:false, fact:'Without the air-filled rind, the orange flesh is slightly denser than water and sinks!' },
+    { q:'A can of DIET soda and a can of REGULAR soda\nare placed in water. Which floats?\n(Answer: Does DIET soda float?)',
+      a:true,  fact:'Diet soda uses artificial sweetener (much less mass than sugar), making it less dense than water.' },
+    { q:'A can of REGULAR soda (with ~40g of sugar)\nis placed in water. Does it float?',
+      a:false, fact:'Dissolved sugar significantly increases the density past 1 g/cm³ — regular soda sinks.' },
+    { q:'A whole, uncooked egg is placed in plain\nfresh water. Does it float?',
+      a:false, fact:'Fresh eggs are slightly denser than fresh water. A floating egg is actually a sign it\'s gone bad!' },
+    { q:'The same egg is placed in VERY salty water\n(like the Dead Sea, ~34% salt). Does it float?',
+      a:true,  fact:'Dissolved salt raises water density above the egg\'s density — making the egg float easily.' },
+    { q:'A lemon is placed in water. Does it float?',
+      a:true,  fact:'Lemons have a spongy, air-filled rind similar to oranges — density stays below 1 g/cm³.' },
+    { q:'A watermelon\'s flesh (no rind) is denser\nthan its average whole density.\nDoes a whole watermelon float?',
+      a:true,  fact:'The thick rind and internal air pockets bring the whole watermelon\'s average density below 1 g/cm³.' },
+
+    // --- Liquids and layering ---
+    { q:'Fresh water (1.00 g/cm³) is slowly poured\ninto a container of salt water (1.03 g/cm³).\nDoes the fresh water float on top?',
+      a:true,  fact:'Less dense fluids float on denser ones. Rivers entering the ocean stay layered for miles!' },
+    { q:'Hot water is less dense than cold water.\nDoes hot water float on top of cold water?',
+      a:true,  fact:'This is why oceans have thermoclines — warm surface water floats on colder, denser deep water.' },
+    { q:'Vegetable oil (0.92 g/cm³) is poured into\nwater (1.00 g/cm³). Does the oil float?',
+      a:true,  fact:'Oil is less dense than water AND doesn\'t mix with it — so it always floats on top.' },
+    { q:'Honey has a density of about 1.4 g/cm³.\nDoes honey float on water?',
+      a:false, fact:'Honey is 40% denser than water — it sinks and sits at the bottom (until it slowly dissolves).' },
+
+    // --- Ice and temperature ---
+    { q:'An ice cube (0.92 g/cm³) is dropped into\nethanol / rubbing alcohol (0.79 g/cm³).\nDoes the ice float in the alcohol?',
+      a:false, fact:'Ice is actually DENSER than alcohol — so it sinks in it, unlike in water. Surprising!' },
+    { q:'A block of ice (density 0.92 g/cm³) is placed\nin liquid mercury (13.6 g/cm³).\nDoes the ice float in mercury?',
+      a:true,  fact:'Almost anything floats in mercury — ice is ~15× less dense than mercury!' },
+    { q:'Water expands when it freezes. This means ice\nis LESS dense than liquid water.\nDoes this make ice float in liquid water?',
+      a:true,  fact:'Correct! Ice is 9% less dense than water. This is rare — most substances sink in their liquid form.' },
+
+    // --- Physics concepts ---
+    { q:'A submarine is designed to both float AND sink.\nWhen its ballast tanks are FILLED with water,\ndoes the submarine float?',
+      a:false, fact:'Filling ballast tanks increases the sub\'s average density above water — it submerges. Pump them out and it rises.' },
+    { q:'Archimedes\' principle says an object floats\nif the weight of water it displaces equals its own weight.\nDoes a 1kg object displacing 1.1kg of water float?',
+      a:true,  fact:'Yes! If displaced water weighs MORE than the object, buoyancy wins and the object floats.' },
+    { q:'A block of wood floats with 90% of its volume\nsubmerged. Is it still floating?',
+      a:true,  fact:'Yes — as long as ANY part stays above the surface, it\'s floating. Density determines how deep it sits.' },
+    { q:'Saturn (the planet) has an average density of\n0.687 g/cm³ — less than water.\nIf you had an ocean big enough, would Saturn float?',
+      a:true,  fact:'Saturn is the only planet in our solar system with a density lower than water — it would technically float!' },
+    { q:'A person holds their breath and fills their\nlungs with air. Does the average human body\nthen become less dense than water?',
+      a:true,  fact:'Lungs full of air lower your average density to just below 1 g/cm³ — that\'s why you can float on your back!' },
+    { q:'A waterlogged piece of driftwood has absorbed\nso much water its pores are completely full.\nDoes it still float?',
+      a:false, fact:'Once all air pockets are filled with water, the wood\'s density exceeds 1 g/cm³ and it sinks.' },
+
+    // --- Advanced / counter-intuitive ---
+    { q:'Titanium has a density of 4.5 g/cm³ — far\nlighter than most metals but still heavier than water.\nDoes a solid titanium rod float in water?',
+      a:false, fact:'At 4.5× the density of water, solid titanium sinks — but its strength-to-weight ratio makes it great for aircraft.' },
+    { q:'A large block of iron (7.9 g/cm³) is shaped\ninto a flat plate and placed on water very gently.\nCan it float due to surface tension?',
+      a:false, fact:'A flat iron plate is too heavy — surface tension can only support tiny, light objects like needles. The plate sinks.' },
+    { q:'Magnesium is a metal with density 1.74 g/cm³.\nDoes solid magnesium float in water?',
+      a:false, fact:'Magnesium at 1.74 g/cm³ is denser than water — it sinks. It also reacts violently with water!' },
+    { q:'Lithium is the lightest metal, density 0.53 g/cm³.\nDoes solid lithium float on water?',
+      a:true,  fact:'Lithium is less dense than water so it floats — but it reacts explosively with water, so you\'d never see it floating calmly!' },
+    { q:'A solid block of pure gold (19.3 g/cm³)\nis placed in water. Does it float?',
+      a:false, fact:'Gold is nearly 20× denser than water — it sinks faster than almost any common material.' },
+    { q:'Paraffin wax (density ~0.9 g/cm³)\nis placed in water. Does it float?',
+      a:true,  fact:'Paraffin wax is slightly less dense than water so it floats — candle wax on water is a real phenomenon.' },
+    { q:'A sealed hollow titanium sphere (average\ndensity 0.5 g/cm³ including the hollow interior)\nis placed in water. Does it float?',
+      a:true,  fact:'Average density is what matters, not material density. The hollow interior brings average density below 1 g/cm³.' },
+    { q:'A neutron star has a density of about\n4×10¹⁷ kg/m³ — incomprehensibly dense.\nWould a teaspoon of neutron star material float?',
+      a:false, fact:'A teaspoon of neutron star material would weigh about a billion tonnes — the most extreme sinking possible!' },
+    { q:'Cork oak bark has a density of 0.12–0.25 g/cm³.\nDoes cork float in liquid gallium (6.1 g/cm³)?',
+      a:true,  fact:'Everything with density under 6.1 g/cm³ floats on gallium. Cork at 0.2 g/cm³ floats easily on it.' },
+    { q:'A sealed block of aerogel coated in wax\n(so water can\'t soak in) has density 0.002 g/cm³.\nDoes it float in liquid mercury?',
+      a:true,  fact:'Aerogel is so light (500× less dense than mercury) it would barely even touch the mercury\'s surface.' },
+
+    // --- Fluid layering & density columns ---
+    { q:'You layer these liquids in order:\nhoney, corn syrup, water, oil, and alcohol.\nDoes the honey float above the water?',
+      a:false, fact:'Honey (1.4 g/cm³) is denser than water — it sinks below it. Density determines layers: honey sits at the bottom.' },
+    { q:'Mercury (13.6 g/cm³), water (1.0), and\nalcohol (0.79) are poured into a container.\nDoes the water float above the mercury?',
+      a:true,  fact:'Yes — water is far less dense than mercury, so it floats on top of mercury (but below the alcohol layer).' },
+    { q:'Supercritical CO₂ (at high pressure/temp)\nhas density ~0.47 g/cm³.\nDoes it float on top of liquid water?',
+      a:true,  fact:'At 0.47 g/cm³, supercritical CO₂ is less than half as dense as water — it floats on it.' },
+    { q:'Deep ocean water at 4 km depth is denser\nthan surface ocean water due to pressure.\nDoes warm surface water float on this cold deep water?',
+      a:true,  fact:'Yes — this stratification (thermocline/halocline) is why deep ocean water almost never mixes with the surface.' },
+
+    // --- Real-world physics scenarios ---
+    { q:'A glass of water is filled to the brim.\nAn ice cube is placed in it — the ice floats.\nWhen the ice melts, does the water overflow?',
+      a:false, fact:'No! Ice floats because it\'s less dense than water. When it melts back to liquid, the volume decreases perfectly — no overflow.' },
+    { q:'A rubber ball is pushed 1 meter underwater\nand released. Does it float back up?',
+      a:true,  fact:'The buoyant force (water pressure pushing up) is greater than gravity — the ball shoots back up rapidly.' },
+    { q:'Two identical cups of water are weighed.\nA heavy steel bolt hanging from a string is\nsubmerged in one cup (not touching the bottom).\nDoes that cup weigh more?',
+      a:true,  fact:'Yes! This is Archimedes: the water pushes up on the bolt AND the bolt pushes down on the water equally — adding measurable weight.' },
+    { q:'A helium balloon is sealed inside a car.\nWhen the car accelerates forward,\ndoes the balloon lean forward or backward?',
+      a:true,  fact:'The balloon floats toward the front! Air inside acts like a heavy fluid — it surges backward, pushing the lighter helium balloon forward.' },
+    { q:'An astronaut opens a water bottle in zero gravity.\nThe water forms a floating sphere.\nIf a bubble of air forms inside the water sphere,\ndoes the air bubble move to the center?',
+      a:false, fact:'In zero-g there\'s no buoyancy — air bubbles don\'t "float" anywhere. They stay wherever placed. Buoyancy requires gravity!' },
+    { q:'A 1kg piece of foam (density 0.05 g/cm³)\nand a 1kg block of lead (density 11.3 g/cm³)\nare both placed in water. Does the foam float?',
+      a:true,  fact:'Both weigh 1kg, but the foam\'s much lower density (and huge volume) displaces far more water than its weight — it floats.' },
+    { q:'A submarine dives to 300m depth. The water\npressure compresses the submarine slightly,\nincreasing its average density.\nDoes this make it harder to return to the surface?',
+      a:true,  fact:'Yes! Deep-diving subs must account for hull compression — it slightly increases density, requiring ballast adjustments to resurface.' },
+    { q:'Crude oil (0.85 g/cm³) is spilled into\nsalt water (1.025 g/cm³). Does the oil float?',
+      a:true,  fact:'This is exactly why oil spills spread across ocean surfaces — oil is always less dense than seawater.' },
+    { q:'A block of wood with a large steel bolt\ndriven through its center sinks when tested.\nThe steel bolt is removed and the hole is sealed.\nDoes the wood float now?',
+      a:true,  fact:'The steel bolt made the combined average density exceed 1 g/cm³. Remove it and the wood\'s own density (~0.6) floats easily.' },
   ];
-  let _pendingIdx = null;
+
+  function pick5() {
+    const pool = [...QUESTIONS];
+    const result = [];
+    for (let i = 0; i < 5; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      result.push(pool.splice(idx, 1)[0]);
+    }
+    return result;
+  }
+
+  const overlay  = document.getElementById('mathQuiz');
+  const qEl      = document.getElementById('mathQuestion');
+  const errEl    = document.getElementById('mathError');
+  const progEl   = document.getElementById('mathProgress');
+  const subEl    = document.getElementById('mathSub');
+  const btnFloat = document.getElementById('btnFloat');
+  const btnSink  = document.getElementById('btnSink');
 
   function showQuiz(idx, onPass) {
-    const op = ops[Math.floor(Math.random()*ops.length)];
-    const a = Math.floor(Math.random()*10)+1;
-    const b = op.sym==='-' ? Math.floor(Math.random()*a)+1 : Math.floor(Math.random()*10)+1;
-    const answer = op.fn(a,b);
+    const queue = pick5();
+    let current = 0;
+    let locked = false;
 
-    const overlay = document.getElementById('mathQuiz');
-    const qEl     = document.getElementById('mathQuestion');
-    const input   = document.getElementById('mathInput');
-    const errEl   = document.getElementById('mathError');
-    const btn     = document.getElementById('mathSubmit');
+    function loadQ() {
+      const q = queue[current];
+      qEl.textContent = q.q;
+      errEl.textContent = '';
+      progEl.textContent = `Question ${current+1} of 5`;
+      btnFloat.className = 'fbtn';
+      btnSink.className  = 'fbtn';
+      locked = false;
+    }
 
-    qEl.textContent = a + ' ' + op.sym + ' ' + b + ' = ?';
-    input.value = '';
-    errEl.textContent = '';
-    overlay.classList.add('active');
-    setTimeout(()=>input.focus(),50);
+    function attempt(userSaysFloat) {
+      if (locked) return;
+      locked = true;
+      const q = queue[current];
+      const correct = (userSaysFloat === q.a);
 
-    function attempt() {
-      if(parseInt(input.value,10) === answer) {
-        overlay.classList.remove('active');
-        onPass();
+      if (correct) {
+        gs.sessionCorrect++;
+        (userSaysFloat ? btnFloat : btnSink).className = 'fbtn correct';
+        errEl.style.color = '#00ff88';
+        errEl.textContent = '✓ ' + q.fact;
+        setTimeout(() => {
+          current++;
+          if (current >= queue.length) {
+            overlay.classList.remove('active');
+            onPass();
+          } else {
+            loadQ();
+          }
+        }, 1200);
       } else {
-        errEl.textContent = '* Wrong! Try again.';
-        input.value='';
-        input.focus();
+        (userSaysFloat ? btnFloat : btnSink).className = 'fbtn wrong';
+        errEl.style.color = '#ff4444';
+        errEl.textContent = '✗ Wrong!\n' + q.fact + '\n\nSending you back to the title...';
+        submitScore();   // record whatever was earned this run
+        setTimeout(() => {
+          overlay.classList.remove('active');
+          btnFloat.className = 'fbtn';
+          btnSink.className  = 'fbtn';
+          errEl.textContent = '';
+          errEl.style.color = '#ff4444';
+          gs.state = 'title';
+        }, 2800);
       }
     }
-    btn.onclick = attempt;
-    input.onkeydown = e => { if(e.key==='Enter') attempt(); };
+
+    btnFloat.onclick = () => attempt(true);
+    btnSink.onclick  = () => attempt(false);
+
+    overlay.classList.add('active');
+    loadQ();
   }
 
   window._showMathQuiz = showQuiz;
@@ -938,6 +1207,7 @@ function drawFightBox() {
 // ---- GAME LOGIC -------------------------------------------------
 function startFight(idx) {
   if(!gs.unlocked[idx]) return;
+  gs.maxBossReached = Math.max(gs.maxBossReached, idx);
   window._showMathQuiz(idx, function(){
     const boss=BOSSES[idx];
     gs.bossIdx=idx; gs.boss=boss;
@@ -1027,7 +1297,38 @@ function dealDamageToBoss(dmg) {
 
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  if(hit('KeyZ','Enter')||hit('Space')){ sfxSelect(); gs.state='select'; gs.menuSel=0; }
+  const n = 3; // PLAY / LEADERBOARD / CHANGE NAME
+  if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
+  if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
+  if(hit('KeyZ','Enter')||hit('Space')) {
+    sfxConfirm();
+    if(gs.titleSel===0) {
+      // Reset run stats when starting fresh
+      gs.sessionCorrect=0; gs.maxBossReached=-1;
+      gs.state='select'; gs.menuSel=0;
+    } else if(gs.titleSel===1) {
+      enterLeaderboard();
+    } else {
+      showNameOverlay();
+    }
+  }
+}
+function enterLeaderboard() {
+  gs.state = 'leaderboard';
+  gs.lbLoading = true;
+  gs.lbLoaded  = false;
+  gs.lbCache   = { q: [], b: [] };
+  Promise.all([fbGet('lb_q'), fbGet('lb_b')]).then(([q, b]) => {
+    gs.lbCache   = { q: q.slice(0,10), b: b.slice(0,10) };
+    gs.lbLoading = false;
+    gs.lbLoaded  = true;
+  }).catch(() => {
+    gs.lbLoading = false;
+    gs.lbLoaded  = true;
+  });
+}
+function updLeaderboard() {
+  if(hit('KeyZ','Enter')||hit('Space')||hit('KeyX','Escape')) { gs.state='title'; }
 }
 function updSelect() {
   if(hit('ArrowUp','KeyW')){ gs.menuSel=Math.max(0,gs.menuSel-1); sfxSelect(); }
@@ -1123,14 +1424,88 @@ function updDead() {
   gs.deathTimer--;
   gs.shakeX*=0.9; gs.shakeY*=0.9; gs.flashA=Math.max(0,gs.flashA-0.02);
   if(hit('KeyR')){ startFight(gs.bossIdx); return; }
-  if(gs.deathTimer<80&&(hit('KeyZ','Enter')||hit('Space'))){ gs.state='select'; gs.menuSel=gs.bossIdx; }
-  if(gs.deathTimer<80&&hit('Escape','KeyX')){ gs.state='title'; }
+  if(gs.deathTimer<80&&(hit('KeyZ','Enter')||hit('Space'))){ submitScore(); gs.state='select'; gs.menuSel=gs.bossIdx; }
+  if(gs.deathTimer<80&&hit('Escape','KeyX')){ submitScore(); gs.state='title'; }
 }
 function updWin() {
-  if(hit('KeyZ','Enter')||hit('Space')||hit('Escape','KeyX')){ gs.state='title'; }
+  if(hit('KeyZ','Enter')||hit('Space')||hit('Escape','KeyX')){
+    submitScore();
+    gs.state='title';
+  }
 }
 
 // ---- SCREEN DRAWS -----------------------------------------------
+function drawLeaderboard() {
+  fr(0,0,W,H,'#000');
+  // Header
+  cx.save(); cx.font="bold 20px 'Courier New',monospace"; cx.textAlign='center';
+  const hue=gs.frame%360;
+  cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=14; cx.shadowColor=cx.fillStyle;
+  cx.fillText('🏆  LEADERBOARDS  🏆',W/2,36); cx.shadowBlur=0; cx.restore();
+
+  if(gs.lbLoading) {
+    cx.save(); cx.font="18px 'Courier New',monospace"; cx.textAlign='center'; cx.fillStyle='#aaa';
+    cx.fillText('Loading scores from server...', W/2, H/2);
+    const dots='.'.repeat((Math.floor(gs.frame/15)%4));
+    cx.fillText(dots, W/2, H/2+30);
+    cx.restore();
+    tx('Z / Esc — Back',W/2,H-10,'#444',11,'center');
+    return;
+  }
+
+  const bossNames=['Sans','Toriel','???','Sans+Pap','Asgore+Tor','Chara','Markiplier','×100','—'];
+  const lbQ = gs.lbCache.q;
+  const lbB = gs.lbCache.b;
+
+  // Left panel — Most Correct
+  const lx=18, rx=W/2+8, py_=54, rh=40, pw=W/2-26;
+  fr(lx,py_,pw,22,'#1a1a1a'); sr(lx,py_,pw,22,'#555',1);
+  tx('MOST QUESTIONS CORRECT',lx+pw/2,py_+15,'#ffe066',11,'center');
+
+  for(let i=0;i<10;i++){
+    const e=lbQ[i];
+    const ey=py_+24+i*rh;
+    const bg=i%2===0?'#080808':'#0d0d0d';
+    fr(lx,ey,pw,rh-2,bg);
+    if(e){
+      const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+      const nc=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'#ccc';
+      tx(medal,     lx+4,  ey+25, nc,      12);
+      // Truncate long names
+      const nm=e.n.length>14?e.n.substring(0,13)+'…':e.n;
+      tx(nm,        lx+38, ey+25, '#fff',  12);
+      tx(`${e.s} ✓`,lx+pw-6,ey+25,'#00ff88',12,'right');
+    } else {
+      tx('—',lx+pw/2,ey+25,'#333',11,'center');
+    }
+  }
+
+  // Right panel — Furthest Boss
+  fr(rx,py_,pw,22,'#1a1a1a'); sr(rx,py_,pw,22,'#555',1);
+  tx('FURTHEST BOSS REACHED',rx+pw/2,py_+15,'#ff8844',11,'center');
+
+  for(let i=0;i<10;i++){
+    const e=lbB[i];
+    const ey=py_+24+i*rh;
+    const bg=i%2===0?'#080808':'#0d0d0d';
+    fr(rx,ey,pw,rh-2,bg);
+    if(e){
+      const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+      const nc=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'#ccc';
+      tx(medal,       rx+4,  ey+25, nc,     12);
+      const nm=e.n.length>13?e.n.substring(0,12)+'…':e.n;
+      tx(nm,          rx+38, ey+25,'#fff',  12);
+      const bn=e.b>=0?(e.b===7?'ALL DONE!':'Boss '+(e.b+1)+': '+bossNames[e.b]):'—';
+      const bc=e.b===7?'#ffd700':e.b>=5?'#ff4444':e.b>=3?'#ff8800':'#aaa';
+      tx(bn,          rx+pw-6,ey+25,bc,11,'right');
+    } else {
+      tx('—',rx+pw/2,ey+25,'#333',11,'center');
+    }
+  }
+
+  tx('Z / Enter / Esc — Back to title',W/2,H-10,'#444',11,'center');
+}
+
 function drawTitle() {
   fr(0,0,W,H,'#000');
   // Particles
@@ -1146,17 +1521,22 @@ function drawTitle() {
   tx('8 Bosses. Progressive Unlocks. Undertale-style.',W/2,170,'#999',14,'center');
 
   const beaten=gs.beaten.filter(b=>b).length;
-  tx(`Progress: ${beaten} / 8`,W/2,210,'#777',14,'center');
+  tx(`Progress: ${beaten} / 8 bosses cleared`,W/2,210,'#777',13,'center');
+  if(gs.username) tx(`Player: ${gs.username}`,W/2,232,'#ffe066',12,'center');
 
-  if(Math.floor(gs.frame/24)%2===0)
-    tx('Press Z / Enter to select boss',W/2,265,'#fff',16,'center');
+  // Main menu
+  const MENU_T=['▶  PLAY','🏆  LEADERBOARD','✎  CHANGE NAME'];
+  for(let i=0;i<3;i++){
+    const sel=gs.titleSel===i;
+    const bx_=W/2-120, by__=268+i*52, bw_=240, bh_=40;
+    fr(bx_,by__,bw_,bh_,sel?'#1a1a3a':'#0a0a0a');
+    sr(bx_,by__,bw_,bh_,sel?'#fff':'#333',sel?2:1);
+    tx(MENU_T[i],W/2,by__+26,sel?'#fff':'#777',14,'center');
+  }
 
-  tx('━ Controls ━',W/2,320,'#444',12,'center');
-  tx('Arrow Keys / WASD: Move heart in battle',W/2,342,'#444',12,'center');
-  tx('Z / Enter: Confirm  |  X / Esc: Back  |  R: Retry',W/2,362,'#444',12,'center');
-  tx('FIGHT: Slider minigame for damage',W/2,382,'#444',12,'center');
-  tx('Blue bones: STOP MOVING to avoid damage!',W/2,402,'#4488ff',12,'center');
-  tx('ITEM: Heal 30 HP (5 per fight)',W/2,422,'#44aa44',12,'center');
+  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,445,'#444',11,'center');
+  tx('Answer 5 float-or-sink questions before each boss!',W/2,465,'#4488ff',11,'center');
+  tx('Wrong answer = back to title screen.',W/2,483,'#ff6666',11,'center');
 }
 
 function drawSelect() {
@@ -1312,8 +1692,9 @@ function drawWin() {
 function update() {
   gs.frame++;
   switch(gs.state){
-    case 'title':    updTitle();    break;
-    case 'select':   updSelect();   break;
+    case 'title':       updTitle();       break;
+    case 'leaderboard': updLeaderboard(); break;
+    case 'select':      updSelect();      break;
     case 'cutscene': updCutscene(); break;
     case 'enemy':    updEnemy();    break;
     case 'player':   updPlayer();   break;
@@ -1332,8 +1713,9 @@ function draw() {
   if(gs.state==='enemy'||gs.state==='player'||gs.state==='dead')
     cx.translate(gs.shakeX,gs.shakeY);
   switch(gs.state){
-    case 'title':    drawTitle();    break;
-    case 'select':   drawSelect();   break;
+    case 'title':       drawTitle();       break;
+    case 'leaderboard': drawLeaderboard(); break;
+    case 'select':      drawSelect();      break;
     case 'cutscene': drawCutscene(); break;
     case 'enemy':    drawBattle();   break;
     case 'player':   drawBattle();   break;
@@ -1387,9 +1769,41 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// ---- USERNAME OVERLAY -------------------------------------------
+function showNameOverlay() {
+  const overlay = document.getElementById('nameOverlay');
+  const input   = document.getElementById('nameInput');
+  const errEl   = document.getElementById('nameError');
+  const btn     = document.getElementById('nameSubmit');
+  input.value = gs.username || '';
+  errEl.textContent = '';
+  overlay.classList.add('active');
+  setTimeout(() => input.focus(), 60);
+
+  function attempt() {
+    const raw = input.value.trim();
+    if (raw.length < 3) {
+      errEl.textContent = '* Name must be at least 3 characters.'; return;
+    }
+    if (raw.length > 40) {
+      errEl.textContent = '* Name must be 40 characters or fewer.'; return;
+    }
+    if (!/^[a-zA-Z0-9 _\-]+$/.test(raw)) {
+      errEl.textContent = '* Letters, numbers, spaces, _ and - only.'; return;
+    }
+    gs.username = raw;
+    localStorage.setItem(NAME_KEY, raw);
+    overlay.classList.remove('active');
+    sfxConfirm();
+  }
+  btn.onclick = attempt;
+  input.onkeydown = e => { if (e.key === 'Enter') attempt(); };
+}
+
 // ---- INIT -------------------------------------------------------
 loadGame();
 requestAnimationFrame(loop);
+if (!gs.username) showNameOverlay();
 </script>
 </body>
 </html>
