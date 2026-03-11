@@ -168,7 +168,8 @@ function saveGame() {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
     ul_u: gs.unlocked_u, bt_u: gs.beaten_u,
     ul_s: gs.unlocked_s, bt_s: gs.beaten_s,
-    ob_u: gs.obbyUnlocked, ob_b: gs.obbyBeaten
+    ob_u: gs.obbyUnlocked, ob_b: gs.obbyBeaten,
+    gold: gs.gold, owned: gs.ownedItems
   }));
 }
 function loadGame() {
@@ -179,6 +180,8 @@ function loadGame() {
       else if(d.ul){ gs.unlocked_u=d.ul; gs.beaten_u=d.bt; } // migrate old saves
       if(d.ul_s){ gs.unlocked_s=d.ul_s; gs.beaten_s=d.bt_s; }
       if(d.ob_u){ gs.obbyUnlocked=d.ob_u; gs.obbyBeaten=d.ob_b; }
+      if(d.gold !== undefined) gs.gold = d.gold;
+      if(d.owned) gs.ownedItems = d.owned;
       while(gs.unlocked_u.length<9) gs.unlocked_u.push(false);
       while(gs.beaten_u.length<9)   gs.beaten_u.push(false);
       while(gs.unlocked_s.length<6) gs.unlocked_s.push(false);
@@ -375,23 +378,52 @@ const BOSSES_S = [
   }
 ];
 
+// ---- SHOP ---------------------------------------------------------
+const SHOP_ITEMS = [
+  { id:'medkit',    name:'Extra Medkits',    cost:75,   icon:'🧰', desc:'Start boss fights with 8 items (was 5)'       },
+  { id:'ironheart', name:'Iron Heart',       cost:120,  icon:'🛡️', desc:'+50 max HP in all boss fights'                },
+  { id:'lucky',     name:'Lucky Strike',     cost:175,  icon:'🍀', desc:'Slider attacks deal 30% more damage'          },
+  { id:'boots',     name:'Speed Boots',      cost:200,  icon:'👟', desc:'Move 40% faster in Obby Run'                  },
+  { id:'shield',    name:'Obby Shield',      cost:250,  icon:'🔰', desc:'Absorb 1 free hit per Obby level'             },
+  { id:'goldheart', name:'Gold Heart',       cost:300,  icon:'💛', desc:'Start Obby levels with 4 hearts instead of 3' },
+  { id:'bounty',    name:'Boss Bounty',      cost:150,  icon:'💰', desc:'Earn 50% more gold from all bosses'           },
+  { id:'iframes',   name:'Ghost Cloak',      cost:180,  icon:'👻', desc:'+40 invincibility frames in Obby after a hit' },
+  { id:'crystal',   name:'Soul Crystal',     cost:500,  icon:'💎', desc:'Revive ONCE per boss fight at 50 HP'          },
+  { id:'berserker', name:"Berserker's Oath", cost:400,  icon:'⚔️', desc:'2x slider damage but only 1 medkit per fight' },
+];
+
 // ---- OBBY LEVELS --------------------------------------------------
 const OBBY_LEVELS = [
-  {name:'Flowey',       color:'#ffff44',ec:'#ffff00',subtitle:'still half asleep...',   spd:0.8, fr:90, dur:600 },
-  {name:'Napstablook',  color:'#888888',ec:'#aaaaaa',subtitle:'...not terrible',        spd:1.0, fr:75, dur:660 },
-  {name:'Monster Kid',  color:'#ff8844',ec:'#ffaa66',subtitle:'whoa dude!!',            spd:1.2, fr:68, dur:720 },
-  {name:'Papyrus',      color:'#ffffff',ec:'#ffcccc',subtitle:'NYEH HEH HEH!',          spd:1.4, fr:60, dur:720 },
-  {name:'Muffet',       color:'#dd44ff',ec:'#ff88ff',subtitle:'Teeheehee~',             spd:1.6, fr:54, dur:780 },
-  {name:'Mettaton',     color:'#ff44aa',ec:'#ff88cc',subtitle:'\u266a RATINGS! \u266a', spd:1.8, fr:48, dur:780 },
-  {name:'Undyne',       color:'#44aaff',ec:'#88ccff',subtitle:'NGAAAH!!',               spd:2.1, fr:42, dur:840 },
-  {name:'Asgore',       color:'#ee8800',ec:'#ffaa44',subtitle:'CEASE FIRE!!!',          spd:2.3, fr:38, dur:900 },
-  {name:'Chara',        color:'#aa0000',ec:'#ff4444',subtitle:'...',                    spd:2.6, fr:32, dur:960 },
-  {name:'Omega Flowey', color:'#00ff44',ec:'#88ff88',subtitle:'YOU IDIOT.',             spd:2.7, fr:28, dur:1020},
-  {name:'Error Sans',   color:'#4444ff',ec:'#8888ff',subtitle:'StOp.',                 spd:2.9, fr:24, dur:1080},
-  {name:'Ink Sans',     color:'#ff8800',ec:'#ffcc44',subtitle:'STAY DETERMINED',        spd:3.1, fr:20, dur:1080},
-  {name:'Gaster',       color:'#aaaaaa',ec:'#ffffff',subtitle:'\u2593\u2591\u2592',     spd:3.4, fr:17, dur:1200},
-  {name:'True Chara',   color:'#ff0000',ec:'#ff8888',subtitle:'ERASE.',                spd:3.7, fr:13, dur:1200},
-  {name:'THE WORLD',    color:'#ff00ff',ec:'#ffffff',subtitle:'YOUR WORST NIGHTMARE',  spd:4.5, fr:9,  dur:1440},
+  {name:'Flowey',       color:'#ffff44',ec:'#ffff00',subtitle:'still half asleep...',    spd:0.8, fr:90, dur:600,
+   ds:["* Howdy!","* I'm FLOWEY. FLOWEY the FLOWER!","* heh heh heh...","* This'll be easy for me. Are you ready?"]},
+  {name:'Napstablook',  color:'#888888',ec:'#aaaaaa',subtitle:'...not terrible',         spd:1.0, fr:75, dur:660,
+   ds:["* oh...","* i didn't see you there...","* i guess we have to do this...","* ...sorry in advance"]},
+  {name:'Monster Kid',  color:'#ff8844',ec:'#ffaa66',subtitle:'whoa dude!!',             spd:1.2, fr:68, dur:720,
+   ds:["* whoa dude!","* you're actually doing this?","* ok ok ok i'm coming after you","* try to keep up!!"]},
+  {name:'Papyrus',      color:'#ffffff',ec:'#ffcccc',subtitle:'NYEH HEH HEH!',           spd:1.4, fr:60, dur:720,
+   ds:["* NYEH HEH HEH!","* I, THE GREAT PAPYRUS, SHALL CAPTURE YOU!","* PREPARE YOURSELF!","* THE GREAT PAPYRUS NEVER LOSES!"]},
+  {name:'Muffet',       color:'#dd44ff',ec:'#ff88ff',subtitle:'Teeheehee~',              spd:1.6, fr:54, dur:780,
+   ds:["* Ahuhuhu~","* Welcome, little spider's treat~","* My darlings are SO hungry...","* Teeheehee~ Run all you like!"]},
+  {name:'Mettaton',     color:'#ff44aa',ec:'#ff88cc',subtitle:'\u266a RATINGS! \u266a',  spd:1.8, fr:48, dur:780,
+   ds:["* OH YES!","* THE RATINGS ARE THROUGH THE ROOF!","* Let's give the audience a show, darling~","* RUN. FOR. YOUR. LIFE!"]},
+  {name:'Undyne',       color:'#44aaff',ec:'#88ccff',subtitle:'NGAAAH!!',                spd:2.1, fr:42, dur:840,
+   ds:["* NGAAAH!","* You think you can just RUN from me?!","* I, UNDYNE, will NEVER give up!","* PREPARE TO BE SPEARED!"]},
+  {name:'Asgore',       color:'#ee8800',ec:'#ffaa44',subtitle:'CEASE FIRE!!!',           spd:2.3, fr:38, dur:900,
+   ds:["* Human...","* I am so sorry.","* But I cannot let you escape.","* ...CEASE FIRE!!!"]},
+  {name:'Chara',        color:'#aa0000',ec:'#ff4444',subtitle:'...',                     spd:2.6, fr:32, dur:960,
+   ds:["* ...","* You've gotten this far.","* Impressive.","* ...But running won't save you."]},
+  {name:'Omega Flowey', color:'#00ff44',ec:'#88ff88',subtitle:'YOU IDIOT.',              spd:2.7, fr:28, dur:1020,
+   ds:["* YOU IDIOT.","* Do you really think you can run from GOD?","* I have seen every timeline.","* EVERY. SINGLE. ONE."]},
+  {name:'Error Sans',   color:'#4444ff',ec:'#8888ff',subtitle:'StOp.',                  spd:2.9, fr:24, dur:1080,
+   ds:["* StOp.","* yOu ShOuLdN't Be HeRe.","* tHiS iS a GlItCh.","* i WiLl DeLeTE yOu."]},
+  {name:'Ink Sans',     color:'#ff8800',ec:'#ffcc44',subtitle:'STAY DETERMINED',         spd:3.1, fr:20, dur:1080,
+   ds:["* Hey!","* I'm Ink — I protect the AUs!","* You running from me is... kinda impressive.","* But DETERMINATION only gets you so far!"]},
+  {name:'Gaster',       color:'#aaaaaa',ec:'#ffffff',subtitle:'\u2593\u2591\u2592',      spd:3.4, fr:17, dur:1200,
+   ds:["\u2593\u2591\u2592\u2591\u2593","* . . .","* \u25a0\u25a1\u25a0","* \u2593\u2592\u2591 \u2592\u2591\u2593 \u2591\u2592\u2593"]},
+  {name:'True Chara',   color:'#ff0000',ec:'#ff8888',subtitle:'ERASE.',                  spd:3.7, fr:13, dur:1200,
+   ds:["* ERASE.","* Everything you love.","* Everything you've built.","* I will delete it ALL."]},
+  {name:'THE WORLD',    color:'#ff00ff',ec:'#ffffff',subtitle:'YOUR WORST NIGHTMARE',    spd:4.5, fr:9,  dur:1440,
+   ds:["* ...", "* You actually made it here.", "* Every boss. Every attack. Every nightmare.", "* This is THE WORLD.", "* And in THE WORLD...", "* There is no escape."]},
 ];
 
 // ---- GAME STATE ---------------------------------------------------
@@ -459,13 +491,33 @@ const gs = {
   obbyMenuSel: 0,
   obbyHP: 3, obbyMaxHP: 3, obbyInv: 0,
   obbyTimer: 0, obbyFrame: 0, obbyDeathTimer: 0,
+  obbyDLines: [], obbyDLine: 0, obbyDTimer: 0,
   obbyBx: 60, obbyBy: 60,
   obbyProjs: [], obbySpawnT: 0,
+  obbyShieldActive: false,
+
+  // Gold & shop
+  gold: 0,
+  ownedItems: [],
+  crystalUsed: false,
+  obbyShield: false,
+
+  // Result gold
+  resultGold: 0,
+
+  shopSel: 0,
 };
 
 function bossArr(){ return gs.campaign==='s' ? BOSSES_S : BOSSES; }
 function ulk()    { return gs.campaign==='s' ? gs.unlocked_s : gs.unlocked_u; }
 function btn()    { return gs.campaign==='s' ? gs.beaten_s   : gs.beaten_u; }
+function hasItem(id){ return gs.ownedItems.includes(id); }
+function earnGold(base){
+  const amt = Math.floor(base * (hasItem('bounty') ? 1.5 : 1));
+  gs.gold += amt;
+  saveGame();
+  return amt;
+}
 
 // ---- INPUT --------------------------------------------------------
 const keys = {}, jp = {}, jpu = {};
@@ -632,7 +684,16 @@ function bossDmg() {
 function takeDmg(d) {
   gs.php = Math.max(0, gs.php-d);
   gs.invTimer = 55; shake(4); flash(0.25); sfxHit();
-  if (gs.php<=0) { gs.state='dead'; gs.deathTimer=200; sfxDie(); }
+  if (gs.php<=0) {
+    if(hasItem('crystal') && !gs.crystalUsed){
+      gs.crystalUsed = true;
+      gs.php = 50;
+      flash(0.8); shake(10);
+      tone(880,0.3,'sine',0.2);
+    } else {
+      gs.state='dead'; gs.deathTimer=200; sfxDie();
+    }
+  }
 }
 
 // ---- SPAWN HELPERS -----------------------------------------------
@@ -1687,7 +1748,11 @@ function startFight(idx) {
   gs.bossIdx=idx; gs.boss=boss;
   gs.bossHP=boss.hp; gs.bossHP2=boss.hp2||0;
   gs.bossPhase=0; gs.fakeDied=false;
-  gs.projs=[]; gs.php=100; gs.items=5; gs.invTimer=0;
+  gs.projs=[]; gs.invTimer=0;
+  gs.pMaxHP = 100 + (hasItem('ironheart') ? 50 : 0);
+  gs.php = gs.pMaxHP;
+  gs.items = hasItem('berserker') ? 1 : hasItem('medkit') ? 8 : 5;
+  gs.crystalUsed = false;
   gs.reversed=false; gs.invisible=false;
   gs.menuSel=0; gs.memPos=[]; gs.flashbangTimer=0;
   gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
@@ -1723,7 +1788,10 @@ function confirmSlider() {
   gs.sliderShowTimer=50;
   const acc=1-Math.abs(gs.sliderX-0.5)*2;
   const base=[80,70,90,100,120,130,150,800,1500][gs.bossIdx]||80;
-  gs.sliderDamage=Math.floor(base*(0.25+acc*1.75));
+  let sliderMult = 0.25+acc*1.75;
+  if(hasItem('lucky'))    sliderMult *= 1.3;
+  if(hasItem('berserker')) sliderMult *= 2.0;
+  gs.sliderDamage=Math.floor(base*sliderMult);
   sfxConfirm();
 }
 
@@ -1763,6 +1831,11 @@ function dealDamageToBoss(dmg) {
     btn()[gs.bossIdx]=true;
     if(gs.bossIdx+1<bossArr().length) ulk()[gs.bossIdx+1]=true;
     saveGame();
+    const goldTbl = gs.campaign==='s'
+      ? [60,90,130,180,250,400]
+      : [50,40,80,100,120,150,180,300,500];
+    const earned = earnGold(goldTbl[gs.bossIdx] || 50);
+    gs.resultGold = earned;
     gs.state='boss_dead'; gs.dLine=0; gs.dTimer=0;
     sfxWin();
   }
@@ -1773,18 +1846,21 @@ function obbyLvl() { return OBBY_LEVELS[gs.obbyLevel]; }
 function startObby(level) {
   gs.obbyLevel = level;
   const lv = obbyLvl();
-  gs.obbyHP = gs.obbyMaxHP = 3;
+  gs.obbyHP = gs.obbyMaxHP = hasItem('goldheart') ? 4 : 3;
   gs.obbyInv = 0;
   gs.obbyTimer = lv.dur;
   gs.obbyFrame = 0;
   gs.obbyProjs = [];
   gs.obbySpawnT = lv.fr;
   gs.obbyDeathTimer = 0;
-  // Boss starts at top-left, player at bottom-right
   gs.obbyBx = 60; gs.obbyBy = 60;
   gs.px = 540; gs.py = 460;
   gs.shakeX=0; gs.shakeY=0; gs.flashA=0;
-  gs.state = 'obby';
+  gs.obbyShield = hasItem('shield');
+  // Show dialogue first
+  gs.obbyDLines = lv.ds || ['* ...'];
+  gs.obbyDLine = 0; gs.obbyDTimer = 0;
+  gs.state = 'obby_intro';
 }
 
 function spawnObbyProj(bx, by, vx, vy, type, opts) {
@@ -1925,6 +2001,55 @@ function obbyAttack() {
   }
 }
 
+function updObbyIntro() {
+  gs.obbyDTimer++;
+  const line = gs.obbyDLines[gs.obbyDLine] || '';
+  const shown = Math.min(line.length, Math.floor(gs.obbyDTimer / 1.4));
+  if(hit('KeyZ','Enter')||hit('Space')) {
+    if(shown < line.length){ gs.obbyDTimer = line.length * 1.5 + 5; }
+    else {
+      gs.obbyDLine++;
+      gs.obbyDTimer = 0;
+      if(gs.obbyDLine >= gs.obbyDLines.length) {
+        gs.state = 'obby';
+      } else {
+        tone(440, 0.04, 'square', 0.05);
+      }
+    }
+  }
+}
+
+function drawObbyIntro() {
+  fr(0,0,W,H,'#000');
+  const lv = obbyLvl();
+  drawSprite(lv, 300, 90);
+  // Boss HP bar style header
+  const bx_=42, by__=175, bw_=516, bh_=18;
+  fr(bx_,by__,bw_,bh_,'#111'); sr(bx_,by__,bw_,bh_,lv.color,1);
+  cx.fillStyle=lv.color; cx.shadowBlur=10; cx.shadowColor=lv.color;
+  fr(bx_+2,by__+2,bw_-4,bh_-4,lv.color);
+  cx.shadowBlur=0;
+  tx(lv.name,W/2,by__+13,'#000',11,'center');
+  // Dialogue box — draw manually using obbyDTimer
+  const dbx=38, dby=362, dbw=524, dbh=148;
+  fr(dbx,dby,dbw,dbh,'#000'); sr(dbx,dby,dbw,dbh,'#fff',2);
+  const line=gs.obbyDLines[gs.obbyDLine]||'';
+  const shown=line.substring(0,Math.min(line.length,Math.floor(gs.obbyDTimer/1.4)));
+  cx.save(); cx.font="14px 'Courier New',monospace"; cx.fillStyle='#fff'; cx.textAlign='left';
+  const words=shown.split(' '); let row=0, cur='';
+  for(const w of words){
+    const test=cur+(cur?' ':'')+w;
+    if(cx.measureText(test).width>dbw-26){cx.fillText(cur,dbx+12,dby+28+row*22);cur=w;row++;}
+    else cur=test;
+  }
+  if(cur) cx.fillText(cur,dbx+12,dby+28+row*22);
+  cx.restore();
+  if(shown.length>=line.length&&Math.floor(gs.frame/18)%2===0)
+    tx('▼',dbx+dbw-22,dby+dbh-10,'#fff',13);
+  tx(`${gs.obbyDLine+1}/${gs.obbyDLines.length}`,dbx+dbw-10,dby+12,'#555',10,'right');
+  tx('Z / Enter: Next', W-10, H-8, '#444', 10, 'right');
+}
+
 function updObbySelect() {
   if(hit('ArrowUp','KeyW')){ gs.obbyMenuSel=Math.max(0,gs.obbyMenuSel-1); sfxSelect(); }
   if(hit('ArrowDown','KeyS')){ gs.obbyMenuSel=Math.min(14,gs.obbyMenuSel+1); sfxSelect(); }
@@ -1936,7 +2061,7 @@ function updObbySelect() {
 }
 
 function updObby() {
-  const spd=3.5;
+  const spd = 3.5 * (hasItem('boots') ? 1.4 : 1);
   let dx=0, dy=0;
   if(dn('ArrowLeft','KeyA'))  dx-=spd;
   if(dn('ArrowRight','KeyD')) dx+=spd;
@@ -1961,8 +2086,9 @@ function updObby() {
   if(gs.obbyInv<=0){
     const dist2=(gs.px-gs.obbyBx)**2+(gs.py-gs.obbyBy)**2;
     if(dist2<(30+8)**2){
-      gs.obbyHP--;
-      gs.obbyInv=90;
+      if(gs.obbyShield){ gs.obbyShield=false; flash(0.5); shake(8); }
+      else gs.obbyHP--;
+      gs.obbyInv = 90 + (hasItem('iframes')?40:0);
       gs.shakeX=8; gs.shakeY=8; gs.flashA=0.4;
       sfxHit();
       if(gs.obbyHP<=0){ gs.state='obby_dead'; gs.obbyDeathTimer=180; sfxDie(); return; }
@@ -1995,8 +2121,9 @@ function updObby() {
         hit_=dx_*dx_+dy_*dy_<((p.r||7)+6)**2;
       }
       if(hit_){
-        gs.obbyHP--;
-        gs.obbyInv=90;
+        if(gs.obbyShield){ gs.obbyShield=false; flash(0.5); shake(8); p.dead=true; }
+        else gs.obbyHP--;
+        gs.obbyInv = 90 + (hasItem('iframes')?40:0);
         gs.shakeX=6; gs.shakeY=6; gs.flashA=0.35;
         sfxHit();
         p.dead=true;
@@ -2161,9 +2288,60 @@ function drawObbyClear() {
   }
 }
 
+// ---- SHOP LOGIC ---------------------------------------------------
+function updShop() {
+  const n = SHOP_ITEMS.length;
+  if(hit('ArrowUp','KeyW')){ gs.shopSel=Math.max(0,gs.shopSel-1); sfxSelect(); }
+  if(hit('ArrowDown','KeyS')){ gs.shopSel=Math.min(n-1,gs.shopSel+1); sfxSelect(); }
+  if(hit('KeyZ','Enter')||hit('Space')){
+    const item = SHOP_ITEMS[gs.shopSel];
+    if(hasItem(item.id)){
+      sfxDeny(); // already owned
+    } else if(gs.gold >= item.cost){
+      gs.gold -= item.cost;
+      gs.ownedItems.push(item.id);
+      saveGame(); sfxWin();
+    } else {
+      sfxDeny(); // not enough gold
+    }
+  }
+  if(hit('KeyX','Escape')){ gs.state='title'; }
+}
+
+function drawShop() {
+  fr(0,0,W,H,'#000');
+  // Header
+  cx.save(); cx.font="bold 20px 'Courier New',monospace"; cx.textAlign='center';
+  const hue=gs.frame%360;
+  cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=12; cx.shadowColor=cx.fillStyle;
+  cx.fillText('🛒  ITEM SHOP',W/2,30); cx.shadowBlur=0; cx.restore();
+  tx(`Your gold: ${gs.gold} 💰`,W/2,50,'#ffd700',13,'center');
+  tx('↑ ↓ navigate  |  Z / Enter buy  |  X / Esc back',W/2,65,'#444',10,'center');
+
+  for(let i=0;i<SHOP_ITEMS.length;i++){
+    const it=SHOP_ITEMS[i], sel=gs.shopSel===i, owned=hasItem(it.id);
+    const bx_=30, by__=76+i*44, bw_=540, bh_=40;
+    fr(bx_,by__,bw_,bh_,sel?'#1a1a00':'#080808');
+    sr(bx_,by__,bw_,bh_,owned?'#ffd700':sel?'#fff':'#333',sel?2:1);
+    // Icon + name
+    tx(it.icon,bx_+16,by__+26,'#fff',15);
+    const nameCol=owned?'#ffd700':sel?'#fff':'#aaa';
+    tx(it.name,bx_+40,by__+26,nameCol,13);
+    // Description
+    tx(it.desc,bx_+40,by__+37,'#555',9);
+    // Cost / owned
+    if(owned){
+      tx('OWNED ✓',bx_+bw_-10,by__+26,'#ffd700',12,'right');
+    } else {
+      const canAfford=gs.gold>=it.cost;
+      tx(`${it.cost} 💰`,bx_+bw_-10,by__+26,canAfford?'#ffd700':'#774400',12,'right');
+    }
+  }
+}
+
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  const n = 4; // UNDERTALE / SPACE MARINES / OBBY RUN / ENTER CODE
+  const n = 5; // UNDERTALE / SPACE MARINES / OBBY RUN / SHOP / ENTER CODE
   if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
   if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')) {
@@ -2178,6 +2356,8 @@ function updTitle() {
       } else {
         sfxDeny();
       }
+    } else if(gs.titleSel===3) {
+      gs.state='shop'; gs.shopSel=0;
     } else {
       showCodeOverlay();
     }
@@ -2306,26 +2486,27 @@ function drawTitle() {
   const u_beaten = gs.beaten_u.filter(b=>b).length;
   const s_beaten = gs.beaten_s.filter(b=>b).length;
   tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,176,'#777',11,'center');
+  tx(`💰 Gold: ${gs.gold}`,W/2,194,'#ffd700',12,'center');
 
   // Main menu
   const obbyUnlk = gs.beaten_u[1] || gs.obbyUnlocked[1];
-  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES', obbyUnlk?'🏃  OBBY RUN':'🔒  OBBY RUN','🔑  ENTER CODE'];
-  const MENU_C=[null,null,obbyUnlk?'#ff88ff':null,'#ffe066'];
-  for(let i=0;i<4;i++){
+  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES', obbyUnlk?'🏃  OBBY RUN':'🔒  OBBY RUN','🛒  SHOP','🔑  ENTER CODE'];
+  const MENU_C=[null,null,obbyUnlk?'#ff88ff':null,'#ffd700','#ffe066'];
+  for(let i=0;i<5;i++){
     const sel=gs.titleSel===i;
-    const bx_=W/2-130, by__=192+i*52, bw_=260, bh_=44;
+    const bx_=W/2-130, by__=210+i*46, bw_=260, bh_=38;
     fr(bx_,by__,bw_,bh_,sel?'#1a1a3a':'#0a0a0a');
     const borderCol=sel?(MENU_C[i]||'#fff'):(i===2?(obbyUnlk?'#441144':'#333'):(MENU_C[i]?'#443300':'#333'));
     sr(bx_,by__,bw_,bh_,borderCol,sel?2:1);
     const col=sel?(MENU_C[i]||'#fff'):(i===2?(obbyUnlk?'#884488':'#333'):(MENU_C[i]?'#665500':'#777'));
-    tx(MENU_T[i],W/2,by__+26,col,13,'center');
+    tx(MENU_T[i],W/2,by__+24,col,13,'center');
   }
   if(!obbyUnlk){
-    tx('Beat Toriel to unlock Obby Run',W/2,192+2*52+48,'#444',10,'center');
+    tx('Beat Toriel to unlock',W/2,248+2*46+42,'#444',9,'center');
   }
 
-  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,434,'#444',11,'center');
-  tx('Sans 15.0 & Space God await the worthy.',W/2,452,'#00ffff',11,'center');
+  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,483,'#444',10,'center');
+  tx('Sans 15.0 & Space God await the worthy.',W/2,498,'#00ffff',10,'center');
 }
 
 function drawSelect() {
@@ -2440,6 +2621,9 @@ function drawBossDead() {
   cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=18; cx.shadowColor=cx.fillStyle;
   cx.fillText(gs.boss.name.toUpperCase()+' DEFEATED!',W/2,115); cx.shadowBlur=0; cx.restore();
   drawDialogueBox(gs.boss.dw||['* ...'],gs.dLine);
+  if(gs.resultGold > 0) {
+    tx(`+${gs.resultGold} 💰 GOLD`,W/2,H-30,'#ffd700',13,'center');
+  }
   tx('Z / Enter to continue',W/2,H-8,'#444',11,'center');
 }
 
@@ -2488,6 +2672,8 @@ function update() {
   gs.frame++;
   switch(gs.state){
     case 'title':       updTitle();       break;
+    case 'shop':        updShop();        break;
+    case 'obby_intro':  updObbyIntro();   break;
     case 'obby_select': updObbySelect();  break;
     case 'obby':        updObby();        break;
     case 'obby_dead':   updObbyDead();    break;
@@ -2512,6 +2698,8 @@ function draw() {
     cx.translate(gs.shakeX,gs.shakeY);
   switch(gs.state){
     case 'title':       drawTitle();       break;
+    case 'shop':        drawShop();        break;
+    case 'obby_intro':  drawObbyIntro();   break;
     case 'obby_select': drawObbySelect();  break;
     case 'obby':        drawObby();        break;
     case 'obby_dead':   drawObbyDead();    break;
