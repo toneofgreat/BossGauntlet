@@ -2595,6 +2595,12 @@ function showCodeOverlay() {
       msg.style.color = '#00ff88';
       msg.textContent = '✓ ALL BOSSES UNLOCKED!';
       setTimeout(()=>{ overlay.classList.remove('active'); }, 1400);
+    } else if (code === '321') {
+      gs.obbyUnlocked = gs.obbyUnlocked.map(()=>true);
+      saveGame(); sfxWin();
+      msg.style.color = '#ff88ff';
+      msg.textContent = '✓ ALL OBBY LEVELS UNLOCKED!';
+      setTimeout(()=>{ overlay.classList.remove('active'); }, 1400);
     } else {
       msg.style.color = '#ff4444';
       msg.textContent = '✗ Wrong code. Try again.';
