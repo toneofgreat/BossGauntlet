@@ -25,53 +25,6 @@ canvas {
   width:100%; height:auto; touch-action:none;
 }
 #info { margin-top:5px; font-size:11px; color:#444; text-align:center; padding:0 8px; }
-/* ---- Username Overlay ---- */
-#nameOverlay {
-  display:none; position:fixed; inset:0;
-  background:rgba(0,0,0,0.93);
-  align-items:center; justify-content:center;
-  z-index:200; font-family:'Courier New',monospace;
-}
-#nameOverlay.active { display:flex; }
-#nameBox {
-  background:#111; border:2px solid #ffe066;
-  padding:24px 18px; text-align:center;
-  max-width:380px; width:96%;
-}
-#nameBox h2 { color:#ffe066; font-size:15px; margin-bottom:8px; letter-spacing:2px; }
-#nameBox p  { color:#888; font-size:12px; margin-bottom:18px; line-height:1.6; }
-#nameInput {
-  background:#000; color:#fff; border:2px solid #555;
-  font-family:'Courier New',monospace; font-size:20px;
-  width:100%; text-align:center; padding:9px;
-  outline:none; letter-spacing:2px;
-}
-#nameInput:focus { border-color:#ffe066; }
-#nameSubmit {
-  display:block; margin:16px auto 0;
-  background:#ffe066; color:#000;
-  font-family:'Courier New',monospace; font-size:14px;
-  border:none; padding:9px 30px; cursor:pointer;
-  letter-spacing:2px; font-weight:bold;
-}
-#nameSubmit:hover { background:#fff; }
-#nameError { color:#ff4444; font-size:12px; margin-top:10px; min-height:16px; }
-/* ---- Virtual Keyboard ---- */
-#vkb { margin-top:12px; }
-.vkb-row { display:flex; justify-content:center; gap:3px; margin-bottom:3px; }
-.vkb-key {
-  background:#1e1e1e; border:1px solid #555; color:#fff;
-  font-family:'Courier New',monospace; font-size:13px; font-weight:bold;
-  width:29px; height:32px; cursor:pointer; border-radius:4px;
-  display:flex; align-items:center; justify-content:center;
-  user-select:none; -webkit-user-select:none; touch-action:manipulation;
-  flex-shrink:0;
-}
-.vkb-key:active { background:#444; border-color:#fff; }
-.vkb-key.k-back  { width:46px; font-size:15px; color:#ff8888; border-color:#884444; }
-.vkb-key.k-space { flex:1; max-width:160px; font-size:11px; letter-spacing:2px; }
-.vkb-key.k-confirm { flex:1; max-width:130px; background:#ffe066; color:#000; border-color:#ffe066; font-size:11px; letter-spacing:1px; }
-.vkb-key.k-sym { color:#aaa; }
 /* ---- On-screen controls ---- */
 #controls {
   display:flex; gap:18px; margin-top:10px; margin-bottom:6px;
@@ -117,15 +70,6 @@ canvas {
 </style>
 </head>
 <body>
-<div id="nameOverlay">
-  <div id="nameBox">
-    <h2>* ENTER YOUR NAME *</h2>
-    <p>3 to 40 characters.<br>Letters, numbers, and spaces only.</p>
-    <input id="nameInput" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="YourName" />
-    <button id="nameSubmit">CONFIRM</button>
-    <div id="nameError"></div>
-  </div>
-</div>
 <div id="wrap">
 <canvas id="c" width="600" height="520"></canvas>
 <div id="info">
@@ -179,8 +123,6 @@ function sfxDeny()    { tone(200,0.2,'square',0.1); }
 
 // ---- SAVE / LOAD --------------------------------------------------
 const SAVE_KEY = 'bossGauntlet_v1';
-const NAME_KEY  = 'bg_username';
-const FB = 'https://bossgaunlet-default-rtdb.firebaseio.com';
 
 function saveGame() {
   localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -201,53 +143,9 @@ function loadGame() {
       while(gs.beaten_s.length<6)   gs.beaten_s.push(false);
     }
   } catch(e) {}
-  gs.username = localStorage.getItem(NAME_KEY) || '';
 }
 
-// ---- FIREBASE LEADERBOARD ----------------------------------------
-async function fbGet(path) {
-  try {
-    const r = await fetch(`${FB}/${path}.json`);
-    const d = await r.json();
-    if (!d) return [];
-    return Array.isArray(d) ? d : Object.values(d);
-  } catch(e) { return []; }
-}
-async function fbSet(path, arr) {
-  try {
-    await fetch(`${FB}/${path}.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(arr)
-    });
-  } catch(e) {}
-}
 
-async function submitScore() {
-  const name   = gs.username;
-  const boss   = gs.maxBossReached;
-  const beaten = btn().filter(b=>b).length;
-  gs.maxBossReached = -1;
-  if (!name || boss < 0) return;
-
-  const date = new Date().toLocaleDateString();
-
-  const [lbQ, lbB] = await Promise.all([fbGet('lb_q'), fbGet('lb_b')]);
-
-  lbQ.push({ n: name, s: beaten, d: date });
-  lbQ.sort((a, b) => b.s - a.s);
-  lbQ.splice(100);
-
-  lbB.push({ n: name, b: boss, d: date });
-  lbB.sort((a, b) => b.b - a.b);
-  lbB.splice(100);
-
-  await Promise.all([fbSet('lb_q', lbQ), fbSet('lb_b', lbB)]);
-
-  gs.lbCache  = { q: lbQ.slice(0, 10), b: lbB.slice(0, 10) };
-  gs.lbLoaded = true;
-  gs.lbLoading = false;
-}
 
 // ---- BOSS DEFINITIONS ---------------------------------------------
 const BOSSES = [
@@ -490,16 +388,8 @@ const gs = {
   memPos: [],
   fakeDieTimer: 0,
 
-  // Player identity & scoring
-  username: '',
-  maxBossReached: -1,  // highest bossIdx attempted this run
   flashbangTimer: 0,   // frames remaining of flashbang blindness
-  titleSel: 0,         // 0=UNDERTALE 1=SPACE MARINES 2=LEADERBOARD 3=CHANGE NAME
-
-  // Leaderboard cache (populated async from Firebase)
-  lbCache:   { q: [], b: [] },
-  lbLoading: false,
-  lbLoaded:  false,
+  titleSel: 0,         // 0=UNDERTALE 1=SPACE MARINES
 };
 
 function bossArr(){ return gs.campaign==='s' ? BOSSES_S : BOSSES; }
@@ -1809,40 +1699,19 @@ function dealDamageToBoss(dmg) {
 
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  const n = 4; // UNDERTALE BOSSES / SPACE MARINES / LEADERBOARD / CHANGE NAME
+  const n = 2; // UNDERTALE BOSSES / SPACE MARINES
   if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
   if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')) {
     sfxConfirm();
     if(gs.titleSel===0) {
-      gs.campaign='u'; gs.maxBossReached=-1;
+      gs.campaign='u';
       gs.state='select'; gs.menuSel=0;
-    } else if(gs.titleSel===1) {
-      gs.campaign='s'; gs.maxBossReached=-1;
-      gs.state='select'; gs.menuSel=0;
-    } else if(gs.titleSel===2) {
-      enterLeaderboard();
     } else {
-      showNameOverlay();
+      gs.campaign='s';
+      gs.state='select'; gs.menuSel=0;
     }
   }
-}
-function enterLeaderboard() {
-  gs.state = 'leaderboard';
-  gs.lbLoading = true;
-  gs.lbLoaded  = false;
-  gs.lbCache   = { q: [], b: [] };
-  Promise.all([fbGet('lb_q'), fbGet('lb_b')]).then(([q, b]) => {
-    gs.lbCache   = { q: q.slice(0,10), b: b.slice(0,10) };
-    gs.lbLoading = false;
-    gs.lbLoaded  = true;
-  }).catch(() => {
-    gs.lbLoading = false;
-    gs.lbLoaded  = true;
-  });
-}
-function updLeaderboard() {
-  if(hit('KeyZ','Enter')||hit('Space')||hit('KeyX','Escape')) { gs.state='title'; }
 }
 function updSelect() {
   if(hit('ArrowUp','KeyW')){ gs.menuSel=Math.max(0,gs.menuSel-1); sfxSelect(); }
@@ -1939,89 +1808,16 @@ function updDead() {
   gs.deathTimer--;
   gs.shakeX*=0.9; gs.shakeY*=0.9; gs.flashA=Math.max(0,gs.flashA-0.02);
   if(hit('KeyR')){ startFight(gs.bossIdx); return; }
-  if(gs.deathTimer<80&&(hit('KeyZ','Enter')||hit('Space'))){ submitScore(); gs.state='select'; gs.menuSel=gs.bossIdx; }
-  if(gs.deathTimer<80&&hit('Escape','KeyX')){ submitScore(); gs.state='title'; }
+  if(gs.deathTimer<80&&(hit('KeyZ','Enter')||hit('Space'))){ gs.state='select'; gs.menuSel=gs.bossIdx; }
+  if(gs.deathTimer<80&&hit('Escape','KeyX')){ gs.state='title'; }
 }
 function updWin() {
   if(hit('KeyZ','Enter')||hit('Space')||hit('Escape','KeyX')){
-    submitScore();
     gs.state='title';
   }
 }
 
 // ---- SCREEN DRAWS -----------------------------------------------
-function drawLeaderboard() {
-  fr(0,0,W,H,'#000');
-  // Header
-  cx.save(); cx.font="bold 20px 'Courier New',monospace"; cx.textAlign='center';
-  const hue=gs.frame%360;
-  cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=14; cx.shadowColor=cx.fillStyle;
-  cx.fillText('🏆  LEADERBOARDS  🏆',W/2,36); cx.shadowBlur=0; cx.restore();
-
-  if(gs.lbLoading) {
-    cx.save(); cx.font="18px 'Courier New',monospace"; cx.textAlign='center'; cx.fillStyle='#aaa';
-    cx.fillText('Loading scores from server...', W/2, H/2);
-    const dots='.'.repeat((Math.floor(gs.frame/15)%4));
-    cx.fillText(dots, W/2, H/2+30);
-    cx.restore();
-    tx('Z / Esc — Back',W/2,H-10,'#444',11,'center');
-    return;
-  }
-
-  const bossNames = gs.campaign==='s'
-    ? ['Alien','Rocket Robot','Corrupt AI','Moon Crusher','Sun God','Space God','—']
-    : ['Sans','Toriel','???','Sans+Pap','Asgore+Tor','Chara','Markiplier','×100','Sans 15.0','—'];
-  const lbQ = gs.lbCache.q;
-  const lbB = gs.lbCache.b;
-
-  // Left panel — Most Correct
-  const lx=18, rx=W/2+8, py_=54, rh=40, pw=W/2-26;
-  fr(lx,py_,pw,22,'#1a1a1a'); sr(lx,py_,pw,22,'#555',1);
-  tx('MOST BOSSES BEATEN',lx+pw/2,py_+15,'#ffe066',11,'center');
-
-  for(let i=0;i<10;i++){
-    const e=lbQ[i];
-    const ey=py_+24+i*rh;
-    const bg=i%2===0?'#080808':'#0d0d0d';
-    fr(lx,ey,pw,rh-2,bg);
-    if(e){
-      const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
-      const nc=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'#ccc';
-      tx(medal,     lx+4,  ey+25, nc,      12);
-      // Truncate long names
-      const nm=e.n.length>14?e.n.substring(0,13)+'…':e.n;
-      tx(nm,        lx+38, ey+25, '#fff',  12);
-      tx(`${e.s}/9 ✓`,lx+pw-6,ey+25,'#00ff88',12,'right');
-    } else {
-      tx('—',lx+pw/2,ey+25,'#333',11,'center');
-    }
-  }
-
-  // Right panel — Furthest Boss
-  fr(rx,py_,pw,22,'#1a1a1a'); sr(rx,py_,pw,22,'#555',1);
-  tx('FURTHEST BOSS REACHED',rx+pw/2,py_+15,'#ff8844',11,'center');
-
-  for(let i=0;i<10;i++){
-    const e=lbB[i];
-    const ey=py_+24+i*rh;
-    const bg=i%2===0?'#080808':'#0d0d0d';
-    fr(rx,ey,pw,rh-2,bg);
-    if(e){
-      const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
-      const nc=i===0?'#ffd700':i===1?'#c0c0c0':i===2?'#cd7f32':'#ccc';
-      tx(medal,       rx+4,  ey+25, nc,     12);
-      const nm=e.n.length>13?e.n.substring(0,12)+'…':e.n;
-      tx(nm,          rx+38, ey+25,'#fff',  12);
-      const bn=e.b>=0?((gs.campaign==='s'?e.b===5:e.b===8)?'ALL DONE!':'Boss '+(e.b+1)+': '+bossNames[e.b]):'—';
-      const bc=e.b===8?'#ffd700':e.b>=6?'#ff4444':e.b>=3?'#ff8800':'#aaa';
-      tx(bn,          rx+pw-6,ey+25,bc,11,'right');
-    } else {
-      tx('—',rx+pw/2,ey+25,'#333',11,'center');
-    }
-  }
-
-  tx('Z / Enter / Esc — Back to title',W/2,H-10,'#444',11,'center');
-}
 
 function drawTitle() {
   fr(0,0,W,H,'#000');
@@ -2040,20 +1836,19 @@ function drawTitle() {
   const u_beaten = gs.beaten_u.filter(b=>b).length;
   const s_beaten = gs.beaten_s.filter(b=>b).length;
   tx(`Undertale: ${u_beaten}/9  Space: ${s_beaten}/6`,W/2,210,'#777',13,'center');
-  if(gs.username) tx(`Player: ${gs.username}`,W/2,232,'#ffe066',12,'center');
 
   // Main menu
-  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES','🏆  LEADERBOARD','✎  CHANGE NAME'];
-  for(let i=0;i<4;i++){
+  const MENU_T=['⚔  UNDERTALE BOSSES','🚀  SPACE MARINES'];
+  for(let i=0;i<2;i++){
     const sel=gs.titleSel===i;
-    const bx_=W/2-130, by__=260+i*48, bw_=260, bh_=40;
+    const bx_=W/2-130, by__=290+i*60, bw_=260, bh_=46;
     fr(bx_,by__,bw_,bh_,sel?'#1a1a3a':'#0a0a0a');
     sr(bx_,by__,bw_,bh_,sel?'#fff':'#333',sel?2:1);
     tx(MENU_T[i],W/2,by__+26,sel?'#fff':'#777',14,'center');
   }
 
-  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,460,'#444',11,'center');
-  tx('Sans 15.0 & Space God await the worthy.',W/2,478,'#00ffff',11,'center');
+  tx('↑ ↓ to navigate  |  Z / Enter to confirm',W/2,430,'#444',11,'center');
+  tx('Sans 15.0 & Space God await the worthy.',W/2,450,'#00ffff',11,'center');
 }
 
 function drawSelect() {
@@ -2216,7 +2011,6 @@ function update() {
   gs.frame++;
   switch(gs.state){
     case 'title':       updTitle();       break;
-    case 'leaderboard': updLeaderboard(); break;
     case 'select':      updSelect();      break;
     case 'cutscene': updCutscene(); break;
     case 'enemy':    updEnemy();    break;
@@ -2237,7 +2031,6 @@ function draw() {
     cx.translate(gs.shakeX,gs.shakeY);
   switch(gs.state){
     case 'title':       drawTitle();       break;
-    case 'leaderboard': drawLeaderboard(); break;
     case 'select':      drawSelect();      break;
     case 'cutscene': drawCutscene(); break;
     case 'enemy':    drawBattle();   break;
@@ -2292,93 +2085,9 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// ---- USERNAME OVERLAY -------------------------------------------
-function showNameOverlay() {
-  const overlay = document.getElementById('nameOverlay');
-  const input   = document.getElementById('nameInput');
-  const errEl   = document.getElementById('nameError');
-  const btn     = document.getElementById('nameSubmit');
-  input.value = gs.username || '';
-  errEl.textContent = '';
-  overlay.classList.add('active');
-
-  function attempt() {
-    const raw = input.value.trim();
-    if (raw.length < 3)  { errEl.textContent = '* At least 3 characters required.'; return; }
-    if (raw.length > 40) { errEl.textContent = '* Max 40 characters.'; return; }
-    if (!/^[a-zA-Z0-9 _\-]+$/.test(raw)) { errEl.textContent = '* Letters, numbers, spaces, _ and - only.'; return; }
-    gs.username = raw;
-    localStorage.setItem(NAME_KEY, raw);
-    overlay.classList.remove('active');
-    sfxConfirm();
-  }
-  btn.onclick = attempt;
-  input.onkeydown = e => { if (e.key === 'Enter') attempt(); };
-
-  // Build virtual keyboard once
-  if (document.getElementById('vkb')) return;
-  const ROWS = [
-    ['1','2','3','4','5','6','7','8','9','0'],
-    ['Q','W','E','R','T','Y','U','I','O','P'],
-    ['A','S','D','F','G','H','J','K','L','⌫'],
-    ['Z','X','C','V','B','N','M','_','-'],
-  ];
-  const vkb = document.createElement('div');
-  vkb.id = 'vkb';
-
-  ROWS.forEach(row => {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'vkb-row';
-    row.forEach(ch => {
-      const k = document.createElement('button');
-      k.type = 'button';
-      k.className = 'vkb-key' + (ch === '⌫' ? ' k-back' : '');
-      k.textContent = ch;
-      k.dataset.ch = ch;
-      rowEl.appendChild(k);
-    });
-    vkb.appendChild(rowEl);
-  });
-
-  // Bottom row: space + confirm
-  const botRow = document.createElement('div');
-  botRow.className = 'vkb-row';
-  const spaceK = document.createElement('button');
-  spaceK.type = 'button'; spaceK.className = 'vkb-key k-space';
-  spaceK.textContent = 'SPACE'; spaceK.dataset.ch = ' ';
-  const confirmK = document.createElement('button');
-  confirmK.type = 'button'; confirmK.className = 'vkb-key k-confirm';
-  confirmK.textContent = 'CONFIRM ✓'; confirmK.dataset.ch = 'CONFIRM';
-  botRow.appendChild(spaceK); botRow.appendChild(confirmK);
-  vkb.appendChild(botRow);
-
-  document.getElementById('nameBox').appendChild(vkb);
-
-  function handleKey(ch) {
-    if (ch === '⌫')      { input.value = input.value.slice(0, -1); }
-    else if (ch === 'CONFIRM') { attempt(); }
-    else if (input.value.length < 40) { input.value += ch; }
-    errEl.textContent = '';
-  }
-
-  vkb.addEventListener('mousedown', e => {
-    e.preventDefault();
-    const k = e.target.closest('.vkb-key');
-    if (k) handleKey(k.dataset.ch);
-  });
-  vkb.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const t = e.touches[0];
-    const el = document.elementFromPoint(t.clientX, t.clientY);
-    const k = el && el.closest('.vkb-key');
-    if (k) handleKey(k.dataset.ch);
-  }, { passive: false });
-}
-
 // ---- INIT -------------------------------------------------------
 loadGame();
 requestAnimationFrame(loop);
-if (!gs.username) showNameOverlay();
 </script>
 </body>
 </html>
