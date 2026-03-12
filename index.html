@@ -3604,7 +3604,12 @@ function startBattleMusic(){
   else if(gs.campaign==='d') _playTrack(_D_SONG);
   else                        _playTrack(_U_SONG);
 }
-function stopMusic(){ _mPlaying=false; _mId++; _mTrack=null; }
+function stopMusic(){
+  _mPlaying=false; _mId++; _mTrack=null;
+  // Close AudioContext to instantly kill all pre-scheduled notes
+  if(AC){ try{AC.close();}catch(e){} AC=null; }
+  _mComp=null;
+}
 function startObbyMusic(){ stopMusic(); _mTrack='obby'; _playTrack(_O_SONG); }
 
 // ---- MAIN LOOP --------------------------------------------------
@@ -3613,7 +3618,7 @@ function loop() {
   update(); draw();
   // Show/hide real HTML title menu in sync with game state
   const isTitle = gs.state==='title';
-  if(isTitle && !_wasTitleState) showTitleMenu();
+  if(isTitle && !_wasTitleState){ stopMusic(); showTitleMenu(); }
   else if(!isTitle && _wasTitleState) hideTitleMenu();
   _wasTitleState = isTitle;
   requestAnimationFrame(loop);
