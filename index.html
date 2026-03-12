@@ -2211,6 +2211,7 @@ function startObby(level) {
   // Show dialogue first
   gs.obbyDLines = lv.ds || ['* ...'];
   gs.obbyDLine = 0; gs.obbyDTimer = 0;
+  startObbyMusic();
   gs.state = 'obby_intro';
 }
 
@@ -3527,6 +3528,59 @@ function _dC(t0){
 // Song: intro A B A C A B A = 6+12+12+12+12+12+12+12 = 90s = 1.5 min
 const _D_SONG=[_dIntro,_dA,_dB,_dA,_dC,_dA,_dB,_dA];
 
+// ---- OBBY MUSIC — A minor dance/runner, 120 BPM, ~2 min ----
+// Dance drums: kick 1&3, snare 2&4, hats every 8th. n=bars, each bar=2s
+function _dkDance(t0,n){
+  for(let b=0;b<n;b++){
+    const tb=t0+b*2;
+    _mKick(tb); _mKick(tb+1);
+    _mSnare(tb+0.5); _mSnare(tb+1.5);
+    for(let i=0;i<8;i++) _mHat(tb+i*0.25,0.15);
+  }
+}
+// _oA: verse — driving staccato lead, 8 bars=16s
+function _oA(t0){
+  const dur=16;
+  _dkDance(t0,8);
+  const ph=[['A4',0.5],['C5',0.5],['E5',0.5],['G5',0.5],['A5',0.5],['G5',0.5],['E5',0.5],['C5',0.5]];
+  for(let r=0;r<4;r++) _mel(ph,t0+r*4,0.7);
+  const bp=[['A2',1],['E2',1],['A2',1],['G2',1]];
+  for(let r=0;r<4;r++) _bas(bp,t0+r*4,0.8);
+  return dur;
+}
+// _oB: bridge — higher melodic run, 8 bars=16s
+function _oB(t0){
+  const dur=16;
+  _dkDance(t0,8);
+  const ph=[['E5',0.5],['A5',0.5],['G5',0.5],['E5',0.5],['D5',0.5],['C5',0.5],['D5',0.5],['E5',0.5]];
+  for(let r=0;r<4;r++) _mel(ph,t0+r*4,0.7);
+  const bp=[['A2',0.5],['A2',0.5],['E2',0.5],['E2',0.5],['D2',0.5],['D2',0.5],['E2',0.5],['E2',0.5]];
+  for(let r=0;r<4;r++) _bas(bp,t0+r*4,0.8);
+  return dur;
+}
+// _oC: breakdown — sparse arpeggio, 4 bars=8s
+function _oC(t0){
+  const dur=8;
+  _dkDance(t0,4);
+  const ph=[['A5',0.25],['R',0.25],['E5',0.25],['R',0.25],['C5',0.25],['R',0.25],['E5',0.25],['R',0.25]];
+  for(let r=0;r<4;r++) _mel(ph,t0+r*2,0.5);
+  const bp=[['A2',0.5],['E2',0.5],['G2',0.5],['A2',0.5]];
+  for(let r=0;r<4;r++) _bas(bp,t0+r*2,0.9);
+  return dur;
+}
+// _oD: climax — 16th-note arpeggio runs, 8 bars=16s
+function _oD(t0){
+  const dur=16;
+  _dkDance(t0,8);
+  const ph=[['A4',0.25],['C5',0.25],['E5',0.25],['A5',0.25],['G5',0.25],['E5',0.25],['C5',0.25],['A4',0.25]];
+  for(let r=0;r<8;r++) _mel(ph,t0+r*2,0.65);
+  const bp=[['A2',0.25],['A2',0.25],['E2',0.25],['E2',0.25],['G2',0.25],['G2',0.25],['D2',0.25],['D2',0.25]];
+  for(let r=0;r<8;r++) _bas(bp,t0+r*2,0.85);
+  return dur;
+}
+// A B A C A B D A = 16+16+16+8+16+16+16+16 = 120s = 2 min
+const _O_SONG=[_oA,_oB,_oA,_oC,_oA,_oB,_oD,_oA];
+
 // ---- TRACK PLAYER — one song at a time, sections in sequence -----
 // Sections play in order then loop the whole list. _mId ensures
 // only one track ever plays; stopMusic() kills it instantly.
@@ -3551,6 +3605,7 @@ function startBattleMusic(){
   else                        _playTrack(_U_SONG);
 }
 function stopMusic(){ _mPlaying=false; _mId++; _mTrack=null; }
+function startObbyMusic(){ stopMusic(); _mTrack='obby'; _playTrack(_O_SONG); }
 
 // ---- MAIN LOOP --------------------------------------------------
 let _wasTitleState = false;
