@@ -3172,11 +3172,18 @@ function _getComp(){
   c.attack.value=0.003; c.release.value=0.15;
   c.connect(ctx.destination); _mComp=c; return c;
 }
+// Master gain — all synths connect here; set to 0 on stopMusic to kill pre-scheduled notes
+let _mMasterGain=null;
+function _getMix(){
+  if(_mMasterGain) return _mMasterGain;
+  const ctx=ac(), g=ctx.createGain(); g.gain.value=1;
+  g.connect(_getComp()); _mMasterGain=g; return g;
+}
 
 // Lead synth: 3 detuned square oscillators + lowpass (fat chorus)
 function _mLead(freq,t,dur,vol){
   if(!freq||dur<=0.01) return;
-  const ctx=ac(), dest=_getComp();
+  const ctx=ac(), dest=_getMix();
   const mg=ctx.createGain();
   mg.gain.setValueAtTime(0.001,t);
   mg.gain.linearRampToValueAtTime(vol,t+Math.min(0.015,dur*0.1));
@@ -3194,7 +3201,7 @@ function _mLead(freq,t,dur,vol){
 // Bass synth: sawtooth+lowpass + sub-octave sine
 function _mBass(freq,t,dur,vol){
   if(!freq||dur<=0.01) return;
-  const ctx=ac(), dest=_getComp();
+  const ctx=ac(), dest=_getMix();
   const mg=ctx.createGain();
   mg.gain.setValueAtTime(0.001,t); mg.gain.linearRampToValueAtTime(vol,t+0.025);
   mg.gain.setValueAtTime(vol,t+dur*0.65); mg.gain.exponentialRampToValueAtTime(0.001,t+dur*0.92);
@@ -3208,7 +3215,7 @@ function _mBass(freq,t,dur,vol){
 }
 // Kick drum: pitched sine sweep + click
 function _mKick(t){
-  const ctx=ac(), dest=_getComp();
+  const ctx=ac(), dest=_getMix();
   const g=ctx.createGain(); g.gain.setValueAtTime(0.95,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.42); g.connect(dest);
   const o=ctx.createOscillator(); o.type='sine';
   o.frequency.setValueAtTime(155,t); o.frequency.exponentialRampToValueAtTime(40,t+0.15);
@@ -3243,7 +3250,7 @@ function _mHat(t,vol=0.2){
 // Soft pad chord (title ambience)
 function _mPad(freqs,t,dur,vol){
   if(!freqs.length||dur<=0.6) return;
-  const ctx=ac(), dest=_getComp();
+  const ctx=ac(), dest=_getMix();
   const mg=ctx.createGain();
   mg.gain.setValueAtTime(0.001,t); mg.gain.linearRampToValueAtTime(vol,t+0.28);
   mg.gain.setValueAtTime(vol,t+dur-0.5); mg.gain.linearRampToValueAtTime(0.001,t+dur);
@@ -3606,9 +3613,9 @@ function startBattleMusic(){
 }
 function stopMusic(){
   _mPlaying=false; _mId++; _mTrack=null;
-  // Close AudioContext to instantly kill all pre-scheduled notes
-  if(AC){ try{AC.close();}catch(e){} AC=null; }
-  _mComp=null;
+  // Instantly silence all pre-scheduled notes by zeroing master gain
+  if(_mMasterGain) _mMasterGain.gain.setValueAtTime(0, AC ? AC.currentTime : 0);
+  _mMasterGain=null; // next song gets a fresh gain=1 node
 }
 function startObbyMusic(){ stopMusic(); _mTrack='obby'; _playTrack(_O_SONG); }
 
