@@ -3153,17 +3153,16 @@ function titleClick(i) {
   else { showCodeOverlay(); }
 }
 
-// ---- MUSIC -------------------------------------------------------
+// ---- MUSIC (multi-section, ~2 min loops) -------------------------
 let _mPlaying=false, _mId=0, _mTrack=null;
 
-// Note frequency table: _N['D4']=293.66, _N['Ab4']=415.30, etc.
+// Note frequency table
 const _N=(()=>{
   const nm=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'],t={};
   for(let o=2;o<=6;o++) for(let i=0;i<12;i++) t[nm[i]+o]=440*Math.pow(2,((o+1)*12+i-69)/12);
   return t;
 })();
 
-// Master compressor — one node, shared by all music sounds
 let _mComp=null;
 function _getComp(){
   if(_mComp) return _mComp;
@@ -3173,7 +3172,7 @@ function _getComp(){
   c.connect(ctx.destination); _mComp=c; return c;
 }
 
-// Lead synth: 3 detuned square oscillators + lowpass filter (fat chorus)
+// Lead synth: 3 detuned square oscillators + lowpass (fat chorus)
 function _mLead(freq,t,dur,vol){
   if(!freq||dur<=0.01) return;
   const ctx=ac(), dest=_getComp();
@@ -3191,47 +3190,33 @@ function _mLead(freq,t,dur,vol){
     o.connect(filt); o.start(t); o.stop(t+dur*0.97);
   }
 }
-
-// Bass synth: sawtooth through lowpass + sub-octave sine
+// Bass synth: sawtooth+lowpass + sub-octave sine
 function _mBass(freq,t,dur,vol){
   if(!freq||dur<=0.01) return;
   const ctx=ac(), dest=_getComp();
   const mg=ctx.createGain();
-  mg.gain.setValueAtTime(0.001,t);
-  mg.gain.linearRampToValueAtTime(vol,t+0.025);
-  mg.gain.setValueAtTime(vol,t+dur*0.65);
-  mg.gain.exponentialRampToValueAtTime(0.001,t+dur*0.92);
+  mg.gain.setValueAtTime(0.001,t); mg.gain.linearRampToValueAtTime(vol,t+0.025);
+  mg.gain.setValueAtTime(vol,t+dur*0.65); mg.gain.exponentialRampToValueAtTime(0.001,t+dur*0.92);
   mg.connect(dest);
-  const filt=ctx.createBiquadFilter();
-  filt.type='lowpass'; filt.frequency.value=900; filt.Q.value=0.5;
-  filt.connect(mg);
-  const saw=ctx.createOscillator();
-  saw.type='sawtooth'; saw.frequency.value=freq;
+  const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=900; filt.Q.value=0.5; filt.connect(mg);
+  const saw=ctx.createOscillator(); saw.type='sawtooth'; saw.frequency.value=freq;
   saw.connect(filt); saw.start(t); saw.stop(t+dur*0.93);
-  const sub=ctx.createOscillator();
-  sub.type='sine'; sub.frequency.value=freq/2;
-  const sg=ctx.createGain(); sg.gain.value=0.5;
-  sub.connect(sg); sg.connect(mg);
+  const sub=ctx.createOscillator(); sub.type='sine'; sub.frequency.value=freq/2;
+  const sg=ctx.createGain(); sg.gain.value=0.5; sub.connect(sg); sg.connect(mg);
   sub.start(t); sub.stop(t+dur*0.93);
 }
-
-// Kick drum: pitched sine sweep + click transient
+// Kick drum: pitched sine sweep + click
 function _mKick(t){
   const ctx=ac(), dest=_getComp();
-  const g=ctx.createGain();
-  g.gain.setValueAtTime(0.95,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.42);
-  g.connect(dest);
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.95,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.42); g.connect(dest);
   const o=ctx.createOscillator(); o.type='sine';
   o.frequency.setValueAtTime(155,t); o.frequency.exponentialRampToValueAtTime(40,t+0.15);
   o.connect(g); o.start(t); o.stop(t+0.42);
-  const cg=ctx.createGain();
-  cg.gain.setValueAtTime(0.6,t); cg.gain.exponentialRampToValueAtTime(0.001,t+0.018);
-  cg.connect(dest);
+  const cg=ctx.createGain(); cg.gain.setValueAtTime(0.6,t); cg.gain.exponentialRampToValueAtTime(0.001,t+0.018); cg.connect(dest);
   const co=ctx.createOscillator(); co.type='square'; co.frequency.value=200;
   co.connect(cg); co.start(t); co.stop(t+0.018);
 }
-
-// Snare drum: noise burst + tone body
+// Snare: noise burst + tone body
 function _mSnare(t){
   const ctx=ac(), dest=_getComp(), sr=ctx.sampleRate;
   const len=Math.floor(sr*0.18), buf=ctx.createBuffer(1,len,sr), d=buf.getChannelData(0);
@@ -3244,8 +3229,7 @@ function _mSnare(t){
   const og=ctx.createGain(); og.gain.setValueAtTime(0.35,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.07);
   o.connect(og); og.connect(dest); o.start(t); o.stop(t+0.07);
 }
-
-// Hi-hat: short filtered noise burst
+// Hi-hat: filtered noise
 function _mHat(t,vol=0.2){
   const ctx=ac(), dest=_getComp(), sr=ctx.sampleRate;
   const len=Math.floor(sr*0.055), buf=ctx.createBuffer(1,len,sr), d=buf.getChannelData(0);
@@ -3255,208 +3239,316 @@ function _mHat(t,vol=0.2){
   const g=ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.055);
   src.connect(hp); hp.connect(g); g.connect(dest); src.start(t); src.stop(t+0.055);
 }
-
-// Soft triangle pad chord (title ambience)
+// Soft pad chord (title ambience)
 function _mPad(freqs,t,dur,vol){
-  if(!freqs.length||dur<=0) return;
+  if(!freqs.length||dur<=0.6) return;
   const ctx=ac(), dest=_getComp();
   const mg=ctx.createGain();
-  mg.gain.setValueAtTime(0.001,t);
-  mg.gain.linearRampToValueAtTime(vol,t+0.28);
-  mg.gain.setValueAtTime(vol,t+dur-0.5);
-  mg.gain.linearRampToValueAtTime(0.001,t+dur);
-  const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1400;
-  filt.connect(mg); mg.connect(dest);
-  for(const f of freqs){
-    const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=f;
-    o.connect(filt); o.start(t); o.stop(t+dur);
-  }
+  mg.gain.setValueAtTime(0.001,t); mg.gain.linearRampToValueAtTime(vol,t+0.28);
+  mg.gain.setValueAtTime(vol,t+dur-0.5); mg.gain.linearRampToValueAtTime(0.001,t+dur);
+  const filt=ctx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1400; filt.connect(mg); mg.connect(dest);
+  for(const f of freqs){ const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=f; o.connect(filt); o.start(t); o.stop(t+dur); }
 }
 
-// ---- TITLE MUSIC: "Once Upon a Time" feel — G major, 80 BPM -----
-// 8 bars × 3.0s = 24.0s loop
-function _scheduleTitleMusic(t0){
+// ---- SCHEDULING HELPERS ------------------------------------------
+// Schedule melody [[noteName,dur],...], 'R'=rest, return total duration
+function _mel(arr,t0,vol){
+  let t=t0,d=0; for(const [n,v] of arr){ if(n!=='R'&&_N[n]) _mLead(_N[n],t,v*0.82,vol); t+=v; d+=v; } return d;
+}
+// Schedule bass [[noteName,dur],...]
+function _bas(arr,t0,vol){ let t=t0; for(const [n,v] of arr){ if(_N[n]) _mBass(_N[n],t,v*0.8,vol); t+=v; } }
+// Rock drums 120 BPM, n bars (barDur=2s)
+function _dk120(t0,n){ for(let b=0;b<n;b++){ const tb=t0+b*2; _mKick(tb);_mHat(tb);_mHat(tb+0.25); _mSnare(tb+0.5);_mHat(tb+0.5);_mHat(tb+0.75); _mKick(tb+1);_mHat(tb+1);_mHat(tb+1.25); _mSnare(tb+1.5);_mHat(tb+1.5);_mHat(tb+1.75); } }
+// March drums 120 BPM (double kick on 1), n bars
+function _dkM(t0,n){ for(let b=0;b<n;b++){ const tb=t0+b*2; _mKick(tb);_mKick(tb+0.125);_mHat(tb);_mHat(tb+0.25); _mSnare(tb+0.5);_mHat(tb+0.5);_mHat(tb+0.75); _mKick(tb+1);_mHat(tb+1);_mHat(tb+1.25); _mSnare(tb+1.5);_mHat(tb+1.5);_mHat(tb+1.75); } }
+// Double-kick drums 160 BPM (barDur=1.5s), n bars
+function _dk160(t0,n){ for(let b=0;b<n;b++){ const tb=t0+b*1.5,e=0.1875,q=0.375; _mKick(tb);_mKick(tb+e);_mSnare(tb+q);_mKick(tb+0.75);_mKick(tb+0.75+e);_mSnare(tb+0.75+q); for(let i=0;i<8;i++) _mHat(tb+i*e,0.15); } }
+
+// ====================== TITLE MUSIC — G major, 80 BPM ======================
+// 6 sections total = ~132s loop; no drums — peaceful, ambient
+// Section A: "Once Upon a Time" main theme (8 bars = 24s)
+function _tA(t0){
   const q=0.75,h=1.5,w=3.0;
-  const mel=[
-    ['G4',q],['A4',q],['B4',q],['D5',q],   // bar 1
-    ['G5',h],['D5',h],                       // bar 2
-    ['E5',q],['D5',q],['B4',q],['G4',q],    // bar 3
-    ['A4',w],                                // bar 4
-    ['C5',q],['B4',q],['A4',q],['G4',q],    // bar 5
-    ['G4',h],['E4',h],                       // bar 6
-    ['D4',q],['E4',q],['D4',q],['B3',q],    // bar 7
-    ['G4',w],                                // bar 8
-  ];
-  let t=t0,dur=0;
-  for(const [n,d] of mel){ if(_N[n]) _mLead(_N[n],t,d*0.88,0.05); t+=d; dur+=d; }
-  const bass=[
-    ['G3',h],['G3',h],  ['G3',h],['D3',h],
-    ['E3',h],['E3',h],  ['A3',w],
-    ['C3',h],['C3',h],  ['E3',h],['E3',h],
-    ['G3',h],['G3',h],  ['G3',w],
-  ];
-  let bt=t0;
-  for(const [n,d] of bass){ if(_N[n]) _mBass(_N[n],bt,d*0.82,0.036); bt+=d; }
-  const chords=[
-    [['G3','B3','D4'],w],[['G3','B3','D4'],w],
-    [['E3','G3','B3'],w],[['A3','C4','E4'],w],
-    [['C3','E3','G3'],w],[['E3','G3','B3'],w],
-    [['G3','B3','D4'],w],[['G3','B3','D4'],w],
-  ];
-  let pt=t0;
-  for(const [fs,d] of chords){ _mPad(fs.map(n=>_N[n]),pt,d*0.97,0.018); pt+=d; }
-  return dur; // 24.0s
+  const mel=[ ['G4',q],['A4',q],['B4',q],['D5',q], ['G5',h],['D5',h], ['E5',q],['D5',q],['B4',q],['G4',q], ['A4',w],
+              ['C5',q],['B4',q],['A4',q],['G4',q], ['G4',h],['E4',h], ['D4',q],['E4',q],['D4',q],['B3',q], ['G4',w] ];
+  const bas=[ ['G3',h],['G3',h],['G3',h],['D3',h], ['E3',h],['E3',h],['A3',w],
+              ['C3',h],['C3',h],['E3',h],['E3',h], ['G3',h],['G3',h],['G3',w] ];
+  const ch=[ [['G3','B3','D4'],w],[['G3','B3','D4'],w],[['E3','G3','B3'],w],[['A3','C4','E4'],w],
+             [['C3','E3','G3'],w],[['E3','G3','B3'],w],[['G3','B3','D4'],w],[['G3','B3','D4'],w] ];
+  const dur=_mel(mel,t0,0.052); _bas(bas,t0,0.036);
+  let pt=t0; for(const [fs,d] of ch){ _mPad(fs.map(n=>_N[n]),pt,d*0.97,0.018); pt+=d; }
+  return dur; // 24s
 }
+// Section B: ascending, more energetic (8 bars = 24s)
+function _tB(t0){
+  const q=0.75,h=1.5,w=3.0;
+  const mel=[ ['D5',q],['E5',q],['G5',q],['A5',q], ['B5',h],['G5',h], ['A5',q],['G5',q],['E5',q],['D5',q], ['G5',w],
+              ['E5',q],['D5',q],['C5',q],['B4',q], ['A4',h],['G4',h], ['B4',q],['A4',q],['G4',q],['E4',q], ['D4',w] ];
+  const bas=[ ['D3',h],['D3',h],['G3',h],['G3',h], ['A3',h],['A3',h],['G3',w],
+              ['E3',h],['E3',h],['A3',h],['A3',h], ['G3',h],['D3',h],['G3',w] ];
+  const ch=[ [['D3','Gb3','A3'],w],[['G3','B3','D4'],w],[['A3','C4','E4'],w],[['G3','B3','D4'],w],
+             [['E3','G3','B3'],w],[['A3','C4','E4'],w],[['G3','B3','D4'],w],[['G3','B3','D4'],w] ];
+  const dur=_mel(mel,t0,0.052); _bas(bas,t0,0.036);
+  let pt=t0; for(const [fs,d] of ch){ _mPad(fs.map(n=>_N[n]),pt,d*0.97,0.018); pt+=d; }
+  return dur; // 24s
+}
+// Section C: bridge, gentle (4 bars = 12s)
+function _tC(t0){
+  const h=1.5,w=3.0;
+  const mel=[ ['B4',h],['D5',h], ['G5',h],['E5',h], ['A4',h],['C5',h], ['G4',w] ];
+  const bas=[ ['G3',h],['G3',h], ['E3',h],['G3',h], ['A3',h],['C4',h], ['G3',w] ];
+  const ch=[ [['G3','B3','D4'],w],[['E3','G3','B3'],w],[['A3','C4','E4'],w],[['G3','B3','D4'],w] ];
+  const dur=_mel(mel,t0,0.048); _bas(bas,t0,0.034);
+  let pt=t0; for(const [fs,d] of ch){ _mPad(fs.map(n=>_N[n]),pt,d*0.97,0.022); pt+=d; }
+  return dur; // 12s
+}
+// Section D: third melody variation (8 bars = 24s)
+function _tD(t0){
+  const q=0.75,h=1.5,w=3.0;
+  const mel=[ ['E5',q],['D5',q],['C5',q],['B4',q], ['G4',h],['A4',h], ['B4',q],['C5',q],['D5',q],['E5',q], ['G5',w],
+              ['C5',q],['B4',q],['A4',q],['G4',q], ['E4',h],['D4',h], ['G4',q],['A4',q],['G4',q],['E4',q], ['G4',w] ];
+  const bas=[ ['E3',h],['E3',h],['G3',h],['A3',h], ['G3',h],['G3',h],['G3',w],
+              ['C3',h],['C3',h],['E3',h],['E3',h], ['G3',h],['D3',h],['G3',w] ];
+  const ch=[ [['E3','G3','B3'],w],[['G3','B3','D4'],w],[['G3','B3','D4'],w],[['G3','B3','D4'],w],
+             [['C3','E3','G3'],w],[['E3','G3','B3'],w],[['G3','B3','D4'],w],[['G3','B3','D4'],w] ];
+  const dur=_mel(mel,t0,0.052); _bas(bas,t0,0.036);
+  let pt=t0; for(const [fs,d] of ch){ _mPad(fs.map(n=>_N[n]),pt,d*0.97,0.018); pt+=d; }
+  return dur; // 24s
+}
+// Song: A B C A D B — 24+24+12+24+24+24 = 132s ≈ 2.2 min
+const _TITLE=[_tA,_tB,_tC,_tA,_tD,_tB];
 
-// ---- UNDERTALE BATTLE: Megalovania-inspired — D minor, 120 BPM --
-// 8 bars × 2.0s = 16.0s loop
-function _scheduleUBattle(t0){
+// ====================== UNDERTALE BATTLE — D minor, 120 BPM ======================
+// 8 sections: intro+A+A+B+C+A+B+A = 8+16+16+16+8+16+16+16 = 112s ≈ 1.9 min
+
+// Intro: quiet, sustained (4 bars = 8s)
+function _uIntro(t0){
+  const h=1.0;
+  const mel=[ ['D4',h],['F4',h], ['A4',h],['C5',h], ['D5',h],['A4',h], ['F4',h],['D4',h] ];
+  const bas=[ ['D3',h],['D3',h], ['A2',h],['C3',h], ['D3',h],['D3',h], ['A2',h],['D3',h] ];
+  const dur=_mel(mel,t0,0.032); _bas(bas,t0,0.030); return dur; // 8s
+}
+// Section A: full Megalovania riff (8 bars = 16s)
+function _uA(t0){
   const s=0.125,e=0.25,q=0.5;
-  // Each riff line = s+s+e+e+s+s+e+s+s+s+3s = 2.0s (1 bar)
   const mel=[
-    // Bars 1-2: D riff (×2)
-    ['D4',s],['D4',s],['D5',e],['A4',e],['Ab4',s],['G4',s],['F4',e],['D4',s],['F4',s],['G4',s],['0',s*3],
-    ['D4',s],['D4',s],['D5',e],['A4',e],['Ab4',s],['G4',s],['F4',e],['D4',s],['F4',s],['G4',s],['0',s*3],
-    // Bars 3-4: C riff (×2)
-    ['C4',s],['C4',s],['C5',e],['G4',e],['Gb4',s],['F4',s],['Eb4',e],['C4',s],['Eb4',s],['F4',s],['0',s*3],
-    ['C4',s],['C4',s],['C5',e],['G4',e],['Gb4',s],['F4',s],['Eb4',e],['C4',s],['Eb4',s],['F4',s],['0',s*3],
-    // Bars 5-6: Bb riff (×2)
-    ['Bb3',s],['Bb3',s],['Bb4',e],['F4',e],['E4',s],['Eb4',s],['Db4',e],['Bb3',s],['Db4',s],['Eb4',s],['0',s*3],
-    ['Bb3',s],['Bb3',s],['Bb4',e],['F4',e],['E4',s],['Eb4',s],['Db4',e],['Bb3',s],['Db4',s],['Eb4',s],['0',s*3],
-    // Bars 7-8: chromatic walk-up
+    ['D4',s],['D4',s],['D5',e],['A4',e],['Ab4',s],['G4',s],['F4',e],['D4',s],['F4',s],['G4',s],['R',0.375],
+    ['D4',s],['D4',s],['D5',e],['A4',e],['Ab4',s],['G4',s],['F4',e],['D4',s],['F4',s],['G4',s],['R',0.375],
+    ['C4',s],['C4',s],['C5',e],['G4',e],['Gb4',s],['F4',s],['Eb4',e],['C4',s],['Eb4',s],['F4',s],['R',0.375],
+    ['C4',s],['C4',s],['C5',e],['G4',e],['Gb4',s],['F4',s],['Eb4',e],['C4',s],['Eb4',s],['F4',s],['R',0.375],
+    ['Bb3',s],['Bb3',s],['Bb4',e],['F4',e],['E4',s],['Eb4',s],['Db4',e],['Bb3',s],['Db4',s],['Eb4',s],['R',0.375],
+    ['Bb3',s],['Bb3',s],['Bb4',e],['F4',e],['E4',s],['Eb4',s],['Db4',e],['Bb3',s],['Db4',s],['Eb4',s],['R',0.375],
     ['A3',s],['Bb3',s],['B3',s],['C4',s],['Db4',s],['D4',s],['Eb4',s],['E4',s],
     ['F4',s],['Gb4',s],['G4',s],['Ab4',s],['A4',s],['Bb4',s],['B4',s],['C5',s],
-    ['D5',e],['C5',e],['B4',e],['Bb4',e],
-    ['A4',e],['Ab4',s],['G4',s],['0',q],
+    ['D5',e],['C5',e],['B4',e],['Bb4',e], ['A4',e],['Ab4',s],['G4',s],['R',q],
   ];
-  let t=t0,dur=0;
-  for(const [n,d] of mel){ if(n!=='0'&&_N[n]) _mLead(_N[n],t,d*0.82,0.066); t+=d; dur+=d; }
-  // Bass: pumping 8th notes (roots)
-  const bRoots=['D3','D3','C3','C3','Bb2','Bb2'];
-  let bt=t0;
-  for(const root of bRoots) for(let i=0;i<8;i++){ _mBass(_N[root],bt,e*0.75,0.052); bt+=e; }
-  // Chromatic walk-up bass (bars 7-8)
+  const dur=_mel(mel,t0,0.066);
+  const bR=['D3','D3','C3','C3','Bb2','Bb2']; let bt=t0;
+  for(const r of bR) for(let i=0;i<8;i++){ _mBass(_N[r],bt,e*0.75,0.052); bt+=e; }
   const wu=['A2','Bb2','B2','C3','Db3','D3','Eb3','E3','F3','Gb3','G3','Ab3','A3','Bb3','B3','C4'];
   for(const n of wu){ _mBass(_N[n],bt,e*0.75,0.052); bt+=e; }
-  // Drums: kick 1&3, snare 2&4, hats every 8th (120 BPM)
-  for(let b=0;b<8;b++){
-    const tb=t0+b*2;
-    _mKick(tb);    _mHat(tb);    _mHat(tb+0.25);
-    _mSnare(tb+0.5); _mHat(tb+0.5); _mHat(tb+0.75);
-    _mKick(tb+1);  _mHat(tb+1);  _mHat(tb+1.25);
-    _mSnare(tb+1.5); _mHat(tb+1.5); _mHat(tb+1.75);
-  }
-  return 16.0;
+  _dk120(t0,8); return dur; // 16s
 }
-
-// ---- SPACE BATTLE: Military march — D minor, 120 BPM ------------
-// 8 bars × 2.0s = 16.0s loop
-function _scheduleSBattle(t0){
+// Section B: D riff (4 bars) + expressive solo (4 bars) = 16s
+function _uB(t0){
   const s=0.125,e=0.25,q=0.5,h=1.0;
-  const mel=[
-    ['D4',e],['D4',e],['A4',q],['G4',e],['F4',e],['E4',e],['D4',e],   // bar 1
-    ['F4',e],['E4',e],['F4',q],['A4',e],['G4',e],['F4',e],['E4',e],   // bar 2
-    ['A4',e],['A4',e],['D5',q],['C5',e],['Bb4',e],['A4',e],['G4',e],  // bar 3
-    ['A4',e],['G4',e],['F4',e],['E4',e],['D4',q],['0',q],             // bar 4
-    ['F4',e],['G4',e],['A4',q],['G4',e],['F4',e],['E4',e],['D4',e],   // bar 5
-    ['G4',e],['A4',e],['Bb4',q],['A4',e],['G4',e],['F4',e],['E4',e],  // bar 6
-    ['D4',e],['F4',e],['A4',e],['D5',e],['C5',e],['Bb4',e],['A4',e],['G4',e], // bar 7
-    ['F4',e],['E4',e],['D4',e],['C4',e],['D4',q],['0',q],             // bar 8
-  ];
-  let t=t0,dur=0;
-  for(const [n,d] of mel){ if(n!=='0'&&_N[n]) _mLead(_N[n],t,d*0.84,0.066); t+=d; dur+=d; }
-  const bassData=[
-    ['D3',h],['D3',h],  ['F3',h],['F3',h],
-    ['A3',h],['A3',h],  ['D3',h+q],['A2',q],
-    ['F3',h],['F3',h],  ['G3',h],['G3',h],
-    ['D3',h],['D3',h],  ['D3',q],['A2',q],['D3',h],
-  ];
-  let bt=t0;
-  for(const [n,d] of bassData){ if(_N[n]) _mBass(_N[n],bt,d*0.8,0.05); bt+=d; }
-  // March drums: double kick on 1, snare on 2&4, hats every 8th
-  for(let b=0;b<8;b++){
-    const tb=t0+b*2;
-    _mKick(tb); _mKick(tb+s);
-    _mHat(tb); _mHat(tb+e);
-    _mSnare(tb+q); _mHat(tb+q); _mHat(tb+q+e);
-    _mKick(tb+h);
-    _mHat(tb+h); _mHat(tb+h+e);
-    _mSnare(tb+h+q); _mHat(tb+h+q); _mHat(tb+h+q+e);
-  }
-  return dur; // 16.0s
+  // First 4 bars: main D+C riff
+  _mel([['D4',s],['D4',s],['D5',e],['A4',e],['Ab4',s],['G4',s],['F4',e],['D4',s],['F4',s],['G4',s],['R',0.375],
+        ['D4',s],['D4',s],['D5',e],['A4',e],['Ab4',s],['G4',s],['F4',e],['D4',s],['F4',s],['G4',s],['R',0.375],
+        ['C4',s],['C4',s],['C5',e],['G4',e],['Gb4',s],['F4',s],['Eb4',e],['C4',s],['Eb4',s],['F4',s],['R',0.375],
+        ['C4',s],['C4',s],['C5',e],['G4',e],['Gb4',s],['F4',s],['Eb4',e],['C4',s],['Eb4',s],['F4',s],['R',0.375]],t0,0.066);
+  // Last 4 bars: expressive solo in D minor
+  _mel([['A4',q],['G4',q],['F4',e],['G4',e],['A4',q],      // bar5 = 2s
+        ['D5',q],['C5',q],['Bb4',q],['A4',q],                // bar6 = 2s
+        ['G4',q],['F4',e],['E4',e],['D4',q],['F4',q],        // bar7 = 2s
+        ['A4',h],['D4',h]],t0+8,0.068);                      // bar8 = 2s
+  // Bass bars 1-4
+  const bR=['D3','D3','C3','C3']; let bt=t0;
+  for(const r of bR) for(let i=0;i<8;i++){ _mBass(_N[r],bt,e*0.75,0.052); bt+=e; }
+  // Bass bars 5-8
+  _bas([['D3',h],['D3',h],['G3',h],['G3',h],['G3',h],['G3',h],['A3',h],['D3',h]],t0+8,0.052);
+  _dk120(t0,8); return 16.0;
 }
+// Section C: emotional bridge (4 bars = 8s)
+function _uC(t0){
+  const h=1.0;
+  const mel=[ ['D5',h],['A4',h], ['G4',h],['F4',h], ['Bb4',h],['F4',h], ['A4',h],['D4',h] ];
+  const bas=[ ['D3',h],['A2',h], ['G2',h],['F2',h], ['Bb2',h],['F2',h], ['A2',h],['D2',h] ];
+  const dur=_mel(mel,t0,0.055); _bas(bas,t0,0.040);
+  for(let b=0;b<4;b++){ const tb=t0+b*2; _mKick(tb); _mSnare(tb+1.0); }
+  return dur; // 8s
+}
+// Song: intro A A B C A B A = 8+16+16+16+8+16+16+16 = 112s
+const _U_SONG=[_uIntro,_uA,_uA,_uB,_uC,_uA,_uB,_uA];
 
-// ---- DIFFICULTY BATTLE: Intense — E minor, 160 BPM --------------
-// 8 bars × 1.5s = 12.0s loop
-function _scheduleDBattle(t0){
-  const s=0.09375,e=0.1875,q=0.375,h=0.75; // 160 BPM
+// ====================== SPACE BATTLE — D minor, 120 BPM ======================
+// 8 sections: A B A C A B A B = 16+16+16+8+16+16+16+16 = 120s = 2 min
+
+// Section A: heroic march (8 bars = 16s)
+function _sA(t0){
+  const e=0.25,q=0.5,h=1.0;
   const mel=[
-    // Bars 1-2: fast 16th-note arpeggios (E minor / F#m)
-    ['E4',s],['G4',s],['B4',s],['E5',s], ['D5',s],['B4',s],['G4',s],['E4',s],
-    ['E4',s],['G4',s],['B4',s],['E5',s], ['D5',s],['B4',s],['G4',s],['E4',s],
+    ['D4',e],['D4',e],['A4',q],['G4',e],['F4',e],['E4',e],['D4',e],
+    ['F4',e],['E4',e],['F4',q],['A4',e],['G4',e],['F4',e],['E4',e],
+    ['A4',e],['A4',e],['D5',q],['C5',e],['Bb4',e],['A4',e],['G4',e],
+    ['A4',e],['G4',e],['F4',e],['E4',e],['D4',q],['R',q],
+    ['F4',e],['G4',e],['A4',q],['G4',e],['F4',e],['E4',e],['D4',e],
+    ['G4',e],['A4',e],['Bb4',q],['A4',e],['G4',e],['F4',e],['E4',e],
+    ['D4',e],['F4',e],['A4',e],['D5',e],['C5',e],['Bb4',e],['A4',e],['G4',e],
+    ['F4',e],['E4',e],['D4',e],['C4',e],['D4',q],['R',q],
+  ];
+  const bas=[ ['D3',h],['D3',h],['F3',h],['F3',h], ['A3',h],['A3',h],['D3',1.5],['A2',0.5],
+              ['F3',h],['F3',h],['G3',h],['G3',h], ['D3',h],['D3',h],['D3',q],['A2',q],['D3',h] ];
+  const dur=_mel(mel,t0,0.066); _bas(bas,t0,0.050); _dkM(t0,8); return dur; // 16s
+}
+// Section B: triumphant high theme (8 bars = 16s)
+function _sB(t0){
+  const e=0.25,q=0.5,h=1.0;
+  const mel=[
+    ['D5',q],['D5',q],['D5',q],['Bb4',e],['F5',e],   // bar1 = 2s
+    ['E5',q],['Eb5',q],['D5',h],                       // bar2 = 2s
+    ['F5',q],['Eb5',e],['D5',e],['C5',q],['D5',q],    // bar3 = 2s
+    ['Bb4',h],['R',h],                                  // bar4 = 2s
+    ['A5',q],['G5',q],['F5',q],['Eb5',e],['D5',e],    // bar5 = 2s
+    ['C5',q],['B4',e],['C5',e],['D5',h],               // bar6 = 2s
+    ['D5',q],['E5',q],['F5',q],['Gb5',e],['G5',e],    // bar7 = 2s
+    ['A5',h],['R',h],                                   // bar8 = 2s
+  ];
+  const bas=[ ['D3',h],['Bb2',h],['D3',h],['D3',h], ['F3',h],['F3',h],['Bb2',h],['Bb2',h],
+              ['A2',h],['A2',h],['D3',h],['D3',h],  ['D3',h],['D3',h],['A2',h],['D3',h] ];
+  const dur=_mel(mel,t0,0.068); _bas(bas,t0,0.050); _dkM(t0,8); return dur; // 16s
+}
+// Section C: bridge/break (4 bars = 8s)
+function _sC(t0){
+  const h=1.0;
+  const mel=[ ['D5',h],['A4',h], ['G4',h],['F4',h], ['Bb4',h],['D5',h], ['A4',2.0] ];
+  const bas=[ ['D3',h],['D3',h], ['G2',h],['F2',h], ['Bb2',h],['D3',h], ['A2',2.0] ];
+  const dur=_mel(mel,t0,0.060); _bas(bas,t0,0.040);
+  for(let b=0;b<4;b++){ const tb=t0+b*2; _mKick(tb); _mKick(tb+0.125); _mSnare(tb+1.0); }
+  return dur; // 8s
+}
+// Song: A B A C A B A B = 120s = 2 min
+const _S_SONG=[_sA,_sB,_sA,_sC,_sA,_sB,_sA,_sB];
+
+// ====================== DIFFICULTY BATTLE — E minor, 160 BPM ======================
+// 8 sections: intro+A+B+A+C+A+B+A = 6+12+12+12+12+12+12+12 = 90s = 1.5 min
+
+// Intro: building arpeggios, soft (4 bars = 6s)
+function _dIntro(t0){
+  const s=0.09375,e=0.1875; // 160 BPM
+  const mel=[]; const arp1=['E4','G4','B4','E5'], arp2=['B4','E5','G5','B5'];
+  for(let i=0;i<32;i++) mel.push([arp1[i%4],s]); // bars 1-2 (32 sixteenth notes)
+  for(let i=0;i<32;i++) mel.push([arp2[i%4],s]); // bars 3-4
+  const dur=_mel(mel,t0,0.040);
+  const bns=['E3','E3','E3','E3','E3','E3','E3','E3','B3','B3','B3','B3','B3','B3','B3','B3',
+             'E3','E3','E3','E3','E3','E3','E3','E3','B3','B3','B3','B3','B3','B3','B3','B3'];
+  let bt=t0; for(const n of bns){ _mBass(_N[n],bt,e*0.7,0.035); bt+=e; }
+  return dur; // 6s
+}
+// Section A: fast 16th-note arpeggios (8 bars = 12s)
+function _dA(t0){
+  const s=0.09375,e=0.1875;
+  const mel=[
+    ['E4',s],['G4',s],['B4',s],['E5',s],['D5',s],['B4',s],['G4',s],['E4',s],  // bar1a
+    ['E4',s],['G4',s],['B4',s],['E5',s],['D5',s],['B4',s],['G4',s],['E4',s],  // bar1b
+    ['Gb4',s],['A4',s],['C5',s],['Gb5',s],['E5',s],['C5',s],['A4',s],['Gb4',s], // bar2a
+    ['G4',s],['B4',s],['D5',s],['G5',s],['Gb5',s],['D5',s],['B4',s],['G4',s], // bar2b
+    ['A4',s],['C5',s],['E5',s],['A5',s],['G5',s],['E5',s],['C5',s],['A4',s],  // bar3a
+    ['A4',s],['C5',s],['E5',s],['A5',s],['G5',s],['E5',s],['C5',s],['A4',s],  // bar3b
+    ['B4',s],['D5',s],['Gb5',s],['B5',s],['A5',s],['Gb5',s],['D5',s],['B4',s], // bar4a
+    ['B4',s],['D5',s],['Gb5',s],['B5',s],['A5',s],['Gb5',s],['D5',s],['B4',s], // bar4b
+    // bars 5-8: same as 1-4
+    ['E4',s],['G4',s],['B4',s],['E5',s],['D5',s],['B4',s],['G4',s],['E4',s],
+    ['E4',s],['G4',s],['B4',s],['E5',s],['D5',s],['B4',s],['G4',s],['E4',s],
     ['Gb4',s],['A4',s],['C5',s],['Gb5',s],['E5',s],['C5',s],['A4',s],['Gb4',s],
-    ['G4',s],['B4',s],['D5',s],['G5',s], ['Gb5',s],['D5',s],['B4',s],['G4',s],
-    // Bars 3-4: staccato melody hits
-    ['E5',e],['0',s],['E5',s],['D5',e],['0',s],['D5',s],['B4',q],['0',q],
-    ['G5',e],['0',s],['G5',s],['Gb5',e],['0',s],['E5',s],['D5',q],['0',q],
-    // Bars 5-6: driving 16th runs
-    ['B4',s],['C5',s],['D5',s],['E5',s], ['Gb5',s],['E5',s],['D5',s],['C5',s],
-    ['B4',s],['A4',s],['G4',s],['Gb4',s],['E4',s],['Gb4',s],['G4',s],['A4',s],
-    ['B4',s],['D5',s],['Gb5',s],['A5',s], ['G5',s],['E5',s],['D5',s],['B4',s],
-    ['G4',s],['B4',s],['D5',s],['G5',s], ['Gb5',s],['D5',s],['B4',s],['G4',s],
-    // Bars 7-8: climax power chords
-    ['E5',e],['E5',e],['E5',e],['E5',e], ['F5',e],['F5',e],['E5',e],['Eb5',e],
-    ['D5',e],['D5',e],['D5',e],['D5',e], ['E5',e],['Eb5',e],['D5',e],['Db5',e],
+    ['G4',s],['B4',s],['D5',s],['G5',s],['Gb5',s],['D5',s],['B4',s],['G4',s],
+    ['A4',s],['C5',s],['E5',s],['A5',s],['G5',s],['E5',s],['C5',s],['A4',s],
+    ['A4',s],['C5',s],['E5',s],['A5',s],['G5',s],['E5',s],['C5',s],['A4',s],
+    ['B4',s],['D5',s],['Gb5',s],['B5',s],['A5',s],['Gb5',s],['D5',s],['B4',s],
+    ['B4',s],['D5',s],['Gb5',s],['B5',s],['A5',s],['Gb5',s],['D5',s],['B4',s],
   ];
-  let t=t0,dur=0;
-  for(const [n,d] of mel){ if(n!=='0'&&_N[n]) _mLead(_N[n],t,d*0.78,0.07); t+=d; dur+=d; }
-  // Bass: 8th-note pattern across 64 steps
-  const bSeq=[
-    'E3','E3','E3','E3','E3','E3','E3','E3', // bar 1
-    'E3','E3','E3','E3','E3','E3','E3','E3', // bar 2
-    'E3','E3','E3','E3','E3','E3','E3','E3', // bar 3
-    'E3','E3','E3','E3','E3','E3','E3','E3', // bar 4
-    'E3','E3','E3','E3','E3','E3','E3','E3', // bar 5
-    'E3','E3','E3','E3','E3','E3','E3','E3', // bar 6
-    'E3','E3','F3','F3','E3','E3','Eb3','Eb3', // bar 7
-    'D3','D3','D3','D3','E3','Eb3','D3','Db3', // bar 8
-  ];
-  let bt=t0;
-  for(const n of bSeq){ _mBass(_N[n]||82,bt,e*0.72,0.056); bt+=e; }
-  // Double-kick drums, constant 8th-note hats (160 BPM)
-  for(let b=0;b<8;b++){
-    const tb=t0+b*1.5;
-    _mKick(tb); _mKick(tb+e);
-    _mSnare(tb+q);
-    _mKick(tb+h); _mKick(tb+h+e);
-    _mSnare(tb+h+q);
-    for(let i=0;i<8;i++) _mHat(tb+i*e, 0.14);
-  }
-  return 12.0;
+  const dur=_mel(mel,t0,0.068);
+  const bS=['E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3',
+            'A2','A2','A2','A2','A2','A2','A2','A2','B2','B2','B2','B2','B2','B2','B2','B2',
+            'E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3',
+            'A2','A2','A2','A2','A2','A2','A2','A2','B2','B2','B2','B2','B2','B2','B2','B2'];
+  let bt=t0; for(const n of bS){ _mBass(_N[n]||82,bt,e*0.72,0.056); bt+=e; }
+  _dk160(t0,8); return dur; // 12s
 }
-
-// ---- TRACK PLAYER ------------------------------------------------
-function _playTrack(schedFn){
-  _mPlaying=true; ac();
-  const id=++_mId;
-  function sched(){
-    if(!_mPlaying||_mId!==id) return;
-    const loopDur=schedFn(ac().currentTime+0.05);
-    setTimeout(sched,(loopDur-0.15)*1000);
+// Section B: staccato hits + runs (8 bars = 12s)
+function _dB(t0){
+  const e=0.1875;
+  const mel=[
+    ['E5',e],['R',e],['D5',e],['R',e],['B4',e],['R',e],['G4',e],['R',e],  // bar1
+    ['E5',e],['R',e],['D5',e],['R',e],['B4',e],['R',e],['G4',e],['R',e],  // bar2
+    ['B5',e],['R',e],['A5',e],['R',e],['G5',e],['R',e],['E5',e],['R',e],  // bar3
+    ['D5',e],['B4',e],['G4',e],['E4',e],['D4',e],['B3',e],['G3',e],['R',e],// bar4
+    ['E5',e],['R',e],['D5',e],['R',e],['B4',e],['R',e],['G4',e],['R',e],  // bar5
+    ['G5',e],['E5',e],['D5',e],['B4',e],['A4',e],['G4',e],['E4',e],['D4',e],// bar6
+    ['E5',e],['Gb5',e],['G5',e],['A5',e],['B5',e],['A5',e],['G5',e],['E5',e],// bar7
+    ['D5',e],['B4',e],['G4',e],['E4',e],['B4',e],['D5',e],['E5',e],['R',e], // bar8
+  ];
+  const dur=_mel(mel,t0,0.072);
+  const bS=['E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3',
+            'A2','A2','A2','A2','A2','A2','A2','A2','G2','G2','G2','G2','G2','G2','G2','G2',
+            'E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3',
+            'A2','A2','A2','A2','A2','A2','A2','A2','E3','E3','E3','E3','E3','E3','E3','E3'];
+  let bt=t0; for(const n of bS){ _mBass(_N[n]||82,bt,e*0.72,0.056); bt+=e; }
+  _dk160(t0,8); return dur; // 12s
+}
+// Section C: all-out climax (8 bars = 12s)
+function _dC(t0){
+  const e=0.1875;
+  const mel=[
+    ['E5',e],['E5',e],['E5',e],['E5',e],['F5',e],['F5',e],['E5',e],['Eb5',e],  // bar1
+    ['D5',e],['D5',e],['D5',e],['D5',e],['E5',e],['Eb5',e],['D5',e],['Db5',e], // bar2
+    ['E5',e],['E5',e],['E5',e],['E5',e],['F5',e],['F5',e],['E5',e],['Eb5',e],  // bar3
+    ['D5',e],['D5',e],['D5',e],['D5',e],['E5',e],['Eb5',e],['D5',e],['Db5',e], // bar4
+    ['B5',e],['B5',e],['A5',e],['A5',e],['G5',e],['G5',e],['E5',e],['E5',e],  // bar5
+    ['D5',e],['D5',e],['B4',e],['B4',e],['A4',e],['A4',e],['G4',e],['G4',e],  // bar6
+    ['E4',e],['G4',e],['B4',e],['E5',e],['G5',e],['B5',e],['G5',e],['E5',e],  // bar7
+    ['D5',e],['B4',e],['G4',e],['E4',e],['B4',e],['D5',e],['G5',e],['B5',e],  // bar8
+  ];
+  const dur=_mel(mel,t0,0.075);
+  const bS=['E3','E3','F3','F3','E3','E3','Eb3','Eb3','D3','D3','D3','D3','E3','Eb3','D3','Db3',
+            'E3','E3','F3','F3','E3','E3','Eb3','Eb3','D3','D3','D3','D3','E3','Eb3','D3','Db3',
+            'B2','B2','A2','A2','G2','G2','E3','E3','D3','D3','B2','B2','A2','A2','G2','G2',
+            'E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3','E3'];
+  let bt=t0; for(const n of bS){ _mBass(_N[n]||82,bt,e*0.72,0.060); bt+=e; }
+  // Extra intense: triple kick
+  for(let b=0;b<8;b++){
+    const tb=t0+b*1.5, ei=0.1875, qi=0.375;
+    _mKick(tb);_mKick(tb+ei);_mKick(tb+ei*2); _mSnare(tb+qi);
+    _mKick(tb+0.75);_mKick(tb+0.75+ei);_mKick(tb+0.75+ei*2); _mSnare(tb+0.75+qi);
+    for(let i=0;i<8;i++) _mHat(tb+i*ei,0.18);
   }
-  sched();
+  return dur; // 12s
+}
+// Song: intro A B A C A B A = 6+12+12+12+12+12+12+12 = 90s = 1.5 min
+const _D_SONG=[_dIntro,_dA,_dB,_dA,_dC,_dA,_dB,_dA];
+
+// ---- TRACK PLAYER — one song at a time, sections in sequence -----
+// Sections play in order then loop the whole list. _mId ensures
+// only one track ever plays; stopMusic() kills it instantly.
+function _playTrack(sections){
+  _mPlaying=true; ac();
+  const id=++_mId; let si=0;
+  function next(t0){
+    if(!_mPlaying||_mId!==id) return;
+    const dur=sections[si++%sections.length](t0);
+    setTimeout(()=>next(ac().currentTime+0.05),(dur-0.2)*1000);
+  }
+  next(ac().currentTime+0.05);
 }
 function startMusic(){
   if(_mPlaying) return;
-  _mTrack='title';
-  _playTrack(_scheduleTitleMusic);
+  _mTrack='title'; _playTrack(_TITLE);
 }
 function startBattleMusic(){
-  stopMusic();
-  _mTrack='battle';
-  if(gs.campaign==='s')      _playTrack(_scheduleSBattle);
-  else if(gs.campaign==='d') _playTrack(_scheduleDBattle);
-  else                        _playTrack(_scheduleUBattle);
+  stopMusic(); _mTrack='battle';
+  if(gs.campaign==='s')      _playTrack(_S_SONG);
+  else if(gs.campaign==='d') _playTrack(_D_SONG);
+  else                        _playTrack(_U_SONG);
 }
 function stopMusic(){ _mPlaying=false; _mId++; _mTrack=null; }
 
