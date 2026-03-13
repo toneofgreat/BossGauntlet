@@ -138,6 +138,8 @@ canvas {
 .tmBtn-shop:hover { border-color:#ffd700; color:#ffd700; background:#1a1400; }
 .tmBtn-code { border-color:#666633; color:#aaaa44; }
 .tmBtn-code:hover { border-color:#ffe066; color:#ffe066; background:#1a1a00; }
+.tmBtn-skin { border-color:#662266; color:#cc55cc; }
+.tmBtn-skin:hover { border-color:#ff88ff; color:#ff88ff; background:#1a001a; }
 #tmHint { font-size:10px; color:#333; margin-top:10px; }
 </style>
 </head>
@@ -153,6 +155,7 @@ canvas {
   <button class="tmBtn tmBtn-o"    onclick="_unlockAudio();titleClick(3)" id="tmObbyBtn">🔒&nbsp; OBBY RUN</button>
   <button class="tmBtn tmBtn-shop" onclick="_unlockAudio();titleClick(4)">🛒&nbsp; SHOP</button>
   <button class="tmBtn tmBtn-code" onclick="_unlockAudio();titleClick(5)">🔑&nbsp; ENTER CODE</button>
+  <button class="tmBtn tmBtn-skin" onclick="_unlockAudio();titleClick(6)">🎨&nbsp; SKIN SHOP</button>
   <div id="tmHint">Click a button to play</div>
   <div style="margin-top:14px;font-size:11px;color:#444;letter-spacing:1px;">made by thomas wynn</div>
 </div>
@@ -229,7 +232,7 @@ function saveGame() {
     ul_s: gs.unlocked_s, bt_s: gs.beaten_s,
     ul_d: gs.unlocked_d, bt_d: gs.beaten_d,
     ob_u: gs.obbyUnlocked, ob_b: gs.obbyBeaten,
-    gold: gs.gold, owned: gs.ownedItems
+    gold: gs.gold, owned: gs.ownedItems, hskin: gs.heartSkin
   }));
 }
 function loadGame() {
@@ -243,6 +246,7 @@ function loadGame() {
       if(d.ob_u){ gs.obbyUnlocked=d.ob_u; gs.obbyBeaten=d.ob_b; }
       if(d.gold !== undefined) gs.gold = d.gold;
       if(d.owned) gs.ownedItems = d.owned;
+      if(d.hskin) gs.heartSkin = d.hskin;
       while(gs.unlocked_u.length<9)  gs.unlocked_u.push(false);
       while(gs.beaten_u.length<9)    gs.beaten_u.push(false);
       while(gs.unlocked_s.length<6)  gs.unlocked_s.push(false);
@@ -465,6 +469,22 @@ const SHOP_ITEMS = [
   { id:'godmode',    name:'Godlike Will',      cost:5000, icon:'👑', desc:'2x HP, 50% less damage, triple medkit count'       },
 ];
 
+const HEART_SKINS = [
+  { id:'skin_red',       name:'Red',        color:'#ff4444', cost:0    },
+  { id:'skin_orange',    name:'Orange',     color:'#ff8800', cost:100  },
+  { id:'skin_yellow',    name:'Yellow',     color:'#ffee00', cost:200  },
+  { id:'skin_green',     name:'Green',      color:'#44cc44', cost:400  },
+  { id:'skin_blue',      name:'Blue',       color:'#4488ff', cost:400  },
+  { id:'skin_purple',    name:'Purple',     color:'#aa44ff', cost:450  },
+  { id:'skin_white',     name:'White',      color:'#ffffff', cost:500  },
+  { id:'skin_gray',      name:'Gray',       color:'#888888', cost:750  },
+  { id:'skin_lightblue', name:'Light Blue', color:'#88ddff', cost:1000 },
+  { id:'skin_lime',      name:'Lime Green', color:'#88ff44', cost:1000 },
+  { id:'skin_maroon',    name:'Maroon',     color:'#880022', cost:1000 },
+  { id:'skin_brown',     name:'Brown',      color:'#884422', cost:1000 },
+  { id:'skin_rainbow',   name:'Rainbow',    color:'rainbow', cost:2000 },
+];
+
 // ---- OBBY LEVELS --------------------------------------------------
 const OBBY_LEVELS = [
   {name:'Flowey',       color:'#ffff44',ec:'#ffff00',subtitle:'still half asleep...',    spd:0.8, fr:90, dur:600,
@@ -666,6 +686,8 @@ const gs = {
   resultGold: 0,
 
   shopSel: 0,
+  skinSel: 0,
+  heartSkin: 'skin_red',
 };
 
 function bossArr(){ return gs.campaign==='s' ? BOSSES_S : gs.campaign==='d' ? BOSSES_D : BOSSES; }
@@ -2053,10 +2075,15 @@ function drawPlayerHPBar() {
 }
 
 // ---- HEART (player) ---------------------------------------------
+function getHeartColor(){
+  if(gs.heartSkin==='skin_rainbow') return `hsl(${(gs.frame*3)%360},100%,60%)`;
+  const sk=HEART_SKINS.find(s=>s.id===gs.heartSkin);
+  return (sk&&sk.color!=='rainbow')?sk.color:'#ff4444';
+}
 function drawHeart() {
   if(gs.invisible&&gs.state==='enemy'){cx.globalAlpha=0.15;}
   const flick=gs.invTimer>0&&Math.floor(gs.frame/4)%2===0;
-  const col=flick?'#fff':'#ff4444';
+  const col=flick?'#fff':getHeartColor();
   const hx=gs.px, hy=gs.py, s=7;
   cx.fillStyle=col;
   cx.beginPath(); cx.arc(hx-s*0.5,hy-s*0.1,s*0.55,0,Math.PI*2); cx.fill();
@@ -2600,7 +2627,8 @@ function drawObby() {
   cx.save();
   if(gs.obbyInv>0&&Math.floor(gs.obbyInv/6)%2===0) cx.globalAlpha=0.2;
   cx.font='bold 18px serif'; cx.textAlign='center'; cx.textBaseline='middle';
-  cx.fillStyle='#ff4444'; cx.shadowBlur=10; cx.shadowColor='#ff0000';
+  const _hc=getHeartColor();
+  cx.fillStyle=_hc; cx.shadowBlur=10; cx.shadowColor=_hc;
   cx.fillText('❤',gs.px,gs.py);
   cx.restore();
   cx.textBaseline='alphabetic';
@@ -2705,9 +2733,77 @@ function drawShop() {
   }
 }
 
+function updSkinShop() {
+  const n = HEART_SKINS.length;
+  if(hit('ArrowUp','KeyW'))   { gs.skinSel=Math.max(0,gs.skinSel-1); sfxSelect(); }
+  if(hit('ArrowDown','KeyS')) { gs.skinSel=Math.min(n-1,gs.skinSel+1); sfxSelect(); }
+  if(hit('KeyZ','Enter')||hit('Space')){
+    const sk = HEART_SKINS[gs.skinSel];
+    const owned = sk.cost===0 || hasItem(sk.id);
+    if(owned){
+      gs.heartSkin = sk.id; saveGame(); sfxWin();
+    } else if(gs.gold >= sk.cost){
+      gs.gold -= sk.cost; gs.ownedItems.push(sk.id);
+      gs.heartSkin = sk.id; saveGame(); sfxWin();
+    } else { sfxDeny(); }
+  }
+  if(hit('KeyX','Escape')){ gs.state='title'; }
+}
+function drawSkinShop() {
+  fr(0,0,W,H,'#000');
+  cx.save(); cx.font="bold 20px 'Courier New',monospace"; cx.textAlign='center';
+  const hue=gs.frame%360;
+  cx.fillStyle=`hsl(${hue},100%,70%)`; cx.shadowBlur=12; cx.shadowColor=cx.fillStyle;
+  cx.fillText('🎨  SKIN SHOP',W/2,28); cx.shadowBlur=0; cx.restore();
+  tx(`Your gold: ${gs.gold} 💰`,W/2,46,'#ffd700',13,'center');
+  tx('↑ ↓ navigate  |  Z/Enter buy/equip  |  X/Esc back',W/2,60,'#444',10,'center');
+  // Preview current heart
+  const previewCol = getHeartColor();
+  const px_=W-36, py_=28, s=8;
+  cx.fillStyle=previewCol; cx.shadowBlur=10; cx.shadowColor=previewCol;
+  cx.beginPath(); cx.arc(px_-s*0.5,py_-s*0.1,s*0.55,0,Math.PI*2); cx.fill();
+  cx.beginPath(); cx.arc(px_+s*0.5,py_-s*0.1,s*0.55,0,Math.PI*2); cx.fill();
+  cx.beginPath(); cx.moveTo(px_-s,py_+s*0.1); cx.lineTo(px_+s,py_+s*0.1); cx.lineTo(px_,py_+s); cx.closePath(); cx.fill();
+  cx.shadowBlur=0;
+
+  const itemH=44, visStart=68, visH=H-visStart-6;
+  const maxVis=Math.floor(visH/itemH);
+  const scrollOff=Math.max(0,Math.min(gs.skinSel-Math.floor(maxVis/2), HEART_SKINS.length-maxVis));
+  for(let vi=0;vi<Math.min(maxVis,HEART_SKINS.length);vi++){
+    const i=vi+scrollOff;
+    if(i>=HEART_SKINS.length) break;
+    const sk=HEART_SKINS[i], sel=gs.skinSel===i;
+    const owned=sk.cost===0||hasItem(sk.id), equipped=gs.heartSkin===sk.id;
+    const bx_=14, by__=visStart+vi*itemH, bw_=572, bh_=itemH-2;
+    fr(bx_,by__,bw_,bh_,sel?'#1a001a':'#080808');
+    sr(bx_,by__,bw_,bh_,equipped?'#ff88ff':sel?'#fff':'#333',sel?2:1);
+    // Mini heart swatch
+    const sc=sk.color==='rainbow'?`hsl(${(gs.frame*3+i*30)%360},100%,60%)`:sk.color;
+    cx.fillStyle=sc; cx.shadowBlur=6; cx.shadowColor=sc;
+    const hx_=bx_+18, hy_=by__+bh_/2, hs=6;
+    cx.beginPath(); cx.arc(hx_-hs*0.5,hy_-hs*0.1,hs*0.55,0,Math.PI*2); cx.fill();
+    cx.beginPath(); cx.arc(hx_+hs*0.5,hy_-hs*0.1,hs*0.55,0,Math.PI*2); cx.fill();
+    cx.beginPath(); cx.moveTo(hx_-hs,hy_+hs*0.1); cx.lineTo(hx_+hs,hy_+hs*0.1); cx.lineTo(hx_,hy_+hs); cx.closePath(); cx.fill();
+    cx.shadowBlur=0;
+    const nameCol=equipped?'#ff88ff':sel?'#fff':'#aaa';
+    tx(sk.name,bx_+42,by__+bh_/2+5,nameCol,13);
+    if(equipped){
+      tx('EQUIPPED ✓',bx_+bw_-8,by__+bh_/2+5,'#ff88ff',12,'right');
+    } else if(owned){
+      tx('EQUIP',bx_+bw_-8,by__+bh_/2+5,sel?'#fff':'#888',12,'right');
+    } else {
+      const canAfford=gs.gold>=sk.cost;
+      tx(sk.cost===0?'FREE':`${sk.cost} 💰`,bx_+bw_-8,by__+bh_/2+5,canAfford?'#ffd700':'#774400',12,'right');
+    }
+  }
+  if(HEART_SKINS.length>maxVis){
+    tx(`${gs.skinSel+1}/${HEART_SKINS.length}`,W-8,H-4,'#444',10,'right');
+  }
+}
+
 // ---- STATE UPDATES -----------------------------------------------
 function updTitle() {
-  const n = 6; // UNDERTALE / SPACE MARINES / DIFFICULTY GAUNTLET / OBBY RUN / SHOP / ENTER CODE
+  const n = 7; // UNDERTALE / SPACE MARINES / DIFFICULTY GAUNTLET / OBBY RUN / SHOP / ENTER CODE / SKIN SHOP
   if(hit('ArrowUp','KeyW'))   { gs.titleSel=(gs.titleSel-1+n)%n; sfxSelect(); }
   if(hit('ArrowDown','KeyS')) { gs.titleSel=(gs.titleSel+1)%n;   sfxSelect(); }
   if(hit('KeyZ','Enter')||hit('Space')) {
@@ -2726,6 +2822,8 @@ function updTitle() {
       }
     } else if(gs.titleSel===4) {
       gs.state='shop'; gs.shopSel=0;
+    } else if(gs.titleSel===6) {
+      gs.state='skinshop'; gs.skinSel=0;
     } else {
       showCodeOverlay();
     }
@@ -2873,7 +2971,8 @@ function drawTitle() {
     '💀  DIFFICULTY GAUNTLET',
     obbyUnlk?'🏃  OBBY RUN':'🔒  OBBY RUN',
     '🛒  SHOP',
-    '🔑  ENTER CODE'
+    '🔑  ENTER CODE',
+    '🎨  SKIN SHOP'
   ];
   const MENU_COLORS=[
     ['#ffffff','#999999','#555555'],
@@ -2882,9 +2981,10 @@ function drawTitle() {
     [obbyUnlk?'#ff88ff':'#777777', obbyUnlk?'#bb44bb':'#444444', obbyUnlk?'#662266':'#333333'],
     ['#ffd700','#bbaa00','#665500'],
     ['#ffe066','#bbaa44','#666633'],
+    ['#ff88ff','#cc55cc','#662266'],
   ];
-  const startY=90, itemH=66, btnH=58;
-  for(let i=0;i<6;i++){
+  const startY=82, itemH=56, btnH=48;
+  for(let i=0;i<7;i++){
     const sel=gs.titleSel===i;
     const [selC,unselC,unselBorder]=MENU_COLORS[i];
     const bx_=W/2-160, by__=startY+i*itemH, bw_=320, bh_=btnH;
@@ -3083,6 +3183,7 @@ function update() {
   switch(gs.state){
     case 'title':       updTitle();       break;
     case 'shop':        updShop();        break;
+    case 'skinshop':    updSkinShop();    break;
     case 'obby_intro':  updObbyIntro();   break;
     case 'obby_select': updObbySelect();  break;
     case 'obby':        updObby();        break;
@@ -3109,6 +3210,7 @@ function draw() {
   switch(gs.state){
     case 'title':       drawTitle();       break;
     case 'shop':        drawShop();        break;
+    case 'skinshop':    drawSkinShop();    break;
     case 'obby_intro':  drawObbyIntro();   break;
     case 'obby_select': drawObbySelect();  break;
     case 'obby':        drawObby();        break;
@@ -3151,7 +3253,8 @@ function titleClick(i) {
     else { sfxDeny(); showTitleMenu(); }
   }
   else if(i===4){ gs.state='shop'; gs.shopSel=0; stopMusic(); }
-  else { showCodeOverlay(); }
+  else if(i===5){ showCodeOverlay(); return; }
+  else if(i===6){ gs.state='skinshop'; gs.skinSel=0; stopMusic(); }
 }
 
 // ---- MUSIC (multi-section, ~2 min loops) -------------------------
