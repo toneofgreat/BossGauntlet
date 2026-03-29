@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Fighter Legends</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace;color:#fff}
+canvas#c{display:block;width:100vw;height:100vh}
+
+/* ---- HUD ---- */
+#hud{position:fixed;top:0;left:0;width:100%;pointer-events:none;z-index:10;padding:12px 16px;display:none}
+#hud-top{display:flex;justify-content:space-between;align-items:flex-start}
+#hud-left{display:flex;flex-direction:column;gap:4px}
+#hp-bar-outer{width:180px;height:16px;background:#222;border:2px solid #555;border-radius:3px}
+#hp-bar-inner{height:100%;background:#e33;border-radius:2px;transition:width .2s}
+#hp-text{font-size:10px;color:#ccc}
+#hud-right{text-align:right}
+#level-text{font-size:14px;color:#ffe066;letter-spacing:1px}
+#xp-text{font-size:10px;color:#aa8}
+#sword-text{font-size:11px;color:#aaa;margin-top:2px}
+#gold-text{font-size:11px;color:#fd0;margin-top:2px}
+
+/* ---- Boss HP ---- */
+#boss-hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:15;display:none;text-align:center}
+#boss-name{font-size:14px;color:#8f4;letter-spacing:2px;margin-bottom:3px}
+#boss-hp-outer{width:280px;height:18px;background:#222;border:2px solid #4a4;border-radius:3px}
+#boss-hp-inner{height:100%;background:#4a4;border-radius:2px;transition:width .25s}
+
+/* ---- MENU ---- */
+#menu{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a0f0a,#0a1a0a,#050a05)}
+#menu-title{font-size:clamp(32px,6vw,52px);letter-spacing:6px;background:linear-gradient(90deg,#f84,#fd0,#4f4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+#menu-sub{color:#555;font-size:12px;margin-bottom:30px;letter-spacing:2px}
+#menu-stats{color:#888;font-size:12px;margin-bottom:24px}
+.menu-btn{background:linear-gradient(145deg,#1a2a1a,#223322);border:2px solid #3a5a3a;color:#afa;font-size:16px;font-family:inherit;padding:14px 40px;margin:6px;border-radius:8px;cursor:pointer;letter-spacing:2px;min-width:220px;transition:all .15s}
+.menu-btn:hover{background:#2a3a2a;border-color:#5a8a5a;transform:translateY(-2px)}
+.menu-btn.locked{opacity:0.35;cursor:not-allowed}
+#back-btn{position:fixed;top:14px;left:14px;z-index:100;background:#222;border:1px solid #444;color:#aaa;font-family:inherit;font-size:12px;padding:6px 14px;border-radius:4px;cursor:pointer;display:none}
+#back-btn:hover{background:#333;color:#fff}
+
+/* ---- SHOP ---- */
+#shop{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,10,5,0.95)}
+#shop-title{font-size:28px;color:#fd0;letter-spacing:4px;margin-bottom:6px}
+#shop-sub{font-size:11px;color:#886;margin-bottom:20px}
+.shop-item{background:#151a15;border:2px solid #333;border-radius:8px;padding:14px 20px;margin:6px;width:320px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .15s}
+.shop-item:hover{border-color:#5a5;background:#1a2a1a}
+.shop-item.owned{border-color:#4a4;opacity:0.6}
+.shop-item.locked{opacity:0.3;cursor:not-allowed}
+.shop-item canvas{width:50px;height:50px;border-radius:4px;background:#0a0a0a}
+.si-info{flex:1}
+.si-name{font-size:14px;color:#efa;margin-bottom:2px}
+.si-desc{font-size:10px;color:#888}
+.si-cost{font-size:13px;color:#fd0;text-align:right;min-width:60px}
+.si-cost.owned-tag{color:#4a4}
+
+/* ---- MESSAGES ---- */
+#msg{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);font-size:15px;color:#ff0;text-align:center;z-index:20;text-shadow:0 0 8px #000;display:none;background:rgba(0,0,0,.6);padding:8px 18px;border-radius:6px}
+#death-screen{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+#death-screen h1{color:#f44;font-size:38px;margin-bottom:16px}
+#death-screen p{color:#a88;font-size:14px;margin-bottom:20px}
+#death-screen button{background:#f44;color:#fff;border:none;padding:12px 32px;font-size:16px;font-family:inherit;cursor:pointer;margin:4px;border-radius:4px}
+#death-screen button:hover{background:#f66}
+#win-screen{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+#win-screen h1{color:#4f4;font-size:34px;margin-bottom:8px}
+#win-screen p{color:#afa;font-size:14px;margin-bottom:6px}
+#win-screen .reward{color:#fd0;font-size:16px;margin-bottom:18px}
+#win-screen button{background:#4f4;color:#000;border:none;padding:12px 32px;font-size:16px;font-family:inherit;cursor:pointer;border-radius:4px}
+
+/* ---- ATTACK PROMPT ---- */
+#atk-prompt{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);font-size:18px;color:#ff0;display:none;z-index:20;text-shadow:0 2px 6px #000;animation:pulse .6s infinite alternate}
+@keyframes pulse{from{opacity:1;transform:translateX(-50%) scale(1)}to{opacity:.7;transform:translateX(-50%) scale(1.06)}}
+
+/* ---- MOBILE ---- */
+#controls-mobile{position:fixed;bottom:10px;left:0;width:100%;display:none;justify-content:space-between;padding:0 16px;z-index:30}
+#dpad-m{display:grid;grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px);gap:3px}
+.db{background:rgba(255,255,255,.1);border:2px solid #555;color:#ccc;font-size:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none}
+.db:active{background:rgba(255,255,255,.25)}
+.db.empty{background:transparent;border:none;pointer-events:none}
+#action-m{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.ab{background:rgba(255,255,255,.1);border:2px solid #888;color:#fff;font-size:13px;font-family:inherit;border-radius:50%;width:55px;height:55px;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none}
+@media(max-width:700px){#controls-mobile{display:flex!important}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hud-top">
+    <div id="hud-left">
+      <div id="hp-bar-outer"><div id="hp-bar-inner" style="width:100%"></div></div>
+      <div id="hp-text">HP: 100/100</div>
+    </div>
+    <div id="hud-right">
+      <div id="level-text">Level 1</div>
+      <div id="xp-text">XP: 0</div>
+      <div id="sword-text">Wooden Sword</div>
+      <div id="gold-text">Gold: 0</div>
+    </div>
+  </div>
+</div>
+<div id="boss-hud"><div id="boss-name">BOSS</div><div id="boss-hp-outer"><div id="boss-hp-inner" style="width:100%"></div></div></div>
+<div id="msg"></div>
+<div id="atk-prompt">Press SPACE to attack!</div>
+<button id="back-btn" onclick="goMenu()">MENU</button>
+
+<!-- MENU -->
+<div id="menu">
+  <div id="menu-title">FIGHTER LEGENDS</div>
+  <div id="menu-sub">REALM OF BOSSES</div>
+  <div id="menu-stats"></div>
+  <button class="menu-btn" onclick="startFight('grass')">GRASS BOSS</button>
+  <button class="menu-btn" onclick="openShop()">SWORD SHOP</button>
+  <button class="menu-btn" onclick="window.location.href='index.html'">BACK TO PLATYFY</button>
+</div>
+
+<!-- SHOP -->
+<div id="shop">
+  <div id="shop-title">SWORD SHOP</div>
+  <div id="shop-sub">Upgrade your blade</div>
+  <div id="shop-items"></div>
+  <button class="menu-btn" style="margin-top:16px" onclick="closeShop()">BACK</button>
+</div>
+
+<!-- DEATH -->
+<div id="death-screen">
+  <h1>YOU DIED</h1>
+  <p>The boss defeated you...</p>
+  <button onclick="goMenu()">MENU</button>
+  <button onclick="retryFight()">RETRY</button>
+</div>
+
+<!-- WIN -->
+<div id="win-screen">
+  <h1 id="win-title">BOSS DEFEATED!</h1>
+  <p id="win-desc"></p>
+  <div class="reward" id="win-reward"></div>
+  <button onclick="goMenu()">CONTINUE</button>
+</div>
+
+<!-- MOBILE -->
+<div id="controls-mobile">
+  <div id="dpad-m">
+    <div class="db empty"></div><div class="db" data-k="w">▲</div><div class="db empty"></div>
+    <div class="db" data-k="a">◀</div><div class="db empty"></div><div class="db" data-k="d">▶</div>
+    <div class="db empty"></div><div class="db" data-k="s">▼</div><div class="db empty"></div>
+  </div>
+  <div id="action-m">
+    <div class="ab" data-k=" " style="border-color:#f44">ATK</div>
+  </div>
+</div>
+
+<script>
+// ===== FIGHTER LEGENDS =====
+const PI=Math.PI,TAU=PI*2,sin=Math.sin,cos=Math.cos,abs=Math.abs,
+      floor=Math.floor,ceil=Math.ceil,min=Math.min,max=Math.max,
+      sqrt=Math.sqrt,rand=Math.random,atan2=Math.atan2,
+      clamp=(v,a,b)=>max(a,min(b,v));
+
+// ---- Vec3 ----
+function v3(x,y,z){return{x:x||0,y:y||0,z:z||0}}
+function v3add(a,b){return v3(a.x+b.x,a.y+b.y,a.z+b.z)}
+function v3sub(a,b){return v3(a.x-b.x,a.y-b.y,a.z-b.z)}
+function v3scale(a,s){return v3(a.x*s,a.y*s,a.z*s)}
+function v3len(a){return sqrt(a.x*a.x+a.y*a.y+a.z*a.z)}
+function v3norm(a){const l=v3len(a)||1;return v3(a.x/l,a.y/l,a.z/l)}
+function v3dot(a,b){return a.x*b.x+a.y*b.y+a.z*b.z}
+function v3cross(a,b){return v3(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x)}
+function v3dist(a,b){return v3len(v3sub(a,b))}
+
+// ---- Matrix4 ----
+function m4(){return new Float32Array(16)}
+function m4id(){const m=m4();m[0]=m[5]=m[10]=m[15]=1;return m}
+function m4mul(a,b){const r=m4();for(let i=0;i<4;i++)for(let j=0;j<4;j++){r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];}return r}
+function m4persp(fov,asp,near,far){const f=1/Math.tan(fov/2),nf=1/(near-far),m=m4();m[0]=f/asp;m[5]=f;m[10]=(far+near)*nf;m[11]=-1;m[14]=2*far*near*nf;return m}
+function m4lookAt(eye,target,up){const z=v3norm(v3sub(eye,target)),x=v3norm(v3cross(up,z)),y=v3cross(z,x),m=m4();
+  m[0]=x.x;m[4]=x.y;m[8]=x.z;m[12]=-v3dot(x,eye);m[1]=y.x;m[5]=y.y;m[9]=y.z;m[13]=-v3dot(y,eye);
+  m[2]=z.x;m[6]=z.y;m[10]=z.z;m[14]=-v3dot(z,eye);m[3]=0;m[7]=0;m[11]=0;m[15]=1;return m}
+function m4translate(tx,ty,tz){const m=m4id();m[12]=tx;m[13]=ty;m[14]=tz;return m}
+function m4rotY(a){const m=m4id();m[0]=cos(a);m[8]=sin(a);m[2]=-sin(a);m[10]=cos(a);return m}
+function m4rotX(a){const m=m4id();m[5]=cos(a);m[9]=-sin(a);m[6]=sin(a);m[10]=cos(a);return m}
+function m4rotZ(a){const m=m4id();m[0]=cos(a);m[4]=-sin(a);m[1]=sin(a);m[5]=cos(a);return m}
+function m4scale(sx,sy,sz){const m=m4id();m[0]=sx;m[5]=sy;m[10]=sz;return m}
+
+// ---- WebGL ----
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+gl.enable(gl.DEPTH_TEST);
+
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight;gl.viewport(0,0,canvas.width,canvas.height)}
+addEventListener('resize',resize);resize();
+
+const VS=`attribute vec3 aPos,aNorm,aCol;uniform mat4 uMVP,uModel;varying vec3 vCol,vNorm,vWP;
+void main(){vec4 wp=uModel*vec4(aPos,1.0);vWP=wp.xyz;vNorm=mat3(uModel)*aNorm;vCol=aCol;gl_Position=uMVP*vec4(aPos,1.0);}`;
+const FS=`precision mediump float;varying vec3 vCol,vNorm,vWP;uniform vec3 uLight,uFog,uCam;uniform float uFogD;
+void main(){vec3 n=normalize(vNorm);float d=max(dot(n,uLight),0.0);vec3 c=vCol*(0.35+d*0.65);
+float f=clamp((distance(vWP,uCam)-uFogD*0.5)/(uFogD*0.5),0.0,1.0);c=mix(c,uFog,f);gl_FragColor=vec4(c,1.0);}`;
+
+function compileS(src,type){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s}
+const prog=gl.createProgram();gl.attachShader(prog,compileS(VS,gl.VERTEX_SHADER));gl.attachShader(prog,compileS(FS,gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);gl.useProgram(prog);
+const aPos=gl.getAttribLocation(prog,'aPos'),aNorm=gl.getAttribLocation(prog,'aNorm'),aCol=gl.getAttribLocation(prog,'aCol');
+const uMVP=gl.getUniformLocation(prog,'uMVP'),uModel=gl.getUniformLocation(prog,'uModel');
+const uLight=gl.getUniformLocation(prog,'uLight'),uFog=gl.getUniformLocation(prog,'uFog');
+const uFogD=gl.getUniformLocation(prog,'uFogD'),uCam=gl.getUniformLocation(prog,'uCam');
+
+// ---- Mesh ----
+function createMesh(v,n,c,idx){
+  const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
+  const nb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,nb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(n),gl.STATIC_DRAW);
+  const cb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(c),gl.STATIC_DRAW);
+  const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+  return{vb,nb,cb,ib,count:idx.length}
+}
+function drawMesh(mesh,model,vp){
+  gl.uniformMatrix4fv(uMVP,false,m4mul(vp,model));gl.uniformMatrix4fv(uModel,false,model);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.enableVertexAttribArray(aPos);gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.nb);gl.enableVertexAttribArray(aNorm);gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.cb);gl.enableVertexAttribArray(aCol);gl.vertexAttribPointer(aCol,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ib);gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
+}
+
+// ---- Primitives ----
+function makeBox(w,h,d,r,g,b){
+  const hw=w/2,hh=h/2,hd=d/2;
+  const v=[-hw,-hh,-hd,hw,-hh,-hd,hw,hh,-hd,-hw,hh,-hd,-hw,-hh,hd,hw,-hh,hd,hw,hh,hd,-hw,hh,hd,
+    -hw,-hh,-hd,-hw,hh,-hd,-hw,hh,hd,-hw,-hh,hd,hw,-hh,-hd,hw,hh,-hd,hw,hh,hd,hw,-hh,hd,
+    -hw,hh,-hd,hw,hh,-hd,hw,hh,hd,-hw,hh,hd,-hw,-hh,-hd,hw,-hh,-hd,hw,-hh,hd,-hw,-hh,hd];
+  const n=[0,0,-1,0,0,-1,0,0,-1,0,0,-1,0,0,1,0,0,1,0,0,1,0,0,1,-1,0,0,-1,0,0,-1,0,0,-1,0,0,
+    1,0,0,1,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0];
+  const c=[];for(let i=0;i<24;i++)c.push(r,g,b);
+  const idx=[];for(let f=0;f<6;f++){const o=f*4;idx.push(o,o+1,o+2,o,o+2,o+3);}
+  return createMesh(v,n,c,idx);
+}
+function makeSphere(rad,seg,r,g,b){
+  const v=[],n=[],c=[],idx=[];
+  for(let y=0;y<=seg;y++){const th=y*PI/seg,st=sin(th),ct=cos(th);
+    for(let x=0;x<=seg;x++){const ph=x*TAU/seg,sp=sin(ph),cp=cos(ph);
+      const nx=cp*st,ny=ct,nz=sp*st;v.push(rad*nx,rad*ny,rad*nz);n.push(nx,ny,nz);c.push(r,g,b);}}
+  for(let y=0;y<seg;y++)for(let x=0;x<seg;x++){const a=y*(seg+1)+x,b2=a+seg+1;idx.push(a,b2,a+1,b2,b2+1,a+1);}
+  return createMesh(v,n,c,idx);
+}
+function makeCyl(rT,rB,h,seg,r,g,b){
+  const v=[],n=[],c=[],idx=[];
+  for(let i=0;i<=seg;i++){const a=i*TAU/seg,ca=cos(a),sa=sin(a);
+    v.push(rT*ca,h/2,rT*sa);n.push(ca,0,sa);c.push(r,g,b);v.push(rB*ca,-h/2,rB*sa);n.push(ca,0,sa);c.push(r,g,b);}
+  for(let i=0;i<seg;i++){const o=i*2;idx.push(o,o+1,o+2,o+1,o+3,o+2);}
+  const bt=v.length/3;v.push(0,h/2,0);n.push(0,1,0);c.push(r,g,b);
+  for(let i=0;i<=seg;i++){const a=i*TAU/seg;v.push(rT*cos(a),h/2,rT*sin(a));n.push(0,1,0);c.push(r,g,b);}
+  for(let i=0;i<seg;i++)idx.push(bt,bt+1+i,bt+2+i);
+  const bb=v.length/3;v.push(0,-h/2,0);n.push(0,-1,0);c.push(r,g,b);
+  for(let i=0;i<=seg;i++){const a=i*TAU/seg;v.push(rB*cos(a),-h/2,rB*sin(a));n.push(0,-1,0);c.push(r,g,b);}
+  for(let i=0;i<seg;i++)idx.push(bb,bb+2+i,bb+1+i);
+  return createMesh(v,n,c,idx);
+}
+function makeCone(r,h,seg,cr,cg,cb){return makeCyl(0,r,h,seg,cr,cg,cb)}
+function makePlane(w,d,r,g,b){
+  return createMesh([-w/2,0,-d/2,w/2,0,-d/2,w/2,0,d/2,-w/2,0,d/2],[0,1,0,0,1,0,0,1,0,0,1,0],[r,g,b,r,g,b,r,g,b,r,g,b],[0,1,2,0,2,3]);
+}
+
+// Mesh cache
+const MC={};
+function getBox(w,h,d,r,g,b){const k=`b${w}_${h}_${d}_${r}_${g}_${b}`;if(!MC[k])MC[k]=makeBox(w,h,d,r,g,b);return MC[k]}
+function getSph(rad,r,g,b){const k=`s${rad}_${r}_${g}_${b}`;if(!MC[k])MC[k]=makeSphere(rad,8,r,g,b);return MC[k]}
+
+// ---- SAVE ----
+let save={level:1,xp:0,gold:0,swords:['wooden'],equipped:'wooden',kills:0};
+function loadSave(){try{const s=localStorage.getItem('fighterLegends_v1');if(s)Object.assign(save,JSON.parse(s))}catch(e){}}
+function saveSave(){try{localStorage.setItem('fighterLegends_v1',JSON.stringify(save))}catch(e){}}
+loadSave();
+
+// ---- SWORDS ----
+const SWORDS={
+  wooden:{name:'Wooden Sword',dmg:1,lvl:0,cost:0,col:[0.55,0.38,0.18],guard:[0.4,0.28,0.12],blade:[0.6,0.42,0.2],w:0.06,h:0.9,desc:'A humble start.'},
+  stone:{name:'Stone Sword',dmg:2,lvl:5,cost:10,col:[0.5,0.5,0.52],guard:[0.4,0.4,0.42],blade:[0.55,0.55,0.58],w:0.08,h:1.05,desc:'Carved from rock. 2 DMG.',gem:[0.4,0.4,0.5],orbs:0},
+  iron:{name:'Iron Sword',dmg:5,lvl:20,cost:50,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],blade:[0.7,0.7,0.75],w:0.09,h:1.15,desc:'Forged in fire. 5 DMG.',gem:[0.5,0.6,0.8],orbs:2,orbCol:[0.5,0.6,0.8]},
+  ice:{name:'Ice Sword',dmg:20,lvl:150,cost:500,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'Frozen power. 20 DMG.',gem:[0.3,0.9,1],orbs:5,orbCol:[0.4,0.8,1],aura:true,auraCol:[0.3,0.7,1]}
+};
+function curSword(){return SWORDS[save.equipped]}
+function xpForLevel(l){return l*10}
+
+// ---- INPUT ----
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault()});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+document.querySelectorAll('.db,.ab').forEach(btn=>{
+  const k=btn.dataset.k;
+  btn.addEventListener('touchstart',e=>{e.preventDefault();keys[k]=true},{passive:false});
+  btn.addEventListener('touchend',e=>{e.preventDefault();keys[k]=false},{passive:false});
+});
+
+// Mouse look
+let mouseDown=false,lastMX=0,lastMY=0;
+canvas.addEventListener('mousedown',e=>{mouseDown=true;lastMX=e.clientX;lastMY=e.clientY});
+addEventListener('mouseup',()=>mouseDown=false);
+addEventListener('mousemove',e=>{if(mouseDown&&gameState==='fight'){camYaw-=(e.clientX-lastMX)*0.005;camPitch=clamp(camPitch+(e.clientY-lastMY)*0.005,0.4,1.3);lastMX=e.clientX;lastMY=e.clientY}});
+
+// ---- GAME STATE ----
+let gameState='menu'; // menu, fight, shop, dead, win
+let gameTime=0,dt=0,lastTime=0;
+
+// Player
+let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:true,atkCd:0,invTimer:0,atkAnim:0};
+let camYaw=0,camPitch=0.7,camDist=12;
+
+// Boss
+let boss=null;
+let lastBossType='';
+let projectiles=[];
+let particles=[];
+
+// Arena decorations
+let trees=[],rocks=[],flowers=[],grassPatches=[];
+
+// ---- ARENA GENERATION ----
+function generateGrassArena(){
+  trees=[];rocks=[];flowers=[];grassPatches=[];MC={};
+  // Trees
+  for(let i=0;i<20;i++){
+    const a=rand()*TAU,r=18+rand()*15;
+    trees.push({x:sin(a)*r,z:cos(a)*r,h:3+rand()*3,r:0.3+rand()*0.2,leafR:1.5+rand()*1});
+  }
+  // Rocks
+  for(let i=0;i<15;i++){
+    const a=rand()*TAU,r=10+rand()*20;
+    rocks.push({x:sin(a)*r,z:cos(a)*r,s:0.4+rand()*0.8,rot:rand()*TAU});
+  }
+  // Flowers
+  for(let i=0;i<40;i++){
+    const a=rand()*TAU,r=3+rand()*25;
+    const cols=[[1,0.3,0.3],[1,1,0.3],[0.9,0.4,0.8],[1,0.6,0.2],[0.4,0.6,1]];
+    flowers.push({x:sin(a)*r,z:cos(a)*r,col:cols[floor(rand()*cols.length)],s:0.15+rand()*0.1});
+  }
+  // Grass patches (darker/lighter spots)
+  for(let i=0;i<30;i++){
+    const a=rand()*TAU,r=rand()*25;
+    grassPatches.push({x:sin(a)*r,z:cos(a)*r,s:1+rand()*2,shade:rand()>0.5?0.05:-0.05});
+  }
+}
+
+// ---- BOSS DEFINITIONS ----
+function spawnBoss(type){
+  projectiles=[];particles=[];
+  if(type==='grass'){
+    boss={
+      type:'grass',name:'GRASS GUARDIAN',
+      pos:v3(0,0,-5),vel:v3(),
+      hp:30,maxHp:30,
+      phase:0,timer:0,atkCd:2,moveTimer:0,
+      stunTimer:0,size:2,speed:2.5,
+      // Grass boss specifics
+      vineTimer:0,leafStormCd:8,seedBombCd:5,
+      rootSlamCd:6,thornShieldActive:false,thornShieldTimer:0,
+      floatY:0
+    };
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';
+    updateBossHP();
+  }
+}
+
+// ---- START FIGHT ----
+function startFight(type){
+  gameState='fight';lastBossType=type;
+  playBattleMusic();
+  document.getElementById('menu').style.display='none';
+  document.getElementById('shop').style.display='none';
+  document.getElementById('death-screen').style.display='none';
+  document.getElementById('win-screen').style.display='none';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('back-btn').style.display='block';
+  document.getElementById('atk-prompt').style.display='block';
+  player.pos=v3(0,0,8);player.vel=v3();player.yaw=0;
+  player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
+  camYaw=0;camPitch=0.7;
+  generateGrassArena();
+  spawnBoss(type);
+  updateHUD();
+}
+function retryFight(){startFight(lastBossType)}
+
+// ---- MENU ----
+function goMenu(){
+  gameState='menu';boss=null;
+  document.getElementById('menu').style.display='flex';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('boss-hud').style.display='none';
+  document.getElementById('back-btn').style.display='none';
+  document.getElementById('atk-prompt').style.display='none';
+  document.getElementById('death-screen').style.display='none';
+  document.getElementById('win-screen').style.display='none';
+  document.getElementById('shop').style.display='none';
+  // Update menu stats
+  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.gold} Gold · ${save.kills} Kills · ${curSword().name}`;
+}
+
+// ---- SHOP ----
+function openShop(){
+  document.getElementById('menu').style.display='none';
+  document.getElementById('shop').style.display='flex';
+  renderShop();
+}
+function closeShop(){
+  document.getElementById('shop').style.display='none';
+  document.getElementById('menu').style.display='flex';
+  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.gold} Gold · ${save.kills} Kills · ${curSword().name}`;
+}
+function renderShop(){
+  const cont=document.getElementById('shop-items');
+  cont.innerHTML='';
+  for(const[id,sw] of Object.entries(SWORDS)){
+    const owned=save.swords.includes(id);
+    const equipped=save.equipped===id;
+    const canBuy=save.level>=sw.lvl&&save.gold>=sw.cost&&!owned;
+    const locked=save.level<sw.lvl&&!owned;
+    const div=document.createElement('div');
+    div.className='shop-item'+(owned?' owned':'')+(locked?' locked':'');
+    div.innerHTML=`
+      <div style="width:50px;height:50px;background:#111;border-radius:4px;display:flex;align-items:center;justify-content:center">
+        <div style="width:8px;height:30px;background:rgb(${sw.blade?sw.blade.map(v=>floor(v*255)).join(','):'180,180,180'});border-radius:2px"></div>
+      </div>
+      <div class="si-info">
+        <div class="si-name">${sw.name}${equipped?' (EQUIPPED)':''}</div>
+        <div class="si-desc">${sw.desc} ${locked?'(Requires Level '+sw.lvl+')':''}</div>
+      </div>
+      <div class="si-cost ${owned?'owned-tag':''}">${owned?(equipped?'EQUIPPED':'EQUIP'):(sw.cost>0?sw.cost+' G':'FREE')}</div>
+    `;
+    div.onclick=()=>{
+      if(locked)return;
+      if(owned){save.equipped=id;saveSave();renderShop();return;}
+      if(canBuy){save.gold-=sw.cost;save.swords.push(id);save.equipped=id;saveSave();renderShop();return;}
+    };
+    cont.appendChild(div);
+  }
+}
+
+// ---- HUD ----
+function updateHUD(){
+  const pct=clamp(player.hp/player.maxHp,0,1)*100;
+  document.getElementById('hp-bar-inner').style.width=pct+'%';
+  document.getElementById('hp-text').textContent='HP: '+floor(player.hp)+'/'+player.maxHp;
+  document.getElementById('level-text').textContent='Level '+save.level;
+  document.getElementById('xp-text').textContent='XP: '+save.xp+'/'+xpForLevel(save.level);
+  document.getElementById('sword-text').textContent=curSword().name+' ('+curSword().dmg+' DMG)';
+  document.getElementById('gold-text').textContent='Gold: '+save.gold;
+}
+function updateBossHP(){
+  if(!boss)return;
+  document.getElementById('boss-hp-inner').style.width=clamp(boss.hp/boss.maxHp,0,1)*100+'%';
+}
+let msgTimer=0;
+function showMsg(t,d){document.getElementById('msg').textContent=t;document.getElementById('msg').style.display='block';msgTimer=d||2}
+
+// ---- PLAYER ----
+function updatePlayer(){
+  if(gameState!=='fight')return;
+  const spd=6;
+  let mx=0,mz=0;
+  if(keys['w']||keys['arrowup'])mz-=1;
+  if(keys['s']||keys['arrowdown'])mz+=1;
+  if(keys['a']||keys['arrowleft'])mx-=1;
+  if(keys['d']||keys['arrowright'])mx+=1;
+  if(mx||mz){
+    const a=atan2(mx,mz)+camYaw;
+    player.vel.x+=(sin(a)*spd-player.vel.x)*0.15;
+    player.vel.z+=(cos(a)*spd-player.vel.z)*0.15;
+    player.yaw=a;
+  }else{
+    player.vel.x*=0.85;player.vel.z*=0.85;
+  }
+  player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;
+  // Keep in arena
+  const arenaR=28;
+  const d=sqrt(player.pos.x*player.pos.x+player.pos.z*player.pos.z);
+  if(d>arenaR){const n=v3norm(player.pos);player.pos.x=n.x*arenaR;player.pos.z=n.z*arenaR;}
+  player.pos.y=0;
+
+  // Attack
+  if(player.atkCd>0)player.atkCd-=dt;
+  if(player.atkAnim>0)player.atkAnim-=dt;
+  if(keys[' ']&&player.atkCd<=0){
+    player.atkCd=0.5;
+    player.atkAnim=0.3;
+    // Hit boss
+    if(boss&&boss.hp>0){
+      const dist=v3dist(player.pos,boss.pos);
+      if(dist<boss.size+1.5){
+        // Check thorn shield
+        if(boss.thornShieldActive){
+          showMsg('BLOCKED by thorns!',1);
+          hurtPlayer(3);
+        }else{
+          const dmg=curSword().dmg;
+          boss.hp-=dmg;
+          boss.stunTimer=0.15;
+          spawnParticles(boss.pos,8,[0.4,0.8,0.2]);
+          showMsg('-'+dmg+'!',0.6);
+          updateBossHP();
+          if(boss.hp<=0)bossDefeated();
+        }
+      }
+    }
+  }
+
+  if(player.invTimer>0)player.invTimer-=dt;
+  updateHUD();
+}
+
+function hurtPlayer(dmg){
+  if(player.invTimer>0)return;
+  player.hp-=dmg;player.invTimer=0.6;
+  spawnParticles(player.pos,6,[1,0.2,0.2]);
+  updateHUD();
+  if(player.hp<=0){
+    gameState='dead';
+    document.getElementById('death-screen').style.display='flex';
+    document.getElementById('boss-hud').style.display='none';
+    document.getElementById('atk-prompt').style.display='none';
+  }
+}
+
+function bossDefeated(){
+  gameState='win';
+  save.kills++;
+  // Level up
+  save.xp+=10;
+  let leveled=0;
+  while(save.xp>=xpForLevel(save.level)){save.xp-=xpForLevel(save.level);save.level++;leveled++;}
+  save.gold+=5;
+  saveSave();
+  document.getElementById('boss-hud').style.display='none';
+  document.getElementById('atk-prompt').style.display='none';
+  document.getElementById('win-title').textContent='GRASS GUARDIAN DEFEATED!';
+  document.getElementById('win-desc').textContent=leveled>0?'Leveled up to '+save.level+'!':'';
+  document.getElementById('win-reward').textContent='+1 Level  +5 Gold';
+  document.getElementById('win-screen').style.display='flex';
+}
+
+// ---- BOSS AI ----
+function updateBoss(){
+  if(!boss||gameState!=='fight')return;
+  if(boss.stunTimer>0){boss.stunTimer-=dt;return;}
+  boss.timer+=dt;boss.moveTimer+=dt;
+  boss.floatY=sin(boss.timer*2)*0.3;
+
+  const toPlayer=v3sub(player.pos,boss.pos);
+  const dist=v3len(toPlayer);
+  const dir=dist>0.1?v3norm(toPlayer):v3(0,0,1);
+
+  // Phase
+  const hpPct=boss.hp/boss.maxHp;
+  if(hpPct<0.3&&boss.phase<2){boss.phase=2;boss.speed=4;showMsg('GRASS GUARDIAN ENRAGED!',2)}
+  else if(hpPct<0.6&&boss.phase<1){boss.phase=1;boss.speed=3;showMsg('Grass Guardian grows stronger!',2)}
+
+  // Movement — circle around player
+  const circleA=boss.timer*boss.speed*0.3;
+  const targetX=player.pos.x+sin(circleA)*6;
+  const targetZ=player.pos.z+cos(circleA)*6;
+  boss.pos.x+=(targetX-boss.pos.x)*dt*1.5;
+  boss.pos.z+=(targetZ-boss.pos.z)*dt*1.5;
+  boss.pos.y=boss.floatY;
+
+  // Contact damage
+  if(dist<boss.size+0.5){
+    const push=v3scale(v3norm(v3sub(player.pos,boss.pos)),boss.size+1.5);
+    player.pos.x=boss.pos.x+push.x;player.pos.z=boss.pos.z+push.z;
+    player.vel=v3scale(v3norm(push),4);
+    hurtPlayer(8);
+  }
+
+  // ---- ATTACKS ----
+  boss.vineTimer-=dt;boss.leafStormCd-=dt;boss.seedBombCd-=dt;boss.rootSlamCd-=dt;
+
+  // Thorn Shield (phase 1+)
+  if(boss.phase>=1&&!boss.thornShieldActive&&boss.thornShieldTimer<=0&&rand()<0.005){
+    boss.thornShieldActive=true;boss.thornShieldTimer=3;
+    showMsg('Thorn Shield!',1.5);
+    spawnParticles(boss.pos,15,[0.3,0.6,0.1]);
+  }
+  if(boss.thornShieldActive){
+    boss.thornShieldTimer-=dt;
+    if(boss.thornShieldTimer<=0){boss.thornShieldActive=false;boss.thornShieldTimer=8;}
+  }
+
+  // Vine Whip — fast projectiles toward player
+  if(boss.vineTimer<=0){
+    boss.vineTimer=max(1.5-boss.phase*0.3,0.6);
+    const numVines=2+boss.phase;
+    for(let i=0;i<numVines;i++){
+      const spread=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);
+      projectiles.push({pos:v3(boss.pos.x,1,boss.pos.z),vel:v3scale(v3norm(spread),9+boss.phase*2),
+        type:'vine',life:3,dmg:6,mesh:getBox(0.1,0.1,0.6,0.2,0.5,0.1)});
+    }
+  }
+
+  // Leaf Storm — ring of leaves expanding outward
+  if(boss.leafStormCd<=0){
+    boss.leafStormCd=max(6-boss.phase*1.5,3);
+    showMsg('Leaf Storm!',1);
+    for(let a=0;a<TAU;a+=TAU/(12+boss.phase*4)){
+      projectiles.push({pos:v3(boss.pos.x,1.5,boss.pos.z),vel:v3(sin(a)*5,0.5,cos(a)*5),
+        type:'leaf',life:4,dmg:5,mesh:getBox(0.3,0.05,0.2,0.3,0.7,0.15),spin:0});
+    }
+  }
+
+  // Seed Bomb — lobs seeds that explode into more projectiles
+  if(boss.seedBombCd<=0){
+    boss.seedBombCd=max(4-boss.phase,2);
+    const numSeeds=1+boss.phase;
+    for(let i=0;i<numSeeds;i++){
+      const tx=player.pos.x+(rand()-0.5)*5;
+      const tz=player.pos.z+(rand()-0.5)*5;
+      projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),
+        vel:v3((tx-boss.pos.x)*0.8,5,(tz-boss.pos.z)*0.8),
+        type:'seed',life:3,dmg:8,mesh:getSph(0.25,0.4,0.3,0.1),explodes:true});
+    }
+  }
+
+  // Root Slam (phase 1+) — roots burst from ground at player position
+  if(boss.phase>=1&&boss.rootSlamCd<=0){
+    boss.rootSlamCd=max(5-boss.phase,2.5);
+    showMsg('Root Slam!',1);
+    // Delayed roots at player pos
+    for(let i=0;i<3+boss.phase*2;i++){
+      const rx=player.pos.x+(rand()-0.5)*4;
+      const rz=player.pos.z+(rand()-0.5)*4;
+      projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,12,0),
+        type:'root',life:1.5,dmg:10,mesh:getBox(0.3,2,0.3,0.35,0.25,0.1),delay:0.3+i*0.15,started:false});
+    }
+  }
+
+  // Pollen Cloud (phase 2) — slow-moving poison zones
+  if(boss.phase>=2&&rand()<0.008){
+    const px=player.pos.x+(rand()-0.5)*8;
+    const pz=player.pos.z+(rand()-0.5)*8;
+    projectiles.push({pos:v3(px,1,pz),vel:v3((rand()-0.5)*0.5,0,(rand()-0.5)*0.5),
+      type:'pollen',life:6,dmg:3,mesh:getSph(1.5,0.6,0.7,0.2),isZone:true});
+  }
+}
+
+// ---- PROJECTILES ----
+function updateProjectiles(){
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p=projectiles[i];
+    p.life-=dt;if(p.life<=0){projectiles.splice(i,1);continue;}
+
+    // Delayed roots
+    if(p.type==='root'&&p.delay>0){p.delay-=dt;continue;}
+
+    p.pos.x+=p.vel.x*dt;p.pos.y+=p.vel.y*dt;p.pos.z+=p.vel.z*dt;
+
+    // Gravity for seeds
+    if(p.type==='seed')p.vel.y-=15*dt;
+    // Spinning leaves
+    if(p.type==='leaf')p.spin=(p.spin||0)+dt*8;
+    // Seeds explode on ground
+    if(p.type==='seed'&&p.pos.y<=0&&p.explodes){
+      p.explodes=false;p.life=0;
+      for(let a=0;a<TAU;a+=TAU/6){
+        projectiles.push({pos:v3(p.pos.x,0.5,p.pos.z),vel:v3(sin(a)*4,2,cos(a)*4),
+          type:'seedling',life:2,dmg:4,mesh:getSph(0.15,0.5,0.8,0.2)});
+      }
+      spawnParticles(p.pos,10,[0.4,0.7,0.2]);
+    }
+    if(p.type==='seedling')p.vel.y-=8*dt;
+
+    // Roots stop at surface
+    if(p.type==='root'&&p.pos.y>2){p.vel.y=0;p.pos.y=1;}
+
+    // Hit player
+    const hitR=p.isZone?1.5:0.8;
+    if(v3dist(p.pos,player.pos)<hitR){
+      hurtPlayer(p.dmg);
+      if(!p.isZone){projectiles.splice(i,1);}
+    }
+  }
+}
+
+// ---- PARTICLES ----
+function spawnParticles(pos,count,col){
+  for(let i=0;i<count;i++){
+    particles.push({pos:v3(pos.x,pos.y+0.5,pos.z),vel:v3((rand()-0.5)*6,rand()*5,(rand()-0.5)*6),
+      life:0.4+rand()*0.6,col,size:0.08+rand()*0.1});
+  }
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.life-=dt;if(p.life<=0){particles.splice(i,1);continue;}
+    p.pos.x+=p.vel.x*dt;p.pos.y+=p.vel.y*dt;p.pos.z+=p.vel.z*dt;p.vel.y-=10*dt;
+  }
+}
+
+// ---- RENDERING ----
+function drawAt(mesh,bx,by,bz,yaw,ox,oy,oz,extraRot){
+  let m=m4mul(m4translate(bx+sin(yaw)*oz+cos(yaw)*ox,by+oy,bz+cos(yaw)*oz-sin(yaw)*ox),m4rotY(yaw));
+  if(extraRot)m=m4mul(m,extraRot);
+  drawMesh(mesh,m,VP);
+}
+
+let VP; // view-projection cached per frame
+
+function render(){
+  resize();gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  if(gameState==='menu'||gameState==='shop')return;
+
+  // Camera
+  const cx=player.pos.x+sin(camYaw)*camDist*sin(camPitch);
+  const cy=player.pos.y+camDist*cos(camPitch)+1;
+  const cz=player.pos.z+cos(camYaw)*camDist*sin(camPitch);
+  const proj=m4persp(PI/3,canvas.width/canvas.height,0.5,200);
+  const view=m4lookAt(v3(cx,cy,cz),v3(player.pos.x,player.pos.y+1,player.pos.z),v3(0,1,0));
+  VP=m4mul(proj,view);
+
+  gl.uniform3f(uLight,0.4,0.8,0.3);
+  gl.uniform3f(uFog,0.35,0.5,0.25);
+  gl.uniform1f(uFogD,60);
+  gl.uniform3f(uCam,cx,cy,cz);
+  gl.clearColor(0.35,0.5,0.25,1);
+
+  // Ground
+  drawMesh(makePlane(80,80,0.25,0.45,0.15),m4id(),VP);
+  // Grass patches
+  for(const gp of grassPatches){
+    drawMesh(makePlane(gp.s,gp.s,0.25+gp.shade,0.45+gp.shade,0.15+gp.shade),m4translate(gp.x,0.01,gp.z),VP);
+  }
+
+  // Trees
+  for(const t of trees){
+    // Trunk
+    drawMesh(getBox(t.r*2,t.h,t.r*2,0.35,0.22,0.1),m4translate(t.x,t.h/2,t.z),VP);
+    // Trunk bark lines
+    drawMesh(getBox(t.r*0.5,t.h*0.8,t.r*2.1,0.3,0.18,0.08),m4translate(t.x,t.h/2,t.z),VP);
+    // Leaves (layered spheres)
+    drawMesh(getSph(t.leafR,0.2,0.5,0.12),m4translate(t.x,t.h+t.leafR*0.5,t.z),VP);
+    drawMesh(getSph(t.leafR*0.8,0.25,0.55,0.15),m4translate(t.x+t.leafR*0.3,t.h+t.leafR*0.3,t.z+t.leafR*0.2),VP);
+    drawMesh(getSph(t.leafR*0.7,0.22,0.52,0.13),m4translate(t.x-t.leafR*0.3,t.h+t.leafR*0.4,t.z-t.leafR*0.3),VP);
+  }
+  // Rocks
+  for(const r of rocks){
+    drawMesh(getSph(r.s,0.45,0.43,0.4),m4translate(r.x,r.s*0.4,r.z),VP);
+    drawMesh(getSph(r.s*0.6,0.5,0.48,0.45),m4translate(r.x+r.s*0.3,r.s*0.3,r.z+r.s*0.2),VP);
+  }
+  // Flowers
+  for(const f of flowers){
+    // Stem
+    drawMesh(getBox(0.03,0.3,0.03,0.2,0.5,0.15),m4translate(f.x,0.15,f.z),VP);
+    // Petals
+    drawMesh(getSph(f.s,...f.col),m4translate(f.x,0.35,f.z),VP);
+    // Center
+    drawMesh(getSph(f.s*0.4,1,0.9,0.2),m4translate(f.x,0.38,f.z),VP);
+  }
+
+  // ---- PLAYER ----
+  if(player.invTimer<=0||floor(player.invTimer*10)%2===0){
+    const px=player.pos.x,py=player.pos.y,pz=player.pos.z,ya=player.yaw;
+    const walk=v3len(player.vel)>0.5?sin(gameTime*10)*0.3:0;
+    const sw=curSword();
+
+    // Legs
+    drawAt(getBox(0.18,0.55,0.18,0.2,0.25,0.5),px,py,pz,ya,-0.15,0.1,0,m4rotX(-walk));
+    drawAt(getBox(0.18,0.55,0.18,0.2,0.25,0.5),px,py,pz,ya,0.15,0.1,0,m4rotX(walk));
+    // Shoes
+    drawAt(getBox(0.18,0.1,0.26,0.25,0.15,0.08),px,py,pz,ya,-0.15,-0.15,0.04,null);
+    drawAt(getBox(0.18,0.1,0.26,0.25,0.15,0.08),px,py,pz,ya,0.15,-0.15,0.04,null);
+    // Torso
+    drawAt(getBox(0.5,0.6,0.3,0.15,0.4,0.7),px,py,pz,ya,0,0.7,0,null);
+    // Belt
+    drawAt(getBox(0.52,0.08,0.32,0.4,0.25,0.1),px,py,pz,ya,0,0.42,0,null);
+    // Shoulders
+    drawAt(getBox(0.2,0.12,0.2,0.12,0.35,0.6),px,py,pz,ya,-0.32,0.95,0,null);
+    drawAt(getBox(0.2,0.12,0.2,0.12,0.35,0.6),px,py,pz,ya,0.32,0.95,0,null);
+    // Arms
+    drawAt(getBox(0.14,0.5,0.14,0.9,0.72,0.58),px,py,pz,ya,-0.38,0.6,0,m4rotX(walk));
+    drawAt(getBox(0.14,0.5,0.14,0.9,0.72,0.58),px,py,pz,ya,0.38,0.6,0,m4rotX(-walk));
+    // Hands
+    drawAt(getSph(0.07,0.9,0.72,0.58),px,py,pz,ya,-0.38,0.32,walk*0.25,null);
+    drawAt(getSph(0.07,0.9,0.72,0.58),px,py,pz,ya,0.38,0.32,-walk*0.25,null);
+    // Head
+    drawAt(getSph(0.25,0.92,0.74,0.6),px,py,pz,ya,0,1.25,0,null);
+    // Hair
+    drawAt(getBox(0.27,0.15,0.27,0.3,0.2,0.1),px,py,pz,ya,0,1.47,0,null);
+    drawAt(getBox(0.25,0.08,0.12,0.3,0.2,0.1),px,py,pz,ya,0,1.4,-0.12,null);
+    // Eyes
+    drawAt(getSph(0.04,1,1,1),px,py,pz,ya,-0.09,1.28,0.2,null);
+    drawAt(getSph(0.04,1,1,1),px,py,pz,ya,0.09,1.28,0.2,null);
+    drawAt(getSph(0.02,0.1,0.15,0.4),px,py,pz,ya,-0.09,1.28,0.22,null);
+    drawAt(getSph(0.02,0.1,0.15,0.4),px,py,pz,ya,0.09,1.28,0.22,null);
+    // Mouth
+    drawAt(getBox(0.06,0.02,0.02,0.7,0.35,0.3),px,py,pz,ya,0,1.15,0.22,null);
+
+    // ---- DETAILED SWORD ----
+    const swingA=player.atkAnim>0?sin(player.atkAnim*25)*1.2:0;
+    const sOx=0.5,sOy=0.9,sOz=0.3;
+    const sRot=m4rotX(-0.5+swingA);
+    // Blade
+    drawAt(getBox(sw.w,sw.h,sw.w*0.5,...sw.col),px,py,pz,ya,sOx,sOy,sOz,sRot);
+    // Edge highlight
+    drawAt(getBox(sw.w*0.3,sw.h*0.85,sw.w*0.2,min(1,sw.col[0]+0.2),min(1,sw.col[1]+0.2),min(1,sw.col[2]+0.2)),px,py,pz,ya,sOx,sOy+0.03,sOz+sw.w*0.2,sRot);
+    // Tip
+    drawAt(getBox(sw.w*0.5,0.12,sw.w*0.3,...sw.col),px,py,pz,ya,sOx,sOy+sw.h*0.5,sOz,sRot);
+    // Fuller (tier 2+)
+    if(sw.dmg>=2)drawAt(getBox(sw.w*0.15,sw.h*0.6,0.01,sw.col[0]*0.5,sw.col[1]*0.5,sw.col[2]*0.5),px,py,pz,ya,sOx,sOy+0.08,sOz+sw.w*0.3,sRot);
+    // Guard
+    const gc=sw.guard;
+    drawAt(getBox(0.22,0.05,0.08,...gc),px,py,pz,ya,sOx,sOy-sw.h*0.35,sOz,sRot);
+    if(sw.dmg>=5){drawAt(getSph(0.035,...gc),px,py,pz,ya,sOx-0.12,sOy-sw.h*0.35,sOz,sRot);drawAt(getSph(0.035,...gc),px,py,pz,ya,sOx+0.12,sOy-sw.h*0.35,sOz,sRot);}
+    // Handle
+    drawAt(getBox(0.045,0.25,0.045,sw.guard[0]*0.7,sw.guard[1]*0.7,sw.guard[2]*0.7),px,py,pz,ya,sOx,sOy-sw.h*0.35-0.15,sOz,sRot);
+    // Pommel
+    drawAt(getSph(0.04,...gc),px,py,pz,ya,sOx,sOy-sw.h*0.35-0.3,sOz,sRot);
+    // Gem
+    if(sw.gem){
+      const gp=0.5+sin(gameTime*4)*0.3;
+      drawAt(getSph(0.04,...sw.gem),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.05,sRot);
+      drawAt(getSph(0.055,sw.gem[0]*gp,sw.gem[1]*gp,sw.gem[2]*gp),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.055,sRot);
+    }
+    // Runes
+    if(sw.dmg>=5){
+      const rg=0.4+sin(gameTime*3)*0.4;
+      for(let r=0;r<min(floor(sw.dmg/5),4);r++){
+        drawAt(getBox(sw.w*0.7,0.02,0.01,rg,rg*0.6,rg*0.3),px,py,pz,ya,sOx,sOy+sw.h*0.1+r*sw.h*0.15,sOz+sw.w*0.3,sRot);
+      }
+    }
+    // Aura
+    if(sw.aura){
+      const ap=0.25+sin(gameTime*5)*0.1;
+      drawAt(getBox(sw.w+0.06,sw.h+0.08,sw.w+0.04,sw.auraCol[0]*ap,sw.auraCol[1]*ap,sw.auraCol[2]*ap),px,py,pz,ya,sOx,sOy,sOz,sRot);
+    }
+    // Orbs
+    if(sw.orbs){
+      for(let o=0;o<sw.orbs;o++){
+        const oa=gameTime*3+o*TAU/sw.orbs;
+        const oR=0.25+sw.orbs*0.04;
+        drawAt(getSph(0.03,...sw.orbCol),px,py,pz,ya,sOx+sin(oa)*oR,sOy+sw.h*0.2+sin(gameTime*4+o)*sw.h*0.25,sOz+cos(oa)*oR,null);
+      }
+    }
+    // Ice particles for ice sword
+    if(sw===SWORDS.ice){
+      for(let i=0;i<4;i++){
+        const ia=gameTime*2+i*1.5;
+        drawAt(getSph(0.025,0.5,0.85,1),px,py,pz,ya,sOx+sin(ia)*0.2,sOy+rand()*sw.h,sOz+cos(ia)*0.15,null);
+      }
+    }
+  }
+
+  // ---- GRASS BOSS ----
+  if(boss&&boss.hp>0){
+    const bx=boss.pos.x,by=boss.pos.y+boss.floatY,bz=boss.pos.z;
+    const bFace=atan2(player.pos.x-bx,player.pos.z-bz);
+    const bt=boss.timer;
+
+    // Main body (mossy green trunk)
+    drawAt(getBox(1.2,2.2,1,0.2,0.45,0.12),bx,by,bz,bFace,0,1.5,0,null);
+    // Body bark texture
+    drawAt(getBox(0.4,1.8,1.02,0.25,0.4,0.1),bx,by,bz,bFace,0.3,1.5,0,null);
+    drawAt(getBox(0.3,1.5,1.02,0.22,0.38,0.09),bx,by,bz,bFace,-0.35,1.6,0,null);
+    // Belly moss
+    drawAt(getBox(0.9,1,0.5,0.15,0.5,0.1),bx,by,bz,bFace,0,1.2,0.3,null);
+    // Moss patches
+    drawAt(getSph(0.3,0.18,0.55,0.15),bx,by,bz,bFace,0.4,2,0.3,null);
+    drawAt(getSph(0.25,0.15,0.5,0.12),bx,by,bz,bFace,-0.35,1.8,-0.2,null);
+
+    // Head (big leafy head)
+    drawAt(getSph(0.7,0.22,0.5,0.14),bx,by,bz,bFace,0,3,0,null);
+    // Leaf crown
+    for(let l=0;l<8;l++){
+      const la=l*TAU/8+sin(bt*2)*0.1;
+      const lh=3.4+sin(la*3)*0.15;
+      drawAt(getBox(0.25,0.5,0.08,0.15+rand()*0.05,0.55+sin(la)*0.1,0.1),bx,by,bz,bFace,sin(la)*0.6,lh,cos(la)*0.6,m4rotZ(sin(la+bt)*0.3));
+    }
+    // Eyes (glowing green)
+    const eyeGlow=0.5+sin(bt*3)*0.3;
+    drawAt(getSph(0.12,eyeGlow,1,eyeGlow*0.5),bx,by,bz,bFace,-0.25,3.1,0.55,null);
+    drawAt(getSph(0.12,eyeGlow,1,eyeGlow*0.5),bx,by,bz,bFace,0.25,3.1,0.55,null);
+    drawAt(getSph(0.05,0,0.2,0),bx,by,bz,bFace,-0.25,3.12,0.6,null);
+    drawAt(getSph(0.05,0,0.2,0),bx,by,bz,bFace,0.25,3.12,0.6,null);
+    // Mouth
+    drawAt(getBox(0.3,0.06,0.08,0.12,0.3,0.05),bx,by,bz,bFace,0,2.75,0.6,null);
+
+    // Arms (vine arms)
+    const armSwing=sin(bt*2.5)*0.4;
+    // Left arm — 3 segments
+    drawAt(getBox(0.2,0.9,0.2,0.25,0.4,0.1),bx,by,bz,bFace,-0.8,2,0,m4rotX(armSwing));
+    drawAt(getBox(0.15,0.7,0.15,0.2,0.45,0.12),bx,by,bz,bFace,-0.85,1.2,armSwing*0.5,m4rotX(armSwing*0.5));
+    drawAt(getBox(0.18,0.25,0.12,0.18,0.5,0.15),bx,by,bz,bFace,-0.85,0.7,armSwing*0.7,null); // hand/leaf
+    // Right arm
+    drawAt(getBox(0.2,0.9,0.2,0.25,0.4,0.1),bx,by,bz,bFace,0.8,2,0,m4rotX(-armSwing));
+    drawAt(getBox(0.15,0.7,0.15,0.2,0.45,0.12),bx,by,bz,bFace,0.85,1.2,-armSwing*0.5,m4rotX(-armSwing*0.5));
+    drawAt(getBox(0.18,0.25,0.12,0.18,0.5,0.15),bx,by,bz,bFace,0.85,0.7,-armSwing*0.7,null);
+
+    // Legs (root legs)
+    drawAt(getBox(0.3,0.9,0.3,0.3,0.22,0.08),bx,by,bz,bFace,-0.35,-0.1,0.15,null);
+    drawAt(getBox(0.3,0.9,0.3,0.3,0.22,0.08),bx,by,bz,bFace,0.35,-0.1,0.15,null);
+    // Root tendrils at feet
+    for(let r=0;r<4;r++){
+      const ra=r*TAU/4+bt*0.2;
+      drawAt(getBox(0.08,0.06,0.4,0.28,0.2,0.07),bx,by,bz,bFace,sin(ra)*0.6,-0.5,cos(ra)*0.6,m4rotY(ra));
+    }
+
+    // Vine tendrils from back
+    for(let v=0;v<3;v++){
+      const va=bt*1.5+v*2;
+      drawAt(getBox(0.06,0.06,0.8,0.18,0.45,0.1),bx,by,bz,bFace,(v-1)*0.3,2.2+sin(va)*0.3,-0.6,m4rotX(sin(va)*0.2));
+    }
+
+    // Flowers growing on body
+    drawAt(getSph(0.12,1,0.3,0.3),bx,by,bz,bFace,0.5,2.3,0.3,null);
+    drawAt(getSph(0.05,1,0.9,0.2),bx,by,bz,bFace,0.5,2.35,0.33,null);
+    drawAt(getSph(0.1,1,1,0.3),bx,by,bz,bFace,-0.4,1.8,0.4,null);
+    drawAt(getSph(0.04,1,0.9,0.2),bx,by,bz,bFace,-0.4,1.84,0.43,null);
+    drawAt(getSph(0.1,0.9,0.4,0.8),bx,by,bz,bFace,0.2,2.7,0.4,null);
+
+    // Thorn shield visual
+    if(boss.thornShieldActive){
+      for(let t2=0;t2<12;t2++){
+        const ta=bt*2+t2*TAU/12;
+        const tr=1.8;
+        drawAt(getBox(0.08,0.4,0.08,0.35,0.2,0.05),bx,by,bz,0,sin(ta)*tr,1.5+sin(ta*2)*0.5,cos(ta)*tr,null);
+      }
+    }
+
+    // Phase 2 aura
+    if(boss.phase>=2){
+      const ap=0.15+sin(bt*4)*0.08;
+      drawAt(getSph(2.5,ap*0.3,ap,ap*0.2),bx,by,bz,0,0,1.5,0,null);
+    }
+
+    // Orbiting leaves
+    const numOrbs=3+boss.phase*2;
+    for(let o=0;o<numOrbs;o++){
+      const oa=bt*1.5+o*TAU/numOrbs;
+      const oR=2+sin(bt*0.5+o)*0.3;
+      drawAt(getBox(0.2,0.04,0.12,0.2,0.55,0.12),bx,by,bz,0,sin(oa)*oR,2+sin(bt*2+o)*0.8,cos(oa)*oR,m4rotY(oa));
+    }
+  }
+
+  // ---- PROJECTILES ----
+  for(const p of projectiles){
+    if(p.type==='root'&&p.delay>0)continue;
+    let mat=m4translate(p.pos.x,p.pos.y,p.pos.z);
+    if(p.spin)mat=m4mul(mat,m4rotY(p.spin));
+    if(p.type==='pollen'){
+      // Translucent cloud
+      const pp=0.2+sin(gameTime*3+p.pos.x)*0.1;
+      drawMesh(getSph(1.5,pp*0.6,pp*0.7,pp*0.2),mat,VP);
+    }else{
+      drawMesh(p.mesh,mat,VP);
+    }
+  }
+
+  // ---- PARTICLES ----
+  for(const p of particles){
+    drawMesh(getSph(p.size,...p.col),m4translate(p.pos.x,p.pos.y,p.pos.z),VP);
+  }
+}
+
+// ---- MUSIC ----
+let audioCtx,masterGain,musicNodes=[],currentTrack='';
+function initAudio(){if(!audioCtx){audioCtx=new(window.AudioContext||window.webkitAudioContext)();masterGain=audioCtx.createGain();masterGain.gain.value=0.2;masterGain.connect(audioCtx.destination)}}
+function stopMusic(){musicNodes.forEach(n=>{try{n.stop()}catch(e){}});musicNodes=[];if(audioCtx){audioCtx.close();audioCtx=null}currentTrack=''}
+const N={C3:130.81,D3:146.83,Eb3:155.56,E3:164.81,F3:174.61,G3:196,A3:220,Bb3:233.08,B3:246.94,
+  C4:261.63,D4:293.66,Eb4:311.13,E4:329.63,F4:349.23,G4:392,A4:440,Bb4:466.16,B4:493.88,
+  C5:523.25,D5:587.33,Eb5:622.25,E5:659.26,F5:698.46,G5:783.99,A5:880,Bb5:932.33,B5:987.77};
+function sn(freq,start,dur,type,vol){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(vol,start+0.01);g.gain.setValueAtTime(vol,start+dur*0.7);g.gain.linearRampToValueAtTime(0,start+dur);
+  o.connect(g);g.connect(masterGain);o.start(start);o.stop(start+dur+0.05);musicNodes.push(o)}
+function sd(start,type){
+  if(type==='kick'){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(150,start);o.frequency.exponentialRampToValueAtTime(40,start+0.12);g.gain.setValueAtTime(0.35,start);g.gain.exponentialRampToValueAtTime(0.001,start+0.2);o.connect(g);g.connect(masterGain);o.start(start);o.stop(start+0.25);musicNodes.push(o)}
+  if(type==='snare'){const bs=audioCtx.sampleRate*0.08,buf=audioCtx.createBuffer(1,bs,audioCtx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<bs;i++)d[i]=(rand()*2-1)*0.4;const n=audioCtx.createBufferSource(),g=audioCtx.createGain(),f=audioCtx.createBiquadFilter();n.buffer=buf;f.type='highpass';f.frequency.value=2000;g.gain.setValueAtTime(0.2,start);g.gain.exponentialRampToValueAtTime(0.001,start+0.1);n.connect(f);f.connect(g);g.connect(masterGain);n.start(start);n.stop(start+0.12);musicNodes.push(n)}
+  if(type==='hat'){const bs=audioCtx.sampleRate*0.03,buf=audioCtx.createBuffer(1,bs,audioCtx.sampleRate),d=buf.getChannelData(0);for(let i=0;i<bs;i++)d[i]=(rand()*2-1)*0.2;const n=audioCtx.createBufferSource(),g=audioCtx.createGain(),f=audioCtx.createBiquadFilter();n.buffer=buf;f.type='highpass';f.frequency.value=7000;g.gain.setValueAtTime(0.1,start);g.gain.exponentialRampToValueAtTime(0.001,start+0.04);n.connect(f);f.connect(g);g.connect(masterGain);n.start(start);n.stop(start+0.06);musicNodes.push(n)}
+}
+
+function playBattleMusic(){
+  if(currentTrack==='battle')return;stopMusic();initAudio();masterGain.gain.setValueAtTime(0.2,audioCtx.currentTime);
+  currentTrack='battle';const t=audioCtx.currentTime+0.1,BPM=110,beat=60/BPM,total=240,loop=beat*total;
+  let ct;
+  // Chords: Am→F→C→G→Dm→Em→F→G (nature/adventure feel)
+  const chords=[[[N.A3,N.C4,N.E4],32],[[N.F3,N.A3,N.C4],32],[[N.C3,N.E3,N.G3],32],[[N.G3,N.B3,N.D4],32],
+    [[N.D3,N.F3,N.A3],32],[[N.E3,N.G3,N.B3],32],[[N.F3,N.A3,N.C4],16],[[N.G3,N.B3,N.D4],16]];
+  ct=t;for(const[ch,dur]of chords){for(const f of ch){sn(f,ct,beat*dur*0.9,'triangle',0.03);sn(f*1.003,ct,beat*dur*0.85,'sine',0.015)}ct+=beat*dur}
+  // Melody
+  const mel=[N.E5,0,N.A5,N.G5,N.E5,0,N.D5,N.E5,N.G5,0,N.A5,N.B5,N.A5,N.G5,N.E5,0,
+    N.C5,0,N.F5,N.E5,N.C5,0,N.A4,N.C5,N.E5,0,N.G5,N.E5,N.C5,0,N.D5,N.E5,
+    N.G5,0,N.E5,N.D5,N.C5,0,N.D5,N.E5,N.G5,N.A5,N.B5,0,N.A5,N.G5,N.E5,N.D5,
+    N.D5,0,N.F5,N.E5,N.D5,N.C5,0,N.D5,N.E5,0,N.G5,N.A5,N.G5,N.E5,N.D5,0,
+    N.A5,N.G5,N.E5,N.D5,N.E5,0,N.G5,N.A5,N.B5,N.A5,N.G5,0,N.E5,N.D5,N.E5,0,
+    N.F5,N.E5,N.D5,N.C5,N.D5,N.E5,0,N.F5,N.G5,N.A5,N.G5,N.F5,N.E5,0,N.D5,N.E5];
+  ct=t;for(const n of mel){if(n>0)sn(n,ct,beat*0.75,'triangle',0.045);ct+=beat*1.5}
+  // Bass
+  const bass=[N.A3,N.A3,N.F3,N.F3,N.C3,N.C3,N.G3,N.G3,N.D3,N.D3,N.E3,N.E3,N.F3,N.F3,N.G3,N.G3];
+  ct=t;for(const b of bass){sn(b*0.5,ct,beat*15*0.9,'triangle',0.06);ct+=beat*15}
+  // Drums
+  ct=t;for(let i=0;i<total;i++){const b2=ct+i*beat;if(i%4===0)sd(b2,'kick');if(i%4===2)sd(b2,'snare');sd(b2,'hat');if(i%2===1)sd(b2+beat*0.5,'hat');if(i%32>28)sd(b2+beat*0.25,'snare')}
+  setTimeout(()=>{if(currentTrack==='battle')playBattleMusic()},loop*1000);
+}
+
+// ---- MAIN LOOP ----
+function gameLoop(time){
+  requestAnimationFrame(gameLoop);
+  dt=min((time-lastTime)/1000,0.05);lastTime=time;
+  if(gameState==='menu'||gameState==='shop'){render();return}
+  gameTime+=dt;
+  updatePlayer();updateBoss();updateProjectiles();updateParticles();
+  if(msgTimer>0){msgTimer-=dt;if(msgTimer<=0)document.getElementById('msg').style.display='none'}
+  render();
+}
+
+// Start
+goMenu();
+requestAnimationFrame(gameLoop);
+document.addEventListener('click',function s(){playBattleMusic();document.removeEventListener('click',s)},{once:true});
+</script>
+</body>
+</html>
