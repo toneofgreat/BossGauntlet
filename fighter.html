@@ -112,7 +112,6 @@ canvas#c{display:block;width:100vw;height:100vh}
   <div id="menu-stats"></div>
   <button class="menu-btn" onclick="startFight('grass')">GRASS BOSS</button>
   <button class="menu-btn" onclick="openShop()">SWORD SHOP</button>
-  <button class="menu-btn" onclick="window.location.href='index.html'">BACK TO PLATYFY</button>
 </div>
 
 <!-- SHOP -->
@@ -318,23 +317,23 @@ function generateGrassArena(){
   trees=[];rocks=[];flowers=[];grassPatches=[];MC={};
   // Trees
   for(let i=0;i<20;i++){
-    const a=rand()*TAU,r=18+rand()*15;
+    const a=rand()*TAU,r=10+rand()*5;
     trees.push({x:sin(a)*r,z:cos(a)*r,h:3+rand()*3,r:0.3+rand()*0.2,leafR:1.5+rand()*1});
   }
   // Rocks
   for(let i=0;i<15;i++){
-    const a=rand()*TAU,r=10+rand()*20;
+    const a=rand()*TAU,r=5+rand()*8;
     rocks.push({x:sin(a)*r,z:cos(a)*r,s:0.4+rand()*0.8,rot:rand()*TAU});
   }
   // Flowers
   for(let i=0;i<40;i++){
-    const a=rand()*TAU,r=3+rand()*25;
+    const a=rand()*TAU,r=2+rand()*10;
     const cols=[[1,0.3,0.3],[1,1,0.3],[0.9,0.4,0.8],[1,0.6,0.2],[0.4,0.6,1]];
     flowers.push({x:sin(a)*r,z:cos(a)*r,col:cols[floor(rand()*cols.length)],s:0.15+rand()*0.1});
   }
   // Grass patches (darker/lighter spots)
   for(let i=0;i<30;i++){
-    const a=rand()*TAU,r=rand()*25;
+    const a=rand()*TAU,r=rand()*10;
     grassPatches.push({x:sin(a)*r,z:cos(a)*r,s:1+rand()*2,shade:rand()>0.5?0.05:-0.05});
   }
 }
@@ -345,7 +344,7 @@ function spawnBoss(type){
   if(type==='grass'){
     boss={
       type:'grass',name:'GRASS GUARDIAN',
-      pos:v3(0,0,-5),vel:v3(),
+      pos:v3(0,0,-3),vel:v3(),
       hp:30,maxHp:30,
       phase:0,timer:0,atkCd:2,moveTimer:0,
       stunTimer:0,size:2,speed:2.5,
@@ -371,7 +370,7 @@ function startFight(type){
   document.getElementById('hud').style.display='block';
   document.getElementById('back-btn').style.display='block';
   document.getElementById('atk-prompt').style.display='block';
-  player.pos=v3(0,0,8);player.vel=v3();player.yaw=0;
+  player.pos=v3(0,0,5);player.vel=v3();player.yaw=0;
   player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
   camYaw=0;camPitch=0.7;
   generateGrassArena();
@@ -471,7 +470,7 @@ function updatePlayer(){
   }
   player.pos.x+=player.vel.x*dt;player.pos.z+=player.vel.z*dt;
   // Keep in arena
-  const arenaR=28;
+  const arenaR=12;
   const d=sqrt(player.pos.x*player.pos.x+player.pos.z*player.pos.z);
   if(d>arenaR){const n=v3norm(player.pos);player.pos.x=n.x*arenaR;player.pos.z=n.z*arenaR;}
   player.pos.y=0;
@@ -555,10 +554,10 @@ function updateBoss(){
 
   // Movement — circle around player
   const circleA=boss.timer*boss.speed*0.3;
-  const targetX=player.pos.x+sin(circleA)*6;
-  const targetZ=player.pos.z+cos(circleA)*6;
-  boss.pos.x+=(targetX-boss.pos.x)*dt*1.5;
-  boss.pos.z+=(targetZ-boss.pos.z)*dt*1.5;
+  const targetX=player.pos.x+sin(circleA)*4;
+  const targetZ=player.pos.z+cos(circleA)*4;
+  boss.pos.x=clamp(boss.pos.x+(targetX-boss.pos.x)*dt*1.5,-10,10);
+  boss.pos.z=clamp(boss.pos.z+(targetZ-boss.pos.z)*dt*1.5,-10,10);
   boss.pos.y=boss.floatY;
 
   // Contact damage
@@ -713,13 +712,13 @@ function render(){
   VP=m4mul(proj,view);
 
   gl.uniform3f(uLight,0.4,0.8,0.3);
-  gl.uniform3f(uFog,0.35,0.5,0.25);
-  gl.uniform1f(uFogD,60);
+  gl.uniform3f(uFog,0.45,0.7,0.35);
+  gl.uniform1f(uFogD,40);
   gl.uniform3f(uCam,cx,cy,cz);
-  gl.clearColor(0.35,0.5,0.25,1);
+  gl.clearColor(0.45,0.7,0.35,1);
 
-  // Ground
-  drawMesh(makePlane(80,80,0.25,0.45,0.15),m4id(),VP);
+  // Ground (dark green)
+  drawMesh(makePlane(30,30,0.1,0.25,0.05),m4id(),VP);
   // Grass patches
   for(const gp of grassPatches){
     drawMesh(makePlane(gp.s,gp.s,0.25+gp.shade,0.45+gp.shade,0.15+gp.shade),m4translate(gp.x,0.01,gp.z),VP);
