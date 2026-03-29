@@ -100,7 +100,7 @@ canvas#c{display:block;width:100vw;height:100vh}
     </div>
   </div>
 </div>
-<div id="boss-hud"><div id="boss-name">BOSS</div><div id="boss-hp-outer"><div id="boss-hp-inner" style="width:100%"></div></div></div>
+<div id="boss-hud"><div id="boss-name">BOSS</div><div id="boss-hp-outer"><div id="boss-hp-inner" style="width:100%"></div></div><div id="boss-hp-text" style="font-size:11px;color:#afa;margin-top:3px">30/30</div></div>
 <div id="msg"></div>
 <div id="atk-prompt">SPACE = Attack · Walk into boss to hit</div>
 <button id="back-btn" onclick="goMenu()">MENU</button>
@@ -447,6 +447,7 @@ function updateHUD(){
 function updateBossHP(){
   if(!boss)return;
   document.getElementById('boss-hp-inner').style.width=clamp(boss.hp/boss.maxHp,0,1)*100+'%';
+  document.getElementById('boss-hp-text').textContent=max(0,floor(boss.hp))+'/'+boss.maxHp;
 }
 let msgTimer=0;
 function showMsg(t,d){document.getElementById('msg').textContent=t;document.getElementById('msg').style.display='block';msgTimer=d||2}
@@ -776,6 +777,9 @@ function render(){
       phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:2,speed:2.5,
       vineTimer:0,leafStormCd:8,seedBombCd:5,rootSlamCd:6,
       thornShieldActive:false,thornShieldTimer:0,floatY:0};
+    document.getElementById('boss-name').textContent='GRASS GUARDIAN';
+    document.getElementById('boss-hud').style.display='block';
+    updateBossHP();
   }
   if(boss){
     const bx=boss.pos.x, bz=boss.pos.z;
