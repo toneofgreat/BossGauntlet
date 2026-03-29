@@ -102,7 +102,7 @@ canvas#c{display:block;width:100vw;height:100vh}
 </div>
 <div id="boss-hud"><div id="boss-name">BOSS</div><div id="boss-hp-outer"><div id="boss-hp-inner" style="width:100%"></div></div></div>
 <div id="msg"></div>
-<div id="atk-prompt">Press SPACE to attack!</div>
+<div id="atk-prompt">SPACE = Attack · Walk into boss to hit</div>
 <button id="back-btn" onclick="goMenu()">MENU</button>
 
 <!-- MENU -->
@@ -274,7 +274,7 @@ const SWORDS={
   wooden:{name:'Wooden Sword',dmg:1,lvl:0,cost:0,col:[0.55,0.38,0.18],guard:[0.4,0.28,0.12],blade:[0.6,0.42,0.2],w:0.06,h:0.9,desc:'A humble start.'},
   stone:{name:'Stone Sword',dmg:2,lvl:5,cost:10,col:[0.5,0.5,0.52],guard:[0.4,0.4,0.42],blade:[0.55,0.55,0.58],w:0.08,h:1.05,desc:'Carved from rock. 2 DMG.',gem:[0.4,0.4,0.5],orbs:0},
   iron:{name:'Iron Sword',dmg:5,lvl:20,cost:50,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],blade:[0.7,0.7,0.75],w:0.09,h:1.15,desc:'Forged in fire. 5 DMG.',gem:[0.5,0.6,0.8],orbs:2,orbCol:[0.5,0.6,0.8]},
-  ice:{name:'Ice Sword',dmg:20,lvl:150,cost:500,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'Frozen power. 20 DMG.',gem:[0.3,0.9,1],orbs:5,orbCol:[0.4,0.8,1],aura:true,auraCol:[0.3,0.7,1]}
+  ice:{name:'Ice Sword',dmg:20,lvl:150,cost:500,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'20 DMG + Q: throw ice + E: ice spikes (50 DMG!)',gem:[0.3,0.9,1],orbs:5,orbCol:[0.4,0.8,1],aura:true,auraCol:[0.3,0.7,1]}
 };
 function curSword(){return SWORDS[save.equipped]}
 function xpForLevel(l){return l*10}
@@ -300,7 +300,7 @@ let gameState='menu'; // menu, fight, shop, dead, win
 let gameTime=0,dt=0,lastTime=0;
 
 // Player
-let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:true,atkCd:0,invTimer:0,atkAnim:0};
+let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:true,atkCd:0,invTimer:0,atkAnim:0,iceThrowCd:0,iceSpikesCd:0};
 let camYaw=0,camPitch=0.7,camDist=12;
 
 // Boss
@@ -368,6 +368,7 @@ function startFight(type){
   document.getElementById('hud').style.display='block';
   document.getElementById('back-btn').style.display='block';
   document.getElementById('atk-prompt').style.display='block';
+  document.getElementById('atk-prompt').textContent=save.equipped==='ice'?'SPACE=Attack · Q=Throw Ice · E=Ice Spikes':'SPACE = Attack · Walk into boss to hit';
   player.pos=v3(0,0,5);player.vel=v3();player.yaw=0;
   player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
   camYaw=0;camPitch=0.7;
@@ -483,7 +484,7 @@ function updatePlayer(){
     // Hit boss
     if(boss&&boss.hp>0){
       const dist=v3dist(player.pos,boss.pos);
-      if(dist<boss.size+1.5){
+      if(dist<boss.size+3){
         // Check thorn shield
         if(boss.thornShieldActive){
           showMsg('BLOCKED by thorns!',1);
@@ -498,6 +499,33 @@ function updatePlayer(){
           if(boss.hp<=0)bossDefeated();
         }
       }
+    }
+  }
+
+  // Ice sword abilities
+  if(player.iceThrowCd>0)player.iceThrowCd-=dt;
+  if(player.iceSpikesCd>0)player.iceSpikesCd-=dt;
+  if(save.equipped==='ice'){
+    // Q = throw ice projectile
+    if(keys['q']&&player.iceThrowCd<=0){
+      player.iceThrowCd=1;
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,16),
+        type:'ice_throw',life:3,dmg:20,mesh:getSph(0.3,0.4,0.8,1),isPlayerProj:true});
+      showMsg('Ice Throw!',0.6);
+      spawnParticles(player.pos,5,[0.4,0.8,1]);
+    }
+    // E = ice spikes from ground at boss position
+    if(keys['e']&&player.iceSpikesCd<=0&&boss){
+      player.iceSpikesCd=4;
+      showMsg('ICE SPIKES!',1);
+      for(let i=0;i<8;i++){
+        const sx=boss.pos.x+(rand()-0.5)*4;
+        const sz=boss.pos.z+(rand()-0.5)*4;
+        projectiles.push({pos:v3(sx,-1,sz),vel:v3(0,15,0),
+          type:'ice_spike',life:1.5,dmg:50,mesh:getBox(0.2,1.5,0.2,0.4,0.8,1),isPlayerProj:true,delay:0.1+i*0.08,started:false});
+      }
+      spawnParticles(boss.pos,12,[0.5,0.85,1]);
     }
   }
 
@@ -559,12 +587,9 @@ function updateBoss(){
   boss.pos.z=clamp(boss.pos.z+(targetZ-boss.pos.z)*dt*1.5,-8,8);
   boss.pos.y=0;
 
-  // Contact damage
+  // Contact damage — hurt but don't push away
   if(dist<boss.size+0.5){
-    const push=v3scale(v3norm(v3sub(player.pos,boss.pos)),boss.size+1.5);
-    player.pos.x=boss.pos.x+push.x;player.pos.z=boss.pos.z+push.z;
-    player.vel=v3scale(v3norm(push),4);
-    hurtPlayer(8);
+    hurtPlayer(5);
   }
 
   // ---- ATTACKS ----
@@ -643,8 +668,8 @@ function updateProjectiles(){
     const p=projectiles[i];
     p.life-=dt;if(p.life<=0){projectiles.splice(i,1);continue;}
 
-    // Delayed roots
-    if(p.type==='root'&&p.delay>0){p.delay-=dt;continue;}
+    // Delayed roots/spikes
+    if((p.type==='root'||p.type==='ice_spike')&&p.delay>0){p.delay-=dt;continue;}
 
     p.pos.x+=p.vel.x*dt;p.pos.y+=p.vel.y*dt;p.pos.z+=p.vel.z*dt;
 
@@ -663,14 +688,39 @@ function updateProjectiles(){
     }
     if(p.type==='seedling')p.vel.y-=8*dt;
 
-    // Roots stop at surface
+    // Roots/ice spikes stop at surface
     if(p.type==='root'&&p.pos.y>2){p.vel.y=0;p.pos.y=1;}
+    if(p.type==='ice_spike'&&p.pos.y>1.5){p.vel.y=0;p.pos.y=1.5;}
 
-    // Hit player
-    const hitR=p.isZone?1.5:0.8;
-    if(v3dist(p.pos,player.pos)<hitR){
-      hurtPlayer(p.dmg);
-      if(!p.isZone){projectiles.splice(i,1);}
+    // Player projectiles hit boss
+    if(p.isPlayerProj&&boss&&boss.hp>0){
+      if(v3dist(p.pos,boss.pos)<boss.size+1){
+        boss.hp-=p.dmg;
+        spawnParticles(boss.pos,10,[0.4,0.8,1]);
+        showMsg('-'+p.dmg+'!',0.8);
+        updateBossHP();
+        if(boss.hp<=0)bossDefeated();
+        projectiles.splice(i,1);continue;
+      }
+    }
+    // Ice spikes also hit boss at ground level
+    if(p.type==='ice_spike'&&p.pos.y>=1&&boss&&boss.hp>0){
+      if(v3dist(p.pos,boss.pos)<2.5){
+        boss.hp-=p.dmg;
+        spawnParticles(boss.pos,15,[0.5,0.9,1]);
+        showMsg('-'+p.dmg+' ICE!',1);
+        updateBossHP();
+        if(boss.hp<=0)bossDefeated();
+      }
+    }
+
+    // Boss projectiles hit player (not player's own projectiles)
+    if(!p.isPlayerProj){
+      const hitR=p.isZone?1.5:0.8;
+      if(v3dist(p.pos,player.pos)<hitR){
+        hurtPlayer(p.dmg);
+        if(!p.isZone){projectiles.splice(i,1);}
+      }
     }
   }
 }
@@ -837,55 +887,68 @@ function render(){
     // Mouth
     drawAt(getBox(0.06,0.02,0.02,0.7,0.35,0.3),px,py,pz,ya,0,1.15,0.22,null);
 
-    // ---- DETAILED SWORD ----
+    // ---- SWORD (looks like a real sword) ----
     const swingA=player.atkAnim>0?sin(player.atkAnim*25)*1.2:0;
-    const sOx=0.5,sOy=0.9,sOz=0.3;
     const sRot=m4rotX(-0.5+swingA);
-    // Blade
-    drawAt(getBox(sw.w,sw.h,sw.w*0.5,...sw.col),px,py,pz,ya,sOx,sOy,sOz,sRot);
-    // Edge highlight
-    drawAt(getBox(sw.w*0.3,sw.h*0.85,sw.w*0.2,min(1,sw.col[0]+0.2),min(1,sw.col[1]+0.2),min(1,sw.col[2]+0.2)),px,py,pz,ya,sOx,sOy+0.03,sOz+sw.w*0.2,sRot);
-    // Tip
-    drawAt(getBox(sw.w*0.5,0.12,sw.w*0.3,...sw.col),px,py,pz,ya,sOx,sOy+sw.h*0.5,sOz,sRot);
-    // Fuller (tier 2+)
-    if(sw.dmg>=2)drawAt(getBox(sw.w*0.15,sw.h*0.6,0.01,sw.col[0]*0.5,sw.col[1]*0.5,sw.col[2]*0.5),px,py,pz,ya,sOx,sOy+0.08,sOz+sw.w*0.3,sRot);
-    // Guard
-    const gc=sw.guard;
-    drawAt(getBox(0.22,0.05,0.08,...gc),px,py,pz,ya,sOx,sOy-sw.h*0.35,sOz,sRot);
-    if(sw.dmg>=5){drawAt(getSph(0.035,...gc),px,py,pz,ya,sOx-0.12,sOy-sw.h*0.35,sOz,sRot);drawAt(getSph(0.035,...gc),px,py,pz,ya,sOx+0.12,sOy-sw.h*0.35,sOz,sRot);}
-    // Handle
-    drawAt(getBox(0.045,0.25,0.045,sw.guard[0]*0.7,sw.guard[1]*0.7,sw.guard[2]*0.7),px,py,pz,ya,sOx,sOy-sw.h*0.35-0.15,sOz,sRot);
-    // Pommel
-    drawAt(getSph(0.04,...gc),px,py,pz,ya,sOx,sOy-sw.h*0.35-0.3,sOz,sRot);
-    // Gem
+    const sx=px+sin(ya)*0.3+cos(ya)*0.45, sy=py, sz=pz+cos(ya)*0.3-sin(ya)*0.45;
+    const sM=m4mul(m4mul(m4translate(sx,sy+0.9,sz),m4rotY(ya)),sRot);
+
+    // HANDLE — wrapped grip
+    drawMesh(getBox(0.05,0.3,0.05,0.3,0.2,0.1),m4mul(sM,m4translate(0,-0.15,0)),VP);
+    drawMesh(getBox(0.06,0.04,0.06,0.25,0.15,0.08),m4mul(sM,m4translate(0,-0.08,0)),VP);
+    drawMesh(getBox(0.06,0.04,0.06,0.25,0.15,0.08),m4mul(sM,m4translate(0,-0.18,0)),VP);
+    // POMMEL
+    drawMesh(getSph(0.05,...sw.guard),m4mul(sM,m4translate(0,-0.32,0)),VP);
+
+    // CROSSGUARD
+    drawMesh(getBox(0.3,0.06,0.08,...sw.guard),sM,VP);
+    // Guard tips
+    drawMesh(getSph(0.04,...sw.guard),m4mul(sM,m4translate(-0.16,0,0)),VP);
+    drawMesh(getSph(0.04,...sw.guard),m4mul(sM,m4translate(0.16,0,0)),VP);
+
+    // BLADE — wide at base, pointed tip
+    drawMesh(getBox(sw.w,sw.h*0.7,0.03,...sw.col),m4mul(sM,m4translate(0,sw.h*0.35,0)),VP);
+    // Blade taper (narrower top half)
+    drawMesh(getBox(sw.w*0.6,sw.h*0.3,0.025,...sw.col),m4mul(sM,m4translate(0,sw.h*0.7,0)),VP);
+    // Blade tip point
+    drawMesh(getBox(sw.w*0.25,sw.h*0.1,0.02,...sw.col),m4mul(sM,m4translate(0,sw.h*0.88,0)),VP);
+    // Edge highlight (bright line down blade)
+    drawMesh(getBox(0.01,sw.h*0.8,0.04,min(1,sw.col[0]+0.3),min(1,sw.col[1]+0.3),min(1,sw.col[2]+0.3)),m4mul(sM,m4translate(0,sw.h*0.35,0.02)),VP);
+    // Fuller groove (dark line)
+    drawMesh(getBox(0.01,sw.h*0.5,0.01,sw.col[0]*0.4,sw.col[1]*0.4,sw.col[2]*0.4),m4mul(sM,m4translate(0,sw.h*0.3,-0.01)),VP);
+
+    // GEM in crossguard
     if(sw.gem){
-      drawAt(getSph(0.04,...sw.gem),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.05,sRot);
-      drawAt(getSph(0.055,sw.gem[0]*0.5,sw.gem[1]*0.5,sw.gem[2]*0.5),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.055,sRot);
+      drawMesh(getSph(0.04,...sw.gem),m4mul(sM,m4translate(0,0.04,0.04)),VP);
     }
-    // Runes
-    if(sw.dmg>=5){
-      for(let r=0;r<min(floor(sw.dmg/5),4);r++){
-        drawAt(getBox(sw.w*0.7,0.02,0.01,0.6,0.4,0.2),px,py,pz,ya,sOx,sOy+sw.h*0.1+r*sw.h*0.15,sOz+sw.w*0.3,sRot);
+
+    // IRON SWORD — glowing runes
+    if(sw.dmg>=5&&sw.dmg<20){
+      drawMesh(getBox(0.02,0.04,0.01,0.5,0.6,0.8),m4mul(sM,m4translate(0,sw.h*0.25,0.02)),VP);
+      drawMesh(getBox(0.02,0.04,0.01,0.5,0.6,0.8),m4mul(sM,m4translate(0,sw.h*0.45,0.02)),VP);
+      // 2 orbiting blue sparks
+      for(let o=0;o<2;o++){
+        const oa=gameTime*3+o*PI;
+        drawMesh(getSph(0.03,0.5,0.6,0.8),m4mul(sM,m4translate(sin(oa)*0.15,sw.h*0.3+o*sw.h*0.2,cos(oa)*0.1)),VP);
       }
     }
-    // Aura
-    if(sw.aura){
-      drawAt(getBox(sw.w+0.06,sw.h+0.08,sw.w+0.04,sw.auraCol[0]*0.25,sw.auraCol[1]*0.25,sw.auraCol[2]*0.25),px,py,pz,ya,sOx,sOy,sOz,sRot);
-    }
-    // Orbs
-    if(sw.orbs){
-      for(let o=0;o<sw.orbs;o++){
-        const oa=gameTime*3+o*TAU/sw.orbs;
-        const oR=0.25+sw.orbs*0.04;
-        drawAt(getSph(0.03,...sw.orbCol),px,py,pz,ya,sOx+sin(oa)*oR,sOy+sw.h*0.2+sin(gameTime*4+o)*sw.h*0.25,sOz+cos(oa)*oR,null);
-      }
-    }
-    // Ice particles for ice sword
+
+    // ICE SWORD — frost aura, ice crystals, orbiting shards
     if(sw===SWORDS.ice){
-      for(let i=0;i<4;i++){
-        const ia=gameTime*2+i*1.5;
-        drawAt(getSph(0.025,0.5,0.85,1),px,py,pz,ya,sOx+sin(ia)*0.2,sOy+rand()*sw.h,sOz+cos(ia)*0.15,null);
+      // Frost aura around blade
+      drawMesh(getBox(sw.w+0.04,sw.h+0.06,0.06,0.08,0.18,0.25),m4mul(sM,m4translate(0,sw.h*0.35,0)),VP);
+      // Ice crystals on blade
+      drawMesh(getBox(0.04,0.15,0.04,0.5,0.9,1),m4mul(sM,m4translate(-0.06,sw.h*0.5,0.02)),VP);
+      drawMesh(getBox(0.03,0.12,0.03,0.5,0.9,1),m4mul(sM,m4translate(0.05,sw.h*0.3,0.02)),VP);
+      drawMesh(getBox(0.035,0.1,0.035,0.5,0.9,1),m4mul(sM,m4translate(0.04,sw.h*0.65,0.02)),VP);
+      // 5 orbiting ice shards
+      for(let o=0;o<5;o++){
+        const oa=gameTime*2.5+o*TAU/5;
+        const oR=0.25;
+        drawMesh(getBox(0.02,0.08,0.02,0.4,0.8,1),m4mul(sM,m4translate(sin(oa)*oR,sw.h*0.2+o*sw.h*0.12,cos(oa)*oR)),VP);
       }
+      // Frost mist at base
+      drawMesh(getSph(0.1,0.3,0.6,0.8),m4mul(sM,m4translate(0,0.1,0)),VP);
     }
   }
 
