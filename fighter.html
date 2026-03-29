@@ -344,7 +344,7 @@ function spawnBoss(type){
   if(type==='grass'){
     boss={
       type:'grass',name:'GRASS GUARDIAN',
-      pos:v3(0,0,-3),vel:v3(),
+      pos:v3(0,0,0),vel:v3(),
       hp:30,maxHp:30,
       phase:0,timer:0,atkCd:2,moveTimer:0,
       stunTimer:0,size:2,speed:2.5,
@@ -556,9 +556,9 @@ function updateBoss(){
   const circleA=boss.timer*boss.speed*0.3;
   const targetX=player.pos.x+sin(circleA)*4;
   const targetZ=player.pos.z+cos(circleA)*4;
-  boss.pos.x=clamp(boss.pos.x+(targetX-boss.pos.x)*dt*1.5,-10,10);
-  boss.pos.z=clamp(boss.pos.z+(targetZ-boss.pos.z)*dt*1.5,-10,10);
-  boss.pos.y=boss.floatY;
+  boss.pos.x=clamp(boss.pos.x+(targetX-boss.pos.x)*dt*1.5,-8,8);
+  boss.pos.z=clamp(boss.pos.z+(targetZ-boss.pos.z)*dt*1.5,-8,8);
+  boss.pos.y=0;
 
   // Contact damage
   if(dist<boss.size+0.5){
@@ -842,9 +842,12 @@ function render(){
 
   // ---- GRASS BOSS ----
   if(boss&&boss.hp>0){
-    const bx=boss.pos.x,by=boss.pos.y+boss.floatY,bz=boss.pos.z;
+    const bx=boss.pos.x,by=0,bz=boss.pos.z;
     const bFace=atan2(player.pos.x-bx,player.pos.z-bz);
     const bt=boss.timer;
+
+    // Big visible marker so boss is always seen
+    drawMesh(getBox(2,4,2,0.1,0.6,0.1),m4translate(bx,2,bz),VP);
 
     // Main body (mossy green trunk)
     drawAt(getBox(1.2,2.2,1,0.2,0.45,0.12),bx,by,bz,bFace,0,1.5,0,null);
