@@ -811,21 +811,18 @@ function render(){
     drawAt(getSph(0.04,...gc),px,py,pz,ya,sOx,sOy-sw.h*0.35-0.3,sOz,sRot);
     // Gem
     if(sw.gem){
-      const gp=0.5+sin(gameTime*4)*0.3;
       drawAt(getSph(0.04,...sw.gem),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.05,sRot);
-      drawAt(getSph(0.055,sw.gem[0]*gp,sw.gem[1]*gp,sw.gem[2]*gp),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.055,sRot);
+      drawAt(getSph(0.055,sw.gem[0]*0.5,sw.gem[1]*0.5,sw.gem[2]*0.5),px,py,pz,ya,sOx,sOy-sw.h*0.35+0.03,sOz+0.055,sRot);
     }
     // Runes
     if(sw.dmg>=5){
-      const rg=0.4+sin(gameTime*3)*0.4;
       for(let r=0;r<min(floor(sw.dmg/5),4);r++){
-        drawAt(getBox(sw.w*0.7,0.02,0.01,rg,rg*0.6,rg*0.3),px,py,pz,ya,sOx,sOy+sw.h*0.1+r*sw.h*0.15,sOz+sw.w*0.3,sRot);
+        drawAt(getBox(sw.w*0.7,0.02,0.01,0.6,0.4,0.2),px,py,pz,ya,sOx,sOy+sw.h*0.1+r*sw.h*0.15,sOz+sw.w*0.3,sRot);
       }
     }
     // Aura
     if(sw.aura){
-      const ap=0.25+sin(gameTime*5)*0.1;
-      drawAt(getBox(sw.w+0.06,sw.h+0.08,sw.w+0.04,sw.auraCol[0]*ap,sw.auraCol[1]*ap,sw.auraCol[2]*ap),px,py,pz,ya,sOx,sOy,sOz,sRot);
+      drawAt(getBox(sw.w+0.06,sw.h+0.08,sw.w+0.04,sw.auraCol[0]*0.25,sw.auraCol[1]*0.25,sw.auraCol[2]*0.25),px,py,pz,ya,sOx,sOy,sOz,sRot);
     }
     // Orbs
     if(sw.orbs){
@@ -867,12 +864,11 @@ function render(){
     for(let l=0;l<8;l++){
       const la=l*TAU/8+sin(bt*2)*0.1;
       const lh=3.4+sin(la*3)*0.15;
-      drawAt(getBox(0.25,0.5,0.08,0.15+rand()*0.05,0.55+sin(la)*0.1,0.1),bx,by,bz,bFace,sin(la)*0.6,lh,cos(la)*0.6,m4rotZ(sin(la+bt)*0.3));
+      drawAt(getBox(0.25,0.5,0.08,0.17,0.55,0.1),bx,by,bz,bFace,sin(la)*0.6,lh,cos(la)*0.6,m4rotZ(sin(la+bt)*0.3));
     }
     // Eyes (glowing green)
-    const eyeGlow=0.5+sin(bt*3)*0.3;
-    drawAt(getSph(0.12,eyeGlow,1,eyeGlow*0.5),bx,by,bz,bFace,-0.25,3.1,0.55,null);
-    drawAt(getSph(0.12,eyeGlow,1,eyeGlow*0.5),bx,by,bz,bFace,0.25,3.1,0.55,null);
+    drawAt(getSph(0.12,0.6,1,0.4),bx,by,bz,bFace,-0.25,3.1,0.55,null);
+    drawAt(getSph(0.12,0.6,1,0.4),bx,by,bz,bFace,0.25,3.1,0.55,null);
     drawAt(getSph(0.05,0,0.2,0),bx,by,bz,bFace,-0.25,3.12,0.6,null);
     drawAt(getSph(0.05,0,0.2,0),bx,by,bz,bFace,0.25,3.12,0.6,null);
     // Mouth
@@ -922,8 +918,7 @@ function render(){
 
     // Phase 2 aura
     if(boss.phase>=2){
-      const ap=0.15+sin(bt*4)*0.08;
-      drawAt(getSph(2.5,ap*0.3,ap,ap*0.2),bx,by,bz,0,0,1.5,0,null);
+      drawAt(getSph(2.5,0.06,0.15,0.04),bx,by,bz,0,0,1.5,0,null);
     }
 
     // Orbiting leaves
@@ -941,9 +936,7 @@ function render(){
     let mat=m4translate(p.pos.x,p.pos.y,p.pos.z);
     if(p.spin)mat=m4mul(mat,m4rotY(p.spin));
     if(p.type==='pollen'){
-      // Translucent cloud
-      const pp=0.2+sin(gameTime*3+p.pos.x)*0.1;
-      drawMesh(getSph(1.5,pp*0.6,pp*0.7,pp*0.2),mat,VP);
+      drawMesh(getSph(1.5,0.15,0.18,0.05),mat,VP);
     }else{
       drawMesh(p.mesh,mat,VP);
     }
