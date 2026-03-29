@@ -842,93 +842,74 @@ function render(){
 
   // ---- GRASS BOSS ----
   if(boss&&boss.hp>0){
-    const bx=boss.pos.x,by=0,bz=boss.pos.z;
+    const bx=boss.pos.x,bz=boss.pos.z;
     const bFace=atan2(player.pos.x-bx,player.pos.z-bz);
     const bt=boss.timer;
 
-    // Big visible marker so boss is always seen
-    drawMesh(getBox(2,4,2,0.1,0.6,0.1),m4translate(bx,2,bz),VP);
-
-    // Main body (mossy green trunk)
-    drawAt(getBox(1.2,2.2,1,0.2,0.45,0.12),bx,by,bz,bFace,0,1.5,0,null);
-    // Body bark texture
-    drawAt(getBox(0.4,1.8,1.02,0.25,0.4,0.1),bx,by,bz,bFace,0.3,1.5,0,null);
-    drawAt(getBox(0.3,1.5,1.02,0.22,0.38,0.09),bx,by,bz,bFace,-0.35,1.6,0,null);
+    // === BODY (big green trunk) ===
+    drawMesh(getBox(1.5,3,1.2,0.15,0.4,0.08),m4translate(bx,1.5,bz),VP);
+    // Bark texture strips
+    drawMesh(getBox(0.5,2.5,1.22,0.2,0.35,0.07),m4translate(bx+0.3,1.5,bz),VP);
+    drawMesh(getBox(0.4,2,1.22,0.18,0.33,0.06),m4translate(bx-0.35,1.6,bz),VP);
     // Belly moss
-    drawAt(getBox(0.9,1,0.5,0.15,0.5,0.1),bx,by,bz,bFace,0,1.2,0.3,null);
-    // Moss patches
-    drawAt(getSph(0.3,0.18,0.55,0.15),bx,by,bz,bFace,0.4,2,0.3,null);
-    drawAt(getSph(0.25,0.15,0.5,0.12),bx,by,bz,bFace,-0.35,1.8,-0.2,null);
+    drawMesh(getBox(1,1.2,0.6,0.12,0.45,0.08),m4translate(bx,1.2,bz+0.3),VP);
 
-    // Head (big leafy head)
-    drawAt(getSph(0.7,0.22,0.5,0.14),bx,by,bz,bFace,0,3,0,null);
-    // Leaf crown
-    for(let l=0;l<8;l++){
-      const la=l*TAU/8+sin(bt*2)*0.1;
-      const lh=3.4+sin(la*3)*0.15;
-      drawAt(getBox(0.25,0.5,0.08,0.17,0.55,0.1),bx,by,bz,bFace,sin(la)*0.6,lh,cos(la)*0.6,m4rotZ(sin(la+bt)*0.3));
-    }
-    // Eyes (glowing green)
-    drawAt(getSph(0.12,0.6,1,0.4),bx,by,bz,bFace,-0.25,3.1,0.55,null);
-    drawAt(getSph(0.12,0.6,1,0.4),bx,by,bz,bFace,0.25,3.1,0.55,null);
-    drawAt(getSph(0.05,0,0.2,0),bx,by,bz,bFace,-0.25,3.12,0.6,null);
-    drawAt(getSph(0.05,0,0.2,0),bx,by,bz,bFace,0.25,3.12,0.6,null);
+    // === HEAD ===
+    drawMesh(getSph(0.8,0.18,0.45,0.1),m4translate(bx,3.5,bz),VP);
+    // Eyes
+    drawMesh(getSph(0.15,0.5,1,0.3),m4translate(bx-0.3,3.6,bz+0.6),VP);
+    drawMesh(getSph(0.15,0.5,1,0.3),m4translate(bx+0.3,3.6,bz+0.6),VP);
+    drawMesh(getSph(0.06,0,0.2,0),m4translate(bx-0.3,3.62,bz+0.7),VP);
+    drawMesh(getSph(0.06,0,0.2,0),m4translate(bx+0.3,3.62,bz+0.7),VP);
     // Mouth
-    drawAt(getBox(0.3,0.06,0.08,0.12,0.3,0.05),bx,by,bz,bFace,0,2.75,0.6,null);
+    drawMesh(getBox(0.35,0.08,0.1,0.1,0.28,0.04),m4translate(bx,3.15,bz+0.7),VP);
 
-    // Arms (vine arms)
-    const armSwing=sin(bt*2.5)*0.4;
-    // Left arm — 3 segments
-    drawAt(getBox(0.2,0.9,0.2,0.25,0.4,0.1),bx,by,bz,bFace,-0.8,2,0,m4rotX(armSwing));
-    drawAt(getBox(0.15,0.7,0.15,0.2,0.45,0.12),bx,by,bz,bFace,-0.85,1.2,armSwing*0.5,m4rotX(armSwing*0.5));
-    drawAt(getBox(0.18,0.25,0.12,0.18,0.5,0.15),bx,by,bz,bFace,-0.85,0.7,armSwing*0.7,null); // hand/leaf
-    // Right arm
-    drawAt(getBox(0.2,0.9,0.2,0.25,0.4,0.1),bx,by,bz,bFace,0.8,2,0,m4rotX(-armSwing));
-    drawAt(getBox(0.15,0.7,0.15,0.2,0.45,0.12),bx,by,bz,bFace,0.85,1.2,-armSwing*0.5,m4rotX(-armSwing*0.5));
-    drawAt(getBox(0.18,0.25,0.12,0.18,0.5,0.15),bx,by,bz,bFace,0.85,0.7,-armSwing*0.7,null);
-
-    // Legs (root legs)
-    drawAt(getBox(0.3,0.9,0.3,0.3,0.22,0.08),bx,by,bz,bFace,-0.35,-0.1,0.15,null);
-    drawAt(getBox(0.3,0.9,0.3,0.3,0.22,0.08),bx,by,bz,bFace,0.35,-0.1,0.15,null);
-    // Root tendrils at feet
-    for(let r=0;r<4;r++){
-      const ra=r*TAU/4+bt*0.2;
-      drawAt(getBox(0.08,0.06,0.4,0.28,0.2,0.07),bx,by,bz,bFace,sin(ra)*0.6,-0.5,cos(ra)*0.6,m4rotY(ra));
+    // === LEAF CROWN ===
+    for(let l=0;l<8;l++){
+      const la=l*TAU/8;
+      drawMesh(getBox(0.3,0.6,0.1,0.15,0.5,0.08),m4mul(m4translate(bx+sin(la)*0.7,3.9,bz+cos(la)*0.7),m4rotZ(sin(la+bt)*0.3)),VP);
     }
 
-    // Vine tendrils from back
-    for(let v=0;v<3;v++){
-      const va=bt*1.5+v*2;
-      drawAt(getBox(0.06,0.06,0.8,0.18,0.45,0.1),bx,by,bz,bFace,(v-1)*0.3,2.2+sin(va)*0.3,-0.6,m4rotX(sin(va)*0.2));
+    // === ARMS (vine arms) ===
+    const armA=sin(bt*2.5)*0.4;
+    drawMesh(getBox(0.25,1,0.25,0.2,0.38,0.08),m4mul(m4translate(bx-1,2.2,bz),m4rotX(armA)),VP);
+    drawMesh(getBox(0.2,0.8,0.2,0.18,0.42,0.1),m4mul(m4translate(bx-1.1,1.3,bz),m4rotX(armA*0.5)),VP);
+    drawMesh(getBox(0.25,1,0.25,0.2,0.38,0.08),m4mul(m4translate(bx+1,2.2,bz),m4rotX(-armA)),VP);
+    drawMesh(getBox(0.2,0.8,0.2,0.18,0.42,0.1),m4mul(m4translate(bx+1.1,1.3,bz),m4rotX(-armA*0.5)),VP);
+
+    // === LEGS (root legs) ===
+    drawMesh(getBox(0.35,1,0.35,0.28,0.2,0.06),m4translate(bx-0.4,0.3,bz+0.2),VP);
+    drawMesh(getBox(0.35,1,0.35,0.28,0.2,0.06),m4translate(bx+0.4,0.3,bz+0.2),VP);
+
+    // === FLOWERS on body ===
+    drawMesh(getSph(0.15,1,0.3,0.3),m4translate(bx+0.5,2.5,bz+0.4),VP);
+    drawMesh(getSph(0.15,1,1,0.3),m4translate(bx-0.4,2,bz+0.5),VP);
+    drawMesh(getSph(0.12,0.9,0.4,0.8),m4translate(bx+0.2,3.1,bz+0.4),VP);
+
+    // === MOSS PATCHES ===
+    drawMesh(getSph(0.35,0.15,0.5,0.1),m4translate(bx+0.5,2.3,bz+0.3),VP);
+    drawMesh(getSph(0.3,0.12,0.48,0.08),m4translate(bx-0.4,2.1,bz-0.2),VP);
+
+    // === VINE TENDRILS from back ===
+    for(let vi=0;vi<3;vi++){
+      const va=bt*1.5+vi*2;
+      drawMesh(getBox(0.08,0.08,0.9,0.15,0.4,0.08),m4mul(m4translate(bx+(vi-1)*0.3,2.5,bz-0.7),m4rotX(sin(va)*0.2)),VP);
     }
 
-    // Flowers growing on body
-    drawAt(getSph(0.12,1,0.3,0.3),bx,by,bz,bFace,0.5,2.3,0.3,null);
-    drawAt(getSph(0.05,1,0.9,0.2),bx,by,bz,bFace,0.5,2.35,0.33,null);
-    drawAt(getSph(0.1,1,1,0.3),bx,by,bz,bFace,-0.4,1.8,0.4,null);
-    drawAt(getSph(0.04,1,0.9,0.2),bx,by,bz,bFace,-0.4,1.84,0.43,null);
-    drawAt(getSph(0.1,0.9,0.4,0.8),bx,by,bz,bFace,0.2,2.7,0.4,null);
-
-    // Thorn shield visual
+    // === THORN SHIELD ===
     if(boss.thornShieldActive){
       for(let t2=0;t2<12;t2++){
         const ta=bt*2+t2*TAU/12;
-        const tr=1.8;
-        drawAt(getBox(0.08,0.4,0.08,0.35,0.2,0.05),bx,by,bz,0,sin(ta)*tr,1.5+sin(ta*2)*0.5,cos(ta)*tr,null);
+        drawMesh(getBox(0.1,0.5,0.1,0.3,0.18,0.04),m4translate(bx+sin(ta)*2,1.5+sin(ta*2)*0.5,bz+cos(ta)*2),VP);
       }
     }
 
-    // Phase 2 aura
-    if(boss.phase>=2){
-      drawAt(getSph(2.5,0.06,0.15,0.04),bx,by,bz,0,0,1.5,0,null);
-    }
-
-    // Orbiting leaves
-    const numOrbs=3+boss.phase*2;
-    for(let o=0;o<numOrbs;o++){
-      const oa=bt*1.5+o*TAU/numOrbs;
-      const oR=2+sin(bt*0.5+o)*0.3;
-      drawAt(getBox(0.2,0.04,0.12,0.2,0.55,0.12),bx,by,bz,0,sin(oa)*oR,2+sin(bt*2+o)*0.8,cos(oa)*oR,m4rotY(oa));
+    // === ORBITING LEAVES ===
+    const nOrbs=3+boss.phase*2;
+    for(let o=0;o<nOrbs;o++){
+      const oa=bt*1.5+o*TAU/nOrbs;
+      const oR=2.2;
+      drawMesh(getBox(0.25,0.05,0.15,0.18,0.5,0.1),m4mul(m4translate(bx+sin(oa)*oR,2.5+sin(bt*2+o)*0.8,bz+cos(oa)*oR),m4rotY(oa)),VP);
     }
   }
 
