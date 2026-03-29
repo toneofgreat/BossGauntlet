@@ -361,7 +361,6 @@ function spawnBoss(type){
 // ---- START FIGHT ----
 function startFight(type){
   gameState='fight';lastBossType=type;
-  playBattleMusic();
   document.getElementById('menu').style.display='none';
   document.getElementById('shop').style.display='none';
   document.getElementById('death-screen').style.display='none';
@@ -375,6 +374,7 @@ function startFight(type){
   generateGrassArena();
   spawnBoss(type);
   updateHUD();
+  try{playBattleMusic();}catch(e){}
 }
 function retryFight(){startFight(lastBossType)}
 
@@ -720,6 +720,13 @@ function render(){
   drawMesh(getBox(30,0.1,30,0.1,0.25,0.05),m4translate(0,-0.05,0),VP);
 
   // ---- GRASS BOSS (detailed) ----
+  // Force-create boss if missing during fight
+  if(!boss&&gameState==='fight'){
+    boss={type:'grass',name:'GRASS GUARDIAN',pos:v3(0,0,0),vel:v3(),hp:30,maxHp:30,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:2,speed:2.5,
+      vineTimer:0,leafStormCd:8,seedBombCd:5,rootSlamCd:6,
+      thornShieldActive:false,thornShieldTimer:0,floatY:0};
+  }
   if(boss){
     const bx=boss.pos.x, bz=boss.pos.z;
     const bt=gameTime;
