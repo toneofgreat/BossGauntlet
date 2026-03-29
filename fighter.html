@@ -316,24 +316,23 @@ let trees=[],rocks=[],flowers=[],grassPatches=[];
 function generateGrassArena(){
   trees=[];rocks=[];flowers=[];grassPatches=[];MC={};
   // Trees
-  for(let i=0;i<20;i++){
-    const a=rand()*TAU,r=10+rand()*5;
+  for(let i=0;i<8;i++){
+    const a=rand()*TAU,r=10+rand()*4;
     trees.push({x:sin(a)*r,z:cos(a)*r,h:3+rand()*3,r:0.3+rand()*0.2,leafR:1.5+rand()*1});
   }
   // Rocks
-  for(let i=0;i<15;i++){
-    const a=rand()*TAU,r=5+rand()*8;
+  for(let i=0;i<6;i++){
+    const a=rand()*TAU,r=6+rand()*6;
     rocks.push({x:sin(a)*r,z:cos(a)*r,s:0.4+rand()*0.8,rot:rand()*TAU});
   }
   // Flowers
-  for(let i=0;i<40;i++){
-    const a=rand()*TAU,r=2+rand()*10;
-    const cols=[[1,0.3,0.3],[1,1,0.3],[0.9,0.4,0.8],[1,0.6,0.2],[0.4,0.6,1]];
-    flowers.push({x:sin(a)*r,z:cos(a)*r,col:cols[floor(rand()*cols.length)],s:0.15+rand()*0.1});
+  for(let i=0;i<12;i++){
+    const a=rand()*TAU,r=2+rand()*8;
+    flowers.push({x:sin(a)*r,z:cos(a)*r,col:[1,0.4,0.4],s:0.15+rand()*0.1});
   }
   // Grass patches (darker/lighter spots)
-  for(let i=0;i<30;i++){
-    const a=rand()*TAU,r=rand()*10;
+  for(let i=0;i<8;i++){
+    const a=rand()*TAU,r=rand()*8;
     grassPatches.push({x:sin(a)*r,z:cos(a)*r,s:1+rand()*2,shade:rand()>0.5?0.05:-0.05});
   }
 }
@@ -720,24 +719,77 @@ function render(){
   // Ground (dark green)
   drawMesh(getBox(30,0.1,30,0.1,0.25,0.05),m4translate(0,-0.05,0),VP);
 
-  // BOSS — draw at fixed position, check boss exists
+  // ---- GRASS BOSS (detailed) ----
   if(boss){
-    // Green body
-    drawMesh(getBox(1.5,3,1.2,0.15,0.4,0.08),m4translate(boss.pos.x,1.5,boss.pos.z),VP);
-    // Head
-    drawMesh(getSph(0.8,0.18,0.45,0.1),m4translate(boss.pos.x,3.5,boss.pos.z),VP);
+    const bx=boss.pos.x, bz=boss.pos.z;
+    const bt=gameTime;
+    const bobY=sin(bt*2)*0.2;
+    const armSwing=sin(bt*2.5)*0.35;
+
+    // === BODY (mossy trunk) ===
+    drawMesh(getBox(1.5,3,1.2,0.15,0.4,0.08),m4translate(bx,1.5+bobY,bz),VP);
+    // Bark strips
+    drawMesh(getBox(0.5,2.5,1.22,0.2,0.35,0.07),m4translate(bx+0.3,1.5+bobY,bz),VP);
+    drawMesh(getBox(0.4,2,1.22,0.18,0.33,0.06),m4translate(bx-0.35,1.6+bobY,bz),VP);
+    // Belly moss
+    drawMesh(getBox(1,1.2,0.6,0.12,0.45,0.08),m4translate(bx,1.2+bobY,bz+0.3),VP);
+    // Moss patches
+    drawMesh(getSph(0.35,0.15,0.5,0.1),m4translate(bx+0.5,2.3+bobY,bz+0.3),VP);
+    drawMesh(getSph(0.3,0.12,0.48,0.08),m4translate(bx-0.4,2.1+bobY,bz-0.2),VP);
+
+    // === HEAD ===
+    drawMesh(getSph(0.8,0.18,0.45,0.1),m4translate(bx,3.5+bobY,bz),VP);
     // Eyes
-    drawMesh(getSph(0.15,0.5,1,0.3),m4translate(boss.pos.x-0.3,3.6,boss.pos.z+0.6),VP);
-    drawMesh(getSph(0.15,0.5,1,0.3),m4translate(boss.pos.x+0.3,3.6,boss.pos.z+0.6),VP);
-    // Arms
-    drawMesh(getBox(0.25,1,0.25,0.2,0.38,0.08),m4translate(boss.pos.x-1,2.2,boss.pos.z),VP);
-    drawMesh(getBox(0.25,1,0.25,0.2,0.38,0.08),m4translate(boss.pos.x+1,2.2,boss.pos.z),VP);
-    // Legs
-    drawMesh(getBox(0.35,1,0.35,0.28,0.2,0.06),m4translate(boss.pos.x-0.4,0.5,boss.pos.z),VP);
-    drawMesh(getBox(0.35,1,0.35,0.28,0.2,0.06),m4translate(boss.pos.x+0.4,0.5,boss.pos.z),VP);
-  }else{
-    // No boss — draw red warning box so we know
-    drawMesh(getBox(3,5,3,0.8,0.1,0.1),m4translate(0,2.5,0),VP);
+    drawMesh(getSph(0.15,0.5,1,0.3),m4translate(bx-0.3,3.6+bobY,bz+0.6),VP);
+    drawMesh(getSph(0.15,0.5,1,0.3),m4translate(bx+0.3,3.6+bobY,bz+0.6),VP);
+    drawMesh(getSph(0.06,0,0.15,0),m4translate(bx-0.3,3.62+bobY,bz+0.7),VP);
+    drawMesh(getSph(0.06,0,0.15,0),m4translate(bx+0.3,3.62+bobY,bz+0.7),VP);
+    // Mouth
+    drawMesh(getBox(0.35,0.08,0.1,0.1,0.28,0.04),m4translate(bx,3.15+bobY,bz+0.7),VP);
+
+    // === LEAF CROWN (8 leaves) ===
+    for(let i=0;i<8;i++){
+      const la=i*TAU/8;
+      drawMesh(getBox(0.3,0.6,0.1,0.15,0.5,0.08),m4translate(bx+sin(la)*0.7,3.9+bobY,bz+cos(la)*0.7),VP);
+    }
+
+    // === ARMS ===
+    drawMesh(getBox(0.25,1,0.25,0.2,0.38,0.08),m4mul(m4translate(bx-1,2.2+bobY,bz),m4rotX(armSwing)),VP);
+    drawMesh(getBox(0.2,0.8,0.2,0.18,0.42,0.1),m4translate(bx-1.1,1.3+bobY,bz),VP);
+    drawMesh(getBox(0.25,1,0.25,0.2,0.38,0.08),m4mul(m4translate(bx+1,2.2+bobY,bz),m4rotX(-armSwing)),VP);
+    drawMesh(getBox(0.2,0.8,0.2,0.18,0.42,0.1),m4translate(bx+1.1,1.3+bobY,bz),VP);
+
+    // === LEGS (roots) ===
+    drawMesh(getBox(0.35,1,0.35,0.28,0.2,0.06),m4translate(bx-0.4,0.5,bz+0.2),VP);
+    drawMesh(getBox(0.35,1,0.35,0.28,0.2,0.06),m4translate(bx+0.4,0.5,bz+0.2),VP);
+    // Root tendrils
+    drawMesh(getBox(0.1,0.08,0.5,0.25,0.18,0.05),m4translate(bx-0.6,0.04,bz+0.5),VP);
+    drawMesh(getBox(0.1,0.08,0.5,0.25,0.18,0.05),m4translate(bx+0.6,0.04,bz-0.3),VP);
+
+    // === FLOWERS on body ===
+    drawMesh(getSph(0.15,1,0.3,0.3),m4translate(bx+0.5,2.5+bobY,bz+0.4),VP);
+    drawMesh(getSph(0.15,1,1,0.3),m4translate(bx-0.4,2+bobY,bz+0.5),VP);
+    drawMesh(getSph(0.12,0.9,0.4,0.8),m4translate(bx+0.2,3.1+bobY,bz+0.4),VP);
+
+    // === VINE TENDRILS from back ===
+    drawMesh(getBox(0.08,0.08,0.9,0.15,0.4,0.08),m4translate(bx-0.3,2.5+bobY,bz-0.7),VP);
+    drawMesh(getBox(0.08,0.08,0.9,0.15,0.4,0.08),m4translate(bx,2.3+bobY,bz-0.7),VP);
+    drawMesh(getBox(0.08,0.08,0.9,0.15,0.4,0.08),m4translate(bx+0.3,2.5+bobY,bz-0.7),VP);
+
+    // === THORN SHIELD ===
+    if(boss.thornShieldActive){
+      for(let i=0;i<12;i++){
+        const ta=bt*2+i*TAU/12;
+        drawMesh(getBox(0.1,0.5,0.1,0.3,0.18,0.04),m4translate(bx+sin(ta)*2,1.5,bz+cos(ta)*2),VP);
+      }
+    }
+
+    // === ORBITING LEAVES ===
+    const nOrbs=3+boss.phase*2;
+    for(let i=0;i<nOrbs;i++){
+      const oa=bt*1.5+i*TAU/nOrbs;
+      drawMesh(getBox(0.25,0.05,0.15,0.18,0.5,0.1),m4translate(bx+sin(oa)*2.2,2.5+bobY,bz+cos(oa)*2.2),VP);
+    }
   }
 
   // ---- PLAYER ----
@@ -830,7 +882,20 @@ function render(){
     }
   }
 
-  // (detailed boss removed — using simple version above)
+  // Trees (simple)
+  for(const t of trees){
+    drawMesh(getBox(0.5,t.h,0.5,0.35,0.22,0.1),m4translate(t.x,t.h/2,t.z),VP);
+    drawMesh(getSph(1.5,0.2,0.5,0.12),m4translate(t.x,t.h+0.7,t.z),VP);
+  }
+  // Rocks
+  for(const r of rocks){
+    drawMesh(getSph(r.s,0.45,0.43,0.4),m4translate(r.x,r.s*0.4,r.z),VP);
+  }
+  // Flowers
+  for(const f of flowers){
+    drawMesh(getBox(0.03,0.3,0.03,0.2,0.5,0.15),m4translate(f.x,0.15,f.z),VP);
+    drawMesh(getSph(f.s,0.9,0.4,0.4),m4translate(f.x,0.35,f.z),VP);
+  }
 
   // ---- PROJECTILES ----
   for(const p of projectiles){
