@@ -1,0 +1,3105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Adventure Obby — Waterfall · Jungle · Volcano · Castle</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace;color:#fff}
+canvas#c{display:block;width:100vw;height:100vh}
+#ui{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+#ui>*{pointer-events:auto}
+#hp-bar{position:fixed;top:14px;left:14px;z-index:20}
+#hp-inner{height:18px;background:#e33;border-radius:3px;transition:width .2s}
+#hp-outer{width:200px;height:18px;background:#333;border-radius:3px;border:2px solid #666}
+#hp-text{font-size:11px;color:#fff;margin-top:2px}
+#boss-bar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:20;display:none;text-align:center}
+#boss-inner{height:22px;background:#f44;border-radius:3px;transition:width .3s}
+#boss-outer{width:320px;height:22px;background:#222;border-radius:3px;border:2px solid #a00}
+#boss-name{font-size:13px;color:#faa;margin-bottom:4px;letter-spacing:2px}
+#msg{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);font-size:16px;color:#ff0;text-align:center;z-index:20;text-shadow:0 0 8px #000;display:none;background:rgba(0,0,0,.6);padding:8px 18px;border-radius:6px}
+#death-screen{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+#death-screen h1{color:#f44;font-size:42px;margin-bottom:20px}
+#death-screen button{background:#f44;color:#fff;border:none;padding:12px 32px;font-size:18px;font-family:inherit;cursor:pointer;margin:6px;border-radius:4px}
+#death-screen button:hover{background:#f66}
+#win-screen{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+#win-screen h1{color:#4f4;font-size:36px;margin-bottom:12px}
+#win-screen p{color:#afa;font-size:16px;margin-bottom:20px}
+#win-screen button{background:#4f4;color:#000;border:none;padding:12px 32px;font-size:18px;font-family:inherit;cursor:pointer;border-radius:4px}
+#attack-prompt{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);font-size:20px;color:#ff0;display:none;z-index:20;text-shadow:0 2px 6px #000;animation:pulse 0.6s infinite alternate}
+@keyframes pulse{from{opacity:1;transform:translateX(-50%) scale(1)}to{opacity:.7;transform:translateX(-50%) scale(1.08)}}
+#controls-mobile{position:fixed;bottom:10px;left:0;width:100%;display:none;justify-content:space-between;padding:0 16px;z-index:30}
+#dpad-m{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:3px}
+.db{background:rgba(255,255,255,.12);border:2px solid #555;color:#ccc;font-size:22px;border-radius:10px;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none}
+.db:active{background:rgba(255,255,255,.3)}
+.db.empty{background:transparent;border:none;pointer-events:none}
+#action-m{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.ab{background:rgba(255,255,255,.12);border:2px solid #888;color:#fff;font-size:14px;font-family:inherit;border-radius:50%;width:58px;height:58px;display:flex;align-items:center;justify-content:center;touch-action:none;user-select:none}
+.ab:active{background:rgba(255,255,255,.3)}
+#map-screen{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#map-canvas{image-rendering:pixelated}
+#map-title{font-size:28px;color:#ffe066;margin-bottom:10px;letter-spacing:4px;text-shadow:0 0 12px #a80}
+#map-sub{font-size:13px;color:#888;margin-bottom:16px}
+@media(max-width:700px){#controls-mobile{display:flex!important}}
+#item-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.9);border:2px solid #ff0;padding:20px 30px;border-radius:8px;display:none;z-index:90;text-align:center}
+#item-popup h3{color:#ff0;margin-bottom:8px}
+#item-popup p{color:#ccc;font-size:14px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="hp-bar"><div id="hp-outer"><div id="hp-inner" style="width:100%"></div></div><div id="hp-text">HP: 100/100</div></div>
+  <div id="boss-bar"><div id="boss-name">BOSS</div><div id="boss-outer"><div id="boss-inner" style="width:100%"></div></div></div>
+  <div id="msg"></div>
+  <div id="attack-prompt">Press SPACE to throw!</div>
+  <div id="item-popup"><h3 id="item-title"></h3><p id="item-desc"></p></div>
+</div>
+<div id="death-screen"><h1>YOU DIED</h1><button onclick="retryLevel()">RETRY</button><button onclick="goToMap()">MAP</button></div>
+<div id="win-screen"><h1 id="win-title">LEVEL CLEAR!</h1><p id="win-desc"></p><button onclick="goToMap()">CONTINUE</button></div>
+<div id="controls-mobile">
+  <div id="dpad-m">
+    <div class="db empty"></div><div class="db" data-k="w">▲</div><div class="db empty"></div>
+    <div class="db" data-k="a">◀</div><div class="db empty"></div><div class="db" data-k="d">▶</div>
+    <div class="db empty"></div><div class="db" data-k="s">▼</div><div class="db empty"></div>
+  </div>
+  <div id="action-m">
+    <div class="ab" data-k=" " style="border-color:#f44">ATK</div>
+    <div class="ab" data-k="j" style="border-color:#4af">JUMP</div>
+  </div>
+</div>
+<div id="map-screen">
+  <div id="map-title">ADVENTURE OBBY</div>
+  <div id="map-sub">Select a level</div>
+  <canvas id="map-canvas" width="800" height="500"></canvas>
+</div>
+
+<script>
+// ===== ADVENTURE OBBY =====
+// 4 Zones × 5 Levels + Final Dragon Boss = 21 levels
+// Waterfall → Jungle → Volcano → Castle → Dragon
+
+// ---- THREE.JS MINI (inline lightweight 3D) ----
+// We use raw WebGL + our own math for a dependency-free 3D engine
+
+const PI=Math.PI, TAU=PI*2, sin=Math.sin, cos=Math.cos, abs=Math.abs,
+      floor=Math.floor, ceil=Math.ceil, min=Math.min, max=Math.max,
+      sqrt=Math.sqrt, rand=Math.random, atan2=Math.atan2, clamp=(v,a,b)=>max(a,min(b,v));
+
+// ---- Vec3 helpers ----
+function v3(x,y,z){return{x:x||0,y:y||0,z:z||0}}
+function v3add(a,b){return v3(a.x+b.x,a.y+b.y,a.z+b.z)}
+function v3sub(a,b){return v3(a.x-b.x,a.y-b.y,a.z-b.z)}
+function v3scale(a,s){return v3(a.x*s,a.y*s,a.z*s)}
+function v3len(a){return sqrt(a.x*a.x+a.y*a.y+a.z*a.z)}
+function v3norm(a){const l=v3len(a)||1;return v3(a.x/l,a.y/l,a.z/l)}
+function v3dot(a,b){return a.x*b.x+a.y*b.y+a.z*b.z}
+function v3cross(a,b){return v3(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x)}
+function v3dist(a,b){return v3len(v3sub(a,b))}
+function v3lerp(a,b,t){return v3(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t)}
+
+// ---- Matrix4 helpers ----
+function m4(){return new Float32Array(16)}
+function m4id(){const m=m4();m[0]=m[5]=m[10]=m[15]=1;return m}
+function m4mul(a,b){
+  const r=m4();
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){
+    r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];
+  }
+  return r;
+}
+function m4persp(fov,asp,near,far){
+  const f=1/Math.tan(fov/2),nf=1/(near-far),m=m4();
+  m[0]=f/asp;m[5]=f;m[10]=(far+near)*nf;m[11]=-1;m[14]=2*far*near*nf;return m;
+}
+function m4lookAt(eye,target,up){
+  const z=v3norm(v3sub(eye,target)),x=v3norm(v3cross(up,z)),y=v3cross(z,x),m=m4();
+  m[0]=x.x;m[4]=x.y;m[8]=x.z;m[12]=-v3dot(x,eye);
+  m[1]=y.x;m[5]=y.y;m[9]=y.z;m[13]=-v3dot(y,eye);
+  m[2]=z.x;m[6]=z.y;m[10]=z.z;m[14]=-v3dot(z,eye);
+  m[3]=0;m[7]=0;m[11]=0;m[15]=1;return m;
+}
+function m4translate(tx,ty,tz){const m=m4id();m[12]=tx;m[13]=ty;m[14]=tz;return m}
+function m4rotY(a){const m=m4id();m[0]=cos(a);m[8]=sin(a);m[2]=-sin(a);m[10]=cos(a);return m}
+function m4rotX(a){const m=m4id();m[5]=cos(a);m[9]=-sin(a);m[6]=sin(a);m[10]=cos(a);return m}
+function m4scale(sx,sy,sz){const m=m4id();m[0]=sx;m[5]=sy;m[10]=sz;return m}
+
+// ---- WebGL Setup ----
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0,0,0,1);
+
+function resize(){
+  canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+  gl.viewport(0,0,canvas.width,canvas.height);
+}
+window.addEventListener('resize',resize);resize();
+
+// ---- Shaders ----
+const VS=`
+attribute vec3 aPos;
+attribute vec3 aNorm;
+attribute vec3 aCol;
+uniform mat4 uMVP;
+uniform mat4 uModel;
+varying vec3 vCol;
+varying vec3 vNorm;
+varying vec3 vWorldPos;
+void main(){
+  vec4 wp=uModel*vec4(aPos,1.0);
+  vWorldPos=wp.xyz;
+  vNorm=mat3(uModel)*aNorm;
+  vCol=aCol;
+  gl_Position=uMVP*vec4(aPos,1.0);
+}`;
+const FS=`
+precision mediump float;
+varying vec3 vCol;
+varying vec3 vNorm;
+varying vec3 vWorldPos;
+uniform vec3 uLightDir;
+uniform vec3 uFog;
+uniform float uFogDist;
+uniform vec3 uCamPos;
+void main(){
+  vec3 n=normalize(vNorm);
+  float diff=max(dot(n,uLightDir),0.0);
+  float amb=0.35;
+  vec3 col=vCol*(amb+diff*0.65);
+  float d=distance(vWorldPos,uCamPos);
+  float fog=clamp((d-uFogDist*0.5)/(uFogDist*0.5),0.0,1.0);
+  col=mix(col,uFog,fog);
+  gl_FragColor=vec4(col,1.0);
+}`;
+
+function compileShader(src,type){
+  const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog=gl.createProgram();
+gl.attachShader(prog,compileShader(VS,gl.VERTEX_SHADER));
+gl.attachShader(prog,compileShader(FS,gl.FRAGMENT_SHADER));
+gl.linkProgram(prog);gl.useProgram(prog);
+
+const aPos=gl.getAttribLocation(prog,'aPos');
+const aNorm=gl.getAttribLocation(prog,'aNorm');
+const aCol=gl.getAttribLocation(prog,'aCol');
+const uMVP=gl.getUniformLocation(prog,'uMVP');
+const uModel=gl.getUniformLocation(prog,'uModel');
+const uLightDir=gl.getUniformLocation(prog,'uLightDir');
+const uFog=gl.getUniformLocation(prog,'uFog');
+const uFogDist=gl.getUniformLocation(prog,'uFogDist');
+const uCamPos=gl.getUniformLocation(prog,'uCamPos');
+
+// ---- Mesh builder ----
+function createMesh(verts,norms,cols,indices){
+  const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.STATIC_DRAW);
+  const nb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,nb);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(norms),gl.STATIC_DRAW);
+  const cb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,cb);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(cols),gl.STATIC_DRAW);
+  const ib=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(indices),gl.STATIC_DRAW);
+  return{vb,nb,cb,ib,count:indices.length};
+}
+
+function drawMesh(mesh,modelMat,vpMat){
+  const mvp=m4mul(vpMat,modelMat);
+  gl.uniformMatrix4fv(uMVP,false,mvp);
+  gl.uniformMatrix4fv(uModel,false,modelMat);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.enableVertexAttribArray(aPos);gl.vertexAttribPointer(aPos,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.nb);gl.enableVertexAttribArray(aNorm);gl.vertexAttribPointer(aNorm,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.cb);gl.enableVertexAttribArray(aCol);gl.vertexAttribPointer(aCol,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mesh.ib);
+  gl.drawElements(gl.TRIANGLES,mesh.count,gl.UNSIGNED_SHORT,0);
+}
+
+// ---- Primitive generators ----
+function makeBox(w,h,d,r,g,b){
+  const hw=w/2,hh=h/2,hd=d/2;
+  const v=[
+    -hw,-hh,-hd, hw,-hh,-hd, hw,hh,-hd, -hw,hh,-hd,
+    -hw,-hh,hd,  hw,-hh,hd,  hw,hh,hd,  -hw,hh,hd,
+    -hw,-hh,-hd, -hw,hh,-hd, -hw,hh,hd, -hw,-hh,hd,
+    hw,-hh,-hd,  hw,hh,-hd,  hw,hh,hd,  hw,-hh,hd,
+    -hw,hh,-hd,  hw,hh,-hd,  hw,hh,hd,  -hw,hh,hd,
+    -hw,-hh,-hd, hw,-hh,-hd, hw,-hh,hd, -hw,-hh,hd
+  ];
+  const n=[
+    0,0,-1,0,0,-1,0,0,-1,0,0,-1,
+    0,0,1,0,0,1,0,0,1,0,0,1,
+    -1,0,0,-1,0,0,-1,0,0,-1,0,0,
+    1,0,0,1,0,0,1,0,0,1,0,0,
+    0,1,0,0,1,0,0,1,0,0,1,0,
+    0,-1,0,0,-1,0,0,-1,0,0,-1,0
+  ];
+  const c=[];for(let i=0;i<24;i++)c.push(r,g,b);
+  const idx=[];for(let f=0;f<6;f++){const o=f*4;idx.push(o,o+1,o+2,o,o+2,o+3);}
+  return createMesh(v,n,c,idx);
+}
+
+function makeSphere(rad,seg,r,g,b){
+  const v=[],n=[],c=[],idx=[];
+  for(let y=0;y<=seg;y++){
+    const theta=y*PI/seg,st=sin(theta),ct=cos(theta);
+    for(let x=0;x<=seg;x++){
+      const phi=x*TAU/seg,sp=sin(phi),cp=cos(phi);
+      const nx=cp*st,ny=ct,nz=sp*st;
+      v.push(rad*nx,rad*ny,rad*nz);
+      n.push(nx,ny,nz);
+      c.push(r,g,b);
+    }
+  }
+  for(let y=0;y<seg;y++)for(let x=0;x<seg;x++){
+    const a=y*(seg+1)+x,b2=a+seg+1;
+    idx.push(a,b2,a+1,b2,b2+1,a+1);
+  }
+  return createMesh(v,n,c,idx);
+}
+
+function makeCylinder(radT,radB,h,seg,r,g,b){
+  const v=[],n=[],c=[],idx=[];
+  for(let i=0;i<=seg;i++){
+    const a=i*TAU/seg,ca=cos(a),sa=sin(a);
+    v.push(radT*ca,h/2,radT*sa);n.push(ca,0,sa);c.push(r,g,b);
+    v.push(radB*ca,-h/2,radB*sa);n.push(ca,0,sa);c.push(r,g,b);
+  }
+  for(let i=0;i<seg;i++){const o=i*2;idx.push(o,o+1,o+2,o+1,o+3,o+2);}
+  // caps
+  const bt=v.length/3;
+  v.push(0,h/2,0);n.push(0,1,0);c.push(r,g,b);
+  for(let i=0;i<=seg;i++){const a=i*TAU/seg;v.push(radT*cos(a),h/2,radT*sin(a));n.push(0,1,0);c.push(r,g,b);}
+  for(let i=0;i<seg;i++)idx.push(bt,bt+1+i,bt+2+i);
+  const bb=v.length/3;
+  v.push(0,-h/2,0);n.push(0,-1,0);c.push(r,g,b);
+  for(let i=0;i<=seg;i++){const a=i*TAU/seg;v.push(radB*cos(a),-h/2,radB*sin(a));n.push(0,-1,0);c.push(r,g,b);}
+  for(let i=0;i<seg;i++)idx.push(bb,bb+2+i,bb+1+i);
+  return createMesh(v,n,c,idx);
+}
+
+function makeCone(rad,h,seg,r,g,b){return makeCylinder(0,rad,h,seg,r,g,b)}
+function makePlane(w,d,r,g,b){
+  const hw=w/2,hd=d/2;
+  const v=[-hw,0,-hd,hw,0,-hd,hw,0,hd,-hw,0,hd];
+  const n=[0,1,0,0,1,0,0,1,0,0,1,0];
+  const c=[r,g,b,r,g,b,r,g,b,r,g,b];
+  return createMesh(v,n,c,[0,1,2,0,2,3]);
+}
+
+// ---- GAME STATE ----
+const ZONES=['waterfall','jungle','volcano','castle'];
+const ZONE_NAMES=['WATERFALL','JUNGLE','VOLCANO','CASTLE'];
+const ZONE_COLORS=[
+  [0.1,0.6,0.4],[0.2,0.5,0.15],[0.6,0.15,0.05],[0.4,0.35,0.3]
+];
+const ZONE_FOG=[
+  [0.1,0.15,0.25],[0.15,0.35,0.1],[0.25,0.08,0.02],[0.2,0.18,0.22]
+];
+
+let save={unlocked:Array(23).fill(false),beaten:Array(23).fill(false)};
+save.unlocked[0]=true;
+function loadSave(){
+  try{const s=localStorage.getItem('adventureObby_v1');if(s){const d=JSON.parse(s);Object.assign(save,d);}}catch(e){}
+}
+function saveSave(){try{localStorage.setItem('adventureObby_v1',JSON.stringify(save))}catch(e){}}
+loadSave();
+
+let state='map'; // map, play, boss, dead, win
+let currentLevel=0;
+let levelTime=0;
+let dt=0, lastTime=0;
+
+// Player
+let player={pos:v3(0,1,0),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:false,jumpCd:0,
+            invTimer:0,attackCd:0,hasSword:false,swordDmg:5};
+let camYaw=0, camPitch=0.9;
+let camDist=14;
+
+// Level data
+let platforms=[];   // {pos,size,type,mesh,slippery,sinkTimer,sinkRate}
+let enemies=[];     // {pos,vel,type,hp,maxHp,mesh,ai,timer,phase,attackCd}
+let projectiles=[]; // {pos,vel,type,life,damage,mesh}
+let pickups=[];     // {pos,type,mesh,collected}
+let particles=[];   // {pos,vel,life,col,size}
+let decorations=[]; // {pos,mesh,rot,scale}
+let waterPlanes=[]; // {y,mesh,pos,size}
+let lavaPlanes=[];
+
+// Boss
+let boss=null;
+let bossAttackTimer=0;
+let playerThrowCd=0;
+let throwInterval=3; // seconds between throws
+
+// Cached meshes
+let meshCache={};
+function getBox(w,h,d,r,g,b){
+  const k=`b${w}_${h}_${d}_${r}_${g}_${b}`;
+  if(!meshCache[k])meshCache[k]=makeBox(w,h,d,r,g,b);
+  return meshCache[k];
+}
+function getSphere(rad,r,g,b){
+  const k=`s${rad}_${r}_${g}_${b}`;
+  if(!meshCache[k])meshCache[k]=makeSphere(rad,8,r,g,b);
+  return meshCache[k];
+}
+
+// ---- INPUT ----
+const keys={};
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key===' ')e.preventDefault();});
+window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+
+// Mobile controls
+document.querySelectorAll('.db,.ab').forEach(btn=>{
+  const k=btn.dataset.k;
+  btn.addEventListener('touchstart',e=>{e.preventDefault();keys[k]=true;},{passive:false});
+  btn.addEventListener('touchend',e=>{e.preventDefault();keys[k]=false;},{passive:false});
+  btn.addEventListener('mousedown',()=>keys[k]=true);
+  btn.addEventListener('mouseup',()=>keys[k]=false);
+});
+
+// Mouse look
+let mouseDown=false, lastMX=0, lastMY=0;
+canvas.addEventListener('mousedown',e=>{mouseDown=true;lastMX=e.clientX;lastMY=e.clientY;});
+window.addEventListener('mouseup',()=>mouseDown=false);
+window.addEventListener('mousemove',e=>{
+  if(mouseDown&&state==='play'||state==='boss'){
+    camYaw-=(e.clientX-lastMX)*0.005;
+    camPitch=clamp(camPitch+(e.clientY-lastMY)*0.005,0.5,1.3);
+    lastMX=e.clientX;lastMY=e.clientY;
+  }
+});
+canvas.addEventListener('touchstart',e=>{
+  if(state==='play'||state==='boss'){
+    const t=e.touches[0];lastMX=t.clientX;lastMY=t.clientY;
+  }
+},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  if(state==='play'||state==='boss'){
+    const t=e.touches[0];
+    camYaw-=(t.clientX-lastMX)*0.006;
+    camPitch=clamp(camPitch+(t.clientY-lastMY)*0.006,0.5,1.3);
+    lastMX=t.clientX;lastMY=t.clientY;
+  }
+},{passive:true});
+
+// ---- MAP SCREEN ----
+const mapCanvas=document.getElementById('map-canvas');
+const mctx=mapCanvas.getContext('2d');
+
+function drawMap(){
+  const W=800,H=500;
+  mapCanvas.width=W;mapCanvas.height=H;
+  // Background gradient
+  const bg=mctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,'#1a2a4a');bg.addColorStop(0.3,'#1a3a3a');
+  bg.addColorStop(0.6,'#3a1a0a');bg.addColorStop(1,'#2a2030');
+  mctx.fillStyle=bg;mctx.fillRect(0,0,W,H);
+
+  // Zone positions
+  const zones=[
+    {x:100,y:280,name:'WATERFALL',col:'#4488cc',bg:'#224466',icon:'💧'},
+    {x:300,y:300,name:'JUNGLE',col:'#44aa44',bg:'#225522',icon:'🌿'},
+    {x:500,y:260,name:'VOLCANO',col:'#cc4422',bg:'#662211',icon:'🌋'},
+    {x:700,y:290,name:'CASTLE',col:'#aa88cc',bg:'#554466',icon:'🏰'}
+  ];
+
+  // Draw paths between zones
+  mctx.strokeStyle='#444';mctx.lineWidth=3;mctx.setLineDash([8,6]);
+  mctx.beginPath();
+  zones.forEach((z,i)=>{if(i===0)mctx.moveTo(z.x,z.y);else mctx.lineTo(z.x,z.y);});
+  mctx.stroke();mctx.setLineDash([]);
+
+  // Draw zones
+  zones.forEach((z,zi)=>{
+    const zoneStart=zi*5;
+    const allBeaten=save.beaten[zoneStart]&&save.beaten[zoneStart+1]&&save.beaten[zoneStart+2]&&save.beaten[zoneStart+3]&&save.beaten[zoneStart+4];
+    // Zone circle
+    mctx.beginPath();mctx.arc(z.x,z.y,38,0,TAU);
+    mctx.fillStyle=allBeaten?'#333':z.bg;mctx.fill();
+    mctx.strokeStyle=allBeaten?'#888':z.col;mctx.lineWidth=3;mctx.stroke();
+    // Zone name
+    mctx.font='bold 11px Courier New';mctx.fillStyle=z.col;mctx.textAlign='center';
+    mctx.fillText(z.name,z.x,z.y-48);
+    // Zone icon
+    mctx.font='28px serif';mctx.fillText(z.icon,z.x,z.y+8);
+
+    // Level dots
+    for(let li=0;li<5;li++){
+      const lx=z.x-40+li*20, ly=z.y+55;
+      const idx=zi*5+li;
+      const beaten=save.beaten[idx];
+      const unlocked=save.unlocked[idx];
+      const isBoss=(li===4);
+
+      mctx.beginPath();mctx.arc(lx,ly,isBoss?10:7,0,TAU);
+      if(beaten){mctx.fillStyle='#4a4';mctx.fill();}
+      else if(unlocked){mctx.fillStyle=z.col;mctx.fill();}
+      else{mctx.fillStyle='#222';mctx.fill();mctx.strokeStyle='#444';mctx.lineWidth=1;mctx.stroke();}
+
+      mctx.font=isBoss?'bold 10px Courier New':'9px Courier New';
+      mctx.fillStyle=beaten?'#fff':(unlocked?'#fff':'#555');
+      mctx.fillText(isBoss?'B':(li+1),lx,ly+3);
+    }
+  });
+
+  // Dragon final boss
+  if(save.unlocked[20]){
+    mctx.font='bold 13px Courier New';mctx.fillStyle='#f84';mctx.textAlign='center';
+    mctx.fillText('🐉 DRAGON',400,420);
+    mctx.beginPath();mctx.arc(400,440,12,0,TAU);
+    mctx.fillStyle=save.beaten[20]?'#4a4':'#f44';mctx.fill();
+    mctx.font='bold 10px Courier New';mctx.fillStyle='#fff';mctx.fillText('!',400,444);
+  }
+
+  // Bonus levels (unlock after dragon)
+  if(save.unlocked[21]){
+    // Sword Arena
+    mctx.font='bold 12px Courier New';mctx.fillStyle='#fd0';mctx.textAlign='center';
+    mctx.fillText('⚔️ SWORD ARENA',250,470);
+    mctx.beginPath();mctx.arc(250,488,11,0,TAU);
+    mctx.fillStyle=save.beaten[21]?'#4a4':'#fd0';mctx.fill();
+    mctx.font='bold 9px Courier New';mctx.fillStyle='#000';mctx.fillText('⚔',250,491);
+  }
+  if(save.unlocked[22]){
+    // Dragon Rampage
+    mctx.font='bold 12px Courier New';mctx.fillStyle='#f44';mctx.textAlign='center';
+    mctx.fillText('🐲 DRAGON RAMPAGE',550,470);
+    mctx.beginPath();mctx.arc(550,488,11,0,TAU);
+    mctx.fillStyle=save.beaten[22]?'#4a4':'#f44';mctx.fill();
+    mctx.font='bold 9px Courier New';mctx.fillStyle='#000';mctx.fillText('🐲',550,491);
+  }
+
+  // Title
+  mctx.font='bold 10px Courier New';mctx.fillStyle='#666';mctx.textAlign='center';
+  mctx.fillText('Click a level to play · Levels unlock in order',W/2,H-12);
+}
+
+mapCanvas.addEventListener('click',e=>{
+  if(state!=='map')return;
+  const rect=mapCanvas.getBoundingClientRect();
+  const sx=800/rect.width, sy=500/rect.height;
+  const mx=(e.clientX-rect.left)*sx, my=(e.clientY-rect.top)*sy;
+
+  const zones=[{x:100,y:280},{x:300,y:300},{x:500,y:260},{x:700,y:290}];
+  zones.forEach((z,zi)=>{
+    for(let li=0;li<5;li++){
+      const lx=z.x-40+li*20, ly=z.y+55;
+      const idx=zi*5+li;
+      if(save.unlocked[idx]&&!save.beaten[idx]||save.beaten[idx]){
+        const dx=mx-lx,dy=my-ly;
+        if(dx*dx+dy*dy<144){startLevel(idx);}
+      }
+    }
+  });
+  // Dragon
+  if(save.unlocked[20]){
+    const dx=mx-400,dy=my-440;
+    if(dx*dx+dy*dy<196)startLevel(20);
+  }
+  // Bonus: Sword Arena
+  if(save.unlocked[21]){
+    const dx=mx-250,dy=my-488;
+    if(dx*dx+dy*dy<196)startLevel(21);
+  }
+  // Bonus: Dragon Rampage
+  if(save.unlocked[22]){
+    const dx=mx-550,dy=my-488;
+    if(dx*dx+dy*dy<196)startLevel(22);
+  }
+});
+
+// ---- LEVEL GENERATION ----
+function startLevel(idx){
+  currentLevel=idx;
+  dragonMode=false;
+  state=(idx%5===4||idx===20)?'boss':'play';
+  document.getElementById('map-screen').style.display='none';
+  document.getElementById('death-screen').style.display='none';
+  document.getElementById('win-screen').style.display='none';
+
+  // Reset
+  platforms=[];enemies=[];projectiles=[];pickups=[];particles=[];decorations=[];waterPlanes=[];lavaPlanes=[];
+  boss=null;bossAttackTimer=0;playerThrowCd=0;levelTime=0;
+  player.pos=v3(0,2,0);player.vel=v3();player.hp=100;player.maxHp=100;
+  player.grounded=false;player.invTimer=0;player.attackCd=0;
+  player.hasSword=false;player.swordDmg=5;
+  camYaw=0;camPitch=0.9;
+  meshCache={};
+
+  const zone=floor(idx/5);
+  if(idx===21)generateSwordArena();
+  else if(idx===22)generateDragonRampage();
+  else if(idx===20)generateDragonBoss();
+  else if(idx%5===4)generateBoss(zone);
+  else generateObbyLevel(zone,idx%5);
+
+  playMusicForLevel(idx);
+
+  const levelName=idx===21?'SWORD ARENA — The Warden Awaits':
+    idx===22?'DRAGON RAMPAGE — Destroy Them All':
+    ZONE_NAMES[min(zone,3)]+(idx%5===4?' — BOSS FIGHT!':idx===20?' — FINAL BOSS':' — Level '+(idx%5+1));
+  showMsg(levelName,3);
+  updateHP();
+}
+
+function generateObbyLevel(zone,localIdx){
+  // Platform generation - each zone has unique characteristics
+  const numPlatforms=18+localIdx*4;
+  let px=0, py=0, pz=0;
+
+  for(let i=0;i<numPlatforms;i++){
+    const fw=2.5+rand()*3;
+    const fd=2.5+rand()*3;
+    let col,type='normal';
+
+    switch(zone){
+      case 0: // Waterfall
+        col=[0.15+rand()*0.1, 0.55+rand()*0.15, 0.3+rand()*0.15];
+        if(rand()<0.35){type='slippery';col=[0.4,0.85,0.95];}
+        if(rand()<0.2&&i>3){type='snow_sink';col=[0.95,0.95,1.0];}
+        break;
+      case 1: // Jungle
+        col=[0.2+rand()*0.15, 0.4+rand()*0.2, 0.1+rand()*0.1];
+        if(rand()<0.2&&i>2){type='quicksand';col=[0.6,0.5,0.25];}
+        break;
+      case 2: // Volcano
+        col=[0.3+rand()*0.15, 0.15+rand()*0.1, 0.08+rand()*0.05];
+        if(rand()<0.15){type='lava_crack';col=[0.5,0.15,0.05];}
+        break;
+      case 3: // Castle
+        col=[0.45+rand()*0.1, 0.4+rand()*0.1, 0.35+rand()*0.1];
+        break;
+    }
+
+    px+=(rand()-0.3)*4;
+    py+=rand()*1.5-0.3;
+    pz-=3.5+rand()*3;
+    if(py<-2)py=-2;if(py>15)py=12;
+
+    const plat={
+      pos:v3(px,py,pz),size:v3(fw,0.5,fd),type,
+      mesh:getBox(fw,0.5,fd,...col),
+      slippery:type==='slippery',
+      sinkTimer:0,sinkRate:type==='snow_sink'?0.8:0
+    };
+    platforms.push(plat);
+
+    // Enemies on platforms
+    if(i>1&&rand()<0.3+localIdx*0.05){
+      spawnEnemy(zone,v3(px,py+1.5,pz));
+    }
+
+    // Pickups
+    if(rand()<0.12){
+      pickups.push({pos:v3(px,py+2,pz),type:'health',mesh:getSphere(0.3,1,0.2,0.2),collected:false});
+    }
+
+    // Zone-specific hazards
+    if(zone===0&&rand()<0.15&&i>2){
+      // Water gun turret
+      enemies.push({
+        pos:v3(px+(rand()>.5?3:-3),py+1.5,pz),vel:v3(),type:'turret_water',
+        hp:1,maxHp:1,mesh:getBox(0.8,0.8,0.8,0.3,0.4,0.8),
+        ai:'turret',timer:rand()*2,phase:0,attackCd:2+rand()
+      });
+    }
+    if(zone===1&&rand()<0.1){
+      // Falling tree
+      decorations.push({
+        pos:v3(px+rand()*4-2,py+4,pz+rand()*2-1),
+        mesh:makeCylinder(0.15,0.2,3,6,0.4,0.25,0.12),
+        rot:0,scale:1,type:'falling_tree',timer:2+rand()*4,fallen:false,fallSpeed:0
+      });
+    }
+    if(zone===2&&rand()<0.2){
+      // Meteor spawn point
+      decorations.push({
+        pos:v3(px,py+20,pz),mesh:null,rot:0,scale:1,type:'meteor_spawn',timer:3+rand()*5
+      });
+    }
+    if(zone===3&&rand()<0.2&&i>2){
+      // Cannon
+      enemies.push({
+        pos:v3(px+(rand()>.5?4:-4),py+1,pz),vel:v3(),type:'cannon',
+        hp:3,maxHp:3,mesh:getBox(1,0.6,1.2,0.35,0.3,0.3),
+        ai:'cannon',timer:rand()*2,phase:0,attackCd:2.5
+      });
+    }
+  }
+
+  // Goal platform at end
+  const lastP=platforms[platforms.length-1];
+  const goalPos=v3(lastP.pos.x,lastP.pos.y,lastP.pos.z-8);
+  platforms.push({
+    pos:goalPos,size:v3(4,0.5,4),type:'goal',
+    mesh:getBox(4,0.5,4,1,0.85,0),slippery:false,sinkTimer:0,sinkRate:0
+  });
+
+  // Water/lava plane for zone
+  if(zone===0){
+    waterPlanes.push({y:-5,pos:v3(0,-5,pz/2),size:v3(200,0.1,abs(pz)+100)});
+  }
+  if(zone===2){
+    lavaPlanes.push({y:-3,pos:v3(0,-3,pz/2),size:v3(200,0.1,abs(pz)+100)});
+  }
+
+  // Castle sword pickup
+  if(zone===3&&localIdx===0){
+    pickups.push({pos:v3(platforms[3].pos.x,platforms[3].pos.y+2,platforms[3].pos.z),type:'sword',mesh:getBox(0.15,1.2,0.15,0.8,0.8,0.3),collected:false});
+  }
+  if(zone===3&&localIdx>0){
+    player.hasSword=true; // Keep sword from first castle level
+    // Hidden sword upgrade
+    const hidePlatIdx=floor(numPlatforms/2);
+    if(hidePlatIdx<platforms.length){
+      pickups.push({pos:v3(platforms[hidePlatIdx].pos.x+3,platforms[hidePlatIdx].pos.y+1.5,platforms[hidePlatIdx].pos.z),
+        type:'sword_upgrade',mesh:getBox(0.2,1.4,0.2,1,0.9,0.2),collected:false});
+    }
+  }
+
+  // Starting platform
+  platforms.unshift({pos:v3(0,0,2),size:v3(5,0.5,5),type:'start',
+    mesh:getBox(5,0.5,5,...ZONE_COLORS[zone]),slippery:false,sinkTimer:0,sinkRate:0});
+}
+
+function spawnEnemy(zone,pos){
+  let type,mesh,hp,ai;
+  switch(zone){
+    case 0: // Water people
+      type='water_person';mesh=makeCylinder(0.3,0.35,1.2,6,0.2,0.3,0.7);
+      hp=2;ai='chase';break;
+    case 1: // Raccoon killers
+      type='raccoon';mesh=makeBox(0.7,0.5,1,0.4,0.35,0.3);
+      hp=2;ai='patrol';break;
+    case 2: // Fire elementals
+      type='fire_elem';mesh=makeSphere(0.5,8,0.9,0.3,0.1);
+      hp=3;ai='chase';break;
+    case 3: // Knights
+      type='knight';mesh=makeCylinder(0.35,0.35,1.6,6,0.5,0.5,0.55);
+      hp=4;ai='chase';break;
+  }
+  enemies.push({pos:v3(pos.x,pos.y,pos.z),vel:v3(),type,hp,maxHp:hp,mesh,ai,timer:0,phase:0,attackCd:0,
+    patrolDir:rand()>.5?1:-1,patrolDist:0});
+}
+
+// ---- BOSS GENERATION ----
+function generateBoss(zone){
+  // Arena platform
+  const arenaSize=30;
+  platforms.push({pos:v3(0,-0.25,0),size:v3(arenaSize,0.5,arenaSize),type:'arena',
+    mesh:getBox(arenaSize,0.5,arenaSize,...ZONE_COLORS[zone]),slippery:zone===0,sinkTimer:0,sinkRate:0});
+  // Tall walls to keep player in
+  for(let i=0;i<4;i++){
+    const a=i*PI/2;
+    const wx=sin(a)*(arenaSize/2+0.5),wz=cos(a)*(arenaSize/2+0.5);
+    platforms.push({pos:v3(wx,5,wz),size:v3(i%2===0?1:arenaSize+1,10,i%2===0?arenaSize+1:1),type:'wall',
+      mesh:getBox(i%2===0?1:arenaSize+1,10,i%2===0?arenaSize+1:1,0.2,0.2,0.25),slippery:false,sinkTimer:0,sinkRate:0});
+  }
+
+  let bossHP,bossName,bossCol,bossSize;
+  switch(zone){
+    case 0: // Evil Fish
+      bossHP=200;bossName='EVIL FROST FISH';bossCol=[0.2,0.4,0.8];bossSize=2.5;
+      throwInterval=3;break;
+    case 1: // Bear
+      bossHP=300;bossName='GRIZZLY TERROR';bossCol=[0.5,0.3,0.15];bossSize=3;
+      throwInterval=3.5;break;
+    case 2: // Demon
+      bossHP=400;bossName='INFERNAL DEMON';bossCol=[0.7,0.1,0.05];bossSize=3.5;
+      throwInterval=5;break;
+    case 3: // Wizard
+      bossHP=500;bossName='ARCANE WIZARD';bossCol=[0.5,0.3,0.7];bossSize=2.8;
+      throwInterval=4;break;
+  }
+
+  boss={
+    pos:v3(0,2,-8),vel:v3(),type:'boss_'+ZONES[zone],
+    hp:bossHP,maxHp:bossHP,name:bossName,
+    mesh:makeSphere(bossSize,12,...bossCol),
+    bodyMesh:null,
+    size:bossSize,zone,phase:0,
+    timer:0,attackCd:2,moveTimer:0,
+    stunTimer:0,speed:2,baseSpeed:2
+  };
+
+  // Build boss body parts
+  switch(zone){
+    case 0: // Fish: body + tail + fins
+      boss.bodyMesh=makeCylinder(0.8,1.5,bossSize*2,8,0.15,0.35,0.75);
+      boss.tailMesh=makeCone(1,2,6,0.1,0.3,0.7);
+      break;
+    case 1: // Bear: big body
+      boss.bodyMesh=makeCylinder(1.5,1.8,bossSize*1.5,8,0.45,0.28,0.12);
+      boss.armMesh=makeCylinder(0.4,0.5,2,6,0.42,0.25,0.1);
+      break;
+    case 2: // Demon: horns + wings
+      boss.bodyMesh=makeCylinder(1,1.5,bossSize*1.8,8,0.6,0.08,0.03);
+      boss.hornMesh=makeCone(0.3,1.5,6,0.3,0.05,0.02);
+      boss.wingMesh=makeBox(3,0.1,2,0.5,0.05,0.02);
+      break;
+    case 3: // Wizard: robe + hat
+      boss.bodyMesh=makeCylinder(0.6,1.2,bossSize*1.5,8,0.35,0.2,0.55);
+      boss.hatMesh=makeCone(1.2,2,6,0.25,0.1,0.4);
+      boss.staffMesh=makeCylinder(0.08,0.08,3.5,6,0.6,0.5,0.2);
+      break;
+  }
+
+  document.getElementById('boss-bar').style.display='block';
+  document.getElementById('boss-name').textContent=bossName;
+  updateBossHP();
+  player.pos=v3(10,2,12);
+}
+
+function generateDragonBoss(){
+  // Sky arena for dragon fight
+  const arenaSize=30;
+  platforms.push({pos:v3(0,-0.25,0),size:v3(arenaSize,0.5,arenaSize),type:'arena',
+    mesh:getBox(arenaSize,0.5,arenaSize,0.3,0.25,0.35),slippery:false,sinkTimer:0,sinkRate:0});
+
+  boss={
+    pos:v3(0,8,0),vel:v3(),type:'dragon',
+    hp:800,maxHp:800,name:'ELDER DRAGON',
+    mesh:makeSphere(4,12,0.6,0.15,0.08),
+    bodyMesh:makeCylinder(2,3,8,10,0.55,0.12,0.06),
+    wingMesh:makeBox(8,0.15,4,0.5,0.1,0.04),
+    tailMesh:makeCylinder(0.8,0.2,6,6,0.5,0.12,0.06),
+    headMesh:makeCone(1.5,2.5,8,0.6,0.15,0.08),
+    size:4,zone:4,phase:0,
+    timer:0,attackCd:1.5,moveTimer:0,
+    stunTimer:0,speed:3,baseSpeed:3,
+    flyAngle:0
+  };
+  throwInterval=3;
+  player.hasSword=false; // Broom fight
+  document.getElementById('boss-bar').style.display='block';
+  document.getElementById('boss-name').textContent='ELDER DRAGON';
+  updateBossHP();
+  player.pos=v3(0,2,12);
+}
+
+// ---- BONUS LEVEL: SWORD ARENA ----
+// 5 sword tiers, 5 enemy waves, then The Warden boss
+const SWORDS=[
+  {name:'Rusty Blade',dmg:5,tier:0,w:0.1,h:1.0,col:[0.5,0.45,0.4],guard:[0.35,0.3,0.25],handle:[0.3,0.2,0.12],gem:null,orbs:0,orbCol:null,aura:false},
+  {name:'Iron Sword',dmg:10,tier:1,w:0.12,h:1.2,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],handle:[0.3,0.25,0.18],gem:[0.4,0.6,0.9],orbs:0,orbCol:null,aura:false},
+  {name:'Steel Greatsword',dmg:18,tier:2,w:0.15,h:1.5,col:[0.8,0.8,0.85],guard:[0.6,0.6,0.65],handle:[0.35,0.28,0.2],gem:[0.3,0.8,0.4],orbs:2,orbCol:[0.5,0.8,0.5],aura:false},
+  {name:'Golden Blade',dmg:28,tier:3,w:0.14,h:1.6,col:[1,0.85,0.2],guard:[0.8,0.65,0.1],handle:[0.45,0.3,0.1],gem:[1,0.3,0.3],orbs:4,orbCol:[1,0.8,0.2],aura:true,auraCol:[1,0.9,0.3]},
+  {name:'Legendary Inferno',dmg:45,tier:4,w:0.18,h:1.8,col:[1,0.3,0.05],guard:[0.8,0.15,0.02],handle:[0.3,0.08,0.02],gem:[1,0.1,0.9],orbs:6,orbCol:[1,0.4,0.05],aura:true,auraCol:[1,0.2,0.02]}
+];
+let swordTier=0;
+let arenaWave=0;
+let arenaEnemiesLeft=0;
+let arenaWardenSpawned=false;
+
+function generateSwordArena(){
+  state='play';
+  const arenaSize=35;
+  platforms.push({pos:v3(0,-0.25,0),size:v3(arenaSize,0.5,arenaSize),type:'arena',
+    mesh:getBox(arenaSize,0.5,arenaSize,0.35,0.3,0.25),slippery:false,sinkTimer:0,sinkRate:0});
+  // Walls
+  for(let i=0;i<4;i++){
+    const a=i*PI/2;
+    const wx=sin(a)*(arenaSize/2+0.5),wz=cos(a)*(arenaSize/2+0.5);
+    platforms.push({pos:v3(wx,5,wz),size:v3(i%2===0?1:arenaSize+1,10,i%2===0?arenaSize+1:1),type:'wall',
+      mesh:getBox(i%2===0?1:arenaSize+1,10,i%2===0?arenaSize+1:1,0.3,0.25,0.2),slippery:false,sinkTimer:0,sinkRate:0});
+  }
+  // Pillars for cover
+  for(let i=0;i<6;i++){
+    const a=i*TAU/6;
+    platforms.push({pos:v3(sin(a)*8,1.5,cos(a)*8),size:v3(1.5,3,1.5),type:'wall',
+      mesh:getBox(1.5,3,1.5,0.4,0.35,0.3),slippery:false,sinkTimer:0,sinkRate:0});
+  }
+
+  player.pos=v3(0,2,12);
+  player.hasSword=true;
+  player.hp=150;player.maxHp=150;
+  swordTier=0;arenaWave=0;arenaEnemiesLeft=0;arenaWardenSpawned=false;
+  applySword(0);
+  spawnArenaWave();
+}
+
+function applySword(tier){
+  swordTier=tier;
+  const s=SWORDS[tier];
+  player.swordDmg=s.dmg;
+  showItemPopup(s.name,'Damage: '+s.dmg+(tier>0?' — UPGRADED!':''));
+}
+
+function spawnArenaWave(){
+  if(arenaWave>=5){
+    // Spawn The Warden
+    if(!arenaWardenSpawned){
+      arenaWardenSpawned=true;
+      showMsg('THE WARDEN APPROACHES!',3);
+      boss={
+        pos:v3(0,2,-8),vel:v3(),type:'warden',
+        hp:600,maxHp:600,name:'THE WARDEN',
+        mesh:null,
+        bodyMesh:makeCylinder(1,1.2,3.5,8,0.25,0.22,0.3),
+        size:2,zone:5,phase:0,
+        timer:0,attackCd:1.5,moveTimer:0,
+        stunTimer:0,speed:4,baseSpeed:4,
+        // Warden-specific
+        shieldUp:false,shieldTimer:0,
+        slamCd:0
+      };
+      // Warden helmet + weapon
+      boss.helmetMesh=makeSphere(1,8,0.3,0.3,0.35);
+      boss.weaponMesh=makeBox(0.2,2.5,0.2,0.6,0.55,0.15);
+      boss.shieldMesh=makeBox(0.3,2,1.5,0.35,0.3,0.25);
+      state='boss';
+      throwInterval=99; // No throwing, sword only
+      document.getElementById('boss-bar').style.display='block';
+      document.getElementById('boss-name').textContent='THE WARDEN';
+      updateBossHP();
+    }
+    return;
+  }
+
+  arenaWave++;
+  const numEnemies=arenaWave+2; // 3,4,5,6,7
+  arenaEnemiesLeft=numEnemies;
+  showMsg('Wave '+arenaWave+'/5 — '+numEnemies+' enemies!',2);
+
+  for(let i=0;i<numEnemies;i++){
+    const a=rand()*TAU;
+    const r=6+rand()*8;
+    const eType=arenaWave<=2?'arena_grunt':arenaWave<=4?'arena_warrior':'arena_elite';
+    const hp=arenaWave<=2?8:arenaWave<=4?15:25;
+    const col=arenaWave<=2?[0.5,0.4,0.3]:arenaWave<=4?[0.6,0.3,0.2]:[0.7,0.15,0.1];
+    const eSize=arenaWave<=2?1.2:arenaWave<=4?1.4:1.6;
+    enemies.push({
+      pos:v3(sin(a)*r,1,cos(a)*r),vel:v3(),type:eType,
+      hp,maxHp:hp,mesh:makeCylinder(0.35,0.4,eSize,6,...col),
+      ai:'chase',timer:0,phase:0,attackCd:0,patrolDir:1,patrolDist:0
+    });
+  }
+}
+
+function checkArenaProgress(){
+  if(currentLevel!==21||state==='boss'||state==='dead'||state==='win')return;
+  // Count alive enemies
+  const alive=enemies.filter(e=>e.hp>0).length;
+  if(alive===0&&arenaEnemiesLeft>0){
+    arenaEnemiesLeft=0;
+    // Award new sword
+    if(arenaWave<5&&swordTier<4){
+      applySword(arenaWave);
+    }
+    // Next wave after short delay
+    setTimeout(()=>{if(state==='play')spawnArenaWave();},1500);
+  }
+}
+
+// ---- BONUS LEVEL: DRAGON RAMPAGE ----
+// Player IS a dragon, must kill 20 OP AI humans
+let dragonMode=false;
+let dragonKills=0;
+let dragonBreathCd=0;
+
+function generateDragonRampage(){
+  state='play';
+  dragonMode=true;
+  dragonKills=0;
+  dragonBreathCd=0;
+
+  const arenaSize=50;
+  platforms.push({pos:v3(0,-0.25,0),size:v3(arenaSize,0.5,arenaSize),type:'arena',
+    mesh:getBox(arenaSize,0.5,arenaSize,0.2,0.35,0.15),slippery:false,sinkTimer:0,sinkRate:0});
+  // Low walls
+  for(let i=0;i<4;i++){
+    const a=i*PI/2;
+    const wx=sin(a)*(arenaSize/2+0.5),wz=cos(a)*(arenaSize/2+0.5);
+    platforms.push({pos:v3(wx,3,wz),size:v3(i%2===0?1:arenaSize+1,6,i%2===0?arenaSize+1:1),type:'wall',
+      mesh:getBox(i%2===0?1:arenaSize+1,6,i%2===0?arenaSize+1:1,0.15,0.25,0.1),slippery:false,sinkTimer:0,sinkRate:0});
+  }
+  // Cover objects: buildings, barricades
+  for(let i=0;i<10;i++){
+    const bx=(rand()-0.5)*35,bz=(rand()-0.5)*35;
+    const bh=2+rand()*3;
+    platforms.push({pos:v3(bx,bh/2,bz),size:v3(2+rand()*2,bh,2+rand()*2),type:'wall',
+      mesh:getBox(2+rand()*2,bh,2+rand()*2,0.4,0.35,0.3),slippery:false,sinkTimer:0,sinkRate:0});
+  }
+
+  player.pos=v3(0,2,20);
+  player.hp=1500;player.maxHp=1500;
+  player.hasSword=false;
+
+  // Spawn 20 OP AI humans
+  for(let i=0;i<20;i++){
+    const a=rand()*TAU;
+    const r=8+rand()*16;
+    enemies.push({
+      pos:v3(sin(a)*r,1,cos(a)*r),vel:v3(),type:'op_human',
+      hp:35,maxHp:35,
+      mesh:makeCylinder(0.3,0.35,1.4,6,0.2,0.35,0.8),
+      ai:'op_ai',timer:rand()*2,phase:0,attackCd:0,
+      patrolDir:rand()>.5?1:-1,patrolDist:0,
+      dodgeCd:0,rollTimer:0,
+      // OP stats
+      speed:6+rand()*3,
+      shootCd:1+rand()*0.5
+    });
+  }
+
+  showMsg('YOU ARE THE DRAGON — Kill all 20!  [SPACE = fire breath]',4);
+}
+
+function updateDragonMode(){
+  if(!dragonMode||state==='dead'||state==='win')return;
+  // Dragon breath attack
+  if(dragonBreathCd>0)dragonBreathCd-=dt;
+  if(keys[' ']&&dragonBreathCd<=0){
+    dragonBreathCd=0.4;
+    // Shoot fire in facing direction
+    const dir=v3(sin(player.yaw),0,cos(player.yaw));
+    for(let i=0;i<5;i++){
+      const spread=v3(dir.x+(rand()-0.5)*0.4,(rand()-0.5)*0.2,dir.z+(rand()-0.5)*0.4);
+      projectiles.push({
+        pos:v3(player.pos.x,player.pos.y+1,player.pos.z),
+        vel:v3scale(v3norm(spread),15+rand()*5),
+        type:'dragon_fire',life:2,damage:20,
+        mesh:getSphere(0.35,1,0.4,0.05)
+      });
+    }
+    spawnParticles(player.pos,5,[1,0.5,0]);
+  }
+
+  // Check dragon fire hitting enemies
+  for(let pi=projectiles.length-1;pi>=0;pi--){
+    const p=projectiles[pi];
+    if(p.type!=='dragon_fire')continue;
+    for(const e of enemies){
+      if(e.hp<=0)continue;
+      if(v3dist(p.pos,e.pos)<1.5){
+        e.hp-=p.damage;
+        spawnParticles(e.pos,8,[1,0.5,0]);
+        if(e.hp<=0){
+          dragonKills++;
+          spawnParticles(e.pos,15,[1,0.8,0.1]);
+          showMsg('Kills: '+dragonKills+'/20',1);
+          if(dragonKills>=20){
+            dragonMode=false;
+            // Win
+            state='win';
+            save.beaten[22]=true;saveSave();
+            document.getElementById('win-title').textContent='THE DRAGON CONQUERS ALL!';
+            document.getElementById('win-desc').textContent='You destroyed all 20 warriors!';
+            document.getElementById('win-screen').style.display='flex';
+            return;
+          }
+        }
+        projectiles.splice(pi,1);
+        break;
+      }
+    }
+  }
+}
+
+function updateOpAI(e){
+  const toPlayer=v3sub(player.pos,e.pos);
+  const dist=v3len(toPlayer);
+  const dir=v3norm(toPlayer);
+  e.timer+=dt;
+
+  // Smart dodging — strafe perpendicular when player faces them
+  const playerFacing=v3(sin(player.yaw),0,cos(player.yaw));
+  const aimDot=v3dot(dir,v3scale(playerFacing,-1));
+
+  if(aimDot>0.7&&e.dodgeCd<=0){
+    // Player is aiming at them — dodge!
+    const perp=v3(-dir.z,0,dir.x);
+    e.vel.x=perp.x*e.speed*1.5*(rand()>0.5?1:-1);
+    e.vel.z=perp.z*e.speed*1.5*(rand()>0.5?1:-1);
+    e.dodgeCd=0.8+rand()*0.5;
+    e.rollTimer=0.3;
+  }else if(dist>10){
+    // Approach from angles, not straight
+    const angle=atan2(dir.x,dir.z)+sin(e.timer*2)*0.8;
+    e.vel.x=sin(angle)*e.speed;
+    e.vel.z=cos(angle)*e.speed;
+  }else if(dist>4){
+    // Circle strafe
+    const perp=v3(-dir.z,0,dir.x);
+    e.vel.x=(dir.x*0.3+perp.x*0.7*e.patrolDir)*e.speed;
+    e.vel.z=(dir.z*0.3+perp.z*0.7*e.patrolDir)*e.speed;
+    if(rand()<0.02)e.patrolDir*=-1;
+  }else{
+    // Back away while shooting
+    e.vel.x=-dir.x*e.speed*0.6;
+    e.vel.z=-dir.z*e.speed*0.6;
+  }
+
+  if(e.dodgeCd>0)e.dodgeCd-=dt;
+  if(e.rollTimer>0){e.rollTimer-=dt;}
+  else{
+    e.pos.x+=e.vel.x*dt;
+    e.pos.z+=e.vel.z*dt;
+  }
+
+  // Shoot at player
+  e.shootCd-=dt;
+  if(e.shootCd<=0&&dist<20){
+    e.shootCd=0.8+rand()*0.6;
+    // Lead the shot
+    const lead=v3add(player.pos,v3scale(player.vel,dist/14));
+    const shootDir=v3norm(v3sub(lead,e.pos));
+    projectiles.push({
+      pos:v3(e.pos.x,e.pos.y+0.8,e.pos.z),
+      vel:v3scale(shootDir,14),
+      type:'enemy',life:3,damage:8,
+      mesh:getSphere(0.15,0.3,0.5,1)
+    });
+  }
+
+  // Melee if very close
+  if(dist<1.8&&e.attackCd<=0){
+    hurtPlayer(12);
+    e.attackCd=1;
+  }
+  if(e.attackCd>0)e.attackCd-=dt;
+
+  // Keep in bounds
+  e.pos.x=clamp(e.pos.x,-22,22);
+  e.pos.z=clamp(e.pos.z,-22,22);
+}
+
+// ---- UI ----
+function updateHP(){
+  const pct=clamp(player.hp/player.maxHp,0,1)*100;
+  document.getElementById('hp-inner').style.width=pct+'%';
+  document.getElementById('hp-text').textContent='HP: '+floor(player.hp)+'/'+player.maxHp;
+}
+function updateBossHP(){
+  if(!boss)return;
+  const pct=clamp(boss.hp/boss.maxHp,0,1)*100;
+  document.getElementById('boss-inner').style.width=pct+'%';
+}
+let msgTimer=0;
+function showMsg(text,dur){
+  document.getElementById('msg').textContent=text;
+  document.getElementById('msg').style.display='block';
+  msgTimer=dur||2;
+}
+let itemPopupTimer=0;
+function showItemPopup(title,desc){
+  document.getElementById('item-title').textContent=title;
+  document.getElementById('item-desc').textContent=desc;
+  document.getElementById('item-popup').style.display='block';
+  itemPopupTimer=2.5;
+}
+
+// ---- PHYSICS & GAMEPLAY ----
+function updatePlayer(){
+  if(state!=='play'&&state!=='boss')return;
+  const spd=6, jumpForce=9;
+  const onIce=player.grounded&&platforms.some(p=>p.slippery&&isOnPlatform(player.pos,p));
+  const friction=onIce?0.02:0.15;
+
+  // Movement relative to camera
+  let mx=0,mz=0;
+  if(keys['w']||keys['arrowup'])mz-=1;
+  if(keys['s']||keys['arrowdown'])mz+=1;
+  if(keys['a']||keys['arrowleft'])mx-=1;
+  if(keys['d']||keys['arrowright'])mx+=1;
+  if(mx||mz){
+    const a=atan2(mx,mz)+camYaw;
+    const move=v3(sin(a)*spd,0,cos(a)*spd);
+    player.vel.x+=(move.x-player.vel.x)*friction;
+    player.vel.z+=(move.z-player.vel.z)*friction;
+    player.yaw=a;
+  } else if(player.grounded){
+    player.vel.x*=(1-friction);
+    player.vel.z*=(1-friction);
+  }
+
+  // Jump
+  if((keys[' ']||keys['j'])&&player.grounded&&player.jumpCd<=0){
+    player.vel.y=jumpForce;player.grounded=false;player.jumpCd=0.2;
+  }
+  if(player.jumpCd>0)player.jumpCd-=dt;
+
+  // Gravity
+  player.vel.y-=22*dt;
+
+  // Move
+  const prevY=player.pos.y;
+  player.pos.x+=player.vel.x*dt;
+  player.pos.y+=player.vel.y*dt;
+  player.pos.z+=player.vel.z*dt;
+
+  // Platform collision
+  player.grounded=false;
+  for(const p of platforms){
+    if(p.type==='wall'){
+      pushOutOfBox(player.pos,p.pos,p.size,0.4);
+      continue;
+    }
+    // Check landing: player must be within XZ bounds, falling, and feet near the top surface
+    const top=p.pos.y+p.size.y/2;
+    const inXZ=player.pos.x>p.pos.x-p.size.x/2-0.3&&player.pos.x<p.pos.x+p.size.x/2+0.3&&
+               player.pos.z>p.pos.z-p.size.z/2-0.3&&player.pos.z<p.pos.z+p.size.z/2+0.3;
+    // Only land if falling AND player was above top last frame AND is now at or below top
+    const canLand=inXZ&&player.vel.y<=0&&prevY>=top-0.05&&player.pos.y<=top+0.3&&player.pos.y>=top-1.5;
+    if(canLand&&(p.type!=='snow_sink'||p.sinkTimer<=2)){
+      player.pos.y=p.pos.y+p.size.y/2;
+      player.vel.y=0;player.grounded=true;
+
+      // Snow sinking — safe for 2 seconds, then collapses
+      if(p.type==='snow_sink'){
+        p.sinkTimer+=dt;
+        if(p.sinkTimer>2){
+          p.pos.y-=12*dt;
+        }
+      }else{
+        p.sinkTimer=max(0,p.sinkTimer-dt*2);
+      }
+
+      // Quicksand
+      if(p.type==='quicksand'){
+        player.vel.x*=0.92;player.vel.z*=0.92;
+        player.pos.y-=0.5*dt;
+        if(player.pos.y<p.pos.y-1){hurtPlayer(20);player.pos.y=p.pos.y+1;player.vel.y=5;}
+      }
+
+      // Lava crack
+      if(p.type==='lava_crack'){
+        hurtPlayer(8*dt);
+      }
+
+      // Goal
+      if(p.type==='goal'){
+        winLevel();return;
+      }
+    }
+  }
+
+  // Fall death — instant kill
+  if(player.pos.y<-4){
+    player.hp=0;player.invTimer=0;
+    state='dead';
+    document.getElementById('death-screen').style.display='flex';
+    document.getElementById('boss-bar').style.display='none';
+  }
+
+  // Water damage
+  for(const w of waterPlanes){
+    if(player.pos.y<w.y+0.5){
+      hurtPlayer(5*dt);
+      player.vel.y=max(player.vel.y,-2);
+    }
+  }
+  // Lava death
+  // Lava = instant death
+  for(const l of lavaPlanes){
+    if(player.pos.y<l.y+0.5){
+      player.hp=0;player.invTimer=0;
+      state='dead';
+      document.getElementById('death-screen').style.display='flex';
+      document.getElementById('boss-bar').style.display='none';
+      return;
+    }
+  }
+
+  // Attack (sword in castle, or throw at boss)
+  if(keys[' ']&&state==='boss'&&playerThrowCd<=0){
+    throwAtBoss();
+    playerThrowCd=throwInterval;
+  }
+  if(player.attackCd>0)player.attackCd-=dt;
+  if(playerThrowCd>0)playerThrowCd-=dt;
+
+  // Sword attack for castle enemies
+  if(keys['z']&&player.hasSword&&player.attackCd<=0){
+    player.attackCd=0.4;
+    // Hit nearby enemies
+    for(const e of enemies){
+      if(v3dist(player.pos,e.pos)<2.5){
+        e.hp-=player.swordDmg;
+        e.vel=v3scale(v3norm(v3sub(e.pos,player.pos)),5);
+        spawnParticles(e.pos,5,[1,0.5,0]);
+        if(e.hp<=0)spawnParticles(e.pos,15,[1,0.8,0]);
+      }
+    }
+  }
+
+  // Invincibility
+  if(player.invTimer>0)player.invTimer-=dt;
+
+  // Pickups
+  for(const pk of pickups){
+    if(pk.collected)continue;
+    if(v3dist(player.pos,pk.pos)<1.5){
+      pk.collected=true;
+      if(pk.type==='health'){player.hp=min(player.hp+25,player.maxHp);updateHP();showItemPopup('Health!','+25 HP');}
+      if(pk.type==='sword'){player.hasSword=true;showItemPopup('Sword Found!','Press Z to slash enemies');}
+      if(pk.type==='sword_upgrade'){player.swordDmg+=3;showItemPopup('Sword Upgrade!','+3 damage');}
+      if(pk.type==='loot'){showItemPopup('Dumpster Loot!','Found some supplies (+15 HP)');player.hp=min(player.hp+15,player.maxHp);updateHP();}
+    }
+  }
+
+  updateHP();
+}
+
+function isOnPlatform(pos,p){
+  const top=p.pos.y+p.size.y/2;
+  return pos.x>p.pos.x-p.size.x/2-0.3&&pos.x<p.pos.x+p.size.x/2+0.3&&
+         pos.z>p.pos.z-p.size.z/2-0.3&&pos.z<p.pos.z+p.size.z/2+0.3&&
+         pos.y<top+1.5&&pos.y>=top-2;
+}
+
+function pushOutOfBox(pos,bpos,bsize,prad){
+  const hx=bsize.x/2+prad,hy=bsize.y/2,hz=bsize.z/2+prad;
+  const dx=pos.x-bpos.x,dy=pos.y-bpos.y,dz=pos.z-bpos.z;
+  if(abs(dx)<hx&&abs(dy)<hy&&abs(dz)<hz){
+    const ox=hx-abs(dx),oy=hy-abs(dy),oz=hz-abs(dz);
+    if(ox<oy&&ox<oz)pos.x=bpos.x+(dx>0?hx:-hx);
+    else if(oz<oy)pos.z=bpos.z+(dz>0?hz:-hz);
+  }
+}
+
+function hurtPlayer(dmg){
+  if(player.invTimer>0)return;
+  player.hp-=dmg;
+  if(dmg>=1)player.invTimer=0.8;
+  updateHP();
+  spawnParticles(player.pos,8,[1,0,0]);
+  if(player.hp<=0){
+    state='dead';
+    document.getElementById('death-screen').style.display='flex';
+    document.getElementById('boss-bar').style.display='none';
+  }
+}
+
+function throwAtBoss(){
+  if(!boss||boss.stunTimer>0)return;
+  const zone=boss.zone;
+  const dir=v3norm(v3sub(boss.pos,player.pos));
+  let col,name;
+  switch(zone){
+    case 0:col=[0.5,0.5,0.5];name='rock';break;
+    case 1:col=[0.5,0.5,0.5];name='rock';break;
+    case 2:col=[0.5,0.7,0.9];name='ice';break;
+    case 3:col=[1,0.8,0.2];name='magic';break;
+    case 4:col=[1,0.5,0.1];name='fireball';break;
+    default:col=[0.5,0.5,0.5];name='rock';
+  }
+  projectiles.push({
+    pos:v3(player.pos.x,player.pos.y+1,player.pos.z),
+    vel:v3scale(dir,18),type:'player_throw',life:3,damage:0,
+    mesh:getSphere(0.3,...col),col,name
+  });
+  showMsg('Threw '+name+'!',0.8);
+}
+
+// ---- ENEMY AI ----
+function updateEnemies(){
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+    if(e.hp<=0){enemies.splice(i,1);continue;}
+
+    const toPlayer=v3sub(player.pos,e.pos);
+    const dist=v3len(toPlayer);
+    e.timer+=dt;
+
+    switch(e.ai){
+      case 'chase':
+        if(dist<15){
+          const dir=v3norm(toPlayer);
+          e.vel.x=dir.x*3;e.vel.z=dir.z*3;
+          if(dist<1.5&&e.attackCd<=0){
+            hurtPlayer(10);e.attackCd=1;
+          }
+        }
+        break;
+      case 'patrol':
+        e.patrolDist+=e.patrolDir*2*dt;
+        e.vel.x=e.patrolDir*2;e.vel.z=0;
+        if(abs(e.patrolDist)>3){e.patrolDir*=-1;}
+        if(dist<8){
+          const dir=v3norm(toPlayer);
+          e.vel.x=dir.x*3.5;e.vel.z=dir.z*3.5;
+          if(dist<1.5&&e.attackCd<=0){hurtPlayer(8);e.attackCd=0.8;}
+        }
+        break;
+      case 'turret':
+        if(e.timer>e.attackCd){
+          e.timer=0;
+          const dir=v3norm(toPlayer);
+          projectiles.push({pos:v3(e.pos.x,e.pos.y,e.pos.z),vel:v3scale(dir,10),
+            type:'enemy',life:4,damage:8,mesh:getSphere(0.2,0.3,0.5,1)});
+        }
+        break;
+      case 'cannon':
+        if(e.timer>e.attackCd){
+          e.timer=0;
+          const dir=v3norm(v3(toPlayer.x,2,toPlayer.z));
+          projectiles.push({pos:v3(e.pos.x,e.pos.y+0.5,e.pos.z),vel:v3scale(dir,12),
+            type:'cannonball',life:5,damage:18,mesh:getSphere(0.4,0.2,0.2,0.2)});
+        }
+        break;
+      case 'op_ai':
+        updateOpAI(e);
+        break;
+    }
+    if(e.ai!=='op_ai'){e.pos.x+=e.vel.x*dt;e.pos.z+=e.vel.z*dt;}
+    if(e.attackCd>0&&e.ai!=='op_ai')e.attackCd-=dt;
+
+    // Keep enemies on platforms
+    let onPlat=false;
+    for(const p of platforms){
+      if(isOnPlatform(e.pos,p)){onPlat=true;e.pos.y=p.pos.y+p.size.y/2;break;}
+    }
+    if(!onPlat)e.pos.y-=8*dt;
+    if(e.pos.y<-20){e.hp=0;} // fell off
+  }
+}
+
+// ---- BOSS AI ----
+function updateBoss(){
+  if(!boss||state!=='boss')return;
+  if(boss.stunTimer>0){boss.stunTimer-=dt;return;}
+
+  boss.timer+=dt;
+  boss.moveTimer+=dt;
+  bossAttackTimer-=dt;
+
+  // Boss loses HP over time
+  boss.hp-=boss.maxHp*0.01*dt; // loses 1% max HP per second
+  updateBossHP();
+  if(boss.hp<=0){bossDead();return;}
+
+  const toPlayer=v3sub(player.pos,boss.pos);
+  const dist=v3len(toPlayer);
+
+  // Phase transitions
+  const hpPct=boss.hp/boss.maxHp;
+  if(hpPct<0.25&&boss.phase<3){boss.phase=3;boss.speed=boss.baseSpeed*2;showMsg('Boss enraged!',2);}
+  else if(hpPct<0.5&&boss.phase<2){boss.phase=2;boss.speed=boss.baseSpeed*1.5;showMsg('Boss is getting faster!',2);}
+  else if(hpPct<0.75&&boss.phase<1){boss.phase=1;boss.speed=boss.baseSpeed*1.2;}
+
+  // Movement
+  switch(boss.zone){
+    case 0: // Fish - circles and dashes
+      boss.pos.x=sin(boss.timer*boss.speed*0.5)*7;
+      boss.pos.z=cos(boss.timer*boss.speed*0.5)*7;
+      boss.pos.y=1.5+sin(boss.timer*2)*0.5;
+      break;
+    case 1: // Bear - charge at player
+      if(boss.moveTimer>2){
+        boss.vel=v3scale(v3norm(toPlayer),boss.speed*3);
+        boss.moveTimer=0;
+      }
+      boss.pos.x+=boss.vel.x*dt;boss.pos.z+=boss.vel.z*dt;
+      boss.pos.x=clamp(boss.pos.x,-8,8);boss.pos.z=clamp(boss.pos.z,-8,8);
+      boss.pos.y=1.5;
+      break;
+    case 2: // Demon - fly around
+      boss.pos.x=sin(boss.timer*boss.speed*0.4)*8;
+      boss.pos.z=cos(boss.timer*boss.speed*0.3)*8;
+      boss.pos.y=3+sin(boss.timer)*2;
+      break;
+    case 3: // Wizard - 5x speed teleport and fly
+      boss.pos.y=4+sin(boss.timer*7.5)*2;
+      if(boss.moveTimer>0.6){
+        boss.pos.x=(rand()-0.5)*22;
+        boss.pos.z=(rand()-0.5)*22;
+        boss.moveTimer=0;
+        spawnParticles(boss.pos,10,[0.5,0.3,0.8]);
+      }
+      // Also dash toward player between teleports
+      const wizDir=v3norm(v3sub(player.pos,boss.pos));
+      boss.pos.x+=wizDir.x*15*dt;
+      boss.pos.z+=wizDir.z*15*dt;
+      break;
+    case 4: // Dragon - slower than player, tracks you
+      const dDir=v3norm(v3sub(player.pos,boss.pos));
+      const dSpd=4; // player is 6, dragon is 4
+      boss.pos.x+=dDir.x*dSpd*dt;
+      boss.pos.z+=dDir.z*dSpd*dt;
+      boss.pos.y=3+sin(boss.timer*2)*2;
+      // Swoop down when close
+      const dDist=v3dist(boss.pos,player.pos);
+      if(dDist<8)boss.pos.y=1.5+sin(boss.timer*4)*0.5;
+      break;
+    case 5: // The Warden - aggressive melee boss
+      const wDir=v3norm(v3sub(player.pos,boss.pos));
+      const wSpd=boss.speed*(1+boss.phase*0.5);
+      boss.pos.x+=wDir.x*wSpd*dt;
+      boss.pos.z+=wDir.z*wSpd*dt;
+      boss.pos.y=1.5;
+      boss.pos.x=clamp(boss.pos.x,-14,14);
+      boss.pos.z=clamp(boss.pos.z,-14,14);
+      break;
+  }
+
+  // Sword hits boss (for Warden fight)
+  if(boss&&boss.zone===5&&keys['z']&&player.attackCd<=0&&v3dist(player.pos,boss.pos)<3){
+    player.attackCd=0.35;
+    const dmg=player.swordDmg;
+    boss.hp-=dmg;
+    boss.stunTimer=0.2;
+    spawnParticles(boss.pos,8,[1,0.9,0.2]);
+    showMsg('-'+dmg+'!',0.5);
+    updateBossHP();
+    if(boss.hp<=0){bossDead();return;}
+  }
+
+  // Collision with player — push out so you can't get stuck inside
+  if(dist<boss.size+0.5){
+    const pushDir=dist>0.1?v3norm(v3sub(player.pos,boss.pos)):v3(1,0,0);
+    // Teleport player to edge of boss so they can't overlap
+    player.pos.x=boss.pos.x+pushDir.x*(boss.size+1);
+    player.pos.z=boss.pos.z+pushDir.z*(boss.size+1);
+    // Gentle knockback velocity
+    player.vel.x=pushDir.x*5;
+    player.vel.z=pushDir.z*5;
+    player.vel.y=2;
+    hurtPlayer(15);
+  }
+
+  // Boss attacks
+  if(bossAttackTimer<=0){
+    bossAttack();
+    bossAttackTimer=max(0.5, 3-boss.phase*0.5);
+  }
+
+  // Check player throws hitting boss
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p=projectiles[i];
+    if(p.type==='player_throw'&&v3dist(p.pos,boss.pos)<boss.size+0.5){
+      const dmg=20+boss.phase*5;
+      boss.hp-=dmg;
+      boss.stunTimer=0.5;
+      spawnParticles(boss.pos,12,[1,1,0]);
+      showMsg('-'+dmg+' damage!',1);
+      projectiles.splice(i,1);
+      updateBossHP();
+      if(boss.hp<=0){
+        bossDead();return;
+      }
+    }
+  }
+
+  // Attack prompt
+  const prompt=document.getElementById('attack-prompt');
+  if(boss.zone===5){
+    // Warden — sword fight, show sword prompt
+    prompt.style.display='block';
+    prompt.textContent='Press Z to slash!';
+  }else if(playerThrowCd<=0){
+    prompt.style.display='block';
+    const zone=boss.zone;
+    prompt.textContent=zone===3?'Press SPACE to cast!':zone===2?'Press SPACE to throw ice!':'Press SPACE to throw!';
+  }else{
+    prompt.style.display='none';
+  }
+}
+
+function bossAttack(){
+  const dir=v3norm(v3sub(player.pos,boss.pos));
+  switch(boss.zone){
+    case 0: // Fish - ice shards
+      for(let i=0;i<3+boss.phase*2;i++){
+        const spread=v3(dir.x+(rand()-0.5)*0.5,dir.y+(rand()-0.5)*0.3,dir.z+(rand()-0.5)*0.5);
+        projectiles.push({pos:v3(boss.pos.x,boss.pos.y,boss.pos.z),vel:v3scale(v3norm(spread),8+boss.phase*2),
+          type:'ice',life:4,damage:12,mesh:getSphere(0.25,0.6,0.8,1)});
+      }
+      break;
+    case 1: // Bear - stomp + claw swipe
+      if(rand()>0.5){
+        // Stomp - shockwave
+        for(let a=0;a<TAU;a+=TAU/8){
+          projectiles.push({pos:v3(boss.pos.x,0.5,boss.pos.z),vel:v3(sin(a)*6,2,cos(a)*6),
+            type:'shockwave',life:2,damage:15,mesh:getSphere(0.4,0.6,0.4,0.2)});
+        }
+        spawnParticles(boss.pos,20,[0.5,0.3,0.1]);
+      }else{
+        // Claw swipe - fast projectiles toward player
+        for(let i=0;i<2+boss.phase;i++){
+          const off=v3((rand()-0.5)*2,0,(rand()-0.5)*2);
+          projectiles.push({pos:v3add(boss.pos,off),vel:v3scale(dir,12),
+            type:'claw',life:2,damage:12,mesh:getBox(0.3,0.1,1,0.8,0.6,0.3)});
+        }
+      }
+      break;
+    case 2: // Demon - meteors + tridents
+      if(rand()>0.4){
+        // Meteors from sky
+        for(let i=0;i<2+boss.phase;i++){
+          const tx=player.pos.x+(rand()-0.5)*6;
+          const tz=player.pos.z+(rand()-0.5)*6;
+          projectiles.push({pos:v3(tx,20,tz),vel:v3(0,-10-boss.phase*2,0),
+            type:'meteor',life:4,damage:20,mesh:getSphere(0.6,0.8,0.3,0.1)});
+        }
+      }else{
+        // Red tridents
+        for(let i=0;i<3+boss.phase;i++){
+          const a=rand()*TAU;
+          const spread=v3(sin(a),0,cos(a));
+          const vel=v3lerp(dir,spread,0.3);
+          projectiles.push({pos:v3(boss.pos.x,boss.pos.y,boss.pos.z),vel:v3scale(v3norm(vel),10),
+            type:'trident',life:4,damage:15,mesh:getBox(0.15,0.15,1.2,0.8,0.1,0.1)});
+        }
+      }
+      break;
+    case 3: // Wizard - lightning, blackholes, freeze
+      const atk=rand();
+      if(atk<0.35){
+        // Lightning bolts
+        for(let i=0;i<2+boss.phase;i++){
+          const tx=player.pos.x+(rand()-0.5)*4;
+          const tz=player.pos.z+(rand()-0.5)*4;
+          projectiles.push({pos:v3(tx,15,tz),vel:v3(0,-8,0),
+            type:'lightning',life:3,damage:18,mesh:getBox(0.2,8,0.2,1,1,0.4)});
+        }
+      }else if(atk<0.6){
+        // Blackhole (slow moving, pulls player)
+        projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),vel:v3scale(dir,2),
+          type:'blackhole',life:5,damage:5,mesh:getSphere(1,0.1,0,0.15),pull:true});
+      }else{
+        // Freeze burst
+        for(let a=0;a<TAU;a+=TAU/(6+boss.phase*2)){
+          projectiles.push({pos:v3(boss.pos.x,boss.pos.y,boss.pos.z),vel:v3(sin(a)*7,0,cos(a)*7),
+            type:'freeze',life:3,damage:10,mesh:getSphere(0.3,0.4,0.6,1)});
+        }
+      }
+      break;
+    case 4: // Dragon - fire breath, walls, tornadoes
+      const datk=rand();
+      if(datk<0.3){
+        // Fire breath - cone of fire
+        for(let i=0;i<5+boss.phase*3;i++){
+          const spread=v3(dir.x+(rand()-0.5)*0.6,(rand()-0.5)*0.3,dir.z+(rand()-0.5)*0.6);
+          projectiles.push({pos:v3(boss.pos.x,boss.pos.y-1,boss.pos.z),vel:v3scale(v3norm(spread),10+rand()*5),
+            type:'fire',life:3,damage:12,mesh:getSphere(0.3,1,0.4,0.05)});
+        }
+      }else if(datk<0.55){
+        // Wall of debris
+        for(let i=-4;i<=4;i++){
+          const perpX=-dir.z,perpZ=dir.x;
+          projectiles.push({pos:v3(boss.pos.x+perpX*i*1.5,boss.pos.y,boss.pos.z+perpZ*i*1.5),
+            vel:v3scale(dir,8),type:'debris',life:4,damage:15,mesh:getBox(1,1,0.5,0.4,0.35,0.3)});
+        }
+      }else{
+        // Tornadoes
+        for(let i=0;i<1+boss.phase;i++){
+          const a=rand()*TAU;
+          projectiles.push({pos:v3(boss.pos.x,1,boss.pos.z),vel:v3(sin(a)*3,0,cos(a)*3),
+            type:'tornado',life:6,damage:8,mesh:makeCone(1.5,4,8,0.5,0.5,0.6),pull:true,spin:0});
+        }
+      }
+      break;
+    case 5: // Warden - ground slam + shockwaves + charge
+      const watk=rand();
+      if(watk<0.4){
+        // Ground slam shockwave
+        for(let a=0;a<TAU;a+=TAU/(10+boss.phase*4)){
+          projectiles.push({pos:v3(boss.pos.x,0.5,boss.pos.z),vel:v3(sin(a)*8,1.5,cos(a)*8),
+            type:'shockwave',life:2.5,damage:18,mesh:getSphere(0.5,0.5,0.4,0.2)});
+        }
+        spawnParticles(boss.pos,20,[0.5,0.4,0.2]);
+      }else if(watk<0.7){
+        // Throw weapons in spread
+        for(let i=0;i<4+boss.phase*2;i++){
+          const a=rand()*TAU;
+          const spread=v3lerp(dir,v3(sin(a),0,cos(a)),0.4);
+          projectiles.push({pos:v3(boss.pos.x,boss.pos.y+1,boss.pos.z),vel:v3scale(v3norm(spread),11),
+            type:'warden_axe',life:3,damage:15,mesh:getBox(0.3,0.8,0.15,0.4,0.35,0.2)});
+        }
+      }else{
+        // Charge slam — rush at player
+        boss.vel=v3scale(dir,20);
+        boss.pos.x+=boss.vel.x*0.3;boss.pos.z+=boss.vel.z*0.3;
+        // Shockwave at landing
+        for(let a=0;a<TAU;a+=TAU/6){
+          projectiles.push({pos:v3(boss.pos.x,0.5,boss.pos.z),vel:v3(sin(a)*6,2,cos(a)*6),
+            type:'shockwave',life:2,damage:20,mesh:getSphere(0.6,0.6,0.3,0.15)});
+        }
+        spawnParticles(boss.pos,15,[0.6,0.4,0.1]);
+      }
+      break;
+  }
+}
+
+function bossDead(){
+  state='win';
+  boss=null;
+  document.getElementById('boss-bar').style.display='none';
+  document.getElementById('attack-prompt').style.display='none';
+  save.beaten[currentLevel]=true;
+  if(currentLevel<20&&!save.unlocked[currentLevel+1]){
+    save.unlocked[currentLevel+1]=true;
+  }
+  // Dragon unlocks both bonus levels
+  if(currentLevel===20){
+    save.unlocked[21]=true;
+    save.unlocked[22]=true;
+  }
+  saveSave();
+
+  const title=currentLevel===20?'DRAGON DEFEATED! 2 BONUS LEVELS UNLOCKED!':
+    currentLevel===21?'THE WARDEN IS SLAIN!':
+    currentLevel===22?'THE DRAGON CONQUERS ALL!':'BOSS DEFEATED!';
+  const desc=currentLevel===20?'Sword Arena and Dragon Rampage unlocked!':
+    currentLevel===21?'You mastered the blade!':
+    currentLevel===22?'None could stop you!':
+    'Onward to the next challenge!';
+  document.getElementById('win-title').textContent=title;
+  document.getElementById('win-desc').textContent=desc;
+  document.getElementById('win-screen').style.display='flex';
+}
+
+function winLevel(){
+  state='win';
+  save.beaten[currentLevel]=true;
+  if(currentLevel<20&&!save.unlocked[currentLevel+1]){
+    save.unlocked[currentLevel+1]=true;
+  }
+  saveSave();
+  document.getElementById('win-title').textContent='LEVEL CLEAR!';
+  document.getElementById('win-desc').textContent='Level '+(currentLevel+1)+' complete!';
+  document.getElementById('win-screen').style.display='flex';
+}
+
+// ---- PROJECTILES ----
+function updateProjectiles(){
+  for(let i=projectiles.length-1;i>=0;i--){
+    const p=projectiles[i];
+    p.life-=dt;
+    if(p.life<=0){projectiles.splice(i,1);continue;}
+
+    p.pos.x+=p.vel.x*dt;p.pos.y+=p.vel.y*dt;p.pos.z+=p.vel.z*dt;
+
+    // Gravity for some types
+    if(p.type==='cannonball'||p.type==='shockwave'||p.type==='meteor'||p.type==='debris'){
+      p.vel.y-=12*dt;
+    }
+
+    // Tornado spin
+    if(p.type==='tornado'){
+      p.spin=(p.spin||0)+dt*5;
+    }
+
+    // Pull effect (blackhole, tornado)
+    if(p.pull){
+      const toP=v3sub(p.pos,player.pos);
+      const d=v3len(toP);
+      if(d<6&&d>0.5){
+        const pull=v3scale(v3norm(toP),4/d);
+        player.vel=v3add(player.vel,v3scale(pull,dt*3));
+      }
+    }
+
+    // Hit player
+    if(p.type!=='player_throw'){
+      const d=v3dist(p.pos,player.pos);
+      if(d<1){
+        hurtPlayer(p.damage);
+        if(p.type==='freeze'){
+          // Freeze player briefly
+          player.vel=v3(0,0,0);
+          showMsg('FROZEN!',1);
+        }
+        projectiles.splice(i,1);
+      }
+    }
+  }
+}
+
+// ---- DECORATIONS & HAZARDS ----
+function updateDecorations(){
+  for(const d of decorations){
+    if(d.type==='falling_tree'){
+      d.timer-=dt;
+      if(d.timer<=0&&!d.fallen){
+        d.fallen=true;d.fallSpeed=0;
+      }
+      if(d.fallen){
+        d.rot+=d.fallSpeed*dt;
+        d.fallSpeed+=3*dt;
+        if(d.rot>PI/2)d.rot=PI/2;
+        // Hurt player if nearby
+        if(d.rot<PI/2&&v3dist(player.pos,d.pos)<2){
+          hurtPlayer(15);
+        }
+      }
+    }
+    if(d.type==='meteor_spawn'){
+      d.timer-=dt;
+      if(d.timer<=0){
+        d.timer=3+rand()*4;
+        // Spawn falling obsidian/meteor
+        const tx=d.pos.x+(rand()-0.5)*10;
+        const tz=d.pos.z+(rand()-0.5)*10;
+        projectiles.push({pos:v3(tx,d.pos.y,tz),vel:v3((rand()-0.5)*2,-12,(rand()-0.5)*2),
+          type:'falling_rock',life:5,damage:20,mesh:getSphere(0.5,0.2,0.15,0.15)});
+      }
+    }
+  }
+}
+
+// ---- PARTICLES ----
+function spawnParticles(pos,count,col){
+  for(let i=0;i<count;i++){
+    particles.push({
+      pos:v3(pos.x,pos.y,pos.z),
+      vel:v3((rand()-0.5)*8,rand()*6,(rand()-0.5)*8),
+      life:0.5+rand()*0.8,
+      col,size:0.1+rand()*0.15
+    });
+  }
+}
+
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.life-=dt;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    p.pos.x+=p.vel.x*dt;p.pos.y+=p.vel.y*dt;p.pos.z+=p.vel.z*dt;
+    p.vel.y-=10*dt;
+  }
+}
+
+// ---- RENDERING ----
+function render(){
+  resize();
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  if(state==='map')return;
+
+  // Camera
+  const camX=player.pos.x+sin(camYaw)*camDist*sin(camPitch);
+  const camY=player.pos.y+camDist*cos(camPitch)+1;
+  const camZ=player.pos.z+cos(camYaw)*camDist*sin(camPitch);
+  const eye=v3(camX,camY,camZ);
+  const target=v3(player.pos.x,player.pos.y+1,player.pos.z);
+
+  const proj=m4persp(PI/3,canvas.width/canvas.height,0.5,200);
+  const view=m4lookAt(eye,target,v3(0,1,0));
+  const vp=m4mul(proj,view);
+
+  // Set uniforms
+  const zone=floor(currentLevel/5);
+  const fogCol=currentLevel===20?[0.15,0.1,0.12]:ZONE_FOG[min(zone,3)];
+  gl.uniform3f(uLightDir,0.4,0.8,0.3);
+  gl.uniform3f(uFog,...fogCol);
+  gl.uniform1f(uFogDist,80);
+  gl.uniform3f(uCamPos,camX,camY,camZ);
+  gl.clearColor(...fogCol,1);
+
+  // Draw ground plane
+  const groundMesh=makePlane(200,200,...(zone===2?[0.2,0.08,0.03]:zone===0?[0.2,0.3,0.5]:zone===1?[0.15,0.3,0.1]:[0.25,0.22,0.2]));
+  drawMesh(groundMesh,m4translate(player.pos.x,-10,player.pos.z),vp);
+
+  // Draw platforms
+  for(const p of platforms){
+    drawMesh(p.mesh,m4translate(p.pos.x,p.pos.y,p.pos.z),vp);
+  }
+
+  // ====== DETAILED CHARACTER RENDERING ======
+
+  // Helper: draw at offset from a base pos+yaw
+  function drawAt(mesh,bx,by,bz,yaw,ox,oy,oz,extraRot){
+    let m=m4mul(m4translate(bx+sin(yaw)*oz+cos(yaw)*ox, by+oy, bz+cos(yaw)*oz-sin(yaw)*ox),m4rotY(yaw));
+    if(extraRot)m=m4mul(m,extraRot);
+    drawMesh(mesh,m,vp);
+  }
+
+  // ---- DRAW PLAYER ----
+  if(player.invTimer<=0||floor(player.invTimer*10)%2===0){
+    const px=player.pos.x,py=player.pos.y,pz=player.pos.z,ya=player.yaw;
+    const walk=player.grounded?sin(levelTime*10)*0.3:0;
+
+    if(dragonMode){
+      // === PLAYER DRAGON ===
+      const wingFlap=sin(levelTime*6)*0.4;
+      // Body - elongated
+      drawAt(getBox(1.4,1,2.8,0.55,0.12,0.06),px,py,pz,ya,0,0.8,0,null);
+      // Belly (lighter)
+      drawAt(getBox(1,0.4,2.2,0.7,0.25,0.1),px,py,pz,ya,0,0.4,0,null);
+      // Neck
+      drawAt(getBox(0.5,0.5,1,0.55,0.13,0.07),px,py,pz,ya,0,1.3,1.4,null);
+      // Head
+      drawAt(getSphere(0.6,0.6,0.14,0.07),px,py,pz,ya,0,1.5,2,null);
+      // Snout
+      drawAt(getBox(0.35,0.3,0.7,0.5,0.1,0.05),px,py,pz,ya,0,1.3,2.5,null);
+      // Eyes
+      drawAt(getSphere(0.12,1,0.9,0.1),px,py,pz,ya,-0.3,1.7,2,null);
+      drawAt(getSphere(0.12,1,0.9,0.1),px,py,pz,ya,0.3,1.7,2,null);
+      drawAt(getSphere(0.06,0.1,0.1,0.1),px,py,pz,ya,-0.3,1.72,2.1,null);
+      drawAt(getSphere(0.06,0.1,0.1,0.1),px,py,pz,ya,0.3,1.72,2.1,null);
+      // Horns
+      drawAt(getBox(0.1,0.5,0.1,0.3,0.08,0.04),px,py,pz,ya,-0.25,2,1.8,null);
+      drawAt(getBox(0.1,0.5,0.1,0.3,0.08,0.04),px,py,pz,ya,0.25,2,1.8,null);
+      // Wings (left)
+      drawAt(getBox(3,0.08,1.5,0.5,0.08,0.03),px,py,pz,ya,-2.2,1.5,0,m4rotX(wingFlap));
+      drawAt(getBox(2,0.06,1,0.45,0.07,0.02),px,py,pz,ya,-4,1.6,0,m4rotX(wingFlap*1.3));
+      // Wings (right)
+      drawAt(getBox(3,0.08,1.5,0.5,0.08,0.03),px,py,pz,ya,2.2,1.5,0,m4rotX(-wingFlap));
+      drawAt(getBox(2,0.06,1,0.45,0.07,0.02),px,py,pz,ya,4,1.6,0,m4rotX(-wingFlap*1.3));
+      // Legs
+      drawAt(getBox(0.3,0.8,0.3,0.45,0.1,0.05),px,py,pz,ya,-0.5,0,0.5,m4rotX(walk));
+      drawAt(getBox(0.3,0.8,0.3,0.45,0.1,0.05),px,py,pz,ya,0.5,0,0.5,m4rotX(-walk));
+      drawAt(getBox(0.3,0.8,0.3,0.45,0.1,0.05),px,py,pz,ya,-0.5,0,-0.8,m4rotX(-walk));
+      drawAt(getBox(0.3,0.8,0.3,0.45,0.1,0.05),px,py,pz,ya,0.5,0,-0.8,m4rotX(walk));
+      // Tail segments
+      drawAt(getBox(0.4,0.4,1.2,0.5,0.11,0.05),px,py,pz,ya,0,0.7,-2,null);
+      drawAt(getBox(0.3,0.3,1,0.48,0.1,0.04),px,py,pz,ya,0,0.65,-3,null);
+      drawAt(getBox(0.15,0.6,0.5,0.45,0.08,0.03),px,py,pz,ya,0,0.7,-3.8,null); // tail fin
+    }else{
+      // === HUMAN PLAYER ===
+      // Torso
+      drawAt(getBox(0.5,0.6,0.3,0.15,0.35,0.7),px,py,pz,ya,0,0.7,0,null);
+      // Belt
+      drawAt(getBox(0.55,0.1,0.35,0.35,0.2,0.1),px,py,pz,ya,0,0.4,0,null);
+      // Head
+      drawAt(getSphere(0.25,0.9,0.72,0.58),px,py,pz,ya,0,1.25,0,null);
+      // Hair
+      drawAt(getBox(0.28,0.15,0.28,0.3,0.2,0.08),px,py,pz,ya,0,1.48,0,null);
+      // Eyes
+      drawAt(getSphere(0.04,1,1,1),px,py,pz,ya,-0.1,1.28,0.2,null);
+      drawAt(getSphere(0.04,1,1,1),px,py,pz,ya,0.1,1.28,0.2,null);
+      drawAt(getSphere(0.02,0.1,0.1,0.4),px,py,pz,ya,-0.1,1.28,0.22,null);
+      drawAt(getSphere(0.02,0.1,0.1,0.4),px,py,pz,ya,0.1,1.28,0.22,null);
+      // Arms
+      drawAt(getBox(0.15,0.55,0.15,0.9,0.7,0.55),px,py,pz,ya,-0.38,0.65,0,m4rotX(walk));
+      drawAt(getBox(0.15,0.55,0.15,0.9,0.7,0.55),px,py,pz,ya,0.38,0.65,0,m4rotX(-walk));
+      // Hands
+      drawAt(getSphere(0.07,0.9,0.7,0.55),px,py,pz,ya,-0.38,0.35,walk*0.3,null);
+      drawAt(getSphere(0.07,0.9,0.7,0.55),px,py,pz,ya,0.38,0.35,-walk*0.3,null);
+      // Legs
+      drawAt(getBox(0.18,0.55,0.18,0.2,0.25,0.5),px,py,pz,ya,-0.15,0.1,0,m4rotX(-walk));
+      drawAt(getBox(0.18,0.55,0.18,0.2,0.25,0.5),px,py,pz,ya,0.15,0.1,0,m4rotX(walk));
+      // Shoes
+      drawAt(getBox(0.18,0.1,0.28,0.25,0.15,0.08),px,py,pz,ya,-0.15,-0.15,0.05,null);
+      drawAt(getBox(0.18,0.1,0.28,0.25,0.15,0.08),px,py,pz,ya,0.15,-0.15,0.05,null);
+      // Sword (DETAILED)
+      if(player.hasSword){
+        const st=currentLevel===21?SWORDS[swordTier]:{col:[0.75,0.75,0.3],w:0.06,h:1.0,guard:[0.4,0.35,0.2],handle:[0.3,0.2,0.1],gem:null,orbs:0,aura:false,tier:0};
+        const swingA=player.attackCd>0?sin(player.attackCd*20)*0.8:0;
+        const sOx=0.5,sOy=0.9,sOz=0.3;
+        const sRot=m4rotX(-0.5+swingA);
+
+        // BLADE — main blade with edge highlight and fuller
+        drawAt(getBox(st.w,st.h,st.w*0.5,...st.col),px,py,pz,ya,sOx,sOy,sOz,sRot);
+        // Blade edge (lighter stripe down center)
+        drawAt(getBox(st.w*0.3,st.h*0.9,st.w*0.15,min(1,st.col[0]+0.2),min(1,st.col[1]+0.2),min(1,st.col[2]+0.2)),px,py,pz,ya,sOx,sOy+0.05,sOz+st.w*0.2,sRot);
+        // Blade tip (pointed)
+        drawAt(getBox(st.w*0.5,0.15,st.w*0.3,...st.col),px,py,pz,ya,sOx,sOy+st.h*0.5,sOz,sRot);
+        // Blood groove / fuller (dark line)
+        if(st.tier>=1)drawAt(getBox(st.w*0.15,st.h*0.6,0.01,st.col[0]*0.5,st.col[1]*0.5,st.col[2]*0.5),px,py,pz,ya,sOx,sOy+0.1,sOz+st.w*0.28,sRot);
+
+        // CROSSGUARD
+        const gc=st.guard||[0.4,0.35,0.2];
+        drawAt(getBox(0.25,0.06,0.08,...gc),px,py,pz,ya,sOx,sOy-st.h*0.35,sOz,sRot);
+        // Guard ends (decorative balls)
+        if(st.tier>=1){
+          drawAt(getSphere(0.04,...gc),px,py,pz,ya,sOx-0.13,sOy-st.h*0.35,sOz,sRot);
+          drawAt(getSphere(0.04,...gc),px,py,pz,ya,sOx+0.13,sOy-st.h*0.35,sOz,sRot);
+        }
+        // Guard wings (tier 3+)
+        if(st.tier>=3){
+          drawAt(getBox(0.08,0.12,0.04,...gc),px,py,pz,ya,sOx-0.15,sOy-st.h*0.3,sOz,sRot);
+          drawAt(getBox(0.08,0.12,0.04,...gc),px,py,pz,ya,sOx+0.15,sOy-st.h*0.3,sOz,sRot);
+        }
+
+        // HANDLE (grip)
+        const hc=st.handle||[0.3,0.2,0.1];
+        drawAt(getBox(0.05,0.3,0.05,...hc),px,py,pz,ya,sOx,sOy-st.h*0.35-0.18,sOz,sRot);
+        // Handle wrapping (alternating bands)
+        if(st.tier>=1){
+          for(let w=0;w<3;w++){
+            drawAt(getBox(0.06,0.03,0.06,hc[0]*0.6,hc[1]*0.6,hc[2]*0.6),px,py,pz,ya,sOx,sOy-st.h*0.35-0.08-w*0.08,sOz,sRot);
+          }
+        }
+
+        // POMMEL (end of handle)
+        drawAt(getSphere(0.05,...gc),px,py,pz,ya,sOx,sOy-st.h*0.35-0.35,sOz,sRot);
+        // Pommel spike (tier 4)
+        if(st.tier>=4)drawAt(getBox(0.02,0.12,0.02,0.8,0.15,0.02),px,py,pz,ya,sOx,sOy-st.h*0.35-0.45,sOz,sRot);
+
+        // GEM in crossguard
+        if(st.gem){
+          drawAt(getSphere(0.04,...st.gem),px,py,pz,ya,sOx,sOy-st.h*0.35+0.04,sOz+0.05,sRot);
+          // Gem glow
+          const gp=0.5+sin(levelTime*4)*0.3;
+          drawAt(getSphere(0.06,st.gem[0]*gp,st.gem[1]*gp,st.gem[2]*gp),px,py,pz,ya,sOx,sOy-st.h*0.35+0.04,sOz+0.06,sRot);
+        }
+
+        // RUNES on blade (tier 2+)
+        if(st.tier>=2){
+          const rGlow=0.5+sin(levelTime*3)*0.5;
+          for(let r=0;r<st.tier;r++){
+            const ry=sOy+st.h*0.1+r*st.h*0.15;
+            drawAt(getBox(st.w*0.8,0.02,0.01,rGlow,rGlow*0.7,rGlow*0.3),px,py,pz,ya,sOx,ry,sOz+st.w*0.3,sRot);
+          }
+        }
+
+        // AURA (tier 3+) — glowing field around blade
+        if(st.aura){
+          const ac=st.auraCol;
+          const aPulse=0.3+sin(levelTime*5)*0.15;
+          drawAt(getBox(st.w+0.08,st.h+0.1,st.w+0.06,ac[0]*aPulse,ac[1]*aPulse,ac[2]*aPulse),px,py,pz,ya,sOx,sOy,sOz,sRot);
+        }
+
+        // ORBITING PARTICLES (tier 2+)
+        if(st.orbs>0){
+          const oc=st.orbCol;
+          for(let o=0;o<st.orbs;o++){
+            const oa=levelTime*3+o*TAU/st.orbs;
+            const orbR=0.3+st.tier*0.08;
+            const ox=sOx+sin(oa)*orbR;
+            const oy=sOy+st.h*0.2+sin(levelTime*4+o)*st.h*0.3;
+            const oz=sOz+cos(oa)*orbR;
+            drawAt(getSphere(0.03+st.tier*0.005,...oc),px,py,pz,ya,ox,oy,oz,null);
+            // Orbit trails
+            const ta=oa-0.4;
+            drawAt(getSphere(0.02,oc[0]*0.5,oc[1]*0.5,oc[2]*0.5),px,py,pz,ya,sOx+sin(ta)*orbR,oy-0.05,sOz+cos(ta)*orbR,null);
+          }
+        }
+
+        // FIRE PARTICLES (tier 4 only — Legendary Inferno)
+        if(st.tier===4){
+          for(let f=0;f<8;f++){
+            const fy=sOy+rand()*st.h;
+            const fx=sOx+(rand()-0.5)*0.15;
+            const fz=sOz+(rand()-0.5)*0.1;
+            const fi=0.3+rand()*0.7;
+            drawAt(getSphere(0.02+rand()*0.02,1*fi,0.4*fi,0.02),px,py,pz,ya,fx,fy,fz,null);
+          }
+        }
+      }
+    }
+  }
+
+  // ---- DRAW ENEMIES (detailed) ----
+  for(const e of enemies){
+    if(e.hp<=0)continue;
+    const ex=e.pos.x,ey=e.pos.y,ez=e.pos.z;
+    const eFace=atan2(player.pos.x-ex,player.pos.z-ez);
+    const ew=sin(levelTime*8+ex)*0.25;
+
+    switch(e.type){
+      case 'water_person':
+        // Blue water humanoid with dripping look
+        drawAt(getBox(0.4,0.7,0.3,0.15,0.3,0.65),ex,ey,ez,eFace,0,0.6,0,null);
+        drawAt(getSphere(0.22,0.2,0.35,0.7),ex,ey,ez,eFace,0,1.15,0,null);
+        drawAt(getSphere(0.04,1,1,1),ex,ey,ez,eFace,-0.08,1.18,0.18,null);
+        drawAt(getSphere(0.04,1,1,1),ex,ey,ez,eFace,0.08,1.18,0.18,null);
+        // Drip shapes
+        drawAt(getBox(0.08,0.25,0.08,0.1,0.25,0.6),ex,ey,ez,eFace,-0.15,0.15,0,null);
+        drawAt(getBox(0.08,0.25,0.08,0.1,0.25,0.6),ex,ey,ez,eFace,0.15,0.15,0,null);
+        // Arms
+        drawAt(getBox(0.12,0.4,0.12,0.15,0.3,0.6),ex,ey,ez,eFace,-0.3,0.55,0,m4rotX(ew));
+        drawAt(getBox(0.12,0.4,0.12,0.15,0.3,0.6),ex,ey,ez,eFace,0.3,0.55,0,m4rotX(-ew));
+        break;
+      case 'raccoon':
+        // Gray furry body, striped tail, mask face
+        drawAt(getBox(0.5,0.35,0.7,0.4,0.38,0.35),ex,ey,ez,eFace,0,0.3,0,null);
+        // Head
+        drawAt(getSphere(0.2,0.42,0.4,0.37),ex,ey,ez,eFace,0,0.5,0.35,null);
+        // Eye mask (dark)
+        drawAt(getBox(0.25,0.08,0.05,0.1,0.08,0.08),ex,ey,ez,eFace,0,0.52,0.5,null);
+        // Eyes
+        drawAt(getSphere(0.04,1,1,0.9),ex,ey,ez,eFace,-0.08,0.53,0.5,null);
+        drawAt(getSphere(0.04,1,1,0.9),ex,ey,ez,eFace,0.08,0.53,0.5,null);
+        // Ears
+        drawAt(getBox(0.06,0.1,0.04,0.35,0.32,0.3),ex,ey,ez,eFace,-0.12,0.65,0.3,null);
+        drawAt(getBox(0.06,0.1,0.04,0.35,0.32,0.3),ex,ey,ez,eFace,0.12,0.65,0.3,null);
+        // Legs
+        drawAt(getBox(0.12,0.2,0.12,0.3,0.25,0.2),ex,ey,ez,eFace,-0.2,0.05,0.2,m4rotX(ew));
+        drawAt(getBox(0.12,0.2,0.12,0.3,0.25,0.2),ex,ey,ez,eFace,0.2,0.05,0.2,m4rotX(-ew));
+        drawAt(getBox(0.12,0.2,0.12,0.3,0.25,0.2),ex,ey,ez,eFace,-0.2,0.05,-0.2,m4rotX(-ew));
+        drawAt(getBox(0.12,0.2,0.12,0.3,0.25,0.2),ex,ey,ez,eFace,0.2,0.05,-0.2,m4rotX(ew));
+        // Striped tail
+        drawAt(getBox(0.1,0.1,0.4,0.4,0.38,0.35),ex,ey,ez,eFace,0,0.4,-0.5,null);
+        drawAt(getBox(0.1,0.08,0.08,0.15,0.12,0.1),ex,ey,ez,eFace,0,0.42,-0.6,null);
+        drawAt(getBox(0.1,0.08,0.08,0.15,0.12,0.1),ex,ey,ez,eFace,0,0.42,-0.75,null);
+        break;
+      case 'fire_elem':
+        // Fiery floating form
+        drawAt(getSphere(0.4,0.9,0.35,0.08),ex,ey,ez,eFace,0,0.6,0,null);
+        drawAt(getSphere(0.25,1,0.6,0.1),ex,ey,ez,eFace,0,1.1,0,null);
+        // Flame tendrils
+        drawAt(getBox(0.08,0.5,0.08,1,0.5,0.05),ex,ey,ez,0,sin(levelTime*7)*0.3,1.3,cos(levelTime*5)*0.2,null);
+        drawAt(getBox(0.08,0.4,0.08,1,0.4,0.02),ex,ey,ez,0,cos(levelTime*6)*0.3,1.2,sin(levelTime*7)*0.2,null);
+        drawAt(getBox(0.08,0.35,0.08,0.9,0.3,0.02),ex,ey,ez,0,sin(levelTime*8+1)*0.25,1.15,cos(levelTime*6+1)*0.15,null);
+        // Eyes (glowing)
+        drawAt(getSphere(0.06,1,1,0.3),ex,ey,ez,eFace,-0.12,1.15,0.2,null);
+        drawAt(getSphere(0.06,1,1,0.3),ex,ey,ez,eFace,0.12,1.15,0.2,null);
+        break;
+      case 'knight':
+        // Armored humanoid with helmet, chestplate, sword
+        // Legs
+        drawAt(getBox(0.18,0.5,0.18,0.38,0.38,0.4),ex,ey,ez,eFace,-0.15,0.1,0,m4rotX(-ew));
+        drawAt(getBox(0.18,0.5,0.18,0.38,0.38,0.4),ex,ey,ez,eFace,0.15,0.1,0,m4rotX(ew));
+        // Chestplate
+        drawAt(getBox(0.55,0.6,0.3,0.5,0.48,0.5),ex,ey,ez,eFace,0,0.7,0,null);
+        // Shoulder pads
+        drawAt(getBox(0.2,0.15,0.2,0.45,0.42,0.45),ex,ey,ez,eFace,-0.38,0.95,0,null);
+        drawAt(getBox(0.2,0.15,0.2,0.45,0.42,0.45),ex,ey,ez,eFace,0.38,0.95,0,null);
+        // Arms
+        drawAt(getBox(0.14,0.45,0.14,0.45,0.42,0.45),ex,ey,ez,eFace,-0.4,0.6,0,m4rotX(ew));
+        drawAt(getBox(0.14,0.45,0.14,0.45,0.42,0.45),ex,ey,ez,eFace,0.4,0.6,0,m4rotX(-ew));
+        // Helmet
+        drawAt(getSphere(0.22,0.45,0.43,0.47),ex,ey,ez,eFace,0,1.15,0,null);
+        // Visor slit
+        drawAt(getBox(0.2,0.04,0.05,0.1,0.08,0.08),ex,ey,ez,eFace,0,1.12,0.2,null);
+        // Sword
+        drawAt(getBox(0.06,0.9,0.04,0.65,0.65,0.7),ex,ey,ez,eFace,0.5,0.7,0.2,m4rotX(-0.3+ew*0.5));
+        // Shield
+        drawAt(getBox(0.06,0.5,0.35,0.4,0.35,0.3),ex,ey,ez,eFace,-0.45,0.65,0.15,null);
+        break;
+      case 'turret_water':
+        // Water cannon turret
+        drawAt(getBox(0.6,0.6,0.6,0.25,0.35,0.65),ex,ey,ez,eFace,0,0.3,0,null);
+        drawAt(getBox(0.15,0.15,0.5,0.3,0.4,0.7),ex,ey,ez,eFace,0,0.5,0.4,null);
+        drawAt(getSphere(0.12,0.3,0.45,0.75),ex,ey,ez,eFace,0,0.5,0.7,null);
+        break;
+      case 'cannon':
+        // Castle cannon
+        drawAt(getBox(0.8,0.5,0.8,0.3,0.25,0.22),ex,ey,ez,eFace,0,0.25,0,null);
+        drawAt(getBox(0.25,0.25,0.8,0.2,0.18,0.15),ex,ey,ez,eFace,0,0.55,0.3,null);
+        drawAt(getSphere(0.18,0.15,0.12,0.1),ex,ey,ez,eFace,0,0.55,0.75,null);
+        // Wheels
+        drawAt(getSphere(0.15,0.25,0.2,0.15),ex,ey,ez,eFace,-0.4,0.1,0,null);
+        drawAt(getSphere(0.15,0.25,0.2,0.15),ex,ey,ez,eFace,0.4,0.1,0,null);
+        break;
+      case 'op_human':
+        // Elite warrior in blue armor
+        drawAt(getBox(0.18,0.5,0.18,0.15,0.2,0.45),ex,ey,ez,eFace,-0.15,0.1,0,m4rotX(-ew));
+        drawAt(getBox(0.18,0.5,0.18,0.15,0.2,0.45),ex,ey,ez,eFace,0.15,0.1,0,m4rotX(ew));
+        drawAt(getBox(0.5,0.55,0.3,0.2,0.3,0.7),ex,ey,ez,eFace,0,0.65,0,null);
+        drawAt(getBox(0.14,0.45,0.14,0.18,0.28,0.65),ex,ey,ez,eFace,-0.35,0.6,0,m4rotX(ew));
+        drawAt(getBox(0.14,0.45,0.14,0.18,0.28,0.65),ex,ey,ez,eFace,0.35,0.6,0,m4rotX(-ew));
+        drawAt(getSphere(0.2,0.85,0.72,0.6),ex,ey,ez,eFace,0,1.1,0,null);
+        drawAt(getSphere(0.04,1,1,1),ex,ey,ez,eFace,-0.08,1.12,0.16,null);
+        drawAt(getSphere(0.04,1,1,1),ex,ey,ez,eFace,0.08,1.12,0.16,null);
+        // Bow/crossbow
+        drawAt(getBox(0.04,0.6,0.04,0.4,0.3,0.15),ex,ey,ez,eFace,0.4,0.7,0.2,null);
+        break;
+      default: // arena enemies (DETAILED)
+        const isElite=e.type==='arena_elite';
+        const isWarrior=e.type==='arena_warrior';
+        const ac=isElite?[0.65,0.12,0.08]:isWarrior?[0.55,0.25,0.15]:[0.45,0.35,0.25];
+        // Legs
+        drawAt(getBox(0.18,0.5,0.18,...ac),ex,ey,ez,eFace,-0.15,0.1,0,m4rotX(-ew));
+        drawAt(getBox(0.18,0.5,0.18,...ac),ex,ey,ez,eFace,0.15,0.1,0,m4rotX(ew));
+        // Torso
+        drawAt(getBox(0.5,0.6,0.3,...ac),ex,ey,ez,eFace,0,0.65,0,null);
+        // Chest plate
+        if(isWarrior||isElite)drawAt(getBox(0.45,0.35,0.2,ac[0]+0.1,ac[1]+0.05,ac[2]+0.05),ex,ey,ez,eFace,0,0.75,0.12,null);
+        // Belt
+        drawAt(getBox(0.52,0.06,0.32,ac[0]*0.5,ac[1]*0.5,ac[2]*0.5),ex,ey,ez,eFace,0,0.4,0,null);
+        // Arms
+        drawAt(getBox(0.14,0.4,0.14,...ac),ex,ey,ez,eFace,-0.35,0.6,0,m4rotX(ew));
+        drawAt(getBox(0.14,0.4,0.14,...ac),ex,ey,ez,eFace,0.35,0.6,0,m4rotX(-ew));
+        // Shoulder pads (warrior+)
+        if(isWarrior||isElite){
+          drawAt(getSphere(0.1,ac[0]+0.05,ac[1]+0.03,ac[2]+0.03),ex,ey,ez,eFace,-0.38,0.88,0,null);
+          drawAt(getSphere(0.1,ac[0]+0.05,ac[1]+0.03,ac[2]+0.03),ex,ey,ez,eFace,0.38,0.88,0,null);
+        }
+        // Head
+        drawAt(getSphere(0.2,0.8,0.65,0.5),ex,ey,ez,eFace,0,1.1,0,null);
+        // Eyes
+        drawAt(getSphere(0.03,1,0.9,0.8),ex,ey,ez,eFace,-0.07,1.13,0.16,null);
+        drawAt(getSphere(0.03,1,0.9,0.8),ex,ey,ez,eFace,0.07,1.13,0.16,null);
+        if(isElite){
+          // Horned helmet with visor
+          drawAt(getSphere(0.22,0.3,0.1,0.05),ex,ey,ez,eFace,0,1.12,0,null);
+          drawAt(getBox(0.04,0.3,0.04,0.35,0.12,0.06),ex,ey,ez,eFace,-0.14,1.35,0,null);
+          drawAt(getBox(0.04,0.3,0.04,0.35,0.12,0.06),ex,ey,ez,eFace,0.14,1.35,0,null);
+          // Visor glow
+          drawAt(getBox(0.18,0.03,0.03,0.8,0.2,0.05),ex,ey,ez,eFace,0,1.14,0.2,null);
+          // Elite cape
+          drawAt(getBox(0.35,0.6,0.04,0.4,0.08,0.05),ex,ey,ez,eFace,0,0.5,-0.18,null);
+        }
+        if(isWarrior){
+          // Warrior headband
+          drawAt(getBox(0.22,0.04,0.22,0.5,0.2,0.1),ex,ey,ez,eFace,0,1.2,0,null);
+        }
+        // Weapon — sword with detail
+        drawAt(getBox(0.05,0.7,0.03,0.6,0.55,0.5),ex,ey,ez,eFace,0.45,0.7,0.15,m4rotX(-0.3+ew));
+        drawAt(getBox(0.12,0.04,0.04,0.4,0.35,0.3),ex,ey,ez,eFace,0.45,0.4,0.15,null); // guard
+        if(isElite){
+          // Elite has a bigger sword with glow
+          drawAt(getBox(0.07,0.9,0.04,0.8,0.2,0.05),ex,ey,ez,eFace,0.45,0.8,0.15,m4rotX(-0.3+ew));
+          // Sword glow
+          const sg=0.2+sin(levelTime*5+ex)*0.15;
+          drawAt(getBox(0.09,0.85,0.06,sg,0.03,0),ex,ey,ez,eFace,0.45,0.8,0.15,m4rotX(-0.3+ew));
+        }
+        // Shield (warrior+)
+        if(isWarrior||isElite){
+          drawAt(getBox(0.04,0.4,0.3,0.35,0.3,0.25),ex,ey,ez,eFace,-0.4,0.55,0.15,null);
+          drawAt(getSphere(0.05,0.4,0.35,0.3),ex,ey,ez,eFace,-0.42,0.6,0.3,null);
+        }
+        // ORBITING EFFECTS (warrior gets 2, elite gets 4)
+        if(isWarrior||isElite){
+          const nOrbs=isElite?4:2;
+          const oCol=isElite?[0.8,0.15,0.05]:[0.5,0.25,0.1];
+          for(let o=0;o<nOrbs;o++){
+            const oa=levelTime*3+o*TAU/nOrbs+ex;
+            const oR=0.6+o*0.05;
+            drawAt(getSphere(0.04,...oCol),ex,ey,ez,0,sin(oa)*oR,0.7+sin(levelTime*4+o)*0.3,cos(oa)*oR,null);
+            drawAt(getSphere(0.02,oCol[0]*0.5,oCol[1]*0.5,oCol[2]*0.5),ex,ey,ez,0,sin(oa-0.4)*oR,0.65+sin(levelTime*4+o)*0.3,cos(oa-0.4)*oR,null);
+          }
+        }
+        // ELITE GROUND RUNE
+        if(isElite){
+          for(let r=0;r<3;r++){
+            const ra=levelTime*0.8+r*TAU/3;
+            drawAt(getBox(0.12,0.015,0.12,0.5+sin(levelTime*3)*0.2,0.05,0),ex,ey,ez,0,sin(ra)*0.8,-0.1,cos(ra)*0.8,null);
+          }
+        }
+        break;
+    }
+  }
+
+  // ---- DRAW BOSS (detailed) ----
+  if(boss){
+    const bx=boss.pos.x,by=boss.pos.y,bz=boss.pos.z,bt=boss.timer;
+    const bFace=atan2(player.pos.x-bx,player.pos.z-bz);
+
+    if(boss.zone===0){
+      // === EVIL FROST FISH ===
+      // Main body (oval)
+      drawAt(getBox(1.2,1.8,3.5,0.15,0.35,0.75),bx,by,bz,bFace,0,0,0,null);
+      // Belly
+      drawAt(getBox(0.9,0.8,2.8,0.45,0.55,0.8),bx,by,bz,bFace,0,-0.3,0,null);
+      // Head/mouth
+      drawAt(getSphere(0.7,0.18,0.38,0.78),bx,by,bz,bFace,0,0.2,1.8,null);
+      // Jaw
+      drawAt(getBox(0.5,0.2,0.5,0.12,0.3,0.65),bx,by,bz,bFace,0,-0.3,2,null);
+      // Teeth
+      for(let i=-2;i<=2;i++){
+        drawAt(getBox(0.06,0.15,0.06,0.9,0.9,0.95),bx,by,bz,bFace,i*0.12,-0.1,2.2,null);
+      }
+      // Eyes (angry)
+      drawAt(getSphere(0.18,0.85,0.9,1),bx,by,bz,bFace,-0.45,0.5,1.4,null);
+      drawAt(getSphere(0.18,0.85,0.9,1),bx,by,bz,bFace,0.45,0.5,1.4,null);
+      drawAt(getSphere(0.08,0.1,0.05,0.2),bx,by,bz,bFace,-0.45,0.52,1.55,null);
+      drawAt(getSphere(0.08,0.1,0.05,0.2),bx,by,bz,bFace,0.45,0.52,1.55,null);
+      // Dorsal fin
+      drawAt(getBox(0.08,0.8,1,0.1,0.28,0.65),bx,by,bz,bFace,0,1.2,0,null);
+      // Side fins (flapping)
+      const ff=sin(bt*4)*0.4;
+      drawAt(getBox(1,0.06,0.6,0.12,0.3,0.7),bx,by,bz,bFace,-0.8,0,0.3,m4rotX(ff));
+      drawAt(getBox(1,0.06,0.6,0.12,0.3,0.7),bx,by,bz,bFace,0.8,0,0.3,m4rotX(-ff));
+      // Tail fin
+      const tw=sin(bt*5)*0.3;
+      drawAt(getBox(0.06,1,0.8,0.1,0.25,0.6),bx,by,bz,bFace,0,0,-2,m4rotY(tw));
+      // Ice crystals on body
+      drawAt(getBox(0.15,0.3,0.15,0.7,0.85,1),bx,by,bz,bFace,-0.5,0.8,0.5,null);
+      drawAt(getBox(0.12,0.25,0.12,0.7,0.85,1),bx,by,bz,bFace,0.4,0.9,-0.3,null);
+
+    }else if(boss.zone===1){
+      // === GRIZZLY BEAR ===
+      // Body
+      drawAt(getBox(2,2,2.5,0.42,0.26,0.12),bx,by,bz,bFace,0,0.5,0,null);
+      // Belly
+      drawAt(getBox(1.5,1.2,1.8,0.5,0.35,0.18),bx,by,bz,bFace,0,0.1,0.1,null);
+      // Head
+      drawAt(getSphere(0.8,0.45,0.28,0.13),bx,by,bz,bFace,0,1.5,1.2,null);
+      // Snout
+      drawAt(getBox(0.4,0.3,0.5,0.5,0.35,0.2),bx,by,bz,bFace,0,1.2,1.6,null);
+      // Nose
+      drawAt(getSphere(0.12,0.15,0.1,0.08),bx,by,bz,bFace,0,1.3,1.9,null);
+      // Eyes
+      drawAt(getSphere(0.1,0.1,0.05,0.02),bx,by,bz,bFace,-0.3,1.65,1.35,null);
+      drawAt(getSphere(0.1,0.1,0.05,0.02),bx,by,bz,bFace,0.3,1.65,1.35,null);
+      // Ears
+      drawAt(getSphere(0.15,0.4,0.25,0.12),bx,by,bz,bFace,-0.45,2,0.9,null);
+      drawAt(getSphere(0.15,0.4,0.25,0.12),bx,by,bz,bFace,0.45,2,0.9,null);
+      // Arms with claws
+      const armSwing=sin(bt*3)*0.4;
+      drawAt(getBox(0.5,1.3,0.5,0.4,0.24,0.1),bx,by,bz,bFace,-1.2,0.3,0.3,m4rotX(armSwing));
+      drawAt(getBox(0.5,1.3,0.5,0.4,0.24,0.1),bx,by,bz,bFace,1.2,0.3,0.3,m4rotX(-armSwing));
+      // Claws
+      for(let c=0;c<3;c++){
+        drawAt(getBox(0.04,0.2,0.04,0.2,0.15,0.1),bx,by,bz,bFace,-1.2+c*0.12-0.12,-0.35,0.6,null);
+        drawAt(getBox(0.04,0.2,0.04,0.2,0.15,0.1),bx,by,bz,bFace,1.2+c*0.12-0.12,-0.35,0.6,null);
+      }
+      // Legs
+      drawAt(getBox(0.55,0.8,0.55,0.38,0.22,0.1),bx,by,bz,bFace,-0.6,-0.6,0.3,null);
+      drawAt(getBox(0.55,0.8,0.55,0.38,0.22,0.1),bx,by,bz,bFace,0.6,-0.6,0.3,null);
+
+    }else if(boss.zone===2){
+      // === INFERNAL DEMON ===
+      // Body
+      drawAt(getBox(1.2,2.2,0.8,0.6,0.06,0.02),bx,by,bz,bFace,0,0.5,0,null);
+      // Abs/chest
+      drawAt(getBox(1,0.8,0.5,0.65,0.08,0.03),bx,by,bz,bFace,0,1,0.15,null);
+      // Head
+      drawAt(getSphere(0.5,0.55,0.05,0.02),bx,by,bz,bFace,0,2,0,null);
+      // Horns (curved)
+      drawAt(getBox(0.1,0.8,0.1,0.3,0.03,0.01),bx,by,bz,bFace,-0.4,2.5,0,m4rotX(-0.3));
+      drawAt(getBox(0.1,0.8,0.1,0.3,0.03,0.01),bx,by,bz,bFace,0.4,2.5,0,m4rotX(-0.3));
+      drawAt(getBox(0.08,0.4,0.08,0.25,0.02,0.01),bx,by,bz,bFace,-0.45,3,0.2,null);
+      drawAt(getBox(0.08,0.4,0.08,0.25,0.02,0.01),bx,by,bz,bFace,0.45,3,0.2,null);
+      // Glowing eyes
+      drawAt(getSphere(0.1,1,0.5,0),bx,by,bz,bFace,-0.2,2.1,0.4,null);
+      drawAt(getSphere(0.1,1,0.5,0),bx,by,bz,bFace,0.2,2.1,0.4,null);
+      // Mouth (jagged)
+      drawAt(getBox(0.3,0.06,0.1,1,0.3,0),bx,by,bz,bFace,0,1.75,0.45,null);
+      // Arms (muscular)
+      drawAt(getBox(0.3,1.2,0.3,0.55,0.05,0.02),bx,by,bz,bFace,-0.85,0.7,0,m4rotX(sin(bt*2)*0.3));
+      drawAt(getBox(0.3,1.2,0.3,0.55,0.05,0.02),bx,by,bz,bFace,0.85,0.7,0,m4rotX(-sin(bt*2)*0.3));
+      // Hands with fire
+      drawAt(getSphere(0.15,1,0.4,0.05),bx,by,bz,bFace,-0.85,0,0,null);
+      drawAt(getSphere(0.15,1,0.4,0.05),bx,by,bz,bFace,0.85,0,0,null);
+      // Wings
+      const dw=sin(bt*3)*0.35;
+      drawAt(getBox(2.5,0.06,1.5,0.45,0.03,0.01),bx,by,bz,bFace,-2,1.5,0,m4rotX(dw));
+      drawAt(getBox(2.5,0.06,1.5,0.45,0.03,0.01),bx,by,bz,bFace,2,1.5,0,m4rotX(-dw));
+      drawAt(getBox(1.5,0.04,1,0.4,0.02,0.01),bx,by,bz,bFace,-3.5,1.7,0,m4rotX(dw*1.2));
+      drawAt(getBox(1.5,0.04,1,0.4,0.02,0.01),bx,by,bz,bFace,3.5,1.7,0,m4rotX(-dw*1.2));
+      // Legs
+      drawAt(getBox(0.35,1,0.35,0.5,0.04,0.02),bx,by,bz,bFace,-0.4,-0.8,0,null);
+      drawAt(getBox(0.35,1,0.35,0.5,0.04,0.02),bx,by,bz,bFace,0.4,-0.8,0,null);
+      // Hooves
+      drawAt(getBox(0.25,0.1,0.35,0.2,0.02,0.01),bx,by,bz,bFace,-0.4,-1.35,0.05,null);
+      drawAt(getBox(0.25,0.1,0.35,0.2,0.02,0.01),bx,by,bz,bFace,0.4,-1.35,0.05,null);
+      // Tail
+      drawAt(getBox(0.12,0.12,1.2,0.5,0.04,0.02),bx,by,bz,bFace,0,0,-0.8,null);
+      drawAt(getBox(0.2,0.15,0.15,0.6,0.05,0.02),bx,by,bz,bFace,0,0.1,-1.4,null);
+
+    }else if(boss.zone===3){
+      // === ARCANE WIZARD ===
+      // Robe (wide at bottom)
+      drawAt(getBox(0.8,1.5,0.8,0.3,0.15,0.5),bx,by,bz,bFace,0,-0.2,0,null);
+      drawAt(getBox(1.2,0.6,1.2,0.28,0.12,0.45),bx,by,bz,bFace,0,-0.8,0,null);
+      // Belt
+      drawAt(getBox(0.85,0.1,0.85,0.5,0.35,0.2),bx,by,bz,bFace,0,0.3,0,null);
+      // Upper body
+      drawAt(getBox(0.7,0.8,0.5,0.32,0.17,0.52),bx,by,bz,bFace,0,0.9,0,null);
+      // Head
+      drawAt(getSphere(0.35,0.85,0.7,0.55),bx,by,bz,bFace,0,1.6,0,null);
+      // Beard
+      drawAt(getBox(0.15,0.5,0.1,0.8,0.75,0.7),bx,by,bz,bFace,0,1.1,0.25,null);
+      // Eyes (glowing purple)
+      drawAt(getSphere(0.06,0.7,0.3,1),bx,by,bz,bFace,-0.12,1.65,0.3,null);
+      drawAt(getSphere(0.06,0.7,0.3,1),bx,by,bz,bFace,0.12,1.65,0.3,null);
+      // Hat (pointy wizard hat)
+      drawAt(getBox(0.45,0.15,0.45,0.25,0.1,0.4),bx,by,bz,bFace,0,1.9,0,null); // brim
+      drawAt(getBox(0.3,0.5,0.3,0.28,0.12,0.45),bx,by,bz,bFace,0,2.2,0,null);
+      drawAt(getBox(0.15,0.5,0.15,0.3,0.15,0.5),bx,by,bz,bFace,0,2.7,0,null);
+      // Star on hat
+      drawAt(getSphere(0.06,1,0.9,0.2),bx,by,bz,bFace,0,2.35,0.2,null);
+      // Arms/sleeves
+      drawAt(getBox(0.2,0.7,0.2,0.3,0.15,0.48),bx,by,bz,bFace,-0.55,0.6,0,m4rotX(sin(bt*2)*0.3));
+      drawAt(getBox(0.2,0.7,0.2,0.3,0.15,0.48),bx,by,bz,bFace,0.55,0.6,0,m4rotX(-sin(bt*2)*0.3));
+      // Staff
+      drawAt(getBox(0.06,3,0.06,0.5,0.4,0.15),bx,by,bz,bFace,0.7,0.5,0.2,null);
+      // Staff orb (glowing)
+      drawAt(getSphere(0.18,0.6,0.3,1),bx,by,bz,bFace,0.7,2.1,0.2,null);
+      // Magic particles around staff
+      const mp=sin(bt*5)*0.3;
+      drawAt(getSphere(0.06,0.8,0.5,1),bx,by,bz,bFace,0.7+mp,2.3,0.2+cos(bt*4)*0.2,null);
+
+    }else if(boss.zone===4){
+      // === ELDER DRAGON (boss) ===
+      const wf=sin(bt*3)*0.4;
+      // Body
+      drawAt(getBox(2,1.5,4,0.5,0.1,0.06),bx,by,bz,bFace,0,0,0,null);
+      // Belly (lighter)
+      drawAt(getBox(1.5,0.6,3.2,0.65,0.2,0.08),bx,by,bz,bFace,0,-0.4,0,null);
+      // Neck
+      drawAt(getBox(0.7,0.7,1.5,0.5,0.12,0.07),bx,by,bz,bFace,0,0.8,2.2,null);
+      // Head
+      drawAt(getSphere(0.8,0.55,0.12,0.06),bx,by,bz,bFace,0,1.2,3,null);
+      // Snout
+      drawAt(getBox(0.5,0.4,1,0.5,0.1,0.05),bx,by,bz,bFace,0,0.9,3.8,null);
+      // Nostrils
+      drawAt(getSphere(0.08,0.3,0.05,0.02),bx,by,bz,bFace,-0.15,1,4.3,null);
+      drawAt(getSphere(0.08,0.3,0.05,0.02),bx,by,bz,bFace,0.15,1,4.3,null);
+      // Eyes
+      drawAt(getSphere(0.15,1,0.6,0),bx,by,bz,bFace,-0.4,1.4,2.8,null);
+      drawAt(getSphere(0.15,1,0.6,0),bx,by,bz,bFace,0.4,1.4,2.8,null);
+      drawAt(getSphere(0.06,0.1,0.05,0.02),bx,by,bz,bFace,-0.4,1.42,2.95,null);
+      drawAt(getSphere(0.06,0.1,0.05,0.02),bx,by,bz,bFace,0.4,1.42,2.95,null);
+      // Horns
+      drawAt(getBox(0.12,0.8,0.12,0.3,0.08,0.04),bx,by,bz,bFace,-0.35,1.8,2.5,m4rotX(-0.4));
+      drawAt(getBox(0.12,0.8,0.12,0.3,0.08,0.04),bx,by,bz,bFace,0.35,1.8,2.5,m4rotX(-0.4));
+      // Teeth
+      for(let t=-3;t<=3;t++){
+        drawAt(getBox(0.05,0.15,0.05,0.9,0.85,0.8),bx,by,bz,bFace,t*0.08,0.7,4.2,null);
+      }
+      // Wings
+      drawAt(getBox(4,0.08,2,0.45,0.08,0.03),bx,by,bz,bFace,-3,1,0,m4rotX(wf));
+      drawAt(getBox(4,0.08,2,0.45,0.08,0.03),bx,by,bz,bFace,3,1,0,m4rotX(-wf));
+      drawAt(getBox(2.5,0.06,1.5,0.4,0.06,0.02),bx,by,bz,bFace,-6,1.2,0,m4rotX(wf*1.3));
+      drawAt(getBox(2.5,0.06,1.5,0.4,0.06,0.02),bx,by,bz,bFace,6,1.2,0,m4rotX(-wf*1.3));
+      // Legs
+      drawAt(getBox(0.5,1.2,0.5,0.45,0.1,0.05),bx,by,bz,bFace,-0.8,-0.8,1,null);
+      drawAt(getBox(0.5,1.2,0.5,0.45,0.1,0.05),bx,by,bz,bFace,0.8,-0.8,1,null);
+      drawAt(getBox(0.5,1.2,0.5,0.45,0.1,0.05),bx,by,bz,bFace,-0.8,-0.8,-1,null);
+      drawAt(getBox(0.5,1.2,0.5,0.45,0.1,0.05),bx,by,bz,bFace,0.8,-0.8,-1,null);
+      // Tail
+      drawAt(getBox(0.5,0.5,1.5,0.48,0.1,0.05),bx,by,bz,bFace,0,-0.1,-2.5,null);
+      drawAt(getBox(0.35,0.35,1.2,0.45,0.09,0.04),bx,by,bz,bFace,0,-0.05,-3.8,m4rotY(sin(bt*2)*0.3));
+      drawAt(getBox(0.2,0.5,0.4,0.4,0.08,0.03),bx,by,bz,bFace,0,0,-4.6,null); // tail spike
+      // Spines along back
+      for(let s=0;s<5;s++){
+        drawAt(getBox(0.06,0.3+s*0.05,0.06,0.35,0.08,0.04),bx,by,bz,bFace,0,1+s*0.05,-1.5+s*0.8,null);
+      }
+
+    }else if(boss.zone===5){
+      // === THE WARDEN (ULTRA DETAILED) ===
+      const ws=sin(bt*3)*0.3;
+      const hpPct2=boss.hp/boss.maxHp;
+      const rage=1-hpPct2; // more rage = more effects
+
+      // Legs (layered plate armor with knee guards)
+      drawAt(getBox(0.35,1,0.35,0.3,0.28,0.32),bx,by,bz,bFace,-0.35,-0.5,0,m4rotX(-ws));
+      drawAt(getBox(0.35,1,0.35,0.3,0.28,0.32),bx,by,bz,bFace,0.35,-0.5,0,m4rotX(ws));
+      // Knee guards
+      drawAt(getBox(0.2,0.15,0.18,0.35,0.32,0.35),bx,by,bz,bFace,-0.35,-0.15,0.18,null);
+      drawAt(getBox(0.2,0.15,0.18,0.35,0.32,0.35),bx,by,bz,bFace,0.35,-0.15,0.18,null);
+      // Shin guards
+      drawAt(getBox(0.15,0.4,0.12,0.33,0.3,0.33),bx,by,bz,bFace,-0.35,-0.6,0.15,null);
+      drawAt(getBox(0.15,0.4,0.12,0.33,0.3,0.33),bx,by,bz,bFace,0.35,-0.6,0.15,null);
+      // Boots (detailed with soles)
+      drawAt(getBox(0.35,0.15,0.45,0.25,0.22,0.25),bx,by,bz,bFace,-0.35,-1.05,0.05,null);
+      drawAt(getBox(0.35,0.15,0.45,0.25,0.22,0.25),bx,by,bz,bFace,0.35,-1.05,0.05,null);
+      drawAt(getBox(0.3,0.05,0.4,0.15,0.12,0.12),bx,by,bz,bFace,-0.35,-1.15,0.05,null);
+      drawAt(getBox(0.3,0.05,0.4,0.15,0.12,0.12),bx,by,bz,bFace,0.35,-1.15,0.05,null);
+
+      // Torso (heavy plate armor with layered plates)
+      drawAt(getBox(1,1.2,0.6,0.35,0.32,0.35),bx,by,bz,bFace,0,0.6,0,null);
+      // Chest plate layers
+      drawAt(getBox(0.9,0.4,0.35,0.38,0.35,0.38),bx,by,bz,bFace,0,0.9,0.15,null);
+      drawAt(getBox(0.7,0.3,0.3,0.4,0.37,0.4),bx,by,bz,bFace,0,0.55,0.18,null);
+      // Chest emblem (glowing skull)
+      drawAt(getBox(0.25,0.25,0.05,0.6,0.5,0.15),bx,by,bz,bFace,0,0.8,0.33,null);
+      drawAt(getSphere(0.08,0.7,0.6,0.2),bx,by,bz,bFace,0,0.85,0.36,null);
+      // Emblem eyes (glow with rage)
+      const eg=0.3+rage*0.7;
+      drawAt(getSphere(0.025,eg,0.1,0),bx,by,bz,bFace,-0.04,0.88,0.37,null);
+      drawAt(getSphere(0.025,eg,0.1,0),bx,by,bz,bFace,0.04,0.88,0.37,null);
+
+      // Shoulder armor (massive pauldrons with spikes)
+      drawAt(getSphere(0.35,0.32,0.3,0.33),bx,by,bz,bFace,-0.7,1.15,0,null);
+      drawAt(getSphere(0.35,0.32,0.3,0.33),bx,by,bz,bFace,0.7,1.15,0,null);
+      // Shoulder plate edge
+      drawAt(getBox(0.35,0.06,0.25,0.28,0.25,0.28),bx,by,bz,bFace,-0.7,1,0,null);
+      drawAt(getBox(0.35,0.06,0.25,0.28,0.25,0.28),bx,by,bz,bFace,0.7,1,0,null);
+      // Shoulder spikes (3 per shoulder)
+      for(let sp=0;sp<3;sp++){
+        const sa=sp*0.4-0.4;
+        drawAt(getBox(0.05,0.3+sp*0.05,0.05,0.2,0.18,0.2),bx,by,bz,bFace,-0.7+sa*0.15,1.45+sp*0.05,sp*0.08,null);
+        drawAt(getBox(0.05,0.3+sp*0.05,0.05,0.2,0.18,0.2),bx,by,bz,bFace,0.7-sa*0.15,1.45+sp*0.05,sp*0.08,null);
+      }
+
+      // Arms (gauntlets with plated forearms)
+      drawAt(getBox(0.25,0.9,0.25,0.3,0.28,0.3),bx,by,bz,bFace,-0.75,0.4,0,m4rotX(ws));
+      drawAt(getBox(0.25,0.9,0.25,0.3,0.28,0.3),bx,by,bz,bFace,0.75,0.4,0,m4rotX(-ws));
+      // Forearm plates
+      drawAt(getBox(0.18,0.35,0.15,0.33,0.3,0.33),bx,by,bz,bFace,-0.75,0.15,0.1,null);
+      drawAt(getBox(0.18,0.35,0.15,0.33,0.3,0.33),bx,by,bz,bFace,0.75,0.15,0.1,null);
+      // Gauntlet fingers
+      drawAt(getBox(0.2,0.08,0.15,0.28,0.25,0.28),bx,by,bz,bFace,-0.75,-0.1,0.1,null);
+      drawAt(getBox(0.2,0.08,0.15,0.28,0.25,0.28),bx,by,bz,bFace,0.75,-0.1,0.1,null);
+
+      // Helmet (enclosed with T-visor, cheek guards, crown)
+      drawAt(getSphere(0.42,0.33,0.3,0.34),bx,by,bz,bFace,0,1.55,0,null);
+      // Cheek guards
+      drawAt(getBox(0.12,0.2,0.15,0.3,0.28,0.3),bx,by,bz,bFace,-0.25,1.4,0.15,null);
+      drawAt(getBox(0.12,0.2,0.15,0.3,0.28,0.3),bx,by,bz,bFace,0.25,1.4,0.15,null);
+      // T-visor (glowing)
+      const vg=0.1+rage*0.5;
+      drawAt(getBox(0.06,0.14,0.05,vg,0.05,0),bx,by,bz,bFace,0,1.58,0.4,null);
+      drawAt(getBox(0.28,0.04,0.05,vg,0.05,0),bx,by,bz,bFace,0,1.62,0.4,null);
+      // Helmet crest (mohawk style)
+      for(let c=0;c<5;c++){
+        drawAt(getBox(0.04,0.15+c*0.03,0.06,0.3+rage*0.5,0.08,0.05),bx,by,bz,bFace,0,1.85+c*0.04,-0.12+c*0.06,null);
+      }
+      // Crown horns
+      drawAt(getBox(0.06,0.2,0.06,0.25,0.2,0.22),bx,by,bz,bFace,-0.2,1.9,0,null);
+      drawAt(getBox(0.06,0.2,0.06,0.25,0.2,0.22),bx,by,bz,bFace,0.2,1.9,0,null);
+
+      // GIANT WARHAMMER (detailed)
+      const hRot=m4rotX(-0.4+ws*0.8);
+      // Shaft
+      drawAt(getBox(0.08,2.8,0.08,0.45,0.35,0.18),bx,by,bz,bFace,0.9,0.5,0.3,hRot);
+      // Shaft wrapping
+      for(let w=0;w<4;w++){
+        drawAt(getBox(0.1,0.04,0.1,0.3,0.2,0.1),bx,by,bz,bFace,0.9,0.2+w*0.3,0.3,hRot);
+      }
+      // Hammer head (massive double-sided)
+      drawAt(getBox(0.6,0.5,0.4,0.38,0.35,0.38),bx,by,bz,bFace,0.9,2.1,0.5,hRot);
+      // Hammer face plates
+      drawAt(getBox(0.55,0.4,0.08,0.42,0.38,0.42),bx,by,bz,bFace,0.9,2.1,0.72,hRot);
+      drawAt(getBox(0.55,0.4,0.08,0.42,0.38,0.42),bx,by,bz,bFace,0.9,2.1,0.28,hRot);
+      // Hammer spike on top
+      drawAt(getBox(0.06,0.25,0.06,0.3,0.25,0.28),bx,by,bz,bFace,0.9,2.45,0.5,hRot);
+      // Hammer runes (glowing)
+      const rg2=0.3+sin(bt*4)*0.4+rage*0.3;
+      drawAt(getBox(0.3,0.04,0.01,rg2,0.1,0),bx,by,bz,bFace,0.9,2.2,0.73,hRot);
+      drawAt(getBox(0.3,0.04,0.01,rg2,0.1,0),bx,by,bz,bFace,0.9,2,0.73,hRot);
+
+      // SHIELD (detailed with emblem)
+      drawAt(getBox(0.1,1,0.7,0.35,0.3,0.25),bx,by,bz,bFace,-0.9,0.5,0.3,null);
+      // Shield rim
+      drawAt(getBox(0.05,1.05,0.05,0.4,0.35,0.3),bx,by,bz,bFace,-0.9,0.5,0.66,null);
+      drawAt(getBox(0.05,1.05,0.05,0.4,0.35,0.3),bx,by,bz,bFace,-0.9,0.5,-0.06,null);
+      drawAt(getBox(0.05,0.05,0.72,0.4,0.35,0.3),bx,by,bz,bFace,-0.9,1.02,0.3,null);
+      drawAt(getBox(0.05,0.05,0.72,0.4,0.35,0.3),bx,by,bz,bFace,-0.9,-0.02,0.3,null);
+      // Shield boss
+      drawAt(getSphere(0.12,0.45,0.4,0.35),bx,by,bz,bFace,-0.92,0.55,0.65,null);
+      // Shield cross emblem
+      drawAt(getBox(0.02,0.5,0.06,0.5,0.4,0.15),bx,by,bz,bFace,-0.93,0.5,0.65,null);
+      drawAt(getBox(0.02,0.06,0.3,0.5,0.4,0.15),bx,by,bz,bFace,-0.93,0.55,0.65,null);
+
+      // Cape (flowing)
+      const capeWave=sin(bt*2)*0.1;
+      drawAt(getBox(0.85,1.4,0.06,0.22,0.06,0.06),bx,by,bz,bFace,0,0.3,-0.35,m4rotX(capeWave));
+      drawAt(getBox(0.7,0.3,0.06,0.2,0.05,0.05),bx,by,bz,bFace,0,-0.5,-0.4,m4rotX(capeWave*1.5));
+      // Cape clasp
+      drawAt(getSphere(0.06,0.5,0.4,0.15),bx,by,bz,bFace,-0.3,1,0.05,null);
+      drawAt(getSphere(0.06,0.5,0.4,0.15),bx,by,bz,bFace,0.3,1,0.05,null);
+
+      // ORBITING DARK ENERGY (gets more intense with rage)
+      const numOrbs=4+floor(rage*8);
+      for(let o=0;o<numOrbs;o++){
+        const oa=bt*2+o*TAU/numOrbs;
+        const orbR=1.5+rage*0.5;
+        const oy2=0.5+sin(bt*3+o*1.5)*1;
+        const orbI=0.2+rage*0.5;
+        drawAt(getSphere(0.06+rage*0.03,orbI,0.05,0.15*orbI),bx,by,bz,0,sin(oa)*orbR,oy2,cos(oa)*orbR,null);
+        // Trails
+        const ta2=oa-0.5;
+        drawAt(getSphere(0.03,orbI*0.5,0.02,0.08*orbI),bx,by,bz,0,sin(ta2)*orbR,oy2-0.1,cos(ta2)*orbR,null);
+      }
+      // Ground runes beneath Warden
+      for(let r=0;r<6;r++){
+        const ra=bt*0.5+r*TAU/6;
+        const rr=2+sin(bt+r)*0.3;
+        const ri=0.15+rage*0.25;
+        drawAt(getBox(0.2,0.02,0.2,ri,0.02,0),bx,by,bz,0,sin(ra)*rr,-0.9,cos(ra)*rr,null);
+      }
+    }
+  }
+
+  // Draw projectiles
+  for(const p of projectiles){
+    let mat=m4translate(p.pos.x,p.pos.y,p.pos.z);
+    if(p.type==='tornado'){
+      mat=m4mul(mat,m4rotY(p.spin||0));
+    }
+    drawMesh(p.mesh,mat,vp);
+  }
+
+  // Draw pickups (bob up and down)
+  for(const pk of pickups){
+    if(pk.collected)continue;
+    const bob=sin(levelTime*3+pk.pos.x)*0.3;
+    const mat=m4mul(m4translate(pk.pos.x,pk.pos.y+bob,pk.pos.z),m4rotY(levelTime*2));
+    drawMesh(pk.mesh,mat,vp);
+  }
+
+  // Draw particles
+  const particleMesh=getSphere(0.1,1,1,1);
+  for(const p of particles){
+    const mat=m4mul(m4translate(p.pos.x,p.pos.y,p.pos.z),m4scale(p.size*5,p.size*5,p.size*5));
+    // Recolor via mesh would be expensive; just draw white and rely on fog
+    drawMesh(particleMesh,mat,vp);
+  }
+
+  // Water planes
+  if(waterPlanes.length){
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    for(const w of waterPlanes){
+      const wm=makePlane(w.size.x,w.size.z,0.2,0.4,0.7);
+      drawMesh(wm,m4translate(w.pos.x,w.pos.y+sin(levelTime)*0.2,w.pos.z),vp);
+    }
+    gl.disable(gl.BLEND);
+  }
+  // Lava planes
+  if(lavaPlanes.length){
+    for(const l of lavaPlanes){
+      const lm=makePlane(l.size.x,l.size.z,0.8,0.2,0.05);
+      drawMesh(lm,m4translate(l.pos.x,l.pos.y,l.pos.z),vp);
+    }
+  }
+}
+
+// ---- MAIN LOOP ----
+function gameLoop(time){
+  requestAnimationFrame(gameLoop);
+  dt=min((time-lastTime)/1000,0.05);
+  lastTime=time;
+
+  if(state==='map'){
+    drawMap();
+    document.getElementById('map-screen').style.display='flex';
+    return;
+  }
+
+  levelTime+=dt;
+
+  updatePlayer();
+  updateEnemies();
+  updateBoss();
+  updateProjectiles();
+  updateDecorations();
+  updateParticles();
+  updateDragonMode();
+  checkArenaProgress();
+
+  // Timers
+  if(msgTimer>0){msgTimer-=dt;if(msgTimer<=0)document.getElementById('msg').style.display='none';}
+  if(itemPopupTimer>0){itemPopupTimer-=dt;if(itemPopupTimer<=0)document.getElementById('item-popup').style.display='none';}
+
+  render();
+}
+
+// ---- MENU FUNCTIONS ----
+function retryLevel(){
+  document.getElementById('death-screen').style.display='none';
+  startLevel(currentLevel);
+}
+function goToMap(){
+  state='map';
+  dragonMode=false;
+  document.getElementById('death-screen').style.display='none';
+  document.getElementById('win-screen').style.display='none';
+  document.getElementById('boss-bar').style.display='none';
+  document.getElementById('attack-prompt').style.display='none';
+  document.getElementById('map-screen').style.display='flex';
+  playMapMusic();
+}
+
+// ---- AUDIO ENGINE ----
+let audioCtx, masterGain;
+function initAudio(){
+  if(!audioCtx){
+    audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    masterGain=audioCtx.createGain();
+    masterGain.gain.value=0.25;
+    masterGain.connect(audioCtx.destination);
+  }
+}
+function playTone(freq,dur,type,vol){
+  initAudio();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type||'square';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.1,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+  o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
+}
+
+// Play hit sounds
+const origHurt=hurtPlayer;
+hurtPlayer=function(dmg){
+  origHurt(dmg);
+  if(dmg>=1)playTone(200,0.15,'sawtooth',0.08);
+};
+
+// ======== JAZZY ELECTRONIC MUSIC SYSTEM ========
+let musicNodes=[];
+let musicPlaying=false;
+let currentTrack='';
+
+function stopMusic(){
+  musicPlaying=false;currentTrack='';
+  if(masterGain)masterGain.gain.setValueAtTime(0,audioCtx.currentTime);
+  musicNodes.forEach(n=>{try{n.stop()}catch(e){}});
+  musicNodes=[];
+  if(audioCtx){audioCtx.close();audioCtx=null;}
+}
+
+// Note frequencies
+const NOTE={
+  C3:130.81,D3:146.83,Eb3:155.56,E3:164.81,F3:174.61,G3:196,Ab3:207.65,A3:220,Bb3:233.08,B3:246.94,
+  C4:261.63,D4:293.66,Eb4:311.13,E4:329.63,F4:349.23,G4:392,Ab4:415.30,A4:440,Bb4:466.16,B4:493.88,
+  C5:523.25,D5:587.33,Eb5:622.25,E5:659.26,F5:698.46,G5:783.99,Ab5:830.61,A5:880,Bb5:932.33,B5:987.77,
+  C6:1046.5
+};
+
+function schedNote(freq,start,dur,type,vol,dest){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(0,start);
+  g.gain.linearRampToValueAtTime(vol,start+0.01);
+  g.gain.setValueAtTime(vol,start+dur*0.7);
+  g.gain.linearRampToValueAtTime(0,start+dur);
+  o.connect(g);g.connect(dest);
+  o.start(start);o.stop(start+dur+0.05);
+  musicNodes.push(o);
+}
+
+function schedDrum(start,type,dest){
+  // Kick
+  if(type==='kick'||type==='both'){
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(150,start);o.frequency.exponentialRampToValueAtTime(40,start+0.12);
+    g.gain.setValueAtTime(0.4,start);g.gain.exponentialRampToValueAtTime(0.001,start+0.2);
+    o.connect(g);g.connect(dest);o.start(start);o.stop(start+0.25);musicNodes.push(o);
+  }
+  // Snare
+  if(type==='snare'||type==='both'){
+    const bufSize=audioCtx.sampleRate*0.1;
+    const buf=audioCtx.createBuffer(1,bufSize,audioCtx.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<bufSize;i++)d[i]=(rand()*2-1)*0.5;
+    const n=audioCtx.createBufferSource(),g=audioCtx.createGain(),f=audioCtx.createBiquadFilter();
+    n.buffer=buf;f.type='highpass';f.frequency.value=2000;
+    g.gain.setValueAtTime(0.25,start);g.gain.exponentialRampToValueAtTime(0.001,start+0.12);
+    n.connect(f);f.connect(g);g.connect(dest);n.start(start);n.stop(start+0.15);musicNodes.push(n);
+  }
+  // Hi-hat
+  if(type==='hat'||type==='both'){
+    const bufSize=audioCtx.sampleRate*0.04;
+    const buf=audioCtx.createBuffer(1,bufSize,audioCtx.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<bufSize;i++)d[i]=(rand()*2-1)*0.3;
+    const n=audioCtx.createBufferSource(),g=audioCtx.createGain(),f=audioCtx.createBiquadFilter();
+    n.buffer=buf;f.type='highpass';f.frequency.value=6000;
+    g.gain.setValueAtTime(0.12,start);g.gain.exponentialRampToValueAtTime(0.001,start+0.05);
+    n.connect(f);f.connect(g);g.connect(dest);n.start(start);n.stop(start+0.08);musicNodes.push(n);
+  }
+}
+
+// ---- TRACK: MAP (chill jazzy lofi) ----
+// ---- HELPER: schedule a section of chords, melody, bass, drums ----
+function schedSection(t,beat,numBeats,chords,melody,bassLine,drumPattern,dest){
+  // Chords
+  let ct=t;
+  for(const[chord,dur] of chords){
+    for(const f of chord){
+      schedNote(f,ct,beat*dur*0.9,'sine',0.035,dest);
+      schedNote(f*1.003,ct,beat*dur*0.9,'triangle',0.015,dest);
+    }
+    ct+=beat*dur;
+  }
+  // Melody
+  ct=t;
+  for(const n of melody){
+    if(n>0)schedNote(n,ct,beat*0.8,melody._wave||'triangle',melody._vol||0.05,dest);
+    ct+=beat;
+  }
+  // Bass
+  ct=t;
+  const bDur=numBeats/bassLine.length;
+  for(const b of bassLine){
+    if(b>0)schedNote(b*0.5,ct,beat*bDur*0.9,'triangle',0.07,dest);
+    ct+=beat*bDur;
+  }
+  // Drums
+  ct=t;
+  for(let i=0;i<numBeats;i++){
+    const bt2=ct+i*beat;
+    drumPattern(i,bt2,beat,dest);
+  }
+}
+
+// ---- TRACK: MAP (~3 min chill jazzy lofi, 82 BPM, 240 beats) ----
+function playMapMusic(){
+  if(currentTrack==='map')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='map';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=82, beat=60/BPM, total=240, loopLen=beat*total;
+  let ct=t;
+  // Section A: Dm7→G7→Cmaj7→Am7 (×2 = 64 beats)
+  const chA=[ [[NOTE.D3,NOTE.F3,NOTE.A3,NOTE.C4],8],[[NOTE.G3,NOTE.B3,NOTE.D4,NOTE.F4],8],
+    [[NOTE.C3,NOTE.E3,NOTE.G3,NOTE.B3],8],[[NOTE.A3,NOTE.C4,NOTE.E4,NOTE.G4],8] ];
+  for(let r=0;r<2;r++){for(const[ch,d] of chA){for(const f of ch){schedNote(f,ct,beat*d*0.9,'sine',0.035,masterGain);schedNote(f*1.003,ct,beat*d*0.9,'triangle',0.015,masterGain);}ct+=beat*d;}}
+  // Section A melody
+  const mA=[NOTE.D5,0,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.A4,NOTE.B4,0,NOTE.D5,NOTE.F5,NOTE.G5,NOTE.F5,NOTE.D5,0,
+    NOTE.E5,0,NOTE.G5,NOTE.E5,NOTE.C5,0,NOTE.B4,NOTE.C5,NOTE.A4,0,NOTE.C5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.A4,0,
+    NOTE.D5,NOTE.F5,NOTE.A5,NOTE.G5,0,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.E5,NOTE.G5,0,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,
+    NOTE.F5,0,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.B4,NOTE.D5,NOTE.E5,0,NOTE.D5,NOTE.C5,NOTE.A4,0,NOTE.G4,NOTE.A4];
+  ct=t;for(const n of mA){if(n>0)schedNote(n,ct,beat*0.85,'triangle',0.05,masterGain);ct+=beat;}
+  // Section A bass
+  const bA=[NOTE.D3,NOTE.D3,NOTE.G3,NOTE.G3,NOTE.C3,NOTE.C3,NOTE.A3,NOTE.A3,NOTE.D3,NOTE.F3,NOTE.G3,NOTE.G3,NOTE.C3,NOTE.E3,NOTE.A3,NOTE.A3];
+  ct=t;for(const b of bA){schedNote(b*0.5,ct,beat*4*0.95,'triangle',0.07,masterGain);ct+=beat*4;}
+  // Section B: Fmaj7→Em7→Dm7→Cmaj7 (64 beats at beat 64)
+  ct=t+beat*64;
+  const chB=[[[NOTE.F3,NOTE.A3,NOTE.C4,NOTE.E4],8],[[NOTE.E3,NOTE.G3,NOTE.B3,NOTE.D4],8],
+    [[NOTE.D3,NOTE.F3,NOTE.A3,NOTE.C4],8],[[NOTE.C3,NOTE.E3,NOTE.G3,NOTE.B3],8]];
+  for(let r=0;r<2;r++){for(const[ch,d] of chB){for(const f of ch){schedNote(f,ct,beat*d*0.9,'sine',0.035,masterGain);schedNote(f*1.003,ct,beat*d*0.85,'triangle',0.018,masterGain);}ct+=beat*d;}}
+  // Section B melody (new lick)
+  const mB=[NOTE.A5,NOTE.G5,NOTE.F5,0,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,0,NOTE.G5,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,0,
+    NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,0,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,0,
+    NOTE.C5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,0,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.F5,NOTE.A5,0,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,
+    NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,0,NOTE.C5,NOTE.D5,NOTE.E5,0,NOTE.D5,NOTE.C5];
+  ct=t+beat*64;for(const n of mB){if(n>0)schedNote(n,ct,beat*0.85,'triangle',0.05,masterGain);ct+=beat;}
+  // Section B bass
+  const bB=[NOTE.F3,NOTE.F3,NOTE.E3,NOTE.E3,NOTE.D3,NOTE.D3,NOTE.C3,NOTE.C3,NOTE.F3,NOTE.A3,NOTE.E3,NOTE.G3,NOTE.D3,NOTE.F3,NOTE.C3,NOTE.E3];
+  ct=t+beat*64;for(const b of bB){schedNote(b*0.5,ct,beat*4*0.95,'triangle',0.07,masterGain);ct+=beat*4;}
+  // Section C: Bridge — Bbmaj7→Am7→Abmaj7→Gm7 (48 beats at beat 128)
+  ct=t+beat*128;
+  const chC=[[[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.A4],8],[[NOTE.A3,NOTE.C4,NOTE.E4,NOTE.G4],8],
+    [[NOTE.Ab3,NOTE.C4,NOTE.Eb4,NOTE.G4],8],[[NOTE.G3,NOTE.Bb3,NOTE.D4,NOTE.F4],8],
+    [[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.A4],8],[[NOTE.A3,NOTE.C4,NOTE.E4,NOTE.G4],8]];
+  for(const[ch,d] of chC){for(const f of ch){schedNote(f,ct,beat*d*0.9,'sine',0.032,masterGain);}ct+=beat*d;}
+  const mC=[NOTE.F5,0,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,0,NOTE.E5,0,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,0,
+    NOTE.Eb5,0,NOTE.G5,NOTE.Ab5,NOTE.G5,NOTE.Eb5,NOTE.C5,0,NOTE.D5,0,NOTE.F5,NOTE.G5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,
+    NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,0,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5];
+  ct=t+beat*128;for(const n of mC){if(n>0)schedNote(n,ct,beat*0.8,'sine',0.045,masterGain);ct+=beat;}
+  // Section D: Reprise of A with variation (64 beats at beat 176) — sparse intro then builds
+  ct=t+beat*176;
+  for(let r=0;r<2;r++){for(const[ch,d] of chA){for(const f of ch){schedNote(f,ct,beat*d*0.9,'sine',0.038,masterGain);}ct+=beat*d;}}
+  const mD=[0,0,NOTE.D5,0,NOTE.F5,NOTE.G5,NOTE.A5,0,0,0,NOTE.G5,0,NOTE.F5,NOTE.E5,NOTE.D5,0,
+    NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,
+    NOTE.D5,NOTE.F5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.A4,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.G5,
+    NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.B4,NOTE.A4,NOTE.G4,NOTE.A4,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.F5];
+  ct=t+beat*176;for(const n of mD){if(n>0)schedNote(n,ct,beat*0.85,'triangle',0.055,masterGain);ct+=beat;}
+  ct=t+beat*176;const bD=[NOTE.D3,NOTE.A3,NOTE.G3,NOTE.C3,NOTE.A3,NOTE.D3,NOTE.G3,NOTE.C3,NOTE.D3,NOTE.F3,NOTE.G3,NOTE.A3,NOTE.C3,NOTE.E3,NOTE.A3,NOTE.D3];
+  for(const b of bD){schedNote(b*0.5,ct,beat*4*0.95,'triangle',0.07,masterGain);ct+=beat*4;}
+  // Drums for all 240 beats
+  ct=t;
+  for(let i=0;i<total;i++){
+    const bt2=ct+i*beat;
+    if(i%4===0)schedDrum(bt2,'kick',masterGain);
+    if(i%4===2)schedDrum(bt2,'snare',masterGain);
+    schedDrum(bt2,'hat',masterGain);
+    if(i%2===1)schedDrum(bt2+beat*0.5,'hat',masterGain);
+    // Fills every 32 beats
+    if(i%32>28){schedDrum(bt2+beat*0.25,'snare',masterGain);}
+  }
+  setTimeout(()=>{if(currentTrack==='map')playMapMusic();},loopLen*1000);
+}
+
+// ---- TRACK: WATERFALL (~3 min smooth jazz, 90 BPM, 270 beats) ----
+function playWaterfallMusic(){
+  if(currentTrack==='waterfall')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='waterfall';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=90, beat=60/BPM, total=270, loopLen=beat*total;
+  let ct;
+  // 8.4 sections of ~32 beats = 270 beats
+  // Section A (0-64): Fm7→Bbm7→Eb7→Abmaj7
+  const chA=[[[NOTE.F3,NOTE.Ab3,NOTE.C4,NOTE.Eb4],8],[[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.Ab4],8],
+    [[NOTE.Eb3,NOTE.G3,NOTE.Bb3,NOTE.D4],8],[[NOTE.Ab3,NOTE.C4,NOTE.Eb4,NOTE.G4],8]];
+  ct=t;for(let r=0;r<2;r++){for(const[ch,d] of chA){for(const f of ch){schedNote(f,ct,beat*d*0.85,'sine',0.035,masterGain);schedNote(f*2,ct+beat,beat*2,'triangle',0.012,masterGain);}ct+=beat*d;}}
+  const mA=[NOTE.C5,NOTE.Eb5,NOTE.F5,0,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.F5,NOTE.Ab5,0,NOTE.Bb5,NOTE.Ab5,NOTE.F5,0,
+    NOTE.G5,NOTE.Bb5,NOTE.G5,NOTE.Eb5,0,NOTE.D5,NOTE.Eb5,NOTE.G5,NOTE.Ab5,0,NOTE.G5,NOTE.Eb5,NOTE.C5,0,NOTE.Eb5,NOTE.C5,
+    NOTE.F5,NOTE.Ab5,NOTE.C6,0,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.G5,NOTE.Bb5,0,NOTE.C6,NOTE.Bb5,NOTE.Ab5,0,
+    NOTE.G5,0,NOTE.F5,NOTE.Eb5,NOTE.D5,0,NOTE.Eb5,NOTE.F5,NOTE.G5,0,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5];
+  ct=t;for(const n of mA){if(n>0)schedNote(n,ct,beat*0.8,'triangle',0.048,masterGain);ct+=beat;}
+  // Bass A
+  ct=t;const bA=[NOTE.F3,NOTE.Ab3,NOTE.Bb3,NOTE.C4,NOTE.Bb3,NOTE.Ab3,NOTE.Eb3,NOTE.G3,NOTE.Ab3,NOTE.Bb3,NOTE.C4,NOTE.Eb4,NOTE.D4,NOTE.C4,NOTE.Ab3,NOTE.G3,
+    NOTE.F3,NOTE.G3,NOTE.Ab3,NOTE.Bb3,NOTE.Eb3,NOTE.F3,NOTE.G3,NOTE.Ab3,NOTE.C4,NOTE.Bb3,NOTE.Ab3,NOTE.G3,NOTE.F3,NOTE.Eb3,NOTE.D4,NOTE.C4];
+  for(const b of bA){schedNote(b*0.5,ct,beat*2*0.9,'triangle',0.065,masterGain);ct+=beat*2;}
+  // Section B (64-128): Dbmaj7→Cm7→Bbm7→Abmaj7
+  ct=t+beat*64;
+  const chB=[[[NOTE.D4,NOTE.F4,NOTE.Ab4],8],[[NOTE.C4,NOTE.Eb4,NOTE.G4],8],
+    [[NOTE.Bb3,NOTE.D4,NOTE.F4],8],[[NOTE.Ab3,NOTE.C4,NOTE.Eb4],8]];
+  for(let r=0;r<2;r++){for(const[ch,d] of chB){for(const f of ch){schedNote(f,ct,beat*d*0.85,'sine',0.032,masterGain);}ct+=beat*d;}}
+  const mB=[NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,0,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,0,NOTE.Ab5,NOTE.G5,NOTE.F5,0,NOTE.Eb5,NOTE.D5,
+    NOTE.Eb5,NOTE.F5,NOTE.G5,0,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,0,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,
+    NOTE.G5,0,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,0,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,0,NOTE.Ab5,NOTE.G5,
+    NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.Ab5,0,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5];
+  ct=t+beat*64;for(const n of mB){if(n>0)schedNote(n,ct,beat*0.78,'sine',0.045,masterGain);ct+=beat;}
+  ct=t+beat*64;for(const b of bA){schedNote(b*0.5,ct,beat*2*0.9,'triangle',0.065,masterGain);ct+=beat*2;}
+  // Section C (128-192): Solo section — sparser chords, more expressive melody
+  ct=t+beat*128;
+  for(let r=0;r<2;r++){for(const[ch,d] of chA){for(const f of ch){schedNote(f,ct,beat*d*0.9,'sine',0.025,masterGain);}ct+=beat*d;}}
+  const mC=[0,0,NOTE.C6,NOTE.Bb5,NOTE.Ab5,0,0,NOTE.G5,NOTE.F5,0,NOTE.Eb5,0,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,
+    NOTE.C6,0,0,NOTE.Bb5,NOTE.Ab5,NOTE.G5,0,0,NOTE.F5,0,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,0,NOTE.Bb5,
+    0,NOTE.Ab5,NOTE.G5,0,NOTE.F5,NOTE.Eb5,0,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,0,
+    NOTE.F5,0,NOTE.Eb5,NOTE.D5,NOTE.C5,0,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.C5];
+  ct=t+beat*128;for(const n of mC){if(n>0)schedNote(n,ct,beat*0.85,'triangle',0.055,masterGain);ct+=beat;}
+  ct=t+beat*128;for(const b of bA){schedNote(b*0.5,ct,beat*2*0.9,'triangle',0.065,masterGain);ct+=beat*2;}
+  // Section D (192-270): Final 78 beats — recap with added energy
+  ct=t+beat*192;
+  for(let r=0;r<2;r++){for(const[ch,d] of chA){for(const f of ch){schedNote(f,ct,beat*d*0.88,'sine',0.038,masterGain);schedNote(f*2,ct,beat*d*0.5,'triangle',0.018,masterGain);}ct+=beat*d;}}
+  const mD=[NOTE.C5,NOTE.Eb5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,
+    NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,
+    NOTE.C5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,0,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,0,
+    NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,0,NOTE.Eb5,NOTE.C5,0,0,NOTE.C5,0,
+    NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5];
+  ct=t+beat*192;for(let i=0;i<min(mD.length,78);i++){if(mD[i]>0)schedNote(mD[i],ct,beat*0.82,'triangle',0.05,masterGain);ct+=beat;}
+  ct=t+beat*192;const bD2=[NOTE.F3,NOTE.Ab3,NOTE.Bb3,NOTE.C4,NOTE.Eb3,NOTE.G3,NOTE.Ab3,NOTE.Bb3,NOTE.C4,NOTE.Bb3,NOTE.Ab3,NOTE.G3,NOTE.F3,NOTE.Eb3,NOTE.D4,NOTE.C4,
+    NOTE.F3,NOTE.G3,NOTE.Ab3,NOTE.Bb3,NOTE.C4,NOTE.Bb3,NOTE.Ab3,NOTE.G3,NOTE.F3,NOTE.Ab3,NOTE.C4,NOTE.Eb4,NOTE.D4,NOTE.C4,NOTE.Bb3,NOTE.Ab3,NOTE.F3,NOTE.G3,NOTE.Ab3,NOTE.Bb3,NOTE.C4,NOTE.Eb4,NOTE.C4];
+  for(let i=0;i<min(bD2.length,39);i++){schedNote(bD2[i]*0.5,ct,beat*2*0.9,'triangle',0.065,masterGain);ct+=beat*2;}
+  // Drums 270 beats
+  ct=t;for(let i=0;i<total;i++){const bt2=ct+i*beat;
+    if(i%4===0)schedDrum(bt2,'kick',masterGain);if(i%4===2)schedDrum(bt2,'snare',masterGain);
+    schedDrum(bt2,'hat',masterGain);if(i%4===1||i%4===3)schedDrum(bt2+beat*0.33,'hat',masterGain);
+    if(i%32>28)schedDrum(bt2+beat*0.25,'snare',masterGain);
+    if(i>=128&&i<192&&i%8===6)schedDrum(bt2+beat*0.5,'kick',masterGain);}
+  setTimeout(()=>{if(currentTrack==='waterfall')playWaterfallMusic();},loopLen*1000);
+}
+
+// ---- TRACK: JUNGLE (~3 min funky jazz-electronic, 105 BPM, 320 beats) ----
+function playJungleMusic(){
+  if(currentTrack==='jungle')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='jungle';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=105, beat=60/BPM, total=320, loopLen=beat*total;
+  let ct;
+  // 5 sections of 64 beats
+  const chA=[[[NOTE.A3,NOTE.C4,NOTE.E4,NOTE.G4],8],[[NOTE.D3,NOTE.F3,NOTE.A3,NOTE.C4],8],
+    [[NOTE.G3,NOTE.Bb3,NOTE.D4,NOTE.F4],8],[[NOTE.C3,NOTE.E3,NOTE.G3,NOTE.Bb3],8]];
+  const chB=[[[NOTE.F3,NOTE.A3,NOTE.C4,NOTE.E4],8],[[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.A4],8],
+    [[NOTE.Eb3,NOTE.G3,NOTE.Bb3,NOTE.D4],8],[[NOTE.A3,NOTE.C4,NOTE.E4,NOTE.G4],8]];
+  // All 5 sections of chords
+  const sections=[chA,chA,chB,chB,chA];
+  ct=t;
+  for(let s=0;s<5;s++){
+    const chords=sections[s];
+    for(let r=0;r<2;r++){for(const[ch,d] of chords){
+      for(let b=0;b<d;b++){if(b%2===0||b===3||b===5){for(const f of ch)schedNote(f,ct+b*beat,beat*0.3,'sawtooth',0.022,masterGain);}}
+      ct+=beat*d;}}
+  }
+  // 5 melody sections
+  const melodies=[
+    [NOTE.E5,0,NOTE.G5,NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.F5,NOTE.A5,0,NOTE.C6,NOTE.A5,0,NOTE.G5,NOTE.F5,
+     NOTE.D5,0,NOTE.G5,NOTE.Bb5,0,NOTE.A5,NOTE.G5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.E5,0,NOTE.C5,NOTE.D5,NOTE.E5,0,
+     NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,0,NOTE.E5,NOTE.G5,
+     NOTE.C6,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,0,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.D5,NOTE.E5],
+    [NOTE.G5,NOTE.A5,NOTE.C6,0,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,
+     NOTE.C5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,0,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,
+     0,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.A5,0,NOTE.G5,NOTE.E5,
+     NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.D5,NOTE.E5,NOTE.G5],
+    [NOTE.F5,NOTE.A5,NOTE.C6,0,NOTE.Bb5,NOTE.A5,NOTE.F5,0,NOTE.D5,NOTE.F5,NOTE.A5,NOTE.Bb5,0,NOTE.A5,NOTE.F5,NOTE.D5,
+     NOTE.Eb5,NOTE.G5,NOTE.Bb5,NOTE.D5,NOTE.Eb5,0,NOTE.G5,NOTE.Bb5,NOTE.C6,0,NOTE.Bb5,NOTE.G5,NOTE.Eb5,0,NOTE.D5,NOTE.Eb5,
+     NOTE.A5,0,NOTE.C6,NOTE.E5,NOTE.G5,0,NOTE.A5,NOTE.C6,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,
+     0,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,0,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.C6,NOTE.A5,0,NOTE.G5,NOTE.E5],
+    [0,NOTE.D5,NOTE.F5,NOTE.A5,0,NOTE.Bb5,NOTE.A5,NOTE.F5,NOTE.D5,0,NOTE.F5,NOTE.A5,NOTE.Bb5,NOTE.A5,0,NOTE.G5,
+     NOTE.Eb5,NOTE.G5,NOTE.Bb5,0,NOTE.D5,NOTE.Eb5,NOTE.G5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.G5,0,NOTE.Eb5,NOTE.G5,NOTE.Bb5,NOTE.C6,
+     NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,0,NOTE.A5,NOTE.G5,
+     NOTE.E5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,0],
+    [NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,
+     NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.G5,
+     NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,0,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,
+     NOTE.A4,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.A4,0,0,NOTE.E5,0]
+  ];
+  for(let s=0;s<5;s++){ct=t+beat*64*s;for(const n of melodies[s]){if(n>0)schedNote(n,ct,beat*0.55,'sawtooth',0.038,masterGain);ct+=beat;}}
+  // Bass all sections
+  const bassNotes=[NOTE.A3,0,NOTE.A3,NOTE.C4,NOTE.D4,0,NOTE.D3,NOTE.F3,NOTE.G3,0,NOTE.G3,NOTE.Bb3,NOTE.C4,0,NOTE.C3,NOTE.E3];
+  ct=t;for(let s=0;s<5;s++){for(const b of bassNotes){if(b>0)schedNote(b*0.5,ct,beat*1.5,'square',0.055,masterGain);ct+=beat*4;}}
+  // Drums
+  ct=t;for(let i=0;i<total;i++){const bt2=ct+i*beat;
+    if(i%4===0||i%4===3)schedDrum(bt2,'kick',masterGain);if(i%4===2)schedDrum(bt2,'snare',masterGain);
+    schedDrum(bt2,'hat',masterGain);schedDrum(bt2+beat*0.5,'hat',masterGain);
+    if(i%8===6)schedDrum(bt2+beat*0.75,'snare',masterGain);
+    if(i%64>56&&i%2===0)schedDrum(bt2+beat*0.25,'snare',masterGain);}
+  setTimeout(()=>{if(currentTrack==='jungle')playJungleMusic();},loopLen*1000);
+}
+
+// ---- TRACK: VOLCANO (~3 min heavy electronic, 128 BPM, 384 beats) ----
+function playVolcanoMusic(){
+  if(currentTrack==='volcano')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='volcano';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=128, beat=60/BPM, total=384, loopLen=beat*total;
+  let ct;
+  // 6 sections of 64 beats
+  const chA=[[[NOTE.E3,NOTE.B3,NOTE.E4],8],[[NOTE.C3,NOTE.G3,NOTE.C4],8],[[NOTE.G3,NOTE.D4,NOTE.G4],8],[[NOTE.D3,NOTE.A3,NOTE.D4],8]];
+  const chB=[[[NOTE.A3,NOTE.E4,NOTE.A4],8],[[NOTE.F3,NOTE.C4,NOTE.F4],8],[[NOTE.D3,NOTE.A3,NOTE.D4],8],[[NOTE.E3,NOTE.B3,NOTE.E4],8]];
+  const chC=[[[NOTE.C3,NOTE.G3,NOTE.C4],8],[[NOTE.Ab3,NOTE.Eb4,NOTE.Ab4],8],[[NOTE.Bb3,NOTE.F4,NOTE.Bb4],8],[[NOTE.E3,NOTE.B3,NOTE.E4],8]];
+  const allCh=[chA,chA,chB,chC,chA,chB];
+  ct=t;
+  for(let s=0;s<6;s++){for(let r=0;r<2;r++){for(const[ch,d] of allCh[s]){for(const f of ch){
+    schedNote(f,ct,beat*d*0.95,'sawtooth',0.03,masterGain);schedNote(f*1.005,ct,beat*d*0.95,'sawtooth',0.02,masterGain);}ct+=beat*d;}}}
+  // 6 melody sections
+  const mels=[
+    [NOTE.E5,NOTE.E5,0,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.C5,NOTE.D5,NOTE.E5,0,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,
+     NOTE.G5,NOTE.G5,0,NOTE.B5,NOTE.A5,NOTE.G5,0,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,0,NOTE.G5,NOTE.E5,0,
+     NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,
+     NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.E5],
+    [NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.C6,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.G5,NOTE.A5,
+     NOTE.C6,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.C6,0,NOTE.B5,NOTE.A5,
+     NOTE.G5,0,NOTE.A5,NOTE.B5,NOTE.C6,NOTE.B5,NOTE.A5,0,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,
+     NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,0,NOTE.G5,NOTE.E5,0],
+    [NOTE.E5,NOTE.A5,NOTE.E5,NOTE.C5,0,NOTE.A5,NOTE.C6,NOTE.A5,NOTE.F5,NOTE.A5,NOTE.C6,NOTE.A5,0,NOTE.F5,NOTE.D5,NOTE.F5,
+     NOTE.D5,NOTE.A5,NOTE.D5,NOTE.F5,NOTE.A5,0,NOTE.D5,NOTE.E5,NOTE.A5,NOTE.E5,NOTE.C5,NOTE.A5,NOTE.E5,0,NOTE.A5,NOTE.E5,
+     NOTE.A5,NOTE.C6,NOTE.A5,NOTE.F5,NOTE.C5,NOTE.F5,NOTE.A5,NOTE.C6,0,NOTE.A5,NOTE.F5,NOTE.D5,NOTE.A5,NOTE.D5,NOTE.F5,NOTE.A5,
+     NOTE.E5,NOTE.B5,NOTE.E5,NOTE.G5,NOTE.B5,0,NOTE.E5,NOTE.G5,NOTE.E5,NOTE.B5,NOTE.E5,0,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.E5],
+    [NOTE.C5,NOTE.G5,NOTE.C5,NOTE.Eb5,NOTE.G5,0,NOTE.Ab5,NOTE.Eb5,NOTE.Ab5,NOTE.C5,NOTE.Eb5,0,NOTE.Bb5,NOTE.F5,NOTE.Bb5,NOTE.D5,
+     NOTE.F5,0,NOTE.Bb5,NOTE.Ab5,NOTE.F5,NOTE.D5,NOTE.Bb4,0,NOTE.E5,NOTE.B5,NOTE.E5,NOTE.G5,NOTE.B5,0,NOTE.E5,NOTE.G5,
+     NOTE.C5,NOTE.G5,NOTE.Eb5,NOTE.Ab5,NOTE.G5,NOTE.Eb5,NOTE.C5,0,NOTE.Bb5,NOTE.F5,NOTE.D5,NOTE.Bb4,0,NOTE.D5,NOTE.F5,NOTE.Bb5,
+     NOTE.E5,NOTE.B5,NOTE.G5,NOTE.E5,0,NOTE.G5,NOTE.B5,NOTE.E5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,0,NOTE.G5,NOTE.E5,NOTE.D5],
+    [NOTE.E5,NOTE.G5,NOTE.B5,NOTE.E5,NOTE.G5,NOTE.E5,NOTE.D5,0,NOTE.C5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,
+     NOTE.G5,NOTE.B5,NOTE.D5,NOTE.G5,NOTE.A5,NOTE.G5,0,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,
+     NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,
+     NOTE.E5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.C6,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,0,NOTE.G5,NOTE.E5],
+    [NOTE.E5,NOTE.A5,NOTE.C6,NOTE.E5,NOTE.A5,NOTE.G5,NOTE.E5,0,NOTE.F5,NOTE.A5,NOTE.C6,NOTE.F5,NOTE.D5,NOTE.A5,NOTE.D5,0,
+     NOTE.D5,NOTE.G5,NOTE.B5,NOTE.D5,NOTE.G5,NOTE.E5,NOTE.D5,0,NOTE.E5,NOTE.G5,NOTE.B5,NOTE.E5,NOTE.B5,NOTE.G5,NOTE.E5,NOTE.D5,
+     NOTE.C5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.B5,NOTE.C6,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.G5,
+     NOTE.A5,NOTE.B5,NOTE.C6,NOTE.B5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.A5,NOTE.G5,NOTE.E5,0]
+  ];
+  for(let s=0;s<6;s++){ct=t+beat*64*s;for(const n of mels[s]){if(n>0)schedNote(n,ct,beat*0.45,'sawtooth',0.04,masterGain);ct+=beat;}}
+  // Sub bass
+  const bassAll=[NOTE.E3,NOTE.C3,NOTE.G3,NOTE.D3,NOTE.A3,NOTE.F3,NOTE.D3,NOTE.E3,NOTE.C3,NOTE.Ab3,NOTE.Bb3,NOTE.E3];
+  ct=t;for(const b of bassAll){schedNote(b*0.25,ct,beat*32*0.9,'sine',0.09,masterGain);ct+=beat*32;}
+  // Heavy drums
+  ct=t;for(let i=0;i<total;i++){const bt2=ct+i*beat;
+    schedDrum(bt2,'kick',masterGain);if(i%2===1)schedDrum(bt2,'snare',masterGain);
+    schedDrum(bt2,'hat',masterGain);schedDrum(bt2+beat*0.5,'hat',masterGain);
+    if(i%4===3)schedDrum(bt2+beat*0.75,'kick',masterGain);
+    if(i%64>56&&i%4===1)schedDrum(bt2,'kick',masterGain);}
+  setTimeout(()=>{if(currentTrack==='volcano')playVolcanoMusic();},loopLen*1000);
+}
+
+// ---- TRACK: CASTLE (~3 min epic orchestral jazz, 96 BPM, 288 beats) ----
+function playCastleMusic(){
+  if(currentTrack==='castle')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='castle';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=96, beat=60/BPM, total=288, loopLen=beat*total;
+  let ct;
+  // 9 sections of 32 beats
+  const chA=[[[NOTE.D3,NOTE.F3,NOTE.A3],4],[[NOTE.Bb3,NOTE.D4,NOTE.F4],4],[[NOTE.F3,NOTE.A3,NOTE.C4],4],[[NOTE.C3,NOTE.E3,NOTE.G3],4],
+    [[NOTE.D3,NOTE.F3,NOTE.A3],4],[[NOTE.G3,NOTE.Bb3,NOTE.D4],4],[[NOTE.A3,NOTE.C4,NOTE.E4],4],[[NOTE.D3,NOTE.F3,NOTE.A3],4]];
+  const chB=[[[NOTE.F3,NOTE.A3,NOTE.C4],4],[[NOTE.G3,NOTE.Bb3,NOTE.D4],4],[[NOTE.A3,NOTE.C4,NOTE.E4],4],[[NOTE.Bb3,NOTE.D4,NOTE.F4],4],
+    [[NOTE.C3,NOTE.E3,NOTE.G3],4],[[NOTE.D3,NOTE.F3,NOTE.A3],4],[[NOTE.E3,NOTE.G3,NOTE.Bb3],4],[[NOTE.A3,NOTE.C4,NOTE.E4],4]];
+  const chSections=[chA,chA,chB,chA,chB,chA,chB,chA,chA];
+  ct=t;for(let s=0;s<9;s++){for(const[ch,d] of chSections[s]){for(const f of ch){
+    schedNote(f,ct,beat*d*0.9,'triangle',0.035,masterGain);schedNote(f*2,ct,beat*d*0.9,'sine',0.018,masterGain);}ct+=beat*d;}}
+  // Melodies — 9 variations
+  const melBase=[
+    [NOTE.A4,NOTE.D5,NOTE.F5,NOTE.E5,NOTE.D5,0,NOTE.C5,NOTE.D5,NOTE.F5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,0,NOTE.D5,NOTE.E5,
+     NOTE.F5,NOTE.D5,NOTE.A4,0,NOTE.Bb4,NOTE.C5,NOTE.D5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.A4,0,NOTE.D5,NOTE.A4,0],
+    [NOTE.D5,NOTE.F5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,0,NOTE.C5,NOTE.D5,NOTE.F5,NOTE.A5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,
+     NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,NOTE.D5],
+    [NOTE.F5,NOTE.A5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,0,NOTE.G5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,0,NOTE.E5,NOTE.F5,
+     NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.A5]
+  ];
+  for(let s=0;s<9;s++){ct=t+beat*32*s;const m=melBase[s%3];for(const n of m){if(n>0)schedNote(n,ct,beat*0.82,'sawtooth',0.032,masterGain);ct+=beat;}}
+  // Bass
+  const bassA=[NOTE.D3,NOTE.Bb3,NOTE.F3,NOTE.C3,NOTE.D3,NOTE.G3,NOTE.A3,NOTE.D3];
+  ct=t;for(let s=0;s<9;s++){for(const b of bassA){schedNote(b*0.5,ct,beat*4*0.9,'triangle',0.065,masterGain);ct+=beat*4;}}
+  // March drums
+  ct=t;for(let i=0;i<total;i++){const bt2=ct+i*beat;
+    if(i%4===0)schedDrum(bt2,'kick',masterGain);if(i%4===2)schedDrum(bt2,'snare',masterGain);
+    if(i%2===0)schedDrum(bt2,'hat',masterGain);if(i%8===4)schedDrum(bt2+beat*0.5,'snare',masterGain);
+    if(i%32>28)schedDrum(bt2+beat*0.25,'snare',masterGain);}
+  setTimeout(()=>{if(currentTrack==='castle')playCastleMusic();},loopLen*1000);
+}
+
+// ---- TRACK: BOSS (~3 min intense jazz-fusion, 140 BPM, 420 beats) ----
+function playBossMusic(){
+  if(currentTrack==='boss')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='boss';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=140, beat=60/BPM, total=420, loopLen=beat*total;
+  let ct;
+  // ~6.5 sections of 64 beats
+  const chA=[[[NOTE.E3,NOTE.Ab3,NOTE.Bb3,NOTE.D4],4],[[NOTE.F3,NOTE.A3,NOTE.C4,NOTE.Eb4],4],
+    [[NOTE.D3,NOTE.F3,NOTE.Ab3,NOTE.B3],4],[[NOTE.E3,NOTE.G3,NOTE.Bb3,NOTE.D4],4],
+    [[NOTE.C3,NOTE.Eb3,NOTE.G3,NOTE.Bb3],4],[[NOTE.Ab3,NOTE.C4,NOTE.Eb4,NOTE.G4],4],
+    [[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.A4],4],[[NOTE.E3,NOTE.Ab3,NOTE.B3,NOTE.D4],4]];
+  const chB=[[[NOTE.A3,NOTE.C4,NOTE.Eb4,NOTE.G4],4],[[NOTE.D3,NOTE.F3,NOTE.Ab3,NOTE.C4],4],
+    [[NOTE.G3,NOTE.Bb3,NOTE.D4,NOTE.F4],4],[[NOTE.C3,NOTE.E3,NOTE.Ab3,NOTE.B3],4],
+    [[NOTE.F3,NOTE.A3,NOTE.C4,NOTE.Eb4],4],[[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.Ab4],4],
+    [[NOTE.E3,NOTE.G3,NOTE.Bb3,NOTE.D4],4],[[NOTE.A3,NOTE.C4,NOTE.E4,NOTE.G4],4]];
+  // 7 chord sections (7×64=448, we use 420 beats of melody/drums)
+  ct=t;const allCh=[chA,chB,chA,chB,chA,chB,chA];
+  for(let s=0;s<7;s++){for(const[ch,d] of allCh[s]){for(const f of ch){schedNote(f,ct,beat*d*0.75,'sawtooth',0.025,masterGain);}ct+=beat*d;}}
+  // Shredding melodies
+  const mels=[
+    [NOTE.E5,NOTE.G5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.A5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.F5,NOTE.Eb5,NOTE.F5,
+     NOTE.D5,NOTE.F5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.D5,NOTE.B4,NOTE.D5,NOTE.E5,NOTE.G5,NOTE.Bb5,NOTE.D5,NOTE.E5,NOTE.Ab5,NOTE.G5,NOTE.E5,
+     NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,
+     NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.A5,NOTE.Bb5,NOTE.A5],
+    [NOTE.A5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.F5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,
+     NOTE.G5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.C5,NOTE.E5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.E5,
+     NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.A5,NOTE.G5,NOTE.F5,NOTE.E5,NOTE.D5,NOTE.E5,NOTE.F5,NOTE.G5,
+     NOTE.A5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.A5,NOTE.G5]
+  ];
+  // Alternate melodies for ~420 beats
+  ct=t;for(let s=0;s<7;s++){const m=mels[s%2];let i=0;const start=ct;
+    for(const n of m){if(n>0)schedNote(n,ct,beat*0.38,'sawtooth',0.04,masterGain);ct+=beat;}
+    // Fill remaining 4 beats if section is 64
+    while(ct<start+beat*60){ct+=beat;}}
+  // Bass
+  const bassNotes=[NOTE.E3,NOTE.F3,NOTE.D3,NOTE.E3,NOTE.C3,NOTE.Ab3,NOTE.Bb3,NOTE.E3,
+    NOTE.A3,NOTE.D3,NOTE.G3,NOTE.C3,NOTE.F3,NOTE.Bb3,NOTE.E3,NOTE.A3];
+  ct=t;for(let s=0;s<ceil(total/32);s++){for(let i=0;i<min(bassNotes.length,(total-s*32));i++){
+    if(ct>=t+beat*total)break;schedNote(bassNotes[i%bassNotes.length]*0.5,ct,beat*1.8,'square',0.05,masterGain);ct+=beat*2;}}
+  // Double-time drums
+  ct=t;for(let i=0;i<total*2;i++){const bt2=ct+i*beat*0.5;if(bt2>=t+beat*total)break;
+    if(i%4===0)schedDrum(bt2,'kick',masterGain);if(i%4===2)schedDrum(bt2,'snare',masterGain);
+    schedDrum(bt2,'hat',masterGain);if(i%8===5)schedDrum(bt2,'kick',masterGain);
+    if(i%16===14)schedDrum(bt2,'snare',masterGain);}
+  setTimeout(()=>{if(currentTrack==='boss')playBossMusic();},loopLen*1000);
+}
+
+// ---- TRACK: BONUS (~3 min groovy electro-jazz, 118 BPM, 352 beats) ----
+function playBonusMusic(){
+  if(currentTrack==='bonus')return;
+  stopMusic();initAudio();
+  masterGain.gain.setValueAtTime(0.25,audioCtx.currentTime);
+  currentTrack='bonus';musicPlaying=true;
+  const t=audioCtx.currentTime+0.1, BPM=118, beat=60/BPM, total=352, loopLen=beat*total;
+  let ct;
+  // ~5.5 sections of 64 beats
+  const chA=[[[NOTE.C3,NOTE.Eb3,NOTE.G3,NOTE.Bb3,NOTE.D4],4],[[NOTE.F3,NOTE.Ab3,NOTE.C4,NOTE.Eb4],4],
+    [[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.Ab4],4],[[NOTE.Eb3,NOTE.G3,NOTE.Bb3,NOTE.D4],4],
+    [[NOTE.Ab3,NOTE.C4,NOTE.Eb4,NOTE.G4],4],[[NOTE.D3,NOTE.F3,NOTE.Ab3,NOTE.C4],4],
+    [[NOTE.G3,NOTE.B3,NOTE.D4,NOTE.F4],4],[[NOTE.C3,NOTE.Eb3,NOTE.G3,NOTE.C4],4]];
+  const chB=[[[NOTE.Eb3,NOTE.G3,NOTE.Bb3,NOTE.D4],4],[[NOTE.Ab3,NOTE.C4,NOTE.Eb4,NOTE.G4],4],
+    [[NOTE.D3,NOTE.F3,NOTE.Ab3,NOTE.C4],4],[[NOTE.G3,NOTE.Bb3,NOTE.D4,NOTE.F4],4],
+    [[NOTE.C3,NOTE.Eb3,NOTE.G3,NOTE.Bb3],4],[[NOTE.F3,NOTE.Ab3,NOTE.C4,NOTE.Eb4],4],
+    [[NOTE.Bb3,NOTE.D4,NOTE.F4,NOTE.Ab4],4],[[NOTE.Eb3,NOTE.G3,NOTE.Bb3,NOTE.Eb4],4]];
+  ct=t;const allCh=[chA,chB,chA,chB,chA,chB];
+  for(let s=0;s<6;s++){for(const[ch,d] of allCh[s]){for(let b=0;b<d;b++){
+    if(b===0||b===2){for(const f of ch)schedNote(f,ct+b*beat,beat*1.8,'triangle',0.028,masterGain);}}ct+=beat*d;}}
+  // Melodies
+  const mels=[
+    [NOTE.G5,NOTE.Eb5,NOTE.C5,NOTE.D5,NOTE.Eb5,0,NOTE.G5,NOTE.F5,NOTE.Ab5,NOTE.F5,NOTE.Eb5,0,NOTE.D5,NOTE.Bb4,NOTE.C5,NOTE.D5,
+     NOTE.Eb5,0,NOTE.G5,NOTE.Ab5,NOTE.G5,NOTE.Eb5,0,NOTE.D5,NOTE.C5,NOTE.Eb5,NOTE.G5,NOTE.C6,NOTE.Bb5,0,NOTE.G5,NOTE.Eb5,
+     NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,0,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,
+     NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5],
+    [NOTE.Eb5,NOTE.G5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.G5,NOTE.Eb5,0,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,
+     NOTE.F5,NOTE.Ab5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.F5,NOTE.D5,0,NOTE.G5,NOTE.Bb5,NOTE.D5,NOTE.F5,NOTE.G5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,
+     NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,0,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,0,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,
+     NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5],
+    [0,0,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,0,0,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,0,0,NOTE.Eb5,NOTE.F5,
+     NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,0,NOTE.Ab5,NOTE.G5,0,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,0,NOTE.D5,NOTE.Eb5,
+     NOTE.F5,NOTE.G5,NOTE.Ab5,NOTE.Bb5,NOTE.C6,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,
+     NOTE.Ab5,NOTE.Bb5,NOTE.C6,0,NOTE.Bb5,NOTE.Ab5,NOTE.G5,NOTE.F5,NOTE.Eb5,NOTE.D5,NOTE.C5,NOTE.D5,NOTE.Eb5,NOTE.F5,NOTE.G5,NOTE.Ab5]
+  ];
+  for(let s=0;s<6;s++){ct=t+beat*64*s;const m=mels[s%3];
+    for(let i=0;i<min(m.length,64);i++){if(m[i]>0){schedNote(m[i],ct,beat*0.65,'sawtooth',0.035,masterGain);schedNote(m[i]*0.998,ct,beat*0.65,'sawtooth',0.018,masterGain);}ct+=beat;}}
+  // Bass
+  const bassNotes=[NOTE.C3,NOTE.Eb3,NOTE.F3,NOTE.G3,NOTE.Bb3,NOTE.Ab3,NOTE.G3,NOTE.Eb3,
+    NOTE.Ab3,NOTE.G3,NOTE.F3,NOTE.Eb3,NOTE.D3,NOTE.F3,NOTE.G3,NOTE.C3];
+  ct=t;for(let s=0;s<ceil(total/32);s++){for(const b of bassNotes){if(ct>=t+beat*total)break;
+    schedNote(b*0.5,ct,beat*1.8,'triangle',0.06,masterGain);ct+=beat*2;}}
+  // Syncopated drums
+  ct=t;for(let i=0;i<total;i++){const bt2=ct+i*beat;
+    if(i%4===0||i%4===3)schedDrum(bt2,'kick',masterGain);
+    if(i%4===1)schedDrum(bt2+beat*0.5,'kick',masterGain);
+    if(i%4===2)schedDrum(bt2,'snare',masterGain);
+    schedDrum(bt2,'hat',masterGain);schedDrum(bt2+beat*0.5,'hat',masterGain);
+    if(i%64>56&&i%2===0)schedDrum(bt2+beat*0.25,'snare',masterGain);}
+  setTimeout(()=>{if(currentTrack==='bonus')playBonusMusic();},loopLen*1000);
+}
+
+// ---- MUSIC TRIGGERS ----
+function playMusicForLevel(idx){
+  const zone=floor(idx/5);
+  const isBoss=(idx%5===4||idx===20);
+  if(idx===21||idx===22)playBonusMusic();
+  else if(isBoss)playBossMusic();
+  else if(zone===0)playWaterfallMusic();
+  else if(zone===1)playJungleMusic();
+  else if(zone===2)playVolcanoMusic();
+  else if(zone===3)playCastleMusic();
+  else playBossMusic();
+}
+
+// ---- START ----
+requestAnimationFrame(gameLoop);
+// Start music on first interaction (required by browsers)
+document.addEventListener('click',function startM(){playMapMusic();document.removeEventListener('click',startM);},{once:true});
+document.addEventListener('keydown',function startM2(){playMapMusic();document.removeEventListener('keydown',startM2);},{once:true});
+</script>
+</body>
+</html>
