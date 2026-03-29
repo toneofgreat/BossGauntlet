@@ -718,36 +718,11 @@ function render(){
   gl.clearColor(0.45,0.7,0.35,1);
 
   // Ground (dark green)
-  drawMesh(makePlane(30,30,0.1,0.25,0.05),m4id(),VP);
-  // Grass patches
-  for(const gp of grassPatches){
-    drawMesh(makePlane(gp.s,gp.s,0.25+gp.shade,0.45+gp.shade,0.15+gp.shade),m4translate(gp.x,0.01,gp.z),VP);
-  }
+  drawMesh(getBox(30,0.1,30,0.1,0.25,0.05),m4translate(0,-0.05,0),VP);
 
-  // Trees
-  for(const t of trees){
-    // Trunk
-    drawMesh(getBox(t.r*2,t.h,t.r*2,0.35,0.22,0.1),m4translate(t.x,t.h/2,t.z),VP);
-    // Trunk bark lines
-    drawMesh(getBox(t.r*0.5,t.h*0.8,t.r*2.1,0.3,0.18,0.08),m4translate(t.x,t.h/2,t.z),VP);
-    // Leaves (layered spheres)
-    drawMesh(getSph(t.leafR,0.2,0.5,0.12),m4translate(t.x,t.h+t.leafR*0.5,t.z),VP);
-    drawMesh(getSph(t.leafR*0.8,0.25,0.55,0.15),m4translate(t.x+t.leafR*0.3,t.h+t.leafR*0.3,t.z+t.leafR*0.2),VP);
-    drawMesh(getSph(t.leafR*0.7,0.22,0.52,0.13),m4translate(t.x-t.leafR*0.3,t.h+t.leafR*0.4,t.z-t.leafR*0.3),VP);
-  }
-  // Rocks
-  for(const r of rocks){
-    drawMesh(getSph(r.s,0.45,0.43,0.4),m4translate(r.x,r.s*0.4,r.z),VP);
-    drawMesh(getSph(r.s*0.6,0.5,0.48,0.45),m4translate(r.x+r.s*0.3,r.s*0.3,r.z+r.s*0.2),VP);
-  }
-  // Flowers
-  for(const f of flowers){
-    // Stem
-    drawMesh(getBox(0.03,0.3,0.03,0.2,0.5,0.15),m4translate(f.x,0.15,f.z),VP);
-    // Petals
-    drawMesh(getSph(f.s,...f.col),m4translate(f.x,0.35,f.z),VP);
-    // Center
-    drawMesh(getSph(f.s*0.4,1,0.9,0.2),m4translate(f.x,0.38,f.z),VP);
+  // ---- BOSS (drawn FIRST so it always appears) ----
+  if(boss&&boss.hp>0){
+    drawMesh(getBox(2,4,2,0.1,0.5,0.05),m4translate(boss.pos.x,2,boss.pos.z),VP);
   }
 
   // ---- PLAYER ----
