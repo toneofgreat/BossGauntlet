@@ -551,9 +551,9 @@ function bossDefeated(){
   gameState='win';
   save.kills++;
   // Level up
-  save.xp+=10;
-  let leveled=0;
-  while(save.xp>=xpForLevel(save.level)){save.xp-=xpForLevel(save.level);save.level++;leveled++;}
+  save.level++;
+  save.xp=0;
+  const leveled=1;
   save.gold+=5;
   saveSave();
   document.getElementById('boss-hud').style.display='none';
