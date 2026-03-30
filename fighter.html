@@ -20,7 +20,6 @@ canvas#c{display:block;width:100vw;height:100vh}
 #level-text{font-size:14px;color:#ffe066;letter-spacing:1px}
 #xp-text{font-size:10px;color:#aa8}
 #sword-text{font-size:11px;color:#aaa;margin-top:2px}
-#gold-text{font-size:11px;color:#fd0;margin-top:2px}
 
 /* ---- Boss HP ---- */
 #boss-hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:15;display:none;text-align:center}
@@ -96,7 +95,6 @@ canvas#c{display:block;width:100vw;height:100vh}
       <div id="level-text">Level 1</div>
       <div id="xp-text">XP: 0</div>
       <div id="sword-text">Wooden Sword</div>
-      <div id="gold-text">Gold: 0</div>
     </div>
   </div>
 </div>
@@ -265,17 +263,19 @@ function getBox(w,h,d,r,g,b){const k=`b${w}_${h}_${d}_${r}_${g}_${b}`;if(!MC[k])
 function getSph(rad,r,g,b){const k=`s${rad}_${r}_${g}_${b}`;if(!MC[k])MC[k]=makeSphere(rad,8,r,g,b);return MC[k]}
 
 // ---- SAVE ----
-let save={level:1,xp:0,gold:0,swords:['wooden'],equipped:'wooden',kills:0};
+let save={level:1,xp:0,swords:['wooden'],equipped:'wooden',kills:0};
 function loadSave(){try{const s=localStorage.getItem('fighterLegends_v1');if(s)Object.assign(save,JSON.parse(s))}catch(e){}}
 function saveSave(){try{localStorage.setItem('fighterLegends_v1',JSON.stringify(save))}catch(e){}}
 loadSave();
 
 // ---- SWORDS ----
 const SWORDS={
-  wooden:{name:'Wooden Sword',dmg:1,lvl:0,cost:0,col:[0.55,0.38,0.18],guard:[0.4,0.28,0.12],blade:[0.6,0.42,0.2],w:0.06,h:0.9,desc:'A humble start.'},
-  stone:{name:'Stone Sword',dmg:2,lvl:5,cost:10,col:[0.5,0.5,0.52],guard:[0.4,0.4,0.42],blade:[0.55,0.55,0.58],w:0.08,h:1.05,desc:'Carved from rock. 2 DMG.',gem:[0.4,0.4,0.5],orbs:0},
-  iron:{name:'Iron Sword',dmg:5,lvl:8,cost:50,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],blade:[0.7,0.7,0.75],w:0.09,h:1.15,desc:'Forged in fire. 5 DMG.',gem:[0.5,0.6,0.8],orbs:2,orbCol:[0.5,0.6,0.8]},
-  ice:{name:'Ice Sword',dmg:20,lvl:12,cost:500,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'20 DMG + Q: throw ice + E: ice spikes (50 DMG!)',gem:[0.3,0.9,1],orbs:5,orbCol:[0.4,0.8,1],aura:true,auraCol:[0.3,0.7,1]}
+  wooden:{name:'Wooden Sword',dmg:1,lvl:0,col:[0.55,0.38,0.18],guard:[0.4,0.28,0.12],blade:[0.6,0.42,0.2],w:0.06,h:0.9,desc:'A humble start.'},
+  stone:{name:'Stone Sword',dmg:2,lvl:5,col:[0.5,0.5,0.52],guard:[0.4,0.4,0.42],blade:[0.55,0.55,0.58],w:0.08,h:1.05,desc:'Carved from rock. 2 DMG.',gem:[0.4,0.4,0.5]},
+  iron:{name:'Iron Sword',dmg:5,lvl:8,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],blade:[0.7,0.7,0.75],w:0.09,h:1.15,desc:'Forged in fire. 5 DMG.',gem:[0.5,0.6,0.8]},
+  ice:{name:'Ice Sword',dmg:20,lvl:12,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'20 DMG · Q: Ice Throw · E: Ice Spikes',gem:[0.3,0.9,1]},
+  lava:{name:'Lava Sword',dmg:35,lvl:16,col:[0.9,0.3,0.0],guard:[0.7,0.2,0.0],blade:[1,0.4,0.05],w:0.11,h:1.35,desc:'35 DMG · Q: Lava Ball · E: Magma Burst',gem:[1,0.5,0.1]},
+  void:{name:'Void Sword',dmg:80,lvl:20,col:[0.15,0.0,0.25],guard:[0.3,0.0,0.4],blade:[0.2,0.0,0.35],w:0.12,h:1.5,desc:'80 DMG · Q: Void Lance',gem:[0.6,0.0,0.9]}
 };
 function curSword(){return SWORDS[save.equipped]}
 function xpForLevel(l){return l*10}
@@ -301,7 +301,7 @@ let gameState='menu'; // menu, fight, shop, dead, win
 let gameTime=0,dt=0,lastTime=0;
 
 // Player
-let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:true,atkCd:0,invTimer:0,atkAnim:0,iceThrowCd:0,iceSpikesCd:0};
+let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:true,atkCd:0,invTimer:0,atkAnim:0,iceThrowCd:0,iceSpikesCd:0,lavaBallCd:0,magmaBurstCd:0,voidLanceCd:0};
 let camYaw=0,camPitch=0.7,camDist=12;
 
 // Boss
@@ -399,9 +399,15 @@ function startFight(type){
   document.getElementById('hud').style.display='block';
   document.getElementById('back-btn').style.display='block';
   document.getElementById('atk-prompt').style.display='block';
-  document.getElementById('atk-prompt').textContent=save.equipped==='ice'?'SPACE=Attack · Q=Throw Ice · E=Ice Spikes':'SPACE = Attack · Walk into boss to hit';
+  const eq=save.equipped;
+  document.getElementById('atk-prompt').textContent=
+    eq==='ice'?'SPACE=Attack · Q=Ice Throw · E=Ice Spikes':
+    eq==='lava'?'SPACE=Attack · Q=Lava Ball · E=Magma Burst':
+    eq==='void'?'SPACE=Attack · Q=Void Lance':
+    'SPACE=Attack · Walk into boss to hit';
   player.pos=v3(0,0,5);player.vel=v3();player.yaw=0;
   player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
+  player.iceThrowCd=0;player.iceSpikesCd=0;player.lavaBallCd=0;player.magmaBurstCd=0;player.voidLanceCd=0;
   camYaw=0;camPitch=0.7;
   if(type==='fire')generateFireArena();else generateGrassArena();
   spawnBoss(type);
@@ -422,7 +428,7 @@ function goMenu(){
   document.getElementById('win-screen').style.display='none';
   document.getElementById('shop').style.display='none';
   // Update menu stats
-  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.gold} Gold · ${save.kills} Kills · ${curSword().name}`;
+  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name}`;
   // Fire boss unlock
   const fireBtn=document.getElementById('fire-boss-btn');
   if(save.kills>=1){
@@ -445,32 +451,29 @@ function openShop(){
 function closeShop(){
   document.getElementById('shop').style.display='none';
   document.getElementById('menu').style.display='flex';
-  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.gold} Gold · ${save.kills} Kills · ${curSword().name}`;
+  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name}`;
 }
 function renderShop(){
   const cont=document.getElementById('shop-items');
   cont.innerHTML='';
   for(const[id,sw] of Object.entries(SWORDS)){
-    const owned=save.swords.includes(id);
+    const unlocked=save.level>=sw.lvl;
     const equipped=save.equipped===id;
-    const canBuy=save.level>=sw.lvl&&save.gold>=sw.cost&&!owned;
-    const locked=save.level<sw.lvl&&!owned;
     const div=document.createElement('div');
-    div.className='shop-item'+(owned?' owned':'')+(locked?' locked':'');
+    div.className='shop-item'+(unlocked?' owned':'')+(unlocked?'':' locked');
     div.innerHTML=`
       <div style="width:50px;height:50px;background:#111;border-radius:4px;display:flex;align-items:center;justify-content:center">
         <div style="width:8px;height:30px;background:rgb(${sw.blade?sw.blade.map(v=>floor(v*255)).join(','):'180,180,180'});border-radius:2px"></div>
       </div>
       <div class="si-info">
         <div class="si-name">${sw.name}${equipped?' (EQUIPPED)':''}</div>
-        <div class="si-desc">${sw.desc} ${locked?'(Requires Level '+sw.lvl+')':''}</div>
+        <div class="si-desc">${sw.desc}${unlocked?'':' — Requires Level '+sw.lvl}</div>
       </div>
-      <div class="si-cost ${owned?'owned-tag':''}">${owned?(equipped?'EQUIPPED':'EQUIP'):(sw.cost>0?sw.cost+' G':'FREE')}</div>
+      <div class="si-cost owned-tag">${unlocked?(equipped?'EQUIPPED':'EQUIP'):'🔒'}</div>
     `;
     div.onclick=()=>{
-      if(locked)return;
-      if(owned){save.equipped=id;saveSave();renderShop();return;}
-      if(canBuy){save.gold-=sw.cost;save.swords.push(id);save.equipped=id;saveSave();renderShop();return;}
+      if(!unlocked)return;
+      save.equipped=id;saveSave();renderShop();
     };
     cont.appendChild(div);
   }
@@ -484,7 +487,6 @@ function updateHUD(){
   document.getElementById('level-text').textContent='Level '+save.level;
   document.getElementById('xp-text').textContent='XP: '+save.xp+'/'+xpForLevel(save.level);
   document.getElementById('sword-text').textContent=curSword().name+' ('+curSword().dmg+' DMG)';
-  document.getElementById('gold-text').textContent='Gold: '+save.gold;
 }
 function updateBossHP(){
   if(!boss)return;
@@ -545,9 +547,12 @@ function updatePlayer(){
     }
   }
 
-  // Ice sword abilities
+  // Special sword abilities
   if(player.iceThrowCd>0)player.iceThrowCd-=dt;
   if(player.iceSpikesCd>0)player.iceSpikesCd-=dt;
+  if(player.lavaBallCd>0)player.lavaBallCd-=dt;
+  if(player.magmaBurstCd>0)player.magmaBurstCd-=dt;
+  if(player.voidLanceCd>0)player.voidLanceCd-=dt;
   if(save.equipped==='ice'){
     // Q = throw ice projectile
     if(keys['q']&&player.iceThrowCd<=0){
@@ -569,6 +574,38 @@ function updatePlayer(){
           type:'ice_spike',life:1.5,dmg:50,mesh:getBox(0.2,1.5,0.2,0.4,0.8,1),isPlayerProj:true,delay:0.1+i*0.08,started:false});
       }
       spawnParticles(boss.pos,12,[0.5,0.85,1]);
+    }
+  }
+  if(save.equipped==='lava'){
+    // Q = throw lava ball
+    if(keys['q']&&player.lavaBallCd<=0){
+      player.lavaBallCd=1;
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,18),
+        type:'lava_ball',life:3,dmg:35,mesh:getSph(0.3,1,0.35,0.02),isPlayerProj:true});
+      showMsg('Lava Ball!',0.6);
+      spawnParticles(player.pos,6,[1,0.4,0.05]);
+    }
+    // E = magma burst — explosion around player, instantly hits boss if close
+    if(keys['e']&&player.magmaBurstCd<=0){
+      player.magmaBurstCd=5;
+      showMsg('MAGMA BURST!',1);
+      spawnParticles(player.pos,20,[1,0.4,0.05]);
+      for(let a=0;a<TAU;a+=TAU/10){
+        projectiles.push({pos:v3(player.pos.x,1,player.pos.z),vel:v3(sin(a)*8,1,cos(a)*8),
+          type:'lava_ball',life:1.5,dmg:60,mesh:getSph(0.25,1,0.35,0.02),isPlayerProj:true});
+      }
+    }
+  }
+  if(save.equipped==='void'){
+    // Q = void lance — super-fast, high damage
+    if(keys['q']&&player.voidLanceCd<=0){
+      player.voidLanceCd=0.8;
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,25),
+        type:'void_lance',life:2,dmg:80,mesh:getBox(0.05,0.05,1.2,0.5,0.0,0.8),isPlayerProj:true});
+      showMsg('Void Lance!',0.6);
+      spawnParticles(player.pos,8,[0.4,0.0,0.7]);
     }
   }
 
@@ -594,15 +631,15 @@ function bossDefeated(){
   save.kills++;
   save.level++;
   save.xp=0;
-  const isFireBoss=boss&&boss.type==='fire';
-  const goldReward=isFireBoss?20:5;
-  save.gold+=goldReward;
+  const bossName=boss?boss.name:'BOSS';
+  // Check if a new sword unlocked
+  const newSword=Object.entries(SWORDS).find(([id,sw])=>sw.lvl===save.level&&!save.swords.includes(id));
   saveSave();
   document.getElementById('boss-hud').style.display='none';
   document.getElementById('atk-prompt').style.display='none';
-  document.getElementById('win-title').textContent=(isFireBoss?'FIRE GOLEM':'GRASS GUARDIAN')+' DEFEATED!';
-  document.getElementById('win-desc').textContent='Leveled up to '+save.level+'!';
-  document.getElementById('win-reward').textContent='+1 Level  +'+goldReward+' Gold';
+  document.getElementById('win-title').textContent=bossName+' DEFEATED!';
+  document.getElementById('win-desc').textContent='Leveled up to '+save.level+'!'+(newSword?' '+newSword[1].name+' unlocked!':'');
+  document.getElementById('win-reward').textContent='+1 Level'+(newSword?' · NEW SWORD: '+newSword[1].name:'');
   document.getElementById('win-screen').style.display='flex';
 }
 
@@ -1133,6 +1170,37 @@ function render(){
       }
       // Frost mist at base
       drawMesh(getSph(0.1,0.3,0.6,0.8),m4mul(sM,m4translate(0,0.1,0)),VP);
+    }
+
+    // LAVA SWORD — molten glow, lava drips, orbiting fire shards
+    if(sw===SWORDS.lava){
+      // Molten aura around blade
+      drawMesh(getBox(sw.w+0.04,sw.h+0.04,0.06,0.25,0.08,0.0),m4mul(sM,m4translate(0,sw.h*0.35,0)),VP);
+      // Lava cracks on blade
+      drawMesh(getBox(0.015,sw.h*0.7,0.035,1,0.5,0.05),m4mul(sM,m4translate(-0.03,sw.h*0.35,0.02)),VP);
+      drawMesh(getBox(0.015,sw.h*0.5,0.035,1,0.4,0.0),m4mul(sM,m4translate(0.04,sw.h*0.45,0.02)),VP);
+      // 4 orbiting fire shards
+      for(let o=0;o<4;o++){
+        const oa=gameTime*3+o*TAU/4;
+        drawMesh(getSph(0.04,1,0.4,0.0),m4mul(sM,m4translate(sin(oa)*0.18,sw.h*0.25+o*sw.h*0.18,cos(oa)*0.1)),VP);
+      }
+    }
+
+    // VOID SWORD — dark blade, purple energy, void rift
+    if(sw===SWORDS.void){
+      // Dark void aura
+      drawMesh(getBox(sw.w+0.06,sw.h+0.08,0.08,0.0,0.0,0.12),m4mul(sM,m4translate(0,sw.h*0.35,0)),VP);
+      // Purple energy veins
+      drawMesh(getBox(0.02,sw.h*0.8,0.04,0.5,0.0,0.8),m4mul(sM,m4translate(0,sw.h*0.35,0.03)),VP);
+      drawMesh(getBox(0.02,sw.h*0.5,0.04,0.35,0.0,0.6),m4mul(sM,m4translate(-0.04,sw.h*0.45,-0.02)),VP);
+      // 6 orbiting void orbs
+      for(let o=0;o<6;o++){
+        const oa=gameTime*2+o*TAU/6;
+        const oR=0.28;
+        drawMesh(getSph(0.035,0.4,0.0,0.7),m4mul(sM,m4translate(sin(oa)*oR,sw.h*0.2+o*sw.h*0.13,cos(oa)*oR)),VP);
+      }
+      // Void rift at tip (dark glow)
+      drawMesh(getSph(0.06,0.15,0.0,0.3),m4mul(sM,m4translate(0,sw.h*0.95,0)),VP);
     }
   }
 
