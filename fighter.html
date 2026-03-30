@@ -273,8 +273,8 @@ loadSave();
 const SWORDS={
   wooden:{name:'Wooden Sword',dmg:1,lvl:0,cost:0,col:[0.55,0.38,0.18],guard:[0.4,0.28,0.12],blade:[0.6,0.42,0.2],w:0.06,h:0.9,desc:'A humble start.'},
   stone:{name:'Stone Sword',dmg:2,lvl:5,cost:10,col:[0.5,0.5,0.52],guard:[0.4,0.4,0.42],blade:[0.55,0.55,0.58],w:0.08,h:1.05,desc:'Carved from rock. 2 DMG.',gem:[0.4,0.4,0.5],orbs:0},
-  iron:{name:'Iron Sword',dmg:5,lvl:20,cost:50,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],blade:[0.7,0.7,0.75],w:0.09,h:1.15,desc:'Forged in fire. 5 DMG.',gem:[0.5,0.6,0.8],orbs:2,orbCol:[0.5,0.6,0.8]},
-  ice:{name:'Ice Sword',dmg:20,lvl:150,cost:500,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'20 DMG + Q: throw ice + E: ice spikes (50 DMG!)',gem:[0.3,0.9,1],orbs:5,orbCol:[0.4,0.8,1],aura:true,auraCol:[0.3,0.7,1]}
+  iron:{name:'Iron Sword',dmg:5,lvl:8,cost:50,col:[0.65,0.65,0.7],guard:[0.5,0.5,0.55],blade:[0.7,0.7,0.75],w:0.09,h:1.15,desc:'Forged in fire. 5 DMG.',gem:[0.5,0.6,0.8],orbs:2,orbCol:[0.5,0.6,0.8]},
+  ice:{name:'Ice Sword',dmg:20,lvl:12,cost:500,col:[0.4,0.75,0.95],guard:[0.3,0.6,0.8],blade:[0.5,0.85,1],w:0.1,h:1.3,desc:'20 DMG + Q: throw ice + E: ice spikes (50 DMG!)',gem:[0.3,0.9,1],orbs:5,orbCol:[0.4,0.8,1],aura:true,auraCol:[0.3,0.7,1]}
 };
 function curSword(){return SWORDS[save.equipped]}
 function xpForLevel(l){return l*10}
