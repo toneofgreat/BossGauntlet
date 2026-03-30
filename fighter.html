@@ -110,7 +110,8 @@ canvas#c{display:block;width:100vw;height:100vh}
   <div id="menu-title">FIGHTER LEGENDS</div>
   <div id="menu-sub">REALM OF BOSSES</div>
   <div id="menu-stats"></div>
-  <button class="menu-btn" onclick="startFight('grass')">GRASS BOSS</button>
+  <button class="menu-btn" onclick="startFight('grass')">🌿 GRASS GUARDIAN</button>
+  <button class="menu-btn locked" id="fire-boss-btn">🔒 FIRE GOLEM (Beat Grass Guardian)</button>
   <button class="menu-btn" onclick="openShop()">SWORD SHOP</button>
 </div>
 
@@ -259,7 +260,7 @@ function makePlane(w,d,r,g,b){
 }
 
 // Mesh cache
-const MC={};
+let MC={};
 function getBox(w,h,d,r,g,b){const k=`b${w}_${h}_${d}_${r}_${g}_${b}`;if(!MC[k])MC[k]=makeBox(w,h,d,r,g,b);return MC[k]}
 function getSph(rad,r,g,b){const k=`s${rad}_${r}_${g}_${b}`;if(!MC[k])MC[k]=makeSphere(rad,8,r,g,b);return MC[k]}
 
@@ -310,11 +311,13 @@ let projectiles=[];
 let particles=[];
 
 // Arena decorations
-let trees=[],rocks=[],flowers=[],grassPatches=[];
+let trees=[],rocks=[],flowers=[],grassPatches=[],lavaPools=[];
+let currentArena='grass';
 
 // ---- ARENA GENERATION ----
 function generateGrassArena(){
-  trees=[];rocks=[];flowers=[];grassPatches=[];MC={};
+  currentArena='grass';
+  trees=[];rocks=[];flowers=[];grassPatches=[];lavaPools=[];MC={};
   // Trees
   for(let i=0;i<8;i++){
     const a=rand()*TAU,r=10+rand()*4;
@@ -337,6 +340,21 @@ function generateGrassArena(){
   }
 }
 
+function generateFireArena(){
+  currentArena='fire';
+  trees=[];rocks=[];flowers=[];grassPatches=[];lavaPools=[];MC={};
+  // Volcanic rocks (more, larger)
+  for(let i=0;i<14;i++){
+    const a=rand()*TAU,r=5+rand()*7;
+    rocks.push({x:sin(a)*r,z:cos(a)*r,s:0.7+rand()*1.4,rot:rand()*TAU,fire:true});
+  }
+  // Lava pools
+  for(let i=0;i<6;i++){
+    const a=rand()*TAU,r=2+rand()*8;
+    lavaPools.push({x:sin(a)*r,z:cos(a)*r,w:1.5+rand()*2,d:1.5+rand()*2,phase:rand()*TAU});
+  }
+}
+
 // ---- BOSS DEFINITIONS ----
 function spawnBoss(type){
   projectiles=[];particles=[];
@@ -350,6 +368,19 @@ function spawnBoss(type){
       // Grass boss specifics
       vineTimer:0,leafStormCd:8,seedBombCd:5,
       rootSlamCd:6,thornShieldActive:false,thornShieldTimer:0,
+      floatY:0
+    };
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';
+    updateBossHP();
+  } else if(type==='fire'){
+    boss={
+      type:'fire',name:'FIRE GOLEM',
+      pos:v3(0,0,0),vel:v3(),
+      hp:60,maxHp:60,
+      phase:0,timer:0,atkCd:2,moveTimer:0,
+      stunTimer:0,size:2.5,speed:3,
+      fireballCd:1.5,fireRingCd:7,eruptionCd:5,meteorCd:6,
       floatY:0
     };
     document.getElementById('boss-name').textContent=boss.name;
@@ -372,7 +403,7 @@ function startFight(type){
   player.pos=v3(0,0,5);player.vel=v3();player.yaw=0;
   player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
   camYaw=0;camPitch=0.7;
-  generateGrassArena();
+  if(type==='fire')generateFireArena();else generateGrassArena();
   spawnBoss(type);
   updateHUD();
   try{playBattleMusic();}catch(e){}
@@ -392,6 +423,17 @@ function goMenu(){
   document.getElementById('shop').style.display='none';
   // Update menu stats
   document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.gold} Gold · ${save.kills} Kills · ${curSword().name}`;
+  // Fire boss unlock
+  const fireBtn=document.getElementById('fire-boss-btn');
+  if(save.kills>=1){
+    fireBtn.classList.remove('locked');
+    fireBtn.onclick=()=>startFight('fire');
+    fireBtn.textContent='🔥 FIRE GOLEM';
+  }else{
+    fireBtn.classList.add('locked');
+    fireBtn.onclick=null;
+    fireBtn.textContent='🔒 FIRE GOLEM (Beat Grass Guardian)';
+  }
 }
 
 // ---- SHOP ----
@@ -550,17 +592,17 @@ function hurtPlayer(dmg){
 function bossDefeated(){
   gameState='win';
   save.kills++;
-  // Level up
   save.level++;
   save.xp=0;
-  const leveled=1;
-  save.gold+=5;
+  const isFireBoss=boss&&boss.type==='fire';
+  const goldReward=isFireBoss?20:5;
+  save.gold+=goldReward;
   saveSave();
   document.getElementById('boss-hud').style.display='none';
   document.getElementById('atk-prompt').style.display='none';
-  document.getElementById('win-title').textContent='GRASS GUARDIAN DEFEATED!';
-  document.getElementById('win-desc').textContent=leveled>0?'Leveled up to '+save.level+'!':'';
-  document.getElementById('win-reward').textContent='+1 Level  +5 Gold';
+  document.getElementById('win-title').textContent=(isFireBoss?'FIRE GOLEM':'GRASS GUARDIAN')+' DEFEATED!';
+  document.getElementById('win-desc').textContent='Leveled up to '+save.level+'!';
+  document.getElementById('win-reward').textContent='+1 Level  +'+goldReward+' Gold';
   document.getElementById('win-screen').style.display='flex';
 }
 
@@ -574,11 +616,7 @@ function updateBoss(){
   const toPlayer=v3sub(player.pos,boss.pos);
   const dist=v3len(toPlayer);
   const dir=dist>0.1?v3norm(toPlayer):v3(0,0,1);
-
-  // Phase
   const hpPct=boss.hp/boss.maxHp;
-  if(hpPct<0.3&&boss.phase<2){boss.phase=2;boss.speed=4;showMsg('GRASS GUARDIAN ENRAGED!',2)}
-  else if(hpPct<0.6&&boss.phase<1){boss.phase=1;boss.speed=3;showMsg('Grass Guardian grows stronger!',2)}
 
   // Movement — circle around player
   const circleA=boss.timer*boss.speed*0.3;
@@ -588,78 +626,137 @@ function updateBoss(){
   boss.pos.z=clamp(boss.pos.z+(targetZ-boss.pos.z)*dt*1.5,-8,8);
   boss.pos.y=0;
 
-  // Contact damage — hurt but don't push away
-  if(dist<boss.size+0.5){
-    hurtPlayer(5);
-  }
+  if(boss.type==='grass'){
+    // Phase
+    if(hpPct<0.3&&boss.phase<2){boss.phase=2;boss.speed=4;showMsg('GRASS GUARDIAN ENRAGED!',2)}
+    else if(hpPct<0.6&&boss.phase<1){boss.phase=1;boss.speed=3;showMsg('Grass Guardian grows stronger!',2)}
 
-  // ---- ATTACKS ----
-  boss.vineTimer-=dt;boss.leafStormCd-=dt;boss.seedBombCd-=dt;boss.rootSlamCd-=dt;
+    // Contact damage
+    if(dist<boss.size+0.5)hurtPlayer(5);
 
-  // Thorn Shield (phase 1+)
-  if(boss.phase>=1&&!boss.thornShieldActive&&boss.thornShieldTimer<=0&&rand()<0.005){
-    boss.thornShieldActive=true;boss.thornShieldTimer=3;
-    showMsg('Thorn Shield!',1.5);
-    spawnParticles(boss.pos,15,[0.3,0.6,0.1]);
-  }
-  if(boss.thornShieldActive){
-    boss.thornShieldTimer-=dt;
-    if(boss.thornShieldTimer<=0){boss.thornShieldActive=false;boss.thornShieldTimer=8;}
-  }
+    // ---- ATTACKS ----
+    boss.vineTimer-=dt;boss.leafStormCd-=dt;boss.seedBombCd-=dt;boss.rootSlamCd-=dt;
 
-  // Vine Whip — fast projectiles toward player
-  if(boss.vineTimer<=0){
-    boss.vineTimer=max(1.5-boss.phase*0.3,0.6);
-    const numVines=2+boss.phase;
-    for(let i=0;i<numVines;i++){
-      const spread=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);
-      projectiles.push({pos:v3(boss.pos.x,1,boss.pos.z),vel:v3scale(v3norm(spread),9+boss.phase*2),
-        type:'vine',life:3,dmg:6,mesh:getBox(0.1,0.1,0.6,0.2,0.5,0.1)});
+    // Thorn Shield (phase 1+)
+    if(boss.phase>=1&&!boss.thornShieldActive&&boss.thornShieldTimer<=0&&rand()<0.005){
+      boss.thornShieldActive=true;boss.thornShieldTimer=3;
+      showMsg('Thorn Shield!',1.5);
+      spawnParticles(boss.pos,15,[0.3,0.6,0.1]);
     }
-  }
-
-  // Leaf Storm — ring of leaves expanding outward
-  if(boss.leafStormCd<=0){
-    boss.leafStormCd=max(6-boss.phase*1.5,3);
-    showMsg('Leaf Storm!',1);
-    for(let a=0;a<TAU;a+=TAU/(12+boss.phase*4)){
-      projectiles.push({pos:v3(boss.pos.x,1.5,boss.pos.z),vel:v3(sin(a)*5,0.5,cos(a)*5),
-        type:'leaf',life:4,dmg:5,mesh:getBox(0.3,0.05,0.2,0.3,0.7,0.15),spin:0});
+    if(boss.thornShieldActive){
+      boss.thornShieldTimer-=dt;
+      if(boss.thornShieldTimer<=0){boss.thornShieldActive=false;boss.thornShieldTimer=8;}
     }
-  }
 
-  // Seed Bomb — lobs seeds that explode into more projectiles
-  if(boss.seedBombCd<=0){
-    boss.seedBombCd=max(4-boss.phase,2);
-    const numSeeds=1+boss.phase;
-    for(let i=0;i<numSeeds;i++){
-      const tx=player.pos.x+(rand()-0.5)*5;
-      const tz=player.pos.z+(rand()-0.5)*5;
-      projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),
-        vel:v3((tx-boss.pos.x)*0.8,5,(tz-boss.pos.z)*0.8),
-        type:'seed',life:3,dmg:8,mesh:getSph(0.25,0.4,0.3,0.1),explodes:true});
+    // Vine Whip — fast projectiles toward player
+    if(boss.vineTimer<=0){
+      boss.vineTimer=max(1.5-boss.phase*0.3,0.6);
+      const numVines=2+boss.phase;
+      for(let i=0;i<numVines;i++){
+        const spread=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);
+        projectiles.push({pos:v3(boss.pos.x,1,boss.pos.z),vel:v3scale(v3norm(spread),9+boss.phase*2),
+          type:'vine',life:3,dmg:6,mesh:getBox(0.1,0.1,0.6,0.2,0.5,0.1)});
+      }
     }
-  }
 
-  // Root Slam (phase 1+) — roots burst from ground at player position
-  if(boss.phase>=1&&boss.rootSlamCd<=0){
-    boss.rootSlamCd=max(5-boss.phase,2.5);
-    showMsg('Root Slam!',1);
-    // Delayed roots at player pos
-    for(let i=0;i<3+boss.phase*2;i++){
-      const rx=player.pos.x+(rand()-0.5)*4;
-      const rz=player.pos.z+(rand()-0.5)*4;
-      projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,12,0),
-        type:'root',life:1.5,dmg:10,mesh:getBox(0.3,2,0.3,0.35,0.25,0.1),delay:0.3+i*0.15,started:false});
+    // Leaf Storm — ring of leaves expanding outward
+    if(boss.leafStormCd<=0){
+      boss.leafStormCd=max(6-boss.phase*1.5,3);
+      showMsg('Leaf Storm!',1);
+      for(let a=0;a<TAU;a+=TAU/(12+boss.phase*4)){
+        projectiles.push({pos:v3(boss.pos.x,1.5,boss.pos.z),vel:v3(sin(a)*5,0.5,cos(a)*5),
+          type:'leaf',life:4,dmg:5,mesh:getBox(0.3,0.05,0.2,0.3,0.7,0.15),spin:0});
+      }
     }
-  }
 
-  // Pollen Cloud (phase 2) — slow-moving poison zones
-  if(boss.phase>=2&&rand()<0.008){
-    const px=player.pos.x+(rand()-0.5)*8;
-    const pz=player.pos.z+(rand()-0.5)*8;
-    projectiles.push({pos:v3(px,1,pz),vel:v3((rand()-0.5)*0.5,0,(rand()-0.5)*0.5),
-      type:'pollen',life:6,dmg:3,mesh:getSph(1.5,0.6,0.7,0.2),isZone:true});
+    // Seed Bomb — lobs seeds that explode into more projectiles
+    if(boss.seedBombCd<=0){
+      boss.seedBombCd=max(4-boss.phase,2);
+      const numSeeds=1+boss.phase;
+      for(let i=0;i<numSeeds;i++){
+        const tx=player.pos.x+(rand()-0.5)*5;
+        const tz=player.pos.z+(rand()-0.5)*5;
+        projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),
+          vel:v3((tx-boss.pos.x)*0.8,5,(tz-boss.pos.z)*0.8),
+          type:'seed',life:3,dmg:8,mesh:getSph(0.25,0.4,0.3,0.1),explodes:true});
+      }
+    }
+
+    // Root Slam (phase 1+) — roots burst from ground at player position
+    if(boss.phase>=1&&boss.rootSlamCd<=0){
+      boss.rootSlamCd=max(5-boss.phase,2.5);
+      showMsg('Root Slam!',1);
+      for(let i=0;i<3+boss.phase*2;i++){
+        const rx=player.pos.x+(rand()-0.5)*4;
+        const rz=player.pos.z+(rand()-0.5)*4;
+        projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,12,0),
+          type:'root',life:1.5,dmg:10,mesh:getBox(0.3,2,0.3,0.35,0.25,0.1),delay:0.3+i*0.15,started:false});
+      }
+    }
+
+    // Pollen Cloud (phase 2) — slow-moving poison zones
+    if(boss.phase>=2&&rand()<0.008){
+      const px=player.pos.x+(rand()-0.5)*8;
+      const pz=player.pos.z+(rand()-0.5)*8;
+      projectiles.push({pos:v3(px,1,pz),vel:v3((rand()-0.5)*0.5,0,(rand()-0.5)*0.5),
+        type:'pollen',life:6,dmg:3,mesh:getSph(1.5,0.6,0.7,0.2),isZone:true});
+    }
+
+  } else if(boss.type==='fire'){
+    // Phase transitions
+    if(hpPct<0.25&&boss.phase<2){boss.phase=2;boss.speed=5;showMsg('FIRE GOLEM ERUPTS!',2);spawnParticles(boss.pos,30,[1,0.4,0.1]);}
+    else if(hpPct<0.5&&boss.phase<1){boss.phase=1;boss.speed=4;showMsg('Fire Golem intensifies!',2);}
+
+    // Contact damage (heavier than grass)
+    if(dist<boss.size+0.5)hurtPlayer(8);
+
+    // ---- ATTACKS ----
+    boss.fireballCd-=dt;boss.fireRingCd-=dt;boss.eruptionCd-=dt;boss.meteorCd-=dt;
+
+    // Fireball — fast projectile toward player
+    if(boss.fireballCd<=0){
+      boss.fireballCd=max(1.5-boss.phase*0.3,0.6);
+      const numBalls=1+boss.phase;
+      for(let i=0;i<numBalls;i++){
+        const spread=v3(dir.x+(rand()-0.5)*0.3,0.1,dir.z+(rand()-0.5)*0.3);
+        projectiles.push({pos:v3(boss.pos.x,1.5,boss.pos.z),vel:v3scale(v3norm(spread),11+boss.phase*2),
+          type:'fireball',life:3,dmg:8,mesh:getSph(0.25,1,0.4,0.05)});
+      }
+    }
+
+    // Fire Ring — ring of fireballs expanding outward
+    if(boss.fireRingCd<=0){
+      boss.fireRingCd=max(7-boss.phase*1.5,3.5);
+      showMsg('Fire Ring!',1);
+      const count=12+boss.phase*4;
+      for(let a=0;a<TAU;a+=TAU/count){
+        projectiles.push({pos:v3(boss.pos.x,1.5,boss.pos.z),vel:v3(sin(a)*6,0.2,cos(a)*6),
+          type:'fireball',life:4,dmg:6,mesh:getSph(0.2,1,0.35,0.05)});
+      }
+    }
+
+    // Eruption (phase 1+) — fire spikes burst from ground at player
+    if(boss.phase>=1&&boss.eruptionCd<=0){
+      boss.eruptionCd=max(5-boss.phase,2.5);
+      showMsg('Eruption!',1);
+      for(let i=0;i<4+boss.phase*2;i++){
+        const rx=player.pos.x+(rand()-0.5)*5;
+        const rz=player.pos.z+(rand()-0.5)*5;
+        projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,14,0),
+          type:'fire_spike',life:1.5,dmg:12,mesh:getBox(0.25,2,0.25,1,0.3,0.0),delay:0.25+i*0.12,started:false,isPlayerProj:false});
+      }
+    }
+
+    // Meteor (phase 2) — slow arcing fireball that explodes into smaller fireballs
+    if(boss.phase>=2&&boss.meteorCd<=0){
+      boss.meteorCd=5;
+      showMsg('METEOR!',1.5);
+      const tx=player.pos.x+(rand()-0.5)*3;
+      const tz=player.pos.z+(rand()-0.5)*3;
+      projectiles.push({pos:v3(boss.pos.x,4,boss.pos.z),
+        vel:v3((tx-boss.pos.x)*0.6,3,(tz-boss.pos.z)*0.6),
+        type:'meteor',life:4,dmg:15,mesh:getSph(0.5,1,0.3,0.0),explodes:true});
+    }
   }
 }
 
@@ -669,8 +766,8 @@ function updateProjectiles(){
     const p=projectiles[i];
     p.life-=dt;if(p.life<=0){projectiles.splice(i,1);continue;}
 
-    // Delayed roots/spikes
-    if((p.type==='root'||p.type==='ice_spike')&&p.delay>0){p.delay-=dt;continue;}
+    // Delayed roots/spikes/fire_spikes
+    if((p.type==='root'||p.type==='ice_spike'||p.type==='fire_spike')&&p.delay>0){p.delay-=dt;continue;}
 
     p.pos.x+=p.vel.x*dt;p.pos.y+=p.vel.y*dt;p.pos.z+=p.vel.z*dt;
 
@@ -689,9 +786,22 @@ function updateProjectiles(){
     }
     if(p.type==='seedling')p.vel.y-=8*dt;
 
-    // Roots/ice spikes stop at surface
+    // Roots/ice spikes/fire spikes stop at surface
     if(p.type==='root'&&p.pos.y>2){p.vel.y=0;p.pos.y=1;}
     if(p.type==='ice_spike'&&p.pos.y>1.5){p.vel.y=0;p.pos.y=1.5;}
+    if(p.type==='fire_spike'&&p.pos.y>1.5){p.vel.y=0;p.pos.y=1.5;}
+    // Gravity for meteors, explode on ground
+    if(p.type==='meteor'){
+      p.vel.y-=8*dt;
+      if(p.pos.y<=0&&p.explodes){
+        p.explodes=false;p.life=0;
+        for(let a=0;a<TAU;a+=TAU/8){
+          projectiles.push({pos:v3(p.pos.x,0.5,p.pos.z),vel:v3(sin(a)*5,3,cos(a)*5),
+            type:'fireball',life:2.5,dmg:8,mesh:getSph(0.2,1,0.35,0.05)});
+        }
+        spawnParticles(p.pos,20,[1,0.4,0.05]);
+      }
+    }
 
     // Player projectiles hit boss
     if(p.isPlayerProj&&boss&&boss.hp>0){
@@ -712,6 +822,12 @@ function updateProjectiles(){
         showMsg('-'+p.dmg+' ICE!',1);
         updateBossHP();
         if(boss.hp<=0)bossDefeated();
+      }
+    }
+    // Fire spikes hit player at ground level
+    if(p.type==='fire_spike'&&p.pos.y>=1){
+      if(v3dist(p.pos,player.pos)<1.2){
+        hurtPlayer(p.dmg);
       }
     }
 
@@ -761,27 +877,33 @@ function render(){
   const view=m4lookAt(v3(cx,cy,cz),v3(player.pos.x,player.pos.y+1,player.pos.z),v3(0,1,0));
   VP=m4mul(proj,view);
 
-  gl.uniform3f(uLight,0.4,0.8,0.3);
-  gl.uniform3f(uFog,0.45,0.7,0.35);
-  gl.uniform1f(uFogD,40);
   gl.uniform3f(uCam,cx,cy,cz);
-  gl.clearColor(0.45,0.7,0.35,1);
 
-  // Ground (dark green)
-  drawMesh(getBox(30,0.1,30,0.1,0.25,0.05),m4translate(0,-0.05,0),VP);
-
-  // ---- GRASS BOSS (detailed) ----
-  // Force-create boss if missing during fight
-  if(!boss&&gameState==='fight'){
-    boss={type:'grass',name:'GRASS GUARDIAN',pos:v3(0,0,0),vel:v3(),hp:30,maxHp:30,
-      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:2,speed:2.5,
-      vineTimer:0,leafStormCd:8,seedBombCd:5,rootSlamCd:6,
-      thornShieldActive:false,thornShieldTimer:0,floatY:0};
-    document.getElementById('boss-name').textContent='GRASS GUARDIAN';
-    document.getElementById('boss-hud').style.display='block';
-    updateBossHP();
+  if(currentArena==='fire'){
+    gl.uniform3f(uLight,0.9,0.5,0.1);
+    gl.uniform3f(uFog,0.35,0.08,0.02);
+    gl.uniform1f(uFogD,35);
+    gl.clearColor(0.15,0.03,0.0,1);
+    // Dark volcanic ground
+    drawMesh(getBox(30,0.1,30,0.12,0.07,0.03),m4translate(0,-0.05,0),VP);
+    // Lava pools (pulsing glow)
+    for(const lp of lavaPools){
+      const lv=0.25+sin(gameTime*2+lp.phase)*0.08;
+      drawMesh(getBox(lp.w,0.08,lp.d,1,lv,0),m4translate(lp.x,0.02,lp.z),VP);
+      // Bright rim
+      drawMesh(getBox(lp.w+0.1,0.04,lp.d+0.1,1,0.5,0.1),m4translate(lp.x,0.0,lp.z),VP);
+    }
+  } else {
+    gl.uniform3f(uLight,0.4,0.8,0.3);
+    gl.uniform3f(uFog,0.45,0.7,0.35);
+    gl.uniform1f(uFogD,40);
+    gl.clearColor(0.45,0.7,0.35,1);
+    // Ground (dark green)
+    drawMesh(getBox(30,0.1,30,0.1,0.25,0.05),m4translate(0,-0.05,0),VP);
   }
-  if(boss){
+
+  // ---- BOSS RENDERING ----
+  if(boss&&boss.type==='grass'){
     const bx=boss.pos.x, bz=boss.pos.z;
     const bt=gameTime;
     const bobY=sin(bt*2)*0.2;
@@ -850,6 +972,64 @@ function render(){
     for(let i=0;i<nOrbs;i++){
       const oa=bt*1.5+i*TAU/nOrbs;
       drawMesh(getBox(0.25,0.05,0.15,0.18,0.5,0.1),m4translate(bx+sin(oa)*2.2,2.5+bobY,bz+cos(oa)*2.2),VP);
+    }
+  } else if(boss&&boss.type==='fire'){
+    const bx=boss.pos.x, bz=boss.pos.z;
+    const bt=gameTime;
+    const bobY=sin(bt*1.8)*0.15;
+    const armSwing=sin(bt*2.5)*0.4;
+
+    // === BODY (volcanic rock) ===
+    drawMesh(getBox(1.8,3.2,1.4,0.22,0.18,0.16),m4translate(bx,1.6+bobY,bz),VP);
+    // Lava cracks on body
+    drawMesh(getBox(0.12,2.5,1.42,0.9,0.3,0.0),m4translate(bx+0.35,1.6+bobY,bz),VP);
+    drawMesh(getBox(0.1,2,1.42,0.85,0.25,0.0),m4translate(bx-0.4,1.7+bobY,bz),VP);
+    drawMesh(getBox(1.82,0.1,1.42,0.9,0.35,0.02),m4translate(bx,2.0+bobY,bz),VP);
+    // Glowing belly
+    drawMesh(getBox(1.0,1.4,0.5,1,0.4,0.05),m4translate(bx,1.3+bobY,bz+0.5),VP);
+
+    // === HEAD (rocky, angular) ===
+    drawMesh(getBox(1.4,1.2,1.2,0.25,0.2,0.17),m4translate(bx,3.7+bobY,bz),VP);
+    // Lava cracks on head
+    drawMesh(getBox(1.42,0.08,1.22,0.9,0.3,0.0),m4translate(bx,3.5+bobY,bz),VP);
+    // Eyes (glowing lava orange)
+    drawMesh(getSph(0.18,1,0.5,0.0),m4translate(bx-0.38,3.8+bobY,bz+0.5),VP);
+    drawMesh(getSph(0.18,1,0.5,0.0),m4translate(bx+0.38,3.8+bobY,bz+0.5),VP);
+    // Eye glow (bright yellow core)
+    drawMesh(getSph(0.08,1,1,0.2),m4translate(bx-0.38,3.8+bobY,bz+0.55),VP);
+    drawMesh(getSph(0.08,1,1,0.2),m4translate(bx+0.38,3.8+bobY,bz+0.55),VP);
+    // Mouth — lava glow slit
+    drawMesh(getBox(0.5,0.1,0.08,1,0.5,0.05),m4translate(bx,3.35+bobY,bz+0.58),VP);
+
+    // === FIRE CROWN (flame spikes) ===
+    for(let i=0;i<6;i++){
+      const fa=i*TAU/6;
+      const fh=0.5+abs(sin(bt*3+i))*0.4;
+      drawMesh(getBox(0.15,fh,0.15,1,0.4+abs(sin(bt*4+i))*0.3,0.0),m4translate(bx+sin(fa)*0.65,4.35+bobY+fh*0.5,bz+cos(fa)*0.65),VP);
+    }
+
+    // === ARMS (massive rock fists) ===
+    drawMesh(getBox(0.35,1.2,0.35,0.22,0.17,0.15),m4mul(m4translate(bx-1.2,2.2+bobY,bz),m4rotX(armSwing)),VP);
+    drawMesh(getBox(0.45,0.55,0.45,0.2,0.15,0.13),m4translate(bx-1.3,1.2+bobY,bz),VP);// fist
+    drawMesh(getBox(0.35,1.2,0.35,0.22,0.17,0.15),m4mul(m4translate(bx+1.2,2.2+bobY,bz),m4rotX(-armSwing)),VP);
+    drawMesh(getBox(0.45,0.55,0.45,0.2,0.15,0.13),m4translate(bx+1.3,1.2+bobY,bz),VP);
+    // Lava on fists
+    drawMesh(getBox(0.47,0.08,0.47,1,0.35,0.0),m4translate(bx-1.3,1.35+bobY,bz),VP);
+    drawMesh(getBox(0.47,0.08,0.47,1,0.35,0.0),m4translate(bx+1.3,1.35+bobY,bz),VP);
+
+    // === LEGS (wide rock pillars) ===
+    drawMesh(getBox(0.5,1.2,0.5,0.2,0.16,0.14),m4translate(bx-0.5,0.6,bz+0.1),VP);
+    drawMesh(getBox(0.5,1.2,0.5,0.2,0.16,0.14),m4translate(bx+0.5,0.6,bz+0.1),VP);
+    // Lava feet
+    drawMesh(getBox(0.55,0.1,0.65,1,0.3,0.0),m4translate(bx-0.5,0.0,bz+0.2),VP);
+    drawMesh(getBox(0.55,0.1,0.65,1,0.3,0.0),m4translate(bx+0.5,0.0,bz+0.2),VP);
+
+    // === ORBITING FIRE SHARDS ===
+    const nFireOrbs=4+boss.phase*2;
+    for(let i=0;i<nFireOrbs;i++){
+      const oa=bt*2+i*TAU/nFireOrbs;
+      const fy=2+sin(bt*3+i)*0.4;
+      drawMesh(getBox(0.15,0.35,0.15,1,0.4+sin(bt*4+i)*0.2,0.0),m4translate(bx+sin(oa)*2.5,fy+bobY,bz+cos(oa)*2.5),VP);
     }
   }
 
@@ -956,24 +1136,33 @@ function render(){
     }
   }
 
-  // Trees (simple)
-  for(const t of trees){
-    drawMesh(getBox(0.5,t.h,0.5,0.35,0.22,0.1),m4translate(t.x,t.h/2,t.z),VP);
-    drawMesh(getSph(1.5,0.2,0.5,0.12),m4translate(t.x,t.h+0.7,t.z),VP);
-  }
-  // Rocks
-  for(const r of rocks){
-    drawMesh(getSph(r.s,0.45,0.43,0.4),m4translate(r.x,r.s*0.4,r.z),VP);
-  }
-  // Flowers
-  for(const f of flowers){
-    drawMesh(getBox(0.03,0.3,0.03,0.2,0.5,0.15),m4translate(f.x,0.15,f.z),VP);
-    drawMesh(getSph(f.s,0.9,0.4,0.4),m4translate(f.x,0.35,f.z),VP);
+  if(currentArena==='grass'){
+    // Trees (simple)
+    for(const t of trees){
+      drawMesh(getBox(0.5,t.h,0.5,0.35,0.22,0.1),m4translate(t.x,t.h/2,t.z),VP);
+      drawMesh(getSph(1.5,0.2,0.5,0.12),m4translate(t.x,t.h+0.7,t.z),VP);
+    }
+    // Rocks (green-tinted)
+    for(const r of rocks){
+      drawMesh(getSph(r.s,0.45,0.43,0.4),m4translate(r.x,r.s*0.4,r.z),VP);
+    }
+    // Flowers
+    for(const f of flowers){
+      drawMesh(getBox(0.03,0.3,0.03,0.2,0.5,0.15),m4translate(f.x,0.15,f.z),VP);
+      drawMesh(getSph(f.s,0.9,0.4,0.4),m4translate(f.x,0.35,f.z),VP);
+    }
+  } else {
+    // Volcanic rocks (dark with lava glow)
+    for(const r of rocks){
+      drawMesh(getSph(r.s,0.2,0.17,0.15),m4translate(r.x,r.s*0.4,r.z),VP);
+      // Lava crack on rock
+      drawMesh(getBox(r.s*0.15,r.s*0.9,r.s*2.1+0.01,0.9,0.3,0),m4mul(m4translate(r.x,r.s*0.4,r.z),m4rotY(r.rot)),VP);
+    }
   }
 
   // ---- PROJECTILES ----
   for(const p of projectiles){
-    if(p.type==='root'&&p.delay>0)continue;
+    if((p.type==='root'||p.type==='ice_spike'||p.type==='fire_spike')&&p.delay>0)continue;
     let mat=m4translate(p.pos.x,p.pos.y,p.pos.z);
     if(p.spin)mat=m4mul(mat,m4rotY(p.spin));
     if(p.type==='pollen'){
