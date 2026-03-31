@@ -218,23 +218,7 @@
 }
 </script>
 <script type="module">
-// Check if server is reachable before loading the game
-async function checkServer() {
-  try {
-    const res = await fetch('http://localhost:3000', { mode: 'no-cors', signal: AbortSignal.timeout(3000) });
-    return true;
-  } catch {
-    return false;
-  }
-}
-const online = await checkServer();
-if (!online) {
-  document.getElementById('screen-username').classList.remove('active');
-  document.getElementById('screen-offline').classList.add('active');
-} else {
-  // Load the game
-  const { } = await import('./blockworld/public/client.js');
-}
+import('./blockworld/public/client.js');
 </script>
 </body>
 </html>

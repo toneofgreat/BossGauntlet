@@ -31,12 +31,28 @@ function exitToMenu() {
 }
 
 // ===== USERNAME SCREEN =====
+socket.on('connect', () => {
+  document.getElementById('username-error').textContent = '';
+  document.getElementById('username-input').disabled = false;
+  document.querySelector('#username-form button').disabled = false;
+});
+
+socket.on('connect_error', () => {
+  const errEl = document.getElementById('username-error');
+  errEl.style.color = '#ff9944';
+  errEl.textContent = 'Cannot reach server — make sure it is running.';
+  document.getElementById('username-input').disabled = true;
+  document.querySelector('#username-form button').disabled = true;
+});
+
 document.getElementById('username-form').addEventListener('submit', e => {
   e.preventDefault();
   const val = document.getElementById('username-input').value.trim();
   const errEl = document.getElementById('username-error');
+  errEl.style.color = '#ff6060';
   errEl.textContent = '';
   if (!val) { errEl.textContent = 'Please enter a username'; return; }
+  if (!socket.connected) { errEl.textContent = 'Not connected to server. Please wait or refresh.'; return; }
   socket.emit('register-username', val, res => {
     if (res.success) {
       currentUser = { username: res.username, ...res.user };
