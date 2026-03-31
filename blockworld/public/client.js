@@ -43,6 +43,8 @@ _errEl.textContent = 'Connecting to server...';
 socket.on('connect', () => {
   _submitBtn.disabled = false;
   _submitBtn.textContent = 'Enter World';
+  _submitBtn.style.background = '';
+  _submitBtn.onclick = null;
   _errEl.textContent = '';
 });
 
@@ -54,10 +56,15 @@ socket.on('disconnect', () => {
 });
 
 socket.on('connect_error', () => {
-  _submitBtn.disabled = true;
-  _submitBtn.textContent = '⚠ Server Offline';
+  _submitBtn.disabled = false;
+  _submitBtn.textContent = '⚠ Server Offline — Click for Help';
+  _submitBtn.style.background = 'linear-gradient(135deg,#883300,#cc4400)';
   _errEl.style.color = '#ff9944';
-  _errEl.textContent = 'Server is not running. Start it with: node server.js';
+  _errEl.textContent = 'Cannot reach the server.';
+  _submitBtn.onclick = () => {
+    document.getElementById('screen-username').classList.remove('active');
+    document.getElementById('screen-offline').classList.add('active');
+  };
 });
 
 document.getElementById('username-form').addEventListener('submit', e => {
