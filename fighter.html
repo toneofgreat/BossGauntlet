@@ -28,7 +28,8 @@ canvas#c{display:block;width:100vw;height:100vh}
 #boss-hp-inner{height:100%;background:#4a4;border-radius:2px;transition:width .25s}
 
 /* ---- MENU ---- */
-#menu{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:linear-gradient(135deg,#0a0f0a,#0a1a0a,#050a05);overflow-y:auto;padding:40px 20px 60px}
+#menu{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;background:linear-gradient(135deg,#0a0f0a,#0a1a0a,#050a05);overflow:hidden}
+#menu-scroll{overflow-y:auto;width:100%;display:flex;flex-direction:column;align-items:center;padding:40px 20px 60px;flex:1}
 #menu-title{font-size:clamp(32px,6vw,52px);letter-spacing:6px;background:linear-gradient(90deg,#f84,#fd0,#4f4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
 #menu-sub{color:#555;font-size:12px;margin-bottom:30px;letter-spacing:2px}
 #menu-stats{color:#888;font-size:12px;margin-bottom:24px}
@@ -105,26 +106,28 @@ canvas#c{display:block;width:100vw;height:100vh}
 
 <!-- MENU -->
 <div id="menu">
-  <div id="menu-title">FIGHTER LEGENDS</div>
-  <div id="menu-sub">REALM OF BOSSES</div>
-  <div id="menu-stats"></div>
-  <div style="color:#555;font-size:10px;letter-spacing:2px;margin-bottom:4px">— WORLD 1: VERDANT WILDS —</div>
-  <button class="menu-btn" onclick="startFight('grass')">🌿 GRASS GUARDIAN</button>
-  <button class="menu-btn locked" id="fire-boss-btn">🔒 FIRE GOLEM</button>
-  <button class="menu-btn locked" id="titan-boss-btn">🔒 VOID TITAN</button>
-  <div style="color:#555;font-size:10px;letter-spacing:2px;margin:6px 0 4px">— WORLD 2: SHADOW DEPTHS —</div>
-  <button class="menu-btn locked" id="wraith-btn">🔒 SHADOW WRAITH</button>
-  <button class="menu-btn locked" id="phantom-btn">🔒 PHANTOM MAGE</button>
-  <button class="menu-btn locked" id="nightmare-btn">🔒 NIGHTMARE BEAST</button>
-  <button class="menu-btn locked" id="dcolossus-btn">🔒 DARK COLOSSUS</button>
-  <button class="menu-btn locked" id="vemperor-btn">🔒 VOID EMPEROR</button>
-  <div style="color:#555;font-size:10px;letter-spacing:2px;margin:6px 0 4px">— WORLD 3: DIVINE HEAVENS —</div>
-  <button class="menu-btn locked" id="eagle-btn">🔒 STORM EAGLE</button>
-  <button class="menu-btn locked" id="tcolossus-btn">🔒 THUNDER COLOSSUS</button>
-  <button class="menu-btn locked" id="cdragon-btn">🔒 CELESTIAL DRAGON</button>
-  <button class="menu-btn locked" id="dtitan-btn">🔒 DIVINE TITAN</button>
-  <button class="menu-btn locked" id="almighty-btn">🔒 THE ALMIGHTY</button>
-  <button class="menu-btn" onclick="openShop()" style="margin-top:8px">⚔ SWORD SHOP</button>
+  <div id="menu-scroll">
+    <div id="menu-title">FIGHTER LEGENDS</div>
+    <div id="menu-sub">REALM OF BOSSES</div>
+    <div id="menu-stats"></div>
+    <div style="color:#555;font-size:10px;letter-spacing:2px;margin-bottom:4px">— WORLD 1: VERDANT WILDS —</div>
+    <button class="menu-btn" onclick="startFight('grass')">🌿 GRASS GUARDIAN</button>
+    <button class="menu-btn locked" id="fire-boss-btn">🔒 FIRE GOLEM</button>
+    <button class="menu-btn locked" id="titan-boss-btn">🔒 VOID TITAN</button>
+    <div style="color:#555;font-size:10px;letter-spacing:2px;margin:6px 0 4px">— WORLD 2: SHADOW DEPTHS —</div>
+    <button class="menu-btn locked" id="wraith-btn">🔒 SHADOW WRAITH</button>
+    <button class="menu-btn locked" id="phantom-btn">🔒 PHANTOM MAGE</button>
+    <button class="menu-btn locked" id="nightmare-btn">🔒 NIGHTMARE BEAST</button>
+    <button class="menu-btn locked" id="dcolossus-btn">🔒 DARK COLOSSUS</button>
+    <button class="menu-btn locked" id="vemperor-btn">🔒 VOID EMPEROR</button>
+    <div style="color:#555;font-size:10px;letter-spacing:2px;margin:6px 0 4px">— WORLD 3: DIVINE HEAVENS —</div>
+    <button class="menu-btn locked" id="eagle-btn">🔒 STORM EAGLE</button>
+    <button class="menu-btn locked" id="tcolossus-btn">🔒 THUNDER COLOSSUS</button>
+    <button class="menu-btn locked" id="cdragon-btn">🔒 CELESTIAL DRAGON</button>
+    <button class="menu-btn locked" id="dtitan-btn">🔒 DIVINE TITAN</button>
+    <button class="menu-btn locked" id="almighty-btn">🔒 THE ALMIGHTY</button>
+    <button class="menu-btn" onclick="openShop()" style="margin-top:8px">⚔ SWORD SHOP</button>
+  </div>
 </div>
 
 <!-- SHOP -->
