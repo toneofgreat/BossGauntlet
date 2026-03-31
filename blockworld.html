@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlockWorld Multiplayer</title>
+  <link rel="stylesheet" href="blockworld/public/style.css">
+</head>
+<body>
+
+<!-- USERNAME SCREEN -->
+<div id="screen-username" class="screen active">
+  <div class="username-box">
+    <h1 class="logo">🌍 BlockWorld</h1>
+    <p class="subtitle">Multiplayer Building & Games</p>
+    <form id="username-form">
+      <input id="username-input" type="text" maxlength="20" placeholder="Enter your username..." autocomplete="off" />
+      <div id="username-error" class="error-msg"></div>
+      <div class="username-rules">
+        <span>Max 20 characters</span>
+        <span>Letters, numbers, underscores</span>
+        <span>Must be unique</span>
+      </div>
+      <button type="submit" class="btn-primary">Enter World</button>
+    </form>
+  </div>
+</div>
+
+<!-- SERVER OFFLINE NOTICE -->
+<div id="screen-offline" class="screen" style="align-items:center;justify-content:center;background:#0a0a1a;">
+  <div style="text-align:center;max-width:420px;padding:40px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;">
+    <div style="font-size:3rem;margin-bottom:16px;">🔌</div>
+    <h2 style="margin-bottom:12px;font-size:1.4rem;">Server Not Running</h2>
+    <p style="color:#888;line-height:1.6;margin-bottom:24px;">
+      BlockWorld needs its server to run multiplayer.<br><br>
+      Open a terminal and run:<br>
+      <code style="background:#111;padding:10px 16px;border-radius:8px;display:block;margin:12px 0;font-size:0.95rem;color:#6af;">cd blockworld<br>node server.js</code>
+      Then refresh this page.
+    </p>
+    <a href="index.html" style="display:inline-block;padding:10px 24px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#ccc;text-decoration:none;">← Back to Games</a>
+  </div>
+</div>
+
+<!-- MENU SCREEN -->
+<div id="screen-menu" class="screen">
+  <div class="menu-header">
+    <h1 class="logo-sm">🌍 BlockWorld</h1>
+    <div class="player-info">
+      <span id="menu-username" class="player-name"></span>
+      <span id="menu-title" class="player-title"></span>
+    </div>
+    <button id="btn-build" class="btn-primary">+ Build</button>
+  </div>
+  <div class="menu-content">
+    <section class="games-section">
+      <h2 class="section-title">⭐ Featured Games</h2>
+      <div class="games-grid">
+        <div class="game-card featured" id="card-race">
+          <div class="game-thumb race-thumb">🏁</div>
+          <div class="game-info">
+            <h3>Speed Race</h3>
+            <p>Race against other players! Stand in the yellow square with 2+ players to start a 15-second countdown.</p>
+            <span class="game-badge">Multiplayer</span>
+          </div>
+          <button class="btn-play" onclick="enterGame('race')">Play</button>
+        </div>
+        <div class="game-card featured" id="card-parkour">
+          <div class="game-thumb parkour-thumb">🏃</div>
+          <div class="game-info">
+            <h3>Lava Parkour</h3>
+            <p>A long 2D parkour with lava pits and jump pads. Everyone plays in the same server!</p>
+            <span class="game-badge">Live Multiplayer</span>
+          </div>
+          <button class="btn-play" onclick="enterGame('parkour')">Play</button>
+        </div>
+      </div>
+    </section>
+    <section class="games-section" id="user-builds-section">
+      <h2 class="section-title">🎮 Top Player Games</h2>
+      <div id="user-builds-list" class="games-grid"></div>
+      <div id="no-builds-msg" class="no-builds">No player games yet. Be the first to build one!</div>
+    </section>
+  </div>
+</div>
+
+<!-- BUILD MODE SCREEN -->
+<div id="screen-build" class="screen">
+  <div id="build-ui">
+    <button id="build-exit-btn" class="build-exit" title="Exit to Menu">✕ Exit</button>
+    <div id="build-mode-toggle" class="mode-toggle">
+      <button id="btn-3d" class="mode-btn active" onclick="setBuildMode('3d')">3D</button>
+      <button id="btn-2d" class="mode-btn" onclick="setBuildMode('2d')">2D</button>
+    </div>
+    <div id="build-toolbar" class="build-toolbar">
+      <div class="toolbar-section">
+        <span class="toolbar-label">Terrain</span>
+        <div class="tool-btn-row">
+          <button class="tool-btn active" data-type="baseplate" onclick="selectTool('baseplate')">
+            <span class="tool-icon">⬜</span><span>Baseplate</span>
+          </button>
+          <button class="tool-btn" data-type="grassplate" onclick="selectTool('grassplate')">
+            <span class="tool-icon">🟩</span><span>Grassplate</span>
+          </button>
+        </div>
+      </div>
+      <div class="toolbar-section">
+        <span class="toolbar-label">Objects</span>
+        <div class="tool-btn-row">
+          <button class="tool-btn" data-type="part" onclick="selectTool('part')">
+            <span class="tool-icon" style="color:#6af">■</span><span>Part</span>
+          </button>
+          <button class="tool-btn" data-type="lava" onclick="selectTool('lava')">
+            <span class="tool-icon" style="color:#f64">🔥</span><span>Lava</span>
+          </button>
+          <button class="tool-btn" data-type="ladder" onclick="selectTool('ladder')">
+            <span class="tool-icon">🪜</span><span>Ladder</span>
+          </button>
+          <button class="tool-btn" data-type="jumppad" onclick="selectTool('jumppad')">
+            <span class="tool-icon" style="color:#ff0">▲</span><span>JumpPad</span>
+          </button>
+          <button class="tool-btn" data-type="car" onclick="selectTool('car')">
+            <span class="tool-icon">🚗</span><span>Car</span>
+          </button>
+          <button class="tool-btn" data-type="sword" onclick="selectTool('sword')">
+            <span class="tool-icon">⚔️</span><span>Sword</span>
+          </button>
+        </div>
+      </div>
+      <div class="toolbar-section">
+        <span class="toolbar-label">Transform</span>
+        <div class="tool-btn-row">
+          <button class="tool-btn" id="btn-translate" onclick="setTransformMode('translate')">
+            <span class="tool-icon">✥</span><span>Move</span>
+          </button>
+          <button class="tool-btn" id="btn-scale" onclick="setTransformMode('scale')">
+            <span class="tool-icon">⤢</span><span>Resize</span>
+          </button>
+          <button class="tool-btn danger" id="btn-delete" onclick="deleteSelected()">
+            <span class="tool-icon">🗑️</span><span>Delete</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="build-save-panel" class="save-panel">
+      <input id="build-name-input" type="text" maxlength="40" placeholder="Name your build..." />
+      <button class="btn-primary" onclick="saveBuild()">💾 Save & Publish</button>
+    </div>
+    <div id="build-hint" class="build-hint">Click to place • Click object to select • Delete key to remove</div>
+  </div>
+  <canvas id="build-canvas-2d" style="display:none"></canvas>
+  <div id="build-canvas-3d"></div>
+</div>
+
+<!-- RACE SCREEN -->
+<div id="screen-race" class="screen">
+  <div id="race-ui">
+    <button class="back-btn" onclick="exitToMenu()">← Menu</button>
+    <div id="race-overlay" class="game-overlay">
+      <h2>Speed Race</h2>
+      <p>Walk into the <span style="color:#ff0">yellow square</span> to join the lobby!</p>
+      <div id="race-lobby-info" class="lobby-info">
+        <span id="race-player-count">0</span> / 2+ players in lobby
+        <div id="race-player-list" class="player-list"></div>
+      </div>
+      <div id="race-countdown-display" class="countdown" style="display:none"></div>
+      <div id="race-winner-display" class="winner-msg" style="display:none"></div>
+      <div id="race-controls-hint" class="controls-hint">WASD / Arrow Keys to move • Space to jump</div>
+    </div>
+    <div id="race-hud" class="race-hud" style="display:none">
+      <div id="race-progress-bar"><div id="race-progress-fill"></div></div>
+      <span id="race-pos-label">Position: 0%</span>
+    </div>
+  </div>
+  <div id="race-canvas-container"></div>
+</div>
+
+<!-- PARKOUR SCREEN -->
+<div id="screen-parkour" class="screen">
+  <div id="parkour-ui">
+    <button class="back-btn" onclick="exitToMenu()">← Menu</button>
+    <div id="parkour-hud" class="parkour-hud">
+      <span id="parkour-progress">Progress: 0%</span>
+      <span id="parkour-players-count">Players: 0</span>
+    </div>
+    <div id="parkour-overlay" class="game-overlay small-overlay">
+      <h3>Lava Parkour</h3>
+      <p>Arrow keys / WASD to move, Space to jump<br>Avoid the lava! Reach the finish!</p>
+      <button class="btn-primary" onclick="startParkour()">Start!</button>
+    </div>
+    <div id="parkour-finish-msg" style="display:none" class="winner-msg">
+      🎉 You finished the parkour!
+    </div>
+  </div>
+  <canvas id="parkour-canvas"></canvas>
+</div>
+
+<!-- PLAY BUILD SCREEN -->
+<div id="screen-play-build" class="screen">
+  <div id="play-ui">
+    <button class="back-btn" onclick="exitToMenu()">← Menu</button>
+    <div id="play-build-name" class="play-title"></div>
+    <div id="play-controls-hint" class="controls-hint">WASD to move • Space to jump</div>
+  </div>
+  <div id="play-canvas-3d"></div>
+  <canvas id="play-canvas-2d" style="display:none"></canvas>
+</div>
+
+<!-- Tell client.js to connect to localhost:3000 -->
+<script>var BLOCKWORLD_SERVER = 'http://localhost:3000';</script>
+<!-- Socket.io from CDN (no server needed to load this) -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+// Check if server is reachable before loading the game
+async function checkServer() {
+  try {
+    const res = await fetch('http://localhost:3000', { mode: 'no-cors', signal: AbortSignal.timeout(3000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const online = await checkServer();
+if (!online) {
+  document.getElementById('screen-username').classList.remove('active');
+  document.getElementById('screen-offline').classList.add('active');
+} else {
+  // Load the game
+  const { } = await import('./blockworld/public/client.js');
+}
+</script>
+</body>
+</html>
