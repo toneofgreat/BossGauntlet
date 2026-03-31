@@ -46,6 +46,9 @@ const racePlayers = new Map(); // socketId -> {username, x, y, z, progress}
 // Parkour state
 const parkourPlayers = new Map(); // socketId -> {username, x, y, progress}
 
+// User-built game rooms: buildId -> Map<socketId, {username,x,y,z}>
+const buildGameRooms = new Map();
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', '*');
@@ -184,6 +187,36 @@ io.on('connection', (socket) => {
     io.to('parkour').emit('parkour-player-finished', { username });
   });
 
+  // --- USER-BUILT GAME ROOMS ---
+  socket.on('join-build-game', (buildId) => {
+    const username = activeSockets.get(socket.id);
+    if (!username || !buildId) return;
+    socket.join('bg-' + buildId);
+    if (!buildGameRooms.has(buildId)) buildGameRooms.set(buildId, new Map());
+    buildGameRooms.get(buildId).set(socket.id, { username, x: 0, y: 2, z: 0 });
+    const others = [...buildGameRooms.get(buildId).entries()]
+      .filter(([sid]) => sid !== socket.id)
+      .map(([sid, p]) => ({ socketId: sid, ...p }));
+    socket.emit('build-game-players', others);
+    socket.to('bg-' + buildId).emit('build-game-player-joined', { socketId: socket.id, username, x: 0, y: 2, z: 0 });
+  });
+
+  socket.on('build-game-position', ({ buildId, x, y, z }) => {
+    if (!buildGameRooms.has(buildId)) return;
+    const p = buildGameRooms.get(buildId).get(socket.id);
+    if (p) { p.x = x; p.y = y; p.z = z; }
+    socket.to('bg-' + buildId).emit('build-game-player-move', { socketId: socket.id, x, y, z });
+  });
+
+  socket.on('leave-build-game', (buildId) => {
+    socket.leave('bg-' + buildId);
+    if (buildGameRooms.has(buildId)) {
+      buildGameRooms.get(buildId).delete(socket.id);
+      if (buildGameRooms.get(buildId).size === 0) buildGameRooms.delete(buildId);
+    }
+    socket.to('bg-' + buildId).emit('build-game-player-left', socket.id);
+  });
+
   // --- DISCONNECT ---
   socket.on('disconnect', () => {
     activeSockets.delete(socket.id);
@@ -196,6 +229,13 @@ io.on('connection', (socket) => {
     if (parkourPlayers.has(socket.id)) {
       parkourPlayers.delete(socket.id);
       io.to('parkour').emit('parkour-player-left', socket.id);
+    }
+    for (const [buildId, room] of buildGameRooms) {
+      if (room.has(socket.id)) {
+        room.delete(socket.id);
+        io.to('bg-' + buildId).emit('build-game-player-left', socket.id);
+        if (room.size === 0) buildGameRooms.delete(buildId);
+      }
     }
   });
 });

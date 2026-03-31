@@ -1376,8 +1376,59 @@ function playBuild3D(build) {
   const keys = {};
   const GRAVITY = -25;
   let onGround = false;
+  const otherBuildPlayers = new Map();
+  const buildPlayerColors = [0xff4444, 0x44ff44, 0xff44ff, 0xffaa44, 0x44ffff, 0xaa44ff];
+  let bpColorIdx = 0;
+  const buildId = build.id;
+
+  function getOrMakeBuildPlayer(sid, username) {
+    if (!otherBuildPlayers.has(sid)) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 2, 1),
+        new THREE.MeshLambertMaterial({ color: buildPlayerColors[(bpColorIdx++) % buildPlayerColors.length] })
+      );
+      m.castShadow = true;
+      scene.add(m);
+      otherBuildPlayers.set(sid, { mesh: m, username });
+    }
+    return otherBuildPlayers.get(sid);
+  }
+
+  socket.emit('join-build-game', buildId);
+
+  socket.on('build-game-players', (players) => {
+    players.forEach(p => {
+      const op = getOrMakeBuildPlayer(p.socketId, p.username);
+      op.mesh.position.set(p.x, p.y, p.z);
+    });
+  });
+
+  socket.on('build-game-player-joined', ({ socketId, username, x, y, z }) => {
+    const op = getOrMakeBuildPlayer(socketId, username);
+    op.mesh.position.set(x, y, z);
+  });
+
+  socket.on('build-game-player-move', ({ socketId, x, y, z }) => {
+    if (otherBuildPlayers.has(socketId)) {
+      otherBuildPlayers.get(socketId).mesh.position.set(x, y, z);
+    }
+  });
+
+  socket.on('build-game-player-left', (socketId) => {
+    if (otherBuildPlayers.has(socketId)) {
+      scene.remove(otherBuildPlayers.get(socketId).mesh);
+      otherBuildPlayers.delete(socketId);
+    }
+  });
+
+  let posTimer = 0;
 
   function updatePlay(dt) {
+    posTimer += dt;
+    if (posTimer > 0.05) {
+      posTimer = 0;
+      socket.emit('build-game-position', { buildId, x: playerMesh.position.x, y: playerMesh.position.y, z: playerMesh.position.z });
+    }
     vel3.y += GRAVITY * dt;
 
     let moveX = 0, moveZ = 0;
@@ -1454,6 +1505,11 @@ function playBuild3D(build) {
     window.removeEventListener('keydown', onKD);
     window.removeEventListener('keyup', onKU);
     window.removeEventListener('resize', onResize);
+    socket.emit('leave-build-game', buildId);
+    socket.off('build-game-players');
+    socket.off('build-game-player-joined');
+    socket.off('build-game-player-move');
+    socket.off('build-game-player-left');
     renderer.dispose();
     container.innerHTML = '';
   };
