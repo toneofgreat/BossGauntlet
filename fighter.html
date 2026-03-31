@@ -40,7 +40,8 @@ canvas#c{display:block;width:100vw;height:100vh}
 #back-btn:hover{background:#333;color:#fff}
 
 /* ---- SHOP ---- */
-#shop{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,10,5,0.95)}
+#shop{position:fixed;inset:0;z-index:200;display:none;overflow-y:scroll;background:rgba(5,10,5,0.95)}
+#shop-inner{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:40px 20px 60px;box-sizing:border-box;width:100%}
 #shop-title{font-size:28px;color:#fd0;letter-spacing:4px;margin-bottom:6px}
 #shop-sub{font-size:11px;color:#886;margin-bottom:20px}
 .shop-item{background:#151a15;border:2px solid #333;border-radius:8px;padding:14px 20px;margin:6px;width:320px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .15s}
@@ -132,10 +133,12 @@ canvas#c{display:block;width:100vw;height:100vh}
 
 <!-- SHOP -->
 <div id="shop">
-  <div id="shop-title">SWORD SHOP</div>
-  <div id="shop-sub">Upgrade your blade</div>
-  <div id="shop-items"></div>
-  <button class="menu-btn" style="margin-top:16px" onclick="closeShop()">BACK</button>
+  <div id="shop-inner">
+    <div id="shop-title">SWORD SHOP</div>
+    <div id="shop-sub">Upgrade your blade</div>
+    <div id="shop-items"></div>
+    <button class="menu-btn" style="margin-top:16px" onclick="closeShop()">BACK</button>
+  </div>
 </div>
 
 <!-- DEATH -->
