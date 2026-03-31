@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Find the Lettuces</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
+#canvas{display:block;width:100vw;height:100vh}
+
+#cutscene{position:fixed;inset:0;background:#1a2a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .6s}
+#cs-stage{font-size:80px;margin-bottom:16px;transition:all .4s}
+#cs-text{color:#ffe066;font-size:26px;letter-spacing:3px;text-align:center;margin-bottom:8px}
+#cs-sub{color:#8a9;font-size:14px;letter-spacing:2px}
+#cs-bar{position:absolute;bottom:0;left:0;height:4px;background:#4f4;transition:width .1s linear}
+
+#game-ui{display:none}
+#score-box{position:fixed;top:14px;left:14px;background:rgba(0,25,0,.88);border:2px solid #3a3;border-radius:8px;padding:8px 16px;color:#afe;font-size:15px;letter-spacing:1px;z-index:20}
+#index-btn{position:fixed;top:14px;right:14px;background:#0a2a0a;border:2px solid #3a3;border-radius:8px;padding:8px 20px;color:#afe;font-size:14px;cursor:pointer;letter-spacing:1px;z-index:20}
+#index-btn:hover{background:#1a4a1a}
+#crosshair{position:fixed;top:50%;left:50%;width:22px;height:22px;transform:translate(-50%,-50%);pointer-events:none;z-index:10}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.8)}
+#crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%)}
+#crosshair::after{width:100%;height:2px;top:50%;transform:translateY(-50%)}
+#interact-hint{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#ffe066;padding:6px 18px;border-radius:20px;font-size:13px;display:none;z-index:20;pointer-events:none}
+
+#found-popup{position:fixed;top:100px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0a3a0a,#165a16);border:3px solid #4f4;border-radius:14px;padding:14px 32px;text-align:center;color:#afe;font-size:17px;letter-spacing:2px;display:none;z-index:30;box-shadow:0 0 40px #4f46}
+#found-popup .fi{font-size:44px;display:block;margin-bottom:4px}
+
+#index-panel{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:50;display:none;overflow-y:auto;padding:20px}
+#index-panel h2{text-align:center;color:#4f4;font-size:30px;letter-spacing:5px;margin-bottom:4px}
+.isub{text-align:center;color:#566;font-size:12px;margin-bottom:20px}
+#index-close{position:sticky;top:0;float:right;background:#2a0a0a;border:2px solid #a44;border-radius:6px;color:#faa;padding:6px 14px;cursor:pointer;font-family:inherit;font-size:13px;z-index:51}
+#lettuce-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;max-width:1100px;margin:0 auto;clear:both}
+.lcard{background:#0a160a;border:2px solid #244;border-radius:10px;padding:14px;cursor:pointer;transition:all .2s;position:relative}
+.lcard:hover{border-color:#4a4;background:#0e220e;transform:translateY(-2px)}
+.lcard.found{border-color:#4f4;background:#0a200a}
+.lcard.found::after{content:'✓ FOUND';position:absolute;top:8px;right:8px;color:#4f4;font-size:10px;letter-spacing:1px}
+.licon{font-size:38px;display:block;text-align:center;margin-bottom:8px}
+.lname{color:#afe;font-size:12px;font-weight:bold;margin-bottom:4px;letter-spacing:1px}
+.lhint{color:#567;font-size:11px;line-height:1.5;font-style:italic}
+.lcard.found .lhint{color:#5a7}
+
+#hint-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0a160a;border:2px solid #4a4;border-radius:12px;padding:24px 32px;max-width:380px;text-align:center;display:none;z-index:60}
+#hint-popup h3{color:#4f4;margin-bottom:12px;letter-spacing:2px;font-size:16px}
+#hint-popup p{color:#adc;font-size:14px;line-height:1.6}
+#hint-close{margin-top:14px;background:#1a3a1a;border:1px solid #4a4;color:#afe;padding:6px 20px;border-radius:6px;cursor:pointer;font-family:inherit}
+
+#secret-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#08081a;border:3px solid #66f;border-radius:14px;padding:28px 36px;text-align:center;display:none;z-index:40;min-width:320px}
+#secret-panel h3{color:#aaf;font-size:20px;margin-bottom:8px;letter-spacing:3px}
+#secret-panel .sp{color:#668;font-size:12px;margin-bottom:16px}
+#secret-input{background:#000;border:2px solid #44a;color:#fff;font-family:'Courier New',monospace;font-size:22px;letter-spacing:8px;text-align:center;padding:8px 16px;width:200px;border-radius:6px;text-transform:uppercase}
+#secret-submit{margin-top:12px;background:#1a1a4a;border:2px solid #44f;color:#aaf;padding:8px 24px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:14px;display:block;width:100%}
+#secret-closebtn{margin-top:8px;background:none;border:1px solid #444;color:#666;padding:6px 20px;border-radius:6px;cursor:pointer;font-family:inherit;display:block;width:100%}
+#secret-msg{margin-top:10px;font-size:13px;color:#f66;min-height:18px}
+
+#start-screen{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:15}
+#start-screen h2{color:#ffe066;font-size:26px;letter-spacing:5px;margin-bottom:16px}
+.ctrl{color:#aaa;font-size:13px;margin:3px 0}
+#start-btn{margin-top:22px;background:#1a3a1a;border:2px solid #4a4;color:#afe;padding:14px 40px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:17px;letter-spacing:2px}
+#start-btn:hover{background:#254a25}
+
+#win-screen{position:fixed;inset:0;background:rgba(0,15,0,.96);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:90;text-align:center}
+#win-screen h1{color:#4f4;font-size:44px;letter-spacing:6px;margin-bottom:16px}
+#win-screen p{color:#afe;font-size:18px}
+
+#minimap{position:fixed;bottom:14px;right:14px;width:120px;height:120px;border:2px solid #3a3;border-radius:6px;background:rgba(0,20,0,.7);z-index:20;display:none}
+</style>
+</head>
+<body>
+
+<div id="cutscene">
+  <div id="cs-stage">🍽️</div>
+  <div id="cs-text">Lunchtime...</div>
+  <div id="cs-sub">A peaceful day at the lettuce farm</div>
+  <div id="cs-bar" style="width:0%"></div>
+</div>
+
+<div id="game-ui">
+  <div id="score-box">🥬 <span id="score-count">0</span> / 16</div>
+  <button id="index-btn">📋 INDEX</button>
+  <div id="crosshair"></div>
+  <div id="interact-hint"></div>
+  <div id="found-popup"><span class="fi">🥬</span><span id="found-name">Lettuce</span> found!<br><span style="color:#4f4;font-size:12px">+1 Lettuce Point</span></div>
+</div>
+
+<div id="index-panel">
+  <button id="index-close">✕ CLOSE</button>
+  <h2>🥬 LETTUCE INDEX 🥬</h2>
+  <div class="isub">Click any lettuce for a hint • <span id="found-count">0</span>/16 found</div>
+  <div id="lettuce-grid"></div>
+</div>
+
+<div id="hint-popup">
+  <h3 id="hint-title"></h3>
+  <p id="hint-text"></p>
+  <button id="hint-close">Got it!</button>
+</div>
+
+<div id="secret-panel">
+  <h3>🔮 SECRET LETTUCE</h3>
+  <div class="sp">Find the 4-letter code hidden across the map...<br>Look for glowing purple orbs with letters on them.</div>
+  <input id="secret-input" type="text" maxlength="4" placeholder="????" autocomplete="off"/>
+  <button id="secret-submit">UNLOCK</button>
+  <button id="secret-closebtn">Cancel</button>
+  <div id="secret-msg"></div>
+</div>
+
+<div id="start-screen">
+  <h2>FIND THE LETTUCES</h2>
+  <div class="ctrl">WASD — Move &nbsp;|&nbsp; Mouse — Look &nbsp;|&nbsp; SPACE — Jump</div>
+  <div class="ctrl">SHIFT — Sprint &nbsp;|&nbsp; Click — Collect lettuce (when close)</div>
+  <div class="ctrl" style="color:#4a4;margin-top:8px">📋 INDEX shows all 16 lettuces + hints</div>
+  <div class="ctrl" style="color:#88f;margin-top:4px">Find 4 glowing purple letters → Secret Lettuce</div>
+  <button id="start-btn">▶ CLICK TO PLAY</button>
+</div>
+
+<div id="win-screen">
+  <h1>YOU FOUND ALL THE LETTUCES!</h1>
+  <p>🥬 16 / 16 Lettuce Points 🥬</p>
+  <p style="margin-top:20px;color:#6a6;font-size:14px">The farm is restored. Lunch is saved. You are the Lettuce Master.</p>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+// ================================================================
+//  FIND THE LETTUCES — full game
+// ================================================================
+
+const LETTUCES = [
+  { id:'plain',     name:'Plain Sight Lettuce',        icon:'🥬', color:0x4ade80, hint:'Right in the middle of the main dirt path near the farm entrance. Hiding in plain sight!' },
+  { id:'big',       name:'Big Lettuce',                icon:'🌿', color:0x22c55e, hint:'Colossal. Check the very far corner of the map — you\'ll see it from a distance.' },
+  { id:'happy',     name:'Happy Lettuce',              icon:'😄', color:0x86efac, hint:'Smiling among the crops in the lettuce farm. It loves growing here!' },
+  { id:'sad',       name:'Sad Lettuce',                icon:'😢', color:0x6ee7b7, hint:'A tearful lettuce on the farm. Near the happy one — but not feeling as cheerful.' },
+  { id:'tiny',      name:'Tiny Lettuce',               icon:'🔍', color:0xbbf7d0, hint:'Barely visible! Halfway buried under the main path. Look straight down while walking the path.' },
+  { id:'cabbage',   name:'Cabbage',                    icon:'🥦', color:0xa8d5b5, hint:'Technically a cabbage, but it counts! Deep in the sewers, past the sewer obby, tucked in a corner.' },
+  { id:'inlet',     name:'Inlet Lettuce',              icon:'🧱', color:0x4ade80, hint:'Set flush into the east wall of the farmhouse. Walk around the house and look closely at the walls.' },
+  { id:'stuff',     name:'Stuff Lettuce',              icon:'🪜', color:0x16a34a, hint:'Sitting on a platform partway up the obstacle course. Start climbing the obby to the east!' },
+  { id:'yellowstud',name:'Yellow Stud Lettuce',        icon:'⭐', color:0xfde047, hint:'Bright yellow! Higher up the obby where the platforms get red and smaller. Keep climbing.' },
+  { id:'evil',      name:'Evil Lettuce',               icon:'😈', color:0xdc2626, hint:'Menacing. Fanged. At the top of the very hard obby section. Are you brave enough?' },
+  { id:'supevil',   name:'Super Duper Evil Lettuce',   icon:'👿', color:0x450a0a, hint:'Even the Evil Lettuce fears this one. Impossibly high above the obby. Good luck.' },
+  { id:'wooden',    name:'Wooden Lettuce',             icon:'🪵', color:0xa16207, hint:'Carved from wood, sitting on top of the farmhouse roof.' },
+  { id:'brick',     name:'Brick Lettuce',              icon:'🏢', color:0x9f3d26, hint:'Red as a brick, high on the skyscraper. Use the zigzag fire-escape platforms on the side.' },
+  { id:'sewer',     name:'Sewer Lettuce',              icon:'🚽', color:0x365314, hint:'Deep in the sewers. Very hard to spot — it\'s hiding in the far back corner of the sewer tunnel.' },
+  { id:'sewerobby', name:'Sewer Obby Lettuce',         icon:'💧', color:0x4d7c0f, hint:'There\'s an obstacle course IN the sewers. Complete it and reach the final platform.' },
+  { id:'secret',    name:'Secret Lettuce',             icon:'🔮', color:0x818cf8, hint:'Find 4 glowing purple letter-orbs hidden around the map. Spell the word, enter it at the glowing podium near the pond.', isSecret:true },
+];
+LETTUCES.forEach(l => l.found = false);
+
+// ================================================================
+//  RENDERER / SCENE / CAMERA
+// ================================================================
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.006);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 600);
+camera.position.set(0, 2, 62);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ================================================================
+//  LIGHTING
+// ================================================================
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+const sun = new THREE.DirectionalLight(0xfff5d0, 1.1);
+sun.position.set(60, 120, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 500;
+sun.shadow.camera.left = -180;
+sun.shadow.camera.right = 180;
+sun.shadow.camera.top = 180;
+sun.shadow.camera.bottom = -180;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0xc0e8ff, 0.3);
+fill.position.set(-40, 30, -40);
+scene.add(fill);
+
+// ================================================================
+//  HELPERS
+// ================================================================
+function box(w, h, d, color, x, y, z, ry=0) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  m.position.set(x, y + h/2, z);
+  m.rotation.y = ry;
+  m.castShadow = true;
+  m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+
+function sphere(r, color, x, y, z, segs=10) {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(r, segs, 8),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  scene.add(m);
+  return m;
+}
+
+function cone(r, h, color, x, y, z, segs=7) {
+  const m = new THREE.Mesh(
+    new THREE.ConeGeometry(r, h, segs),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  m.position.set(x, y + h/2, z);
+  m.castShadow = true;
+  scene.add(m);
+  return m;
+}
+
+// ================================================================
+//  LETTUCE FACTORY
+// ================================================================
+function makeFaceTex(type) { // type: happy | sad | evil | superevil
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const ctx = c.getContext('2d');
+  // Eyes
+  if (type === 'superevil') {
+    ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4;
+    [[16,20],[44,20]].forEach(([ex,ey]) => {
+      ctx.beginPath(); ctx.moveTo(ex-6,ey-6); ctx.lineTo(ex+6,ey+6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ex+6,ey-6); ctx.lineTo(ex-6,ey+6); ctx.stroke();
+    });
+  } else {
+    ctx.fillStyle = (type==='evil') ? '#cc2200' : '#111';
+    ctx.beginPath(); ctx.arc(18,22,5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(46,22,5,0,Math.PI*2); ctx.fill();
+  }
+  // Mouth
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  if (type==='happy')    { ctx.arc(32,34,12,0,Math.PI); }
+  else if (type==='sad') { ctx.arc(32,50,12,Math.PI,0); }
+  else {
+    ctx.moveTo(16,48); ctx.lineTo(48,48);
+    ctx.moveTo(24,48); ctx.lineTo(20,56);
+    ctx.moveTo(40,48); ctx.lineTo(44,56);
+  }
+  ctx.stroke();
+  if (type==='superevil') {
+    ctx.strokeStyle='#ff0000'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(6,16); ctx.lineTo(28,26); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(58,16); ctx.lineTo(36,26); ctx.stroke();
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+function makeLettuce(opts={}) {
+  const {
+    color=0x4ade80, scale=1, happy=false, sad=false,
+    evil=false, superEvil=false, wooden=false, brick=false,
+    cabbage=false, secret=false
+  } = opts;
+
+  const g = new THREE.Group();
+  const mat = () => new THREE.MeshLambertMaterial({ color });
+  const darker = (c,d) => new THREE.Color(c).offsetHSL(0,0,-d).getHex();
+  const lighter = (c,l) => new THREE.Color(c).offsetHSL(0,0,l).getHex();
+
+  if (cabbage) {
+    // Compact round layers
+    [0.65,0.52,0.38].forEach((r,i) => {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(r*scale,9,7),
+        new THREE.MeshLambertMaterial({ color: darker(color, i*0.05) })
+      );
+      m.position.y = (0.35+i*0.18)*scale;
+      m.scale.y = 0.85;
+      g.add(m);
+    });
+  } else {
+    // Core sphere
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.5*scale,10,8), mat());
+    core.position.y = 0.5*scale;
+    g.add(core);
+
+    // Leaf clusters
+    const leafC = [color, darker(color,0.08), lighter(color,0.08)];
+    for (let i=0;i<6;i++) {
+      const angle = (i/6)*Math.PI*2;
+      const lm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.35*scale,7,5),
+        new THREE.MeshLambertMaterial({ color: leafC[i%3] })
+      );
+      lm.position.set(
+        Math.cos(angle)*0.48*scale,
+        0.6*scale,
+        Math.sin(angle)*0.48*scale
+      );
+      lm.scale.set(1,0.55,1);
+      g.add(lm);
+    }
+
+    // Top spike / tuft
+    const tuft = new THREE.Mesh(
+      new THREE.ConeGeometry(0.22*scale,0.55*scale,6),
+      new THREE.MeshLambertMaterial({ color: wooden?0xc8a060:lighter(color,0.1) })
+    );
+    tuft.position.y = 1.05*scale;
+    g.add(tuft);
+  }
+
+  // Stem
+  const stemMat = new THREE.MeshLambertMaterial({ color: wooden?0x8b5e2a: 0x4ade80 });
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07*scale,0.1*scale,0.35*scale,6), stemMat);
+  stem.position.y = 0.18*scale;
+  g.add(stem);
+
+  // Face plane
+  const faceType = superEvil?'superevil':evil?'evil':happy?'happy':sad?'sad':null;
+  if (faceType) {
+    const fp = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.75*scale,0.65*scale),
+      new THREE.MeshBasicMaterial({ map:makeFaceTex(faceType), transparent:true, depthWrite:false })
+    );
+    fp.position.set(0, 0.6*scale, 0.52*scale);
+    g.add(fp);
+  }
+
+  // Wooden grain lines
+  if (wooden) {
+    for (let i=0;i<3;i++) {
+      const grain = new THREE.Mesh(
+        new THREE.TorusGeometry(0.3*scale+i*0.08*scale,0.015*scale,4,20),
+        new THREE.MeshLambertMaterial({ color:0x6b3e15 })
+      );
+      grain.position.y = 0.3*scale+i*0.2*scale;
+      grain.rotation.x = Math.PI/2;
+      g.add(grain);
+    }
+  }
+
+  // Brick texture patches
+  if (brick) {
+    for (let i=0;i<4;i++) {
+      const angle = (i/4)*Math.PI*2;
+      const bm = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2*scale,0.1*scale,0.06*scale),
+        new THREE.MeshLambertMaterial({ color:0x7a2e1a })
+      );
+      bm.position.set(Math.cos(angle)*0.5*scale, 0.6*scale, Math.sin(angle)*0.5*scale);
+      bm.rotation.y = angle;
+      g.add(bm);
+    }
+  }
+
+  // Secret aura
+  if (secret) {
+    const aura = new THREE.Mesh(
+      new THREE.SphereGeometry(0.95*scale,10,8),
+      new THREE.MeshBasicMaterial({ color:0x818cf8, transparent:true, opacity:0.22, side:THREE.BackSide })
+    );
+    aura.position.y = 0.5*scale;
+    g.add(aura);
+  }
+
+  g.castShadow = true;
+  return g;
+}
+
+// ================================================================
+//  MAP GEOMETRY
+// ================================================================
+
+// --- Ground ---
+const groundMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(400,400,1,1),
+  new THREE.MeshLambertMaterial({ color:0x4a7a2a })
+);
+groundMesh.rotation.x = -Math.PI/2;
+groundMesh.receiveShadow = true;
+scene.add(groundMesh);
+
+// Underground floor (sewer level)
+const underMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(400,400),
+  new THREE.MeshLambertMaterial({ color:0x2a1a0a })
+);
+underMesh.rotation.x = -Math.PI/2;
+underMesh.position.y = -10;
+scene.add(underMesh);
+
+// Sky dome color already set via scene.background
+
+// --- Main path (dirt) ---
+for (let z=-90;z<=90;z+=4) box(6,0.12,4,0xc8a060,0,-0.06,z);
+for (let x=-50;x<=90;x+=4) box(4,0.12,6,0xc8a060,x,-0.06,28);
+
+// --- LETTUCE FARM (center) ---
+// Soil rows
+for (let row=0;row<5;row++) {
+  for (let col=0;col<8;col++) {
+    box(2.4,0.35,1.4,0x6b4226,-14+col*3.5,-0.175,-18+row*3.8);
+    // tiny crop sprout
+    const s=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.1,0.5,5),new THREE.MeshLambertMaterial({color:0x4ade80}));
+    s.position.set(-14+col*3.5+Math.random()-0.5,0.25,-18+row*3.8+Math.random()-0.5);
+    scene.add(s);
+    const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.18,5,4),new THREE.MeshLambertMaterial({color:0x4ade80}));
+    leaf.position.set(-14+col*3.5+Math.random()-0.5,0.6,-18+row*3.8+Math.random()-0.5);
+    scene.add(leaf);
+  }
+}
+// Fence
+[-18,2].forEach(fz=>{for(let fx=-17;fx<=18;fx+=3){box(0.18,1.4,0.18,0xa0522d,fx,-0.7,fz);box(0.18,1.4,0.18,0xa0522d,fx+1.5,-0.7,fz);}});
+[-17,17].forEach(fx=>{for(let fz=-18;fz<=2;fz+=3){box(0.18,1.4,0.18,0xa0522d,fx,-0.7,fz);}});
+box(36,0.14,0.14,0xa0522d,0,0.7,-18); box(36,0.14,0.14,0xa0522d,0,0.7,2);
+box(0.14,0.14,21,0xa0522d,-17,0.7,-8); box(0.14,0.14,21,0xa0522d,17,0.7,-8);
+// Gate posts
+box(0.6,2,0.6,0x8b4513,-4,-1,3.5); box(0.6,2,0.6,0x8b4513,4,-1,3.5);
+
+// --- FARMHOUSE ---
+const HX=-44,HZ=32;
+box(18,8,14,0xd4a96a,HX,0,HZ); // walls
+box(18,0.5,14,0x8b7355,HX,8,HZ); // flat roof base
+// Roof pyramid
+const roofM=new THREE.Mesh(new THREE.ConeGeometry(12,5,4),new THREE.MeshLambertMaterial({color:0x8b2222}));
+roofM.position.set(HX,11,HZ); roofM.rotation.y=Math.PI/4; roofM.castShadow=true; scene.add(roofM);
+// Door
+box(2.5,4,0.2,0x6b3a1f,HX,-2,HZ+7.1);
+// Windows
+box(2,2,0.15,0x87ceeb,HX-5,3,HZ+7.1);
+box(2,2,0.15,0x87ceeb,HX+5,3,HZ+7.1);
+// Chimney
+box(1.2,4,1.2,0xa05050,HX-5,8,HZ-4);
+
+// --- SKYSCRAPER ---
+const SX=52,SZ=-54;
+box(12,70,12,0x607880,SX,0,SZ);
+// Windows
+for(let fl=1;fl<=7;fl++){
+  [-4,0,4].forEach(wx=>{
+    box(1.5,1.5,0.2,0x87ceeb,SX+wx,fl*8,SZ+6.1);
+    box(1.5,1.5,0.2,0x87ceeb,SX+wx,fl*8,SZ-6.1);
+    box(0.2,1.5,1.5,0x87ceeb,SX+6.1,fl*8,SZ+wx);
+    box(0.2,1.5,1.5,0x87ceeb,SX-6.1,fl*8,SZ+wx);
+  });
+}
+box(1,12,1,0x444,SX,70,SZ); // antenna
+// Fire escape zigzag platforms up east face
+for(let fl=0;fl<8;fl++){
+  const fz=SZ+(fl%2===0?7:-7);
+  box(4,0.5,3,0x667788,SX+7,fl*9+2,fz);
+  // ladder-like box between floors
+  if(fl<7) box(0.3,9,0.3,0x445566,SX+9,(fl*9)+4.5,SZ);
+}
+
+// --- OBBY ---
+const OX=82;
+const PLATFORMS=[
+  [OX,    0,  0, 10,1,10, 0x22c55e],
+  [OX+7,  2,  0,  5,1, 5, 0x16a34a],
+  [OX+13, 4,  6,  5,1, 5, 0x15803d],
+  [OX+19, 6,  0,  4,1, 4, 0x0d6b2e],
+  [OX+25, 9, -6,  4,1, 4, 0xdc2626],
+  [OX+31,12,  0,  3,1, 3, 0xb91c1c],
+  [OX+37,16,  5,  3,1, 3, 0x991b1b],
+  [OX+43,21,  0,  3,1, 3, 0x7f1d1d],
+  [OX+49,27, -4,  2,1, 2, 0x450a0a],
+  [OX+54,34,  0,  2,1, 2, 0x1a0000],
+  [OX+59,42,  4,  2,1, 2, 0x0a0000],
+];
+PLATFORMS.forEach(([x,y,z,w,h,d,c])=>box(w,h,d,c,x,y,z));
+// Pillars/spinners for style
+for(let i=0;i<6;i++) box(0.5,3+i*3,0.5,0x555,OX+5+i*8,0,i%2?4:-4);
+// "OBBY" sign
+box(8,0.3,0.3,0xffaa00,OX+4,3,0);
+
+// --- SEWERS ---
+const SEWX=-12,SEWZ=58;
+// Entrance building (open bottom for player entry)
+box(9,3,9,0x4a4a4a,SEWX,0,SEWZ); // walls but let's hollow: just 4 walls
+// Remove interior — just place 4 wall-slabs
+box(9,4,0.6,0x3a3a3a,SEWX,-2,SEWZ-4.5);
+box(9,4,0.6,0x3a3a3a,SEWX,-2,SEWZ+4.5);
+box(0.6,4,9,0x3a3a3a,SEWX-4.5,-2,SEWZ);
+box(0.6,4,9,0x3a3a3a,SEWX+4.5,-2,SEWZ);
+box(9,0.5,9,0x333,SEWX,2,SEWZ); // roof
+// Sewer ramp going down
+for(let step=0;step<9;step++){
+  box(7,0.5,2.2,0x4a4a4a,SEWX,-step*1.05,SEWZ+5+step*2);
+}
+// Sewer main tunnel
+box(8,8,65,0x2a2a2a,SEWX,-6,SEWZ+35); // outer shell
+// Interior - create hollow appearance
+box(6.6,6,63,0x1a1f1a,SEWX,-6,SEWZ+35); // inner fill (darker)
+// floor
+const SEWFLOOR=-10;
+box(6,0.3,62,0x3a3a2a,SEWX,SEWFLOOR+0.15,SEWZ+35);
+// gunk water
+box(5.5,0.18,58,0x2d4a1e,SEWX,SEWFLOOR+0.3,SEWZ+33);
+// ceiling
+box(7,0.5,65,0x333,SEWX,-3.5+0.25,SEWZ+35);
+// side walls are the outer shell minus inner
+
+// Sewer obby platforms
+const SEWPLATS=[
+  [SEWX,   SEWFLOOR+0.6, SEWZ+18, 5,0.5,4, 0x4a4a2a],
+  [SEWX-2, SEWFLOOR+2.2, SEWZ+30, 3,0.5,3, 0x4a3a1a],
+  [SEWX+2, SEWFLOOR+3.8, SEWZ+42, 3,0.5,3, 0x3a4a1a],
+  [SEWX,   SEWFLOOR+5.5, SEWZ+54, 4,0.5,4, 0x4a4a2a],
+];
+SEWPLATS.forEach(([x,y,z,w,h,d,c])=>box(w,h,d,c,x,y,z));
+
+// Sewer atmospheric lights
+const sl1=new THREE.PointLight(0x4a8a3a,1.5,20); sl1.position.set(SEWX,-6,SEWZ+20); scene.add(sl1);
+const sl2=new THREE.PointLight(0x3a7a2a,1.2,20); sl2.position.set(SEWX,-6,SEWZ+45); scene.add(sl2);
+
+// --- TREES scattered ---
+[[−80,−80],[80,−80],[80,80],[−80,80],[−55,−50],[55,50],[30,−70],[−65,45],[20,−90],[−30,60]].forEach(([tx,tz])=>{
+  box(1.2,7,1.2,0x8b4513,tx,0,tz);
+  sphere(4.5,0x228b22,tx,10,tz,8);
+  sphere(3,0x1a7a1a,tx,14,tz,7);
+});
+
+// --- POND near secret podium ---
+const pondM=new THREE.Mesh(new THREE.CircleGeometry(7,20),new THREE.MeshLambertMaterial({color:0x3070c0,transparent:true,opacity:0.75}));
+pondM.rotation.x=-Math.PI/2; pondM.position.set(22,0.05,22); scene.add(pondM);
+
+// --- SECRET PODIUM ---
+box(2.5,1.2,2.5,0x312e81,22,0,22);
+box(0.6,3,0.6,0x4338ca,22,1.2,22);
+box(1.5,0.3,1.5,0x6366f1,22,4.2,22); // top gem base
+const podiumLight=new THREE.PointLight(0x818cf8,2.5,10);
+podiumLight.position.set(22,5,22);
+scene.add(podiumLight);
+
+// --- BIG CORNER rock formation ---
+box(25,1,25,0x5a8a3a,-85,0,-85); // platform
+box(3,4,3,0x888,-87,1,-87);
+box(2,6,2,0x777,-84,1,-82);
+
+// ================================================================
+//  CODE LETTER ORBS
+// ================================================================
+// Secret code is LEAF
+const CODE_LETTERS=[
+  { letter:'L', x:2,    y:2.5, z:-22, note:'near farm' },
+  { letter:'E', x:HX+9, y:5,   z:HZ,  note:'house east' },
+  { letter:'A', x:SEWX, y:-7,  z:SEWZ+12, note:'sewer entrance' },
+  { letter:'F', x:SX+8, y:4,   z:SZ,  note:'skyscraper side' },
+];
+CODE_LETTERS.forEach(({letter,x,y,z})=>{
+  // Orb
+  const om=new THREE.Mesh(new THREE.SphereGeometry(0.42,10,8),new THREE.MeshBasicMaterial({color:0x818cf8}));
+  om.position.set(x,y,z); scene.add(om);
+  // Glow
+  const gl=new THREE.PointLight(0x818cf8,1.2,5); gl.position.set(x,y,z); scene.add(gl);
+  // Letter sprite
+  const lc=document.createElement('canvas'); lc.width=64; lc.height=64;
+  const lx=lc.getContext('2d');
+  lx.font='bold 52px Arial'; lx.textAlign='center'; lx.textBaseline='middle';
+  lx.fillStyle='#c7d2fe'; lx.fillText(letter,32,32);
+  const lt=new THREE.CanvasTexture(lc);
+  const lm=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:lt,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+  lm.position.set(x,y+0.75,z); scene.add(lm);
+});
+
+// ================================================================
+//  PLACE LETTUCES
+// ================================================================
+const lettuceObjects=[]; // { mesh, data }
+
+function placeLettuce(id,x,y,z,opts={}){
+  const data=LETTUCES.find(l=>l.id===id);
+  const mesh=makeLettuce({ color:data.color, ...opts });
+  mesh.position.set(x,y,z);
+  // tag all children for raycasting
+  mesh.userData.lettuceId=id;
+  mesh.traverse(c=>{ if(c.isMesh||c.isGroup) c.userData.lettuceId=id; });
+  scene.add(mesh);
+  data.worldPos=new THREE.Vector3(x,y,z);
+  lettuceObjects.push({ mesh, data });
+  return mesh;
+}
+
+// 1. Plain sight - middle of path
+placeLettuce('plain',0,0,42);
+// 2. Big lettuce - far corner
+placeLettuce('big',-85,0,-85,{scale:4.5});
+// 3. Happy - farm
+placeLettuce('happy',8,0.3,-6,{happy:true});
+// 4. Sad - farm
+placeLettuce('sad',-6,0.3,-12,{sad:true});
+// 5. Tiny - half under path
+placeLettuce('tiny',-1,-0.55,28,{scale:0.22});
+// 6. Cabbage - deep sewer
+placeLettuce('cabbage',SEWX+2,SEWFLOOR+0.5,SEWZ+60,{cabbage:true,scale:1.3});
+// 7. Inlet - pressed against house east wall
+placeLettuce('inlet',HX+9.1,3,HZ,{scale:0.55});
+// 8. Stuff - early obby
+placeLettuce('stuff',PLATFORMS[2][0],PLATFORMS[2][1]+1.3,PLATFORMS[2][2],{scale:0.9});
+// 9. Yellow stud - harder obby section
+placeLettuce('yellowstud',PLATFORMS[4][0],PLATFORMS[4][1]+1.3,PLATFORMS[4][2],{color:0xfde047,scale:0.8});
+// 10. Evil - high obby
+placeLettuce('evil',PLATFORMS[7][0],PLATFORMS[7][1]+1.3,PLATFORMS[7][2],{evil:true,scale:1.2});
+// 11. Super duper evil - top
+placeLettuce('supevil',PLATFORMS[10][0],PLATFORMS[10][1]+1.3,PLATFORMS[10][2],{superEvil:true,color:0x450a0a,scale:1.4});
+// 12. Wooden - house roof
+placeLettuce('wooden',HX,8.5,HZ,{wooden:true,color:0xa16207});
+// 13. Brick - top of skyscraper
+placeLettuce('brick',SX,70.5,SZ,{brick:true,color:0x9f3d26,scale:1.2});
+// 14. Sewer lettuce - hidden far corner of sewer
+placeLettuce('sewer',SEWX-2.5,SEWFLOOR+0.7,SEWZ+58,{color:0x365314,scale:0.72});
+// 15. Sewer obby lettuce - atop last sewer platform
+const sp=SEWPLATS[3];
+placeLettuce('sewerobby',sp[0],sp[1]+sp[4]+0.8,sp[2],{color:0x4d7c0f,scale:0.85});
+// 16. Secret - at podium (hidden until code)
+const secretMesh=placeLettuce('secret',22,2,22,{secret:true,color:0x818cf8,scale:1.1});
+secretMesh.visible=false;
+
+// ================================================================
+//  INDEX UI BUILD
+// ================================================================
+const grid=document.getElementById('lettuce-grid');
+LETTUCES.forEach(l=>{
+  const card=document.createElement('div');
+  card.className='lcard'; card.id='card-'+l.id;
+  card.innerHTML=`<span class="licon">${l.icon}</span><div class="lname">${l.name}</div><div class="lhint">${l.hint}</div>`;
+  card.addEventListener('click',()=>{
+    document.getElementById('hint-title').textContent=l.icon+' '+l.name;
+    document.getElementById('hint-text').textContent=l.hint;
+    document.getElementById('hint-popup').style.display='block';
+  });
+  grid.appendChild(card);
+});
+
+function refreshCard(l){
+  const card=document.getElementById('card-'+l.id);
+  if(!card) return;
+  if(l.found) card.classList.add('found');
+  document.getElementById('found-count').textContent=LETTUCES.filter(x=>x.found).length;
+}
+
+// ================================================================
+//  PLAYER PHYSICS
+// ================================================================
+const player={
+  vel:new THREE.Vector3(),
+  onGround:false,
+  yaw:Math.PI, // facing -z initially
+  pitch:0,
+  speed:11,
+  sprintMult:1.9,
+  jumpPow:12,
+  gravity:-22,
+};
+
+function getFloorY(px,pz){
+  // Obby platforms
+  for(const [x,y,z,w,h,d] of PLATFORMS){
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+  }
+  // Sewer obby platforms
+  for(const [x,y,z,w,h,d] of SEWPLATS){
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+  }
+  // Skyscraper fire escape
+  for(let fl=0;fl<8;fl++){
+    const fpz=SZ+(fl%2===0?7:-7);
+    const fpy=fl*9+2; const fph=0.5;
+    if(px>=SX+5&&px<=SX+9&&pz>=fpz-1.5&&pz<=fpz+1.5) return fpy+fph;
+  }
+  // House roof
+  if(px>=HX-9&&px<=HX+9&&pz>=HZ-7&&pz<=HZ+7) return 8.5;
+  // Sewer ramp
+  if(Math.abs(px-SEWX)<3.5&&pz>SEWZ+1&&pz<SEWZ+19){
+    return -1.05*9*(pz-SEWZ-1)/17; // ramp from 0 to ~-9.45
+  }
+  // Sewer floor
+  if(Math.abs(px-SEWX)<3.5&&pz>=SEWZ+19&&pz<=SEWZ+68) return SEWFLOOR;
+  return 0;
+}
+
+// ================================================================
+//  CONTROLS
+// ================================================================
+const keys={};
+document.addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='Space') e.preventDefault(); });
+document.addEventListener('keyup',e=>{ keys[e.code]=false; });
+
+let locked=false;
+canvas.addEventListener('click',()=>{
+  if(gameStarted&&!indexOpen&&!secretOpen) canvas.requestPointerLock();
+});
+document.addEventListener('pointerlockchange',()=>{ locked=document.pointerLockElement===canvas; });
+document.addEventListener('mousemove',e=>{
+  if(!locked) return;
+  player.yaw-=e.movementX*0.0022;
+  player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch-e.movementY*0.0022));
+});
+
+// ================================================================
+//  RAYCASTING — click to collect
+// ================================================================
+const raycaster=new THREE.Raycaster();
+raycaster.far=14;
+const screenCenter=new THREE.Vector2(0,0);
+
+canvas.addEventListener('mousedown',()=>{
+  if(!locked||!gameStarted) return;
+  raycaster.setFromCamera(screenCenter,camera);
+  const allMeshes=[];
+  lettuceObjects.forEach(lo=>lo.mesh.traverse(c=>{ if(c.isMesh) allMeshes.push(c); }));
+  const hits=raycaster.intersectObjects(allMeshes,false);
+  if(hits.length){
+    const id=hits[0].object.userData.lettuceId;
+    if(!id) return;
+    const lo=lettuceObjects.find(l=>l.data.id===id);
+    if(!lo||lo.data.found) return;
+    const dist=camera.position.distanceTo(lo.mesh.position);
+    if(dist<14) foundLettuce(lo.data, lo.mesh);
+  }
+  // Podium check
+  if(camera.position.distanceTo(new THREE.Vector3(22,2,22))<6){
+    openSecretPanel();
+  }
+});
+
+// ================================================================
+//  FOUND LETTUCE
+// ================================================================
+let foundTimer=0;
+
+function foundLettuce(data, mesh){
+  if(data.found) return;
+  data.found=true;
+  const scoreCount=document.getElementById('score-count');
+  const count=LETTUCES.filter(l=>l.found).length;
+  scoreCount.textContent=count;
+  document.getElementById('found-name').textContent=data.name;
+  const popup=document.getElementById('found-popup');
+  popup.querySelector('.fi').textContent=data.icon;
+  popup.style.display='block';
+  popup.style.animation='none';
+  void popup.offsetWidth;
+  popup.style.animation='';
+  foundTimer=5;
+  refreshCard(data);
+  // Make found lettuce spin faster & fade
+  mesh.userData.collected=true;
+  if(count>=16){
+    setTimeout(()=>{ document.getElementById('win-screen').style.display='flex'; },1800);
+  }
+}
+
+// ================================================================
+//  SECRET CODE
+// ================================================================
+let gameStarted=false, indexOpen=false, secretOpen=false;
+
+function openSecretPanel(){
+  document.getElementById('secret-panel').style.display='block';
+  secretOpen=true;
+  if(locked) document.exitPointerLock();
+}
+
+document.getElementById('secret-submit').addEventListener('click',()=>{
+  const code=document.getElementById('secret-input').value.toUpperCase().trim();
+  const msg=document.getElementById('secret-msg');
+  if(code==='LEAF'){
+    msg.style.color='#4f4'; msg.textContent='✓ Code correct! The Secret Lettuce has appeared!';
+    secretMesh.visible=true;
+    setTimeout(()=>{
+      document.getElementById('secret-panel').style.display='none';
+      secretOpen=false;
+    },2200);
+  } else {
+    msg.style.color='#f66'; msg.textContent='Wrong. Find the 4 purple letter-orbs first...';
+  }
+});
+document.getElementById('secret-closebtn').addEventListener('click',()=>{
+  document.getElementById('secret-panel').style.display='none';
+  secretOpen=false;
+});
+
+// ================================================================
+//  INDEX UI
+// ================================================================
+document.getElementById('index-btn').addEventListener('click',()=>{
+  indexOpen=!indexOpen;
+  document.getElementById('index-panel').style.display=indexOpen?'block':'none';
+  if(indexOpen&&locked) document.exitPointerLock();
+});
+document.getElementById('index-close').addEventListener('click',()=>{
+  indexOpen=false;
+  document.getElementById('index-panel').style.display='none';
+});
+document.getElementById('hint-close').addEventListener('click',()=>{
+  document.getElementById('hint-popup').style.display='none';
+});
+
+// ================================================================
+//  CUTSCENE
+// ================================================================
+const csFrames=[
+  {stage:'🍽️',    text:'Lunchtime...',          sub:'A peaceful day at the lettuce farm', dur:2000},
+  {stage:'🥄🍽️',  text:'Time for a salad!',      sub:'Reaching for the lettuce...', dur:1800},
+  {stage:'🍽️',    text:'Wait.',                  sub:'Something is wrong.', dur:1500},
+  {stage:'😧',    text:'There\'s no lettuce.',    sub:'The bowl is empty.', dur:1800},
+  {stage:'😠',    text:'NO LETTUCE?!',            sub:'THIS IS UNACCEPTABLE!!', dur:2000},
+  {stage:'😡💢', text:'I MUST FIND THE LETTUCES!', sub:'All sixteen of them. NOW.', dur:2000},
+  {stage:'🥬✨',  text:'FIND THE LETTUCES',       sub:'Your quest begins...', dur:1400},
+];
+let csIdx=0, csTotal=csFrames.reduce((s,f)=>s+f.dur,0), csElapsed=0;
+const csStage=document.getElementById('cs-stage');
+const csText=document.getElementById('cs-text');
+const csSub=document.getElementById('cs-sub');
+const csBar=document.getElementById('cs-bar');
+
+function stepCS(){
+  if(csIdx>=csFrames.length){
+    const cs=document.getElementById('cutscene');
+    cs.style.opacity='0';
+    setTimeout(()=>{
+      cs.style.display='none';
+      document.getElementById('game-ui').style.display='block';
+      document.getElementById('start-screen').style.display='flex';
+    },600);
+    return;
+  }
+  const f=csFrames[csIdx];
+  csStage.textContent=f.stage;
+  csText.textContent=f.text;
+  csSub.textContent=f.sub;
+  csIdx++;
+  setTimeout(stepCS,f.dur);
+}
+setTimeout(stepCS,400);
+
+// Animate progress bar
+let barStart=null;
+function animBar(ts){
+  if(!barStart) barStart=ts;
+  const pct=Math.min(100,(ts-barStart)/csTotal*100);
+  csBar.style.width=pct+'%';
+  if(pct<100) requestAnimationFrame(animBar);
+}
+requestAnimationFrame(animBar);
+
+// ================================================================
+//  START
+// ================================================================
+document.getElementById('start-btn').addEventListener('click',()=>{
+  document.getElementById('start-screen').style.display='none';
+  gameStarted=true;
+  canvas.requestPointerLock();
+});
+
+// ================================================================
+//  GAME LOOP
+// ================================================================
+const clock=new THREE.Clock();
+const tmpEuler=new THREE.Euler(0,0,0,'YXZ');
+const tmpQuat=new THREE.Quaternion();
+const moveDir=new THREE.Vector3();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05);
+  const elapsed=clock.getElapsedTime();
+
+  if(gameStarted&&locked){
+    // Input
+    moveDir.set(0,0,0);
+    if(keys['KeyW']||keys['ArrowUp'])    moveDir.z-=1;
+    if(keys['KeyS']||keys['ArrowDown'])  moveDir.z+=1;
+    if(keys['KeyA']||keys['ArrowLeft'])  moveDir.x-=1;
+    if(keys['KeyD']||keys['ArrowRight']) moveDir.x+=1;
+    if(moveDir.length()>0) moveDir.normalize();
+
+    const spd=player.speed*(keys['ShiftLeft']||keys['ShiftRight']?player.sprintMult:1);
+    moveDir.multiplyScalar(spd);
+    tmpEuler.set(0,player.yaw,0);
+    tmpQuat.setFromEuler(tmpEuler);
+    moveDir.applyQuaternion(tmpQuat);
+
+    player.vel.x=moveDir.x;
+    player.vel.z=moveDir.z;
+    player.vel.y+=player.gravity*dt;
+
+    camera.position.x+=player.vel.x*dt;
+    camera.position.y+=player.vel.y*dt;
+    camera.position.z+=player.vel.z*dt;
+
+    // Floor
+    const floorY=getFloorY(camera.position.x,camera.position.z);
+    const eyeH=1.8;
+    if(camera.position.y<floorY+eyeH){
+      camera.position.y=floorY+eyeH;
+      player.vel.y=0;
+      player.onGround=true;
+    } else {
+      player.onGround=false;
+    }
+
+    if(keys['Space']&&player.onGround){
+      player.vel.y=player.jumpPow;
+      player.onGround=false;
+    }
+
+    // Bounds
+    camera.position.x=Math.max(-145,Math.min(145,camera.position.x));
+    camera.position.z=Math.max(-145,Math.min(145,camera.position.z));
+    // Prevent going too far underground
+    if(camera.position.y<-12) camera.position.y=-12;
+
+    // Camera rotation
+    tmpEuler.set(player.pitch,player.yaw,0,'YXZ');
+    camera.quaternion.setFromEuler(tmpEuler);
+
+    // Interact hint (podium)
+    const hint=document.getElementById('interact-hint');
+    const podDist=camera.position.distanceTo(new THREE.Vector3(22,2,22));
+    if(podDist<5){
+      hint.style.display='block';
+      hint.textContent='Click to enter Secret Code';
+    } else {
+      hint.style.display='none';
+    }
+  }
+
+  // Found popup timer
+  if(foundTimer>0){
+    foundTimer-=dt;
+    if(foundTimer<=0) document.getElementById('found-popup').style.display='none';
+  }
+
+  // Animate lettuces
+  lettuceObjects.forEach((lo,i)=>{
+    if(lo.data.found&&lo.mesh.userData.collected){
+      lo.mesh.position.y+=dt*2;
+      lo.mesh.rotation.y+=dt*4;
+      const m=lo.mesh.children[0];
+      if(m&&m.material) m.material.transparent=true,m.material.opacity=Math.max(0,m.material.opacity-dt*0.8);
+      if(lo.mesh.position.y>lo.data.worldPos.y+5) lo.mesh.visible=false,lo.mesh.userData.collected=false;
+    } else if(!lo.data.found){
+      lo.mesh.rotation.y+=dt*(0.4+i*0.03);
+      lo.mesh.position.y=lo.data.worldPos.y+Math.sin(elapsed*1.2+i*0.8)*0.12;
+    }
+  });
+
+  // Secret lettuce spin
+  if(secretMesh.visible&&!LETTUCES.find(l=>l.id==='secret').found){
+    secretMesh.rotation.y+=dt*1.8;
+    secretMesh.position.y=2+Math.sin(elapsed*2)*0.18;
+  }
+
+  // Podium glow pulse
+  podiumLight.intensity=2+Math.sin(elapsed*3)*0.8;
+
+  // Letter orbs bob
+  CODE_LETTERS.forEach(({x,y,z},i)=>{
+    // Just pulsing light already there
+  });
+
+  renderer.render(scene,camera);
+}
+
+animate();
+</script>
+</body>
+</html>

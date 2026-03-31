@@ -34,6 +34,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* BlockWorld card */
 .bg-bw{background:linear-gradient(135deg,#0a0a1e,#0a1a2e,#1a0a2e)}
 .bg-bw canvas{width:100%;height:100%}
+/* Find the Lettuces card */
+.bg-ltc{background:linear-gradient(135deg,#051a05,#0a2a0a,#1a3a0a)}
+.bg-ltc canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -71,6 +74,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>BLOCKWORLD</h2>
       <p>Multiplayer building and games. Build 3D and 2D worlds, race other players, survive lava parkour, and play community-made games.</p>
       <span class="tag" style="background:#448;color:#aaf">MULTIPLAYER</span>
+    </div>
+  </a>
+  <a href="find-the-lettuces.html" class="card">
+    <div class="card-img bg-ltc"><canvas id="c5"></canvas></div>
+    <div class="card-body">
+      <h2>FIND THE LETTUCES</h2>
+      <p>3D exploration game across a lettuce farm, obby, skyscraper, and sewers. Hunt all 16 hidden lettuces — including a secret one needing a 4-letter code!</p>
+      <span class="tag" style="background:#1a3a1a;color:#4f4">3D EXPLORATION</span>
     </div>
   </a>
 </div>
@@ -187,6 +198,49 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
       ctx.strokeStyle='rgba(255,255,100,0.5)';ctx.lineWidth=3;
       ctx.beginPath();ctx.arc(px+15,py-10,12,0,PI);ctx.stroke();
     }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Find the Lettuces preview: floating lettuce in farm ----
+(function(){
+  const c=document.getElementById('c5'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const ltcs=[];
+  for(let i=0;i<8;i++) ltcs.push({x:rand()*w,y:rand()*h,vy:-(0.4+rand()*0.5),s:8+rand()*14,hue:100+rand()*40});
+  function drawLettuce(lx,ly,s,hue,spin){
+    ctx.save();ctx.translate(lx,ly);ctx.rotate(spin);
+    // Core
+    ctx.fillStyle=`hsl(${hue},60%,35%)`;ctx.beginPath();ctx.arc(0,0,s,0,Math.PI*2);ctx.fill();
+    // Leaves
+    for(let i=0;i<5;i++){
+      const a=(i/5)*Math.PI*2+spin;
+      ctx.fillStyle=`hsl(${hue+i*5},65%,40%)`;
+      ctx.beginPath();ctx.ellipse(cos(a)*s*0.9,sin(a)*s*0.9,s*0.55,s*0.32,a,0,Math.PI*2);ctx.fill();
+    }
+    // Top tuft
+    ctx.fillStyle=`hsl(${hue},70%,50%)`;
+    ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(-s*0.3,-s*0.4);ctx.lineTo(s*0.3,-s*0.4);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+  function draw(){
+    t+=0.02;ctx.fillStyle='rgba(5,15,5,0.18)';ctx.fillRect(0,0,w,h);
+    // Ground rows
+    ctx.fillStyle='#1a3a0a';ctx.fillRect(0,h*0.75,w,h*0.25);
+    for(let i=0;i<5;i++){ctx.fillStyle='#3a2010';ctx.fillRect(i*(w/5)+5,h*0.76,w/5-10,6);}
+    // Lettuces
+    for(const l of ltcs){
+      l.y+=l.vy; if(l.y<-20){l.y=h+20;l.x=rand()*w;}
+      drawLettuce(l.x,l.y,l.s,l.hue,t*0.5+l.x);
+    }
+    // Title
+    ctx.font='bold 16px Courier New';ctx.fillStyle='#4f4';ctx.textAlign='center';
+    ctx.fillText('🥬 FIND THE LETTUCES 🥬',w/2,h/2);
+    ctx.font='11px Courier New';ctx.fillStyle='#2a8a2a';
+    ctx.fillText('16 hidden lettuces to find!',w/2,h/2+18);
     requestAnimationFrame(draw);
   }
   draw();
