@@ -31,35 +31,53 @@ function exitToMenu() {
 }
 
 // ===== USERNAME SCREEN =====
+const _submitBtn = document.querySelector('#username-form button[type="submit"]');
+const _errEl = document.getElementById('username-error');
+
+// Start in connecting state
+_submitBtn.disabled = true;
+_submitBtn.textContent = 'Connecting...';
+_errEl.style.color = '#888';
+_errEl.textContent = 'Connecting to server...';
+
 socket.on('connect', () => {
-  document.getElementById('username-error').textContent = '';
-  document.getElementById('username-input').disabled = false;
-  document.querySelector('#username-form button').disabled = false;
+  _submitBtn.disabled = false;
+  _submitBtn.textContent = 'Enter World';
+  _errEl.textContent = '';
+});
+
+socket.on('disconnect', () => {
+  _submitBtn.disabled = true;
+  _submitBtn.textContent = 'Disconnected';
+  _errEl.style.color = '#ff9944';
+  _errEl.textContent = 'Lost connection to server.';
 });
 
 socket.on('connect_error', () => {
-  const errEl = document.getElementById('username-error');
-  errEl.style.color = '#ff9944';
-  errEl.textContent = 'Cannot reach server — make sure it is running.';
-  document.getElementById('username-input').disabled = true;
-  document.querySelector('#username-form button').disabled = true;
+  _submitBtn.disabled = true;
+  _submitBtn.textContent = '⚠ Server Offline';
+  _errEl.style.color = '#ff9944';
+  _errEl.textContent = 'Server is not running. Start it with: node server.js';
 });
 
 document.getElementById('username-form').addEventListener('submit', e => {
   e.preventDefault();
   const val = document.getElementById('username-input').value.trim();
-  const errEl = document.getElementById('username-error');
-  errEl.style.color = '#ff6060';
-  errEl.textContent = '';
-  if (!val) { errEl.textContent = 'Please enter a username'; return; }
-  if (!socket.connected) { errEl.textContent = 'Not connected to server. Please wait or refresh.'; return; }
+  _errEl.style.color = '#ff6060';
+  _errEl.textContent = '';
+  if (!val) { _errEl.textContent = 'Please enter a username'; return; }
+  if (!socket.connected) { _errEl.textContent = 'Not connected to server.'; return; }
+  _submitBtn.disabled = true;
+  _submitBtn.textContent = 'Entering...';
   socket.emit('register-username', val, res => {
     if (res.success) {
       currentUser = { username: res.username, ...res.user };
       showScreen('menu');
       refreshMenu();
     } else {
-      errEl.textContent = res.error;
+      _errEl.textContent = res.error;
+      _submitBtn.disabled = false;
+      _submitBtn.textContent = 'Enter World';
     }
   });
 });
