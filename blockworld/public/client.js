@@ -44,13 +44,13 @@ socket.on('connect', () => {
   _submitBtn.disabled = false;
   _submitBtn.textContent = 'Enter World';
   _submitBtn.style.background = '';
-  _submitBtn.onclick = null;
   _errEl.textContent = '';
 });
 
 socket.on('disconnect', () => {
-  _submitBtn.disabled = true;
-  _submitBtn.textContent = 'Disconnected';
+  _submitBtn.disabled = false;
+  _submitBtn.textContent = '⚠ Server Offline — Click for Help';
+  _submitBtn.style.background = 'linear-gradient(135deg,#883300,#cc4400)';
   _errEl.style.color = '#ff9944';
   _errEl.textContent = 'Lost connection to server.';
 });
@@ -61,19 +61,27 @@ socket.on('connect_error', () => {
   _submitBtn.style.background = 'linear-gradient(135deg,#883300,#cc4400)';
   _errEl.style.color = '#ff9944';
   _errEl.textContent = 'Cannot reach the server.';
-  _submitBtn.onclick = () => {
-    document.getElementById('screen-username').classList.remove('active');
-    document.getElementById('screen-offline').classList.add('active');
-  };
 });
 
 document.getElementById('username-form').addEventListener('submit', e => {
   e.preventDefault();
+
+  // Server offline — show help screen
+  if (!socket.connected) {
+    const offlineEl = document.getElementById('screen-offline');
+    if (offlineEl) {
+      document.getElementById('screen-username').classList.remove('active');
+      offlineEl.classList.add('active');
+    } else {
+      alert('Server is not running!\n\nGo to glitch.com → New Project → Import from GitHub → toneofgreat/BossGauntlet\n\nThen paste the URL here and the game will work for everyone.');
+    }
+    return;
+  }
+
   const val = document.getElementById('username-input').value.trim();
   _errEl.style.color = '#ff6060';
   _errEl.textContent = '';
   if (!val) { _errEl.textContent = 'Please enter a username'; return; }
-  if (!socket.connected) { _errEl.textContent = 'Not connected to server.'; return; }
   _submitBtn.disabled = true;
   _submitBtn.textContent = 'Entering...';
   socket.emit('register-username', val, res => {
