@@ -14,6 +14,8 @@ body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
 #cs-text{color:#ffe066;font-size:26px;letter-spacing:3px;text-align:center;margin-bottom:8px}
 #cs-sub{color:#8a9;font-size:14px;letter-spacing:2px}
 #cs-bar{position:absolute;bottom:0;left:0;height:4px;background:#4f4;transition:width .1s linear}
+#cs-next{position:absolute;bottom:20px;right:24px;background:#1a3a1a;border:2px solid #4a4;border-radius:8px;color:#afe;padding:8px 22px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:1px;cursor:pointer}
+#cs-next:hover{background:#254a25}
 
 #game-ui{display:none}
 #score-box{position:fixed;top:14px;left:14px;background:rgba(0,25,0,.88);border:2px solid #3a3;border-radius:8px;padding:8px 16px;color:#afe;font-size:15px;letter-spacing:1px;z-index:20}
@@ -75,6 +77,7 @@ body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
   <div id="cs-text">Lunchtime...</div>
   <div id="cs-sub">A peaceful day at the lettuce farm</div>
   <div id="cs-bar" style="width:0%"></div>
+  <button id="cs-next">Next ›</button>
 </div>
 
 <div id="game-ui">
@@ -833,8 +836,10 @@ const csText=document.getElementById('cs-text');
 const csSub=document.getElementById('cs-sub');
 const csBar=document.getElementById('cs-bar');
 
+let csTimer=null;
 function stepCS(){
   if(csIdx>=csFrames.length){
+    document.getElementById('cs-next').style.display='none';
     const cs=document.getElementById('cutscene');
     cs.style.opacity='0';
     setTimeout(()=>{
@@ -848,10 +853,16 @@ function stepCS(){
   csStage.textContent=f.stage;
   csText.textContent=f.text;
   csSub.textContent=f.sub;
+  // Update button label on last frame
+  document.getElementById('cs-next').textContent=csIdx===csFrames.length-1?'Play ▶':'Next ›';
   csIdx++;
-  setTimeout(stepCS,f.dur);
+  csTimer=setTimeout(stepCS,f.dur);
 }
-setTimeout(stepCS,400);
+document.getElementById('cs-next').addEventListener('click',()=>{
+  clearTimeout(csTimer);
+  stepCS();
+});
+csTimer=setTimeout(stepCS,400);
 
 // Animate progress bar
 let barStart=null;
