@@ -79,6 +79,14 @@ body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
 .ctrl{color:#aaa;font-size:12px;margin:3px 0}
 #start-btn{margin-top:20px;background:#1a3a1a;border:2px solid #4a4;color:#afe;padding:12px 36px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:16px;letter-spacing:2px}
 #start-btn:hover{background:#254a25}
+/* Mobile touch controls */
+#touch-controls{display:none;position:fixed;inset:0;pointer-events:none;z-index:18}
+#joy-zone{position:absolute;bottom:28px;left:24px;width:130px;height:130px;pointer-events:all;touch-action:none}
+#joy-base{position:absolute;inset:0;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.28);border-radius:50%}
+#joy-stick{position:absolute;width:52px;height:52px;background:rgba(255,255,255,.38);border-radius:50%;top:39px;left:39px;pointer-events:none}
+#jump-btn{position:absolute;bottom:38px;right:24px;width:76px;height:76px;background:rgba(80,255,80,.22);border:3px solid rgba(80,255,80,.5);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#4f4;font-size:13px;font-weight:bold;pointer-events:all;touch-action:none;user-select:none;letter-spacing:1px}
+#look-zone{position:absolute;right:0;top:0;bottom:0;left:170px;pointer-events:all;touch-action:none}
+#collect-btn{position:absolute;bottom:130px;right:24px;width:60px;height:60px;background:rgba(255,220,50,.18);border:2px solid rgba(255,220,50,.45);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#ffe066;font-size:11px;font-weight:bold;pointer-events:all;touch-action:none;user-select:none;letter-spacing:1px;text-align:center}
 </style>
 </head>
 <body>
@@ -160,6 +168,12 @@ body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
   <button id="start-btn">▶ CLICK TO PLAY</button>
 </div>
 
+<div id="touch-controls">
+  <div id="joy-zone"><div id="joy-base"></div><div id="joy-stick"></div></div>
+  <div id="look-zone"></div>
+  <div id="jump-btn">JUMP</div>
+  <div id="collect-btn">COLLECT</div>
+</div>
 <canvas id="canvas"></canvas>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script>
@@ -1016,13 +1030,14 @@ function getFloorY(px,pz){
 // ================================================================
 //  CONTROLS
 // ================================================================
+const isMobile=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 const keys={};
 document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space')e.preventDefault();});
 document.addEventListener('keyup',e=>{keys[e.code]=false;});
 
 let locked=false;
 canvas.addEventListener('click',()=>{
-  if(gameStarted&&!indexOpen&&!codeOpen&&!quizOpen) canvas.requestPointerLock();
+  if(gameStarted&&!indexOpen&&!codeOpen&&!quizOpen&&!isMobile) canvas.requestPointerLock();
 });
 document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===canvas;});
 document.addEventListener('mousemove',e=>{
@@ -1030,6 +1045,99 @@ document.addEventListener('mousemove',e=>{
   player.yaw-=e.movementX*.0022;
   player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch-e.movementY*.0022));
 });
+
+// ---- Mobile touch state ----
+const joy={active:false,id:-1,cx:0,cy:0,dx:0,dz:0};
+const look={id:-1,lx:0,ly:0};
+let mobileJumping=false;
+
+if(isMobile){
+  document.getElementById('touch-controls').style.display='block';
+
+  const joyZone=document.getElementById('joy-zone');
+  const joyStick=document.getElementById('joy-stick');
+  const JR=65; // max joystick radius
+
+  function joyUpdate(tx,ty){
+    const rect=joyZone.getBoundingClientRect();
+    const cx=rect.left+rect.width/2, cy=rect.top+rect.height/2;
+    let dx=tx-cx, dy=ty-cy;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>JR){dx=dx/dist*JR;dy=dy/dist*JR;}
+    joyStick.style.left=(rect.width/2+dx-26)+'px';
+    joyStick.style.top=(rect.height/2+dy-26)+'px';
+    const norm=Math.max(dist,0.01);
+    joy.dx=(dist>8?dx/JR:0);
+    joy.dz=(dist>8?dy/JR:0);
+  }
+
+  joyZone.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(joy.active) return;
+    const t=e.changedTouches[0];
+    joy.active=true; joy.id=t.identifier;
+    joyUpdate(t.clientX,t.clientY);
+  },{passive:false});
+  joyZone.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier===joy.id) joyUpdate(t.clientX,t.clientY);
+    }
+  },{passive:false});
+  joyZone.addEventListener('touchend',e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier===joy.id){
+        joy.active=false; joy.id=-1; joy.dx=0; joy.dz=0;
+        joyStick.style.left='39px'; joyStick.style.top='39px';
+      }
+    }
+  },{passive:false});
+
+  const lookZone=document.getElementById('look-zone');
+  lookZone.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(look.id!==-1) return;
+    const t=e.changedTouches[0];
+    look.id=t.identifier; look.lx=t.clientX; look.ly=t.clientY;
+  },{passive:false});
+  lookZone.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){
+      if(t.identifier===look.id){
+        const dx=t.clientX-look.lx, dy=t.clientY-look.ly;
+        player.yaw-=dx*.004;
+        player.pitch=Math.max(-1.5,Math.min(1.5,player.pitch-dy*.004));
+        look.lx=t.clientX; look.ly=t.clientY;
+      }
+    }
+  },{passive:false});
+  lookZone.addEventListener('touchend',e=>{
+    e.preventDefault();
+    for(const t of e.changedTouches){if(t.identifier===look.id) look.id=-1;}
+  },{passive:false});
+
+  const jumpBtn=document.getElementById('jump-btn');
+  jumpBtn.addEventListener('touchstart',e=>{e.preventDefault();mobileJumping=true;},{passive:false});
+  jumpBtn.addEventListener('touchend',e=>{e.preventDefault();mobileJumping=false;},{passive:false});
+
+  // Collect button — same logic as mouse click
+  document.getElementById('collect-btn').addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(!gameStarted) return;
+    raycaster.setFromCamera(screenCenter,camera);
+    const allMeshes=[];
+    lettuceObjects.forEach(lo=>lo.mesh.traverse(c=>{if(c.isMesh)allMeshes.push(c);}));
+    const hits=raycaster.intersectObjects(allMeshes,false);
+    if(hits.length){
+      const id=hits[0].object.userData.lettuceId;
+      if(id){const lo=lettuceObjects.find(l=>l.data.id===id);if(lo&&!lo.data.found&&lo.mesh.visible&&camera.position.distanceTo(lo.mesh.position)<14)foundLettuce(lo.data,lo.mesh);}
+    }
+    PODIUMS.forEach(p=>{const pv=new THREE.Vector3(...p.pos);if(camera.position.distanceTo(pv)<5)openCode(p.gate,p.hint);});
+    const qtPos=new THREE.Vector3(ERX+60,ERY+2,ERZ);
+    if(camera.position.distanceTo(qtPos)<6&&!quizComplete)openQuiz();
+  },{passive:false});
+}
 
 // ================================================================
 //  RAYCASTING
@@ -1397,7 +1505,7 @@ document.getElementById('endscene').addEventListener('click',()=>{clearTimeout(e
 document.getElementById('start-btn').addEventListener('click',()=>{
   document.getElementById('start-screen').style.display='none';
   gameStarted=true;
-  canvas.requestPointerLock();
+  if(!isMobile) canvas.requestPointerLock();
 });
 
 // ================================================================
@@ -1413,14 +1521,18 @@ function animate(){
   const dt=Math.min(clock.getDelta(),.05);
   const elapsed=clock.getElapsedTime();
 
-  if(gameStarted&&locked){
+  if(gameStarted&&(locked||isMobile)){
     // Input
     moveDir.set(0,0,0);
-    if(keys['KeyW']||keys['ArrowUp'])    moveDir.z-=1;
-    if(keys['KeyS']||keys['ArrowDown'])  moveDir.z+=1;
-    if(keys['KeyA']||keys['ArrowLeft'])  moveDir.x-=1;
-    if(keys['KeyD']||keys['ArrowRight']) moveDir.x+=1;
-    if(moveDir.length()>0) moveDir.normalize();
+    if(isMobile){
+      moveDir.x=joy.dx; moveDir.z=joy.dz;
+    } else {
+      if(keys['KeyW']||keys['ArrowUp'])    moveDir.z-=1;
+      if(keys['KeyS']||keys['ArrowDown'])  moveDir.z+=1;
+      if(keys['KeyA']||keys['ArrowLeft'])  moveDir.x-=1;
+      if(keys['KeyD']||keys['ArrowRight']) moveDir.x+=1;
+      if(moveDir.length()>0) moveDir.normalize();
+    }
     const spd=player.speed*(keys['ShiftLeft']||keys['ShiftRight']?player.sprintMult:1);
     moveDir.multiplyScalar(spd);
     tmpEuler.set(0,player.yaw,0);
@@ -1430,6 +1542,8 @@ function animate(){
     player.vel.x=moveDir.x;
     player.vel.z=moveDir.z;
     player.vel.y+=player.gravity*dt;
+
+    if(mobileJumping&&player.onGround){player.vel.y=player.jumpPow;player.onGround=false;mobileJumping=false;}
 
     // WALL COLLISION — separate X and Z axes (no more teleporting through walls)
     const nx=camera.position.x+player.vel.x*dt;
