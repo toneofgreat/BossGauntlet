@@ -13,9 +13,10 @@ body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
 #cs-stage{font-size:80px;margin-bottom:16px;transition:all .4s}
 #cs-text{color:#ffe066;font-size:26px;letter-spacing:3px;text-align:center;margin-bottom:8px}
 #cs-sub{color:#8a9;font-size:14px;letter-spacing:2px}
-#cs-bar{position:absolute;bottom:0;left:0;height:4px;background:#4f4;transition:width .1s linear}
-#cs-next{position:absolute;bottom:20px;right:24px;background:#1a3a1a;border:2px solid #4a4;border-radius:8px;color:#afe;padding:8px 22px;font-family:'Courier New',monospace;font-size:14px;letter-spacing:1px;cursor:pointer}
-#cs-next:hover{background:#254a25}
+#cs-bar{position:absolute;bottom:0;left:0;height:5px;background:#4f4}
+#cs-click{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);color:#4f4;font-size:15px;letter-spacing:2px;animation:blink 1s step-start infinite;pointer-events:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+#cutscene{cursor:pointer}
 
 #game-ui{display:none}
 #score-box{position:fixed;top:14px;left:14px;background:rgba(0,25,0,.88);border:2px solid #3a3;border-radius:8px;padding:8px 16px;color:#afe;font-size:15px;letter-spacing:1px;z-index:20}
@@ -77,7 +78,7 @@ body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
   <div id="cs-text">Lunchtime...</div>
   <div id="cs-sub">A peaceful day at the lettuce farm</div>
   <div id="cs-bar" style="width:0%"></div>
-  <button id="cs-next">Next ›</button>
+  <div id="cs-click">▶ CLICK TO CONTINUE ◀</div>
 </div>
 
 <div id="game-ui">
@@ -837,28 +838,26 @@ const csSub=document.getElementById('cs-sub');
 const csBar=document.getElementById('cs-bar');
 
 let csTimer=null;
+function endCutscene(){
+  clearTimeout(csTimer);
+  const cs=document.getElementById('cutscene');
+  cs.style.opacity='0';
+  setTimeout(()=>{
+    cs.style.display='none';
+    document.getElementById('game-ui').style.display='block';
+    document.getElementById('start-screen').style.display='flex';
+  },600);
+}
 function stepCS(){
-  if(csIdx>=csFrames.length){
-    document.getElementById('cs-next').style.display='none';
-    const cs=document.getElementById('cutscene');
-    cs.style.opacity='0';
-    setTimeout(()=>{
-      cs.style.display='none';
-      document.getElementById('game-ui').style.display='block';
-      document.getElementById('start-screen').style.display='flex';
-    },600);
-    return;
-  }
+  if(csIdx>=csFrames.length){ endCutscene(); return; }
   const f=csFrames[csIdx];
   csStage.textContent=f.stage;
   csText.textContent=f.text;
   csSub.textContent=f.sub;
-  // Update button label on last frame
-  document.getElementById('cs-next').textContent=csIdx===csFrames.length-1?'Play ▶':'Next ›';
   csIdx++;
   csTimer=setTimeout(stepCS,f.dur);
 }
-document.getElementById('cs-next').addEventListener('click',()=>{
+document.getElementById('cutscene').addEventListener('click',()=>{
   clearTimeout(csTimer);
   stepCS();
 });
