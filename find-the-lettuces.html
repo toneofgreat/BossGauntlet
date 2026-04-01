@@ -532,7 +532,7 @@ const sl1=new THREE.PointLight(0x4a8a3a,1.5,20); sl1.position.set(SEWX,-6,SEWZ+2
 const sl2=new THREE.PointLight(0x3a7a2a,1.2,20); sl2.position.set(SEWX,-6,SEWZ+45); scene.add(sl2);
 
 // --- TREES scattered ---
-[[−80,−80],[80,−80],[80,80],[−80,80],[−55,−50],[55,50],[30,−70],[−65,45],[20,−90],[−30,60]].forEach(([tx,tz])=>{
+[[-80,-80],[80,-80],[80,80],[-80,80],[-55,-50],[55,50],[30,-70],[-65,45],[20,-90],[-30,60]].forEach(([tx,tz])=>{
   box(1.2,7,1.2,0x8b4513,tx,0,tz);
   sphere(4.5,0x228b22,tx,10,tz,8);
   sphere(3,0x1a7a1a,tx,14,tz,7);
