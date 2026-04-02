@@ -1052,8 +1052,6 @@ const look={id:-1,lx:0,ly:0};
 let mobileJumping=false;
 
 if(isMobile){
-  document.getElementById('touch-controls').style.display='block';
-
   const joyZone=document.getElementById('joy-zone');
   const joyStick=document.getElementById('joy-stick');
   const JR=65; // max joystick radius
@@ -1505,7 +1503,8 @@ document.getElementById('endscene').addEventListener('click',()=>{clearTimeout(e
 document.getElementById('start-btn').addEventListener('click',()=>{
   document.getElementById('start-screen').style.display='none';
   gameStarted=true;
-  if(!isMobile) canvas.requestPointerLock();
+  if(isMobile) document.getElementById('touch-controls').style.display='block';
+  else canvas.requestPointerLock();
 });
 
 // ================================================================
