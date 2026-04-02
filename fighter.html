@@ -428,7 +428,8 @@ let gameTime=0,dt=0,lastTime=0;
 // Player
 let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,defense:0,grounded:true,atkCd:0,invTimer:0,atkAnim:0,iceThrowCd:0,iceSpikesCd:0,lavaBallCd:0,magmaBurstCd:0,voidLanceCd:0,omegaStrikeCd:0,
   shadowCutterCd:0,voidHammerCd:0,phantomBladeCd:0,nightmareCleaverCd:0,darkExcaliburCd:0,soulCutterCd:0,abyssHammerCd:0,wraithBladeCd:0,emperorsCutterCd:0,excaliburNoctisCd:0,
-  stormCutterCd:0,thunderHammerCd:0,heavensEdgeCd:0,celestialMaceCd:0,excaliburCaelumCd:0,dragonsCutterCd:0,godHammerCd:0,archangelSwordCd:0,divinusQCd:0,ultimateBladeCd:0};
+  stormCutterCd:0,thunderHammerCd:0,heavensEdgeCd:0,celestialMaceCd:0,excaliburCaelumCd:0,dragonsCutterCd:0,godHammerCd:0,archangelSwordCd:0,divinusQCd:0,ultimateBladeCd:0,
+  abyssStrikeCd:0,voidSlashCd:0,chaosBurstCd:0,realityRendCd:0,primordialWrathCd:0,absoluteStrikeCd:0};
 let camYaw=0,camPitch=0.7,camDist=12;
 
 // Boss
@@ -755,6 +756,7 @@ function startFight(type){
   player.soulCutterCd=0;player.abyssHammerCd=0;player.wraithBladeCd=0;player.emperorsCutterCd=0;player.excaliburNoctisCd=0;
   player.stormCutterCd=0;player.thunderHammerCd=0;player.heavensEdgeCd=0;player.celestialMaceCd=0;player.excaliburCaelumCd=0;
   player.dragonsCutterCd=0;player.godHammerCd=0;player.archangelSwordCd=0;player.divinusQCd=0;player.ultimateBladeCd=0;
+  player.abyssStrikeCd=0;player.voidSlashCd=0;player.chaosBurstCd=0;player.realityRendCd=0;player.primordialWrathCd=0;player.absoluteStrikeCd=0;
   camYaw=0;camPitch=0.7;
   if(type==='fire')generateFireArena();
   else if(type==='void_titan')generateVoidArena();
@@ -1062,6 +1064,12 @@ function updatePlayer(){
   if(player.archangelSwordCd>0)player.archangelSwordCd-=dt;
   if(player.divinusQCd>0)player.divinusQCd-=dt;
   if(player.ultimateBladeCd>0)player.ultimateBladeCd-=dt;
+  if(player.abyssStrikeCd>0)player.abyssStrikeCd-=dt;
+  if(player.voidSlashCd>0)player.voidSlashCd-=dt;
+  if(player.chaosBurstCd>0)player.chaosBurstCd-=dt;
+  if(player.realityRendCd>0)player.realityRendCd-=dt;
+  if(player.primordialWrathCd>0)player.primordialWrathCd-=dt;
+  if(player.absoluteStrikeCd>0)player.absoluteStrikeCd-=dt;
 
   if(save.equipped==='shadow_cutter'){
     if(keys['q']&&player.shadowCutterCd<=0){
@@ -1274,6 +1282,85 @@ function updatePlayer(){
       const dir=v3(sin(player.yaw),0,cos(player.yaw));
       projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,30),
         type:'ultimate_beam',life:3,dmg:150000,mesh:getBox(0.07,0.07,2.2,1,0.9,1),isPlayerProj:true});
+    }
+  }
+  if(save.equipped==='abyss_blade'){
+    if(keys['q']&&player.abyssStrikeCd<=0){
+      player.abyssStrikeCd=1.2;
+      showMsg('Abyss Strike!',1);spawnParticles(player.pos,20,[0.4,0,0.8]);
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      for(let i=-1;i<=1;i++){
+        const a=player.yaw+i*0.25;
+        projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3(sin(a)*22,0,cos(a)*22),
+          type:'abyss_strike',life:2,dmg:225000,mesh:getBox(0.08,0.08,1.8,0.15,0,0.3),isPlayerProj:true});
+      }
+    }
+  }
+  if(save.equipped==='void_scythe'){
+    if(keys['q']&&player.voidSlashCd<=0){
+      player.voidSlashCd=1.5;
+      showMsg('Void Slash!',1);spawnParticles(player.pos,25,[0.7,0,1]);
+      for(let a=0;a<TAU;a+=TAU/8){
+        projectiles.push({pos:v3(player.pos.x,1,player.pos.z),vel:v3(sin(a)*16,0.5,cos(a)*16),
+          type:'void_slash',life:2.5,dmg:450000,mesh:getBox(0.04,0.04,1.5,0.25,0,0.4),isPlayerProj:true});
+      }
+    }
+  }
+  if(save.equipped==='chaos_sword'){
+    if(keys['q']&&player.chaosBurstCd<=0){
+      player.chaosBurstCd=2;
+      showMsg('Chaos Burst!',1);spawnParticles(player.pos,35,[1,0.4,0]);
+      for(let a=0;a<TAU;a+=TAU/12){
+        projectiles.push({pos:v3(player.pos.x,1,player.pos.z),vel:v3(sin(a)*20,1,cos(a)*20),
+          type:'chaos_burst',life:2.5,dmg:900000,mesh:getSph(0.3,1,0.4,0.1),isPlayerProj:true});
+      }
+    }
+  }
+  if(save.equipped==='reality_edge'){
+    if(keys['q']&&player.realityRendCd<=0){
+      player.realityRendCd=2.5;
+      showMsg('Reality Rend!',1);spawnParticles(player.pos,40,[0,1,0.9]);
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,35),
+        type:'reality_rend',life:3,dmg:2500000,mesh:getBox(0.1,0.1,2.5,0.2,1,1),isPlayerProj:true});
+      for(let i=1;i<=4;i++){
+        setTimeout(()=>{
+          if(!boss)return;
+          projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,35),
+            type:'reality_rend',life:3,dmg:2500000,mesh:getBox(0.1,0.1,2.5,0.2,1,1),isPlayerProj:true});
+        },i*120);
+      }
+    }
+  }
+  if(save.equipped==='primordial_blade'){
+    if(keys['q']&&player.primordialWrathCd<=0){
+      player.primordialWrathCd=3;
+      showMsg('Primordial Wrath!',1.5);spawnParticles(player.pos,50,[1,0.9,0.3]);
+      for(let a=0;a<TAU;a+=TAU/16){
+        projectiles.push({pos:v3(player.pos.x,1,player.pos.z),vel:v3(sin(a)*18,2,cos(a)*18),
+          type:'primordial_wrath',life:3,dmg:7000000,mesh:getSph(0.4,1,0.7,0.1),isPlayerProj:true});
+      }
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      projectiles.push({pos:v3(player.pos.x,1.5,player.pos.z),vel:v3scale(dir,40),
+        type:'primordial_beam',life:3,dmg:7000000,mesh:getBox(0.12,0.12,2.8,1,0.8,0.2),isPlayerProj:true});
+    }
+  }
+  if(save.equipped==='absolute_blade'){
+    if(keys['q']&&player.absoluteStrikeCd<=0){
+      player.absoluteStrikeCd=4;
+      showMsg('ABSOLUTE STRIKE!!!',2);spawnParticles(player.pos,80,[1,1,1]);
+      for(let a=0;a<TAU;a+=TAU/20){
+        projectiles.push({pos:v3(player.pos.x,1,player.pos.z),vel:v3(sin(a)*22,2.5,cos(a)*22),
+          type:'absolute_strike',life:3.5,dmg:20000000,mesh:getSph(0.5,1,1,1),isPlayerProj:true});
+      }
+      const dir=v3(sin(player.yaw),0,cos(player.yaw));
+      for(let i=0;i<3;i++){
+        setTimeout(()=>{
+          if(!boss)return;
+          projectiles.push({pos:v3(player.pos.x,1.2,player.pos.z),vel:v3scale(dir,45),
+            type:'absolute_beam',life:3,dmg:20000000,mesh:getBox(0.14,0.14,3,1,1,1),isPlayerProj:true});
+        },i*80);
+      }
     }
   }
 
