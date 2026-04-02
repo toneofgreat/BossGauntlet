@@ -209,6 +209,7 @@ body.theme-void #menu-title{background:linear-gradient(90deg,#c0f,#80f,#f0f);-we
   </div>
   <div id="action-m">
     <div class="ab" data-k=" " style="border-color:#f44">ATK</div>
+    <div class="ab" data-k="q" style="border-color:#44f" id="q-ability-btn">Q</div>
   </div>
 </div>
 
@@ -413,6 +414,8 @@ document.querySelectorAll('.db,.ab').forEach(btn=>{
   const k=btn.dataset.k;
   btn.addEventListener('touchstart',e=>{e.preventDefault();keys[k]=true},{passive:false});
   btn.addEventListener('touchend',e=>{e.preventDefault();keys[k]=false},{passive:false});
+  btn.addEventListener('mousedown',e=>{e.preventDefault();keys[k]=true});
+  btn.addEventListener('mouseup',e=>{e.preventDefault();keys[k]=false});
 });
 
 // Mouse look
@@ -748,6 +751,10 @@ function startFight(type){
     ?`SPACE=Attack · Q=${curSword().qname} (${curSword().qdmg} DMG)`
     :'SPACE=Attack · Walk into boss to hit';
   document.getElementById('atk-prompt').textContent=atkPromptText;
+  const qBtn=document.getElementById('q-ability-btn');
+  if(curSword().qdmg){qBtn.style.display='flex';qBtn.textContent=curSword().qname||'Q';}
+  else{qBtn.style.display='none';}
+  document.getElementById('controls-mobile').style.display='flex';
   player.pos=v3(0,0,5);player.vel=v3();player.yaw=0;
   applyArmor();
   player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
@@ -782,6 +789,7 @@ function goMenu(){
   document.getElementById('death-screen').style.display='none';
   document.getElementById('win-screen').style.display='none';
   document.getElementById('shop').style.display='none';
+  document.getElementById('controls-mobile').style.display='none';
   // Update menu stats
   document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name} · ${curArmor().name}`;
   // Fire boss unlock
