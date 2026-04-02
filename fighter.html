@@ -664,7 +664,7 @@ function spawnBoss(type){
     document.getElementById('boss-hud').style.display='block';
     updateBossHP();
   } else if(type==='the_almighty'){
-    boss={type:'the_almighty',name:'THE ALMIGHTY',pos:v3(0,0,0),vel:v3(),hp:200000,maxHp:200000,
+    boss={type:'the_almighty',name:'THE ALMIGHTY',pos:v3(0,0,0),vel:v3(),hp:350000000,maxHp:350000000,
       phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:4.5,speed:4,floatY:0,
       barrageCd:0.5,novaCd:2,slamCd:1.5,stormCd:3,beamCd:2,punishCd:1.5,isAlmighty:true};
     document.getElementById('boss-name').textContent=boss.name;
@@ -719,7 +719,7 @@ function spawnBoss(type){
     document.getElementById('boss-name').textContent=boss.name;
     document.getElementById('boss-hud').style.display='block';updateBossHP();
   } else if(type==='dimension_lord'){
-    boss={type:'dimension_lord',name:'DIMENSION LORD',pos:v3(0,0,0),vel:v3(),hp:25000000,maxHp:25000000,
+    boss={type:'dimension_lord',name:'DIMENSION LORD',pos:v3(0,0,0),vel:v3(),hp:75000000,maxHp:75000000,
       phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:4,speed:5.5,floatY:0,
       dimCd:0.2,portalCd:2,eraseCd:3,dominateCd:4};
     document.getElementById('boss-name').textContent=boss.name;
