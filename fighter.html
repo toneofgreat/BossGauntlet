@@ -36,6 +36,26 @@ canvas#c{display:block;width:100vw;height:100vh}
 .menu-btn{background:linear-gradient(145deg,#1a2a1a,#223322);border:2px solid #3a5a3a;color:#afa;font-size:16px;font-family:inherit;padding:14px 40px;margin:6px;border-radius:8px;cursor:pointer;letter-spacing:2px;min-width:220px;transition:all .15s}
 .menu-btn:hover{background:#2a3a2a;border-color:#5a8a5a;transform:translateY(-2px)}
 .menu-btn.locked{opacity:0.35;cursor:not-allowed}
+.theme-btn{background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);border-radius:8px;font-size:18px;width:36px;height:36px;cursor:pointer;transition:all .15s}
+.theme-btn:hover{background:rgba(255,255,255,0.18);transform:scale(1.15)}
+/* ---- THEMES ---- */
+body.theme-crimson #menu{background:linear-gradient(135deg,#1a0505,#2a0808,#0f0303)}
+body.theme-crimson #menu-scroll{background:transparent}
+body.theme-crimson .menu-btn{background:linear-gradient(145deg,#2a0f0f,#331a1a);border-color:#5a2020;color:#faa}
+body.theme-crimson .menu-btn:hover{background:#3a1515;border-color:#8a3030}
+body.theme-crimson #menu-title{background:linear-gradient(90deg,#f22,#f84,#f44);-webkit-background-clip:text;background-clip:text}
+body.theme-sapphire #menu{background:linear-gradient(135deg,#050a1a,#08102a,#030510)}
+body.theme-sapphire .menu-btn{background:linear-gradient(145deg,#0f1a2a,#1a2233);border-color:#2a4a7a;color:#aaf}
+body.theme-sapphire .menu-btn:hover{background:#152035;border-color:#4a6aaa}
+body.theme-sapphire #menu-title{background:linear-gradient(90deg,#48f,#4af,#88f);-webkit-background-clip:text;background-clip:text}
+body.theme-gold #menu{background:linear-gradient(135deg,#1a1500,#2a2000,#0f0e00)}
+body.theme-gold .menu-btn{background:linear-gradient(145deg,#2a2000,#332800);border-color:#6a5000;color:#ffd}
+body.theme-gold .menu-btn:hover{background:#3a2e00;border-color:#aa8800}
+body.theme-gold #menu-title{background:linear-gradient(90deg,#fd0,#fa0,#ff4);-webkit-background-clip:text;background-clip:text}
+body.theme-void #menu{background:linear-gradient(135deg,#0a0010,#100020,#050008)}
+body.theme-void .menu-btn{background:linear-gradient(145deg,#15002a,#200035);border-color:#4a0080;color:#daf}
+body.theme-void .menu-btn:hover{background:#200040;border-color:#7000cc}
+body.theme-void #menu-title{background:linear-gradient(90deg,#c0f,#80f,#f0f);-webkit-background-clip:text;background-clip:text}
 #back-btn{position:fixed;top:14px;left:14px;z-index:100;background:#222;border:1px solid #444;color:#aaa;font-family:inherit;font-size:12px;padding:6px 14px;border-radius:4px;cursor:pointer;display:none}
 #back-btn:hover{background:#333;color:#fff}
 
@@ -111,6 +131,14 @@ canvas#c{display:block;width:100vw;height:100vh}
     <div id="menu-title">FIGHTER LEGENDS</div>
     <div id="menu-sub">REALM OF BOSSES</div>
     <div id="menu-stats"></div>
+    <div id="theme-row" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;justify-content:center">
+      <span style="color:#555;font-size:10px;letter-spacing:2px;align-self:center">THEME:</span>
+      <button class="theme-btn" onclick="setTheme('default')" title="Default">🌿</button>
+      <button class="theme-btn" onclick="setTheme('crimson')" title="Crimson">🔴</button>
+      <button class="theme-btn" onclick="setTheme('sapphire')" title="Sapphire">🔵</button>
+      <button class="theme-btn" onclick="setTheme('gold')" title="Gold">🟡</button>
+      <button class="theme-btn" onclick="setTheme('void')" title="Void">🟣</button>
+    </div>
     <div style="color:#555;font-size:10px;letter-spacing:2px;margin-bottom:4px">— WORLD 1: VERDANT WILDS —</div>
     <button class="menu-btn" onclick="startFight('grass')">🌿 GRASS GUARDIAN</button>
     <button class="menu-btn locked" id="fire-boss-btn">🔒 FIRE GOLEM</button>
@@ -127,7 +155,22 @@ canvas#c{display:block;width:100vw;height:100vh}
     <button class="menu-btn locked" id="cdragon-btn">🔒 CELESTIAL DRAGON</button>
     <button class="menu-btn locked" id="dtitan-btn">🔒 DIVINE TITAN</button>
     <button class="menu-btn locked" id="almighty-btn">🔒 THE ALMIGHTY</button>
-    <button class="menu-btn" onclick="openShop()" style="margin-top:8px">⚔ SWORD SHOP</button>
+    <div style="color:#555;font-size:10px;letter-spacing:2px;margin:6px 0 4px">— WORLD 4: ETERNAL ABYSS —</div>
+    <button class="menu-btn locked" id="acrawler-btn">🔒 ABYSS CRAWLER</button>
+    <button class="menu-btn locked" id="vhydra-btn">🔒 VOID HYDRA</button>
+    <button class="menu-btn locked" id="cknight-btn">🔒 CHAOS KNIGHT</button>
+    <button class="menu-btn locked" id="sgod-btn">🔒 SHADOW GOD</button>
+    <button class="menu-btn locked" id="edevourer-btn">🔒 ETERNAL DEVOURER</button>
+    <div style="color:#555;font-size:10px;letter-spacing:2px;margin:6px 0 4px">— WORLD 5: PRIMORDIAL CHAOS —</div>
+    <button class="menu-btn locked" id="pbeast-btn">🔒 PRIMORDIAL BEAST</button>
+    <button class="menu-btn locked" id="cdragon2-btn">🔒 CHAOS DRAGON</button>
+    <button class="menu-btn locked" id="rbreaker-btn">🔒 REALITY BREAKER</button>
+    <button class="menu-btn locked" id="dlord-btn">🔒 DIMENSION LORD</button>
+    <button class="menu-btn locked" id="absolute-btn">🔒 THE ABSOLUTE</button>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center">
+      <button class="menu-btn" onclick="openShop('swords')" style="min-width:160px;font-size:14px">⚔ SWORD SHOP</button>
+      <button class="menu-btn" onclick="openShop('armors')" style="min-width:160px;font-size:14px">🛡 ARMOR SHOP</button>
+    </div>
   </div>
 </div>
 
@@ -283,10 +326,18 @@ function getBox(w,h,d,r,g,b){const k=`b${w}_${h}_${d}_${r}_${g}_${b}`;if(!MC[k])
 function getSph(rad,r,g,b){const k=`s${rad}_${r}_${g}_${b}`;if(!MC[k])MC[k]=makeSphere(rad,8,r,g,b);return MC[k]}
 
 // ---- SAVE ----
-let save={level:1,xp:0,swords:['wooden'],equipped:'wooden',kills:0,beatFireGolem:false,beatVoidTitan:false,beatVoidEmperor:false,beatShadowWraith:false,beatPhantomMage:false,beatNightmareBeast:false,beatDarkColossus:false,beatStormEagle:false,beatThunderColossus:false,beatCelestialDragon:false,beatDivineTitan:false};
+let save={level:1,xp:0,swords:['wooden'],equipped:'wooden',kills:0,beatFireGolem:false,beatVoidTitan:false,beatVoidEmperor:false,beatShadowWraith:false,beatPhantomMage:false,beatNightmareBeast:false,beatDarkColossus:false,beatStormEagle:false,beatThunderColossus:false,beatCelestialDragon:false,beatDivineTitan:false,beatTheAlmighty:false,
+beatAbyssCrawler:false, beatVoidHydra:false, beatChaosKnight:false, beatShadowGod:false, beatEternalDevourer:false,
+beatPrimordialBeast:false, beatChaosDragon:false, beatRealityBreaker:false, beatDimensionLord:false, beatTheAbsolute:false,
+armor:'none', theme:'default'};
 function loadSave(){try{const s=localStorage.getItem('fighterLegends_v1');if(s)Object.assign(save,JSON.parse(s))}catch(e){}}
 function saveSave(){try{localStorage.setItem('fighterLegends_v1',JSON.stringify(save))}catch(e){}}
+function setTheme(theme){
+  save.theme=theme;saveSave();
+  document.body.className=theme==='default'?'':'theme-'+theme;
+}
 loadSave();
+if(save.theme&&save.theme!=='default')document.body.className='theme-'+save.theme;
 
 // ---- SWORDS ----
 const SWORDS={
@@ -316,9 +367,42 @@ const SWORDS={
   god_hammer:{name:'God Hammer',dmg:20000,lvl:12000,stype:'hammer',col:[1.0,0.9,0.7],guard:[1.0,1.0,0.85],blade:[1.0,0.95,0.75],w:0.38,h:0.7,desc:'20000 DMG · Q: God Smash',gem:[1.0,1.0,0.8],qdmg:27000,qname:'God Smash'},
   archangel_sword:{name:'Archangel Sword',dmg:30000,lvl:15000,stype:'excalibur',col:[0.97,0.95,0.88],guard:[0.9,0.82,0.3],blade:[1.0,1.0,0.97],w:0.16,h:1.85,desc:'30000 DMG · Q: Holy Lance',gem:[1.0,1.0,0.9],qdmg:42000,qname:'Holy Lance'},
   excalibur_divinus:{name:'Excalibur Divinus',dmg:50000,lvl:17500,stype:'excalibur',col:[1.0,0.94,0.78],guard:[1.0,0.88,0.22],blade:[1.0,1.0,0.93],w:0.17,h:2.0,desc:'50000 DMG · Q: Divine Beam',gem:[1.0,1.0,0.95],qdmg:70000,qname:'Divine Beam'},
-  ultimate_blade:{name:'ULTIMATE BLADE',dmg:80000,lvl:20000,stype:'sword',col:[0.88,0.55,1.0],guard:[0.75,0.35,0.9],blade:[0.95,0.65,1.0],w:0.18,h:2.1,desc:'80000 DMG · Q: ULTIMATE STRIKE',gem:[1.0,0.8,1.0],qdmg:150000,qname:'ULTIMATE STRIKE'}
+  ultimate_blade:{name:'ULTIMATE BLADE',dmg:80000,lvl:20000,stype:'sword',col:[0.88,0.55,1.0],guard:[0.75,0.35,0.9],blade:[0.95,0.65,1.0],w:0.18,h:2.1,desc:'80000 DMG · Q: ULTIMATE STRIKE',gem:[1.0,0.8,1.0],qdmg:150000,qname:'ULTIMATE STRIKE'},
+  abyss_blade:{name:'Abyss Blade',dmg:200,lvl:15000,col:[0.05,0.0,0.15],guard:[0.1,0.0,0.2],blade:[0.15,0.0,0.3],w:0.13,h:1.65,desc:'200 DMG · Q: Abyss Strike (300 DMG)',gem:[0.4,0.0,0.8],qdmg:300,qname:'Abyss Strike',stype:'sword'},
+  void_scythe:{name:'Void Scythe',dmg:500,lvl:30000,col:[0.2,0.0,0.35],guard:[0.3,0.0,0.5],blade:[0.25,0.0,0.4],w:0.15,h:1.8,desc:'500 DMG · Q: Void Slash (800 DMG)',gem:[0.7,0.0,1.0],qdmg:800,qname:'Void Slash',stype:'cutter'},
+  chaos_sword:{name:'Chaos Sword',dmg:1200,lvl:80000,col:[0.6,0.1,0.0],guard:[0.8,0.2,0.0],blade:[1.0,0.3,0.1],w:0.16,h:1.9,desc:'1200 DMG · Q: Chaos Burst (2000 DMG)',gem:[1.0,0.4,0.0],qdmg:2000,qname:'Chaos Burst',stype:'sword'},
+  reality_edge:{name:'Reality Edge',dmg:3000,lvl:200000,col:[0.0,0.8,0.8],guard:[0.0,0.6,0.9],blade:[0.2,1.0,1.0],w:0.17,h:2.0,desc:'3000 DMG · Q: Reality Rend (5000 DMG)',gem:[0.0,1.0,0.9],qdmg:5000,qname:'Reality Rend',stype:'excalibur'},
+  primordial_blade:{name:'Primordial Blade',dmg:8000,lvl:500000,col:[1.0,0.6,0.0],guard:[1.0,0.4,0.0],blade:[1.0,0.8,0.2],w:0.18,h:2.1,desc:'8000 DMG · Q: Primordial Wrath (15000 DMG)',gem:[1.0,0.9,0.3],qdmg:15000,qname:'Primordial Wrath',stype:'hammer'},
+  absolute_blade:{name:'ABSOLUTE BLADE',dmg:25000,lvl:1500000,col:[1.0,1.0,1.0],guard:[0.9,0.9,1.0],blade:[1.0,1.0,1.0],w:0.2,h:2.2,desc:'25000 DMG · Q: ABSOLUTE STRIKE (50000 DMG)',gem:[1.0,1.0,1.0],qdmg:50000,qname:'ABSOLUTE STRIKE',stype:'excalibur'}
 };
 function curSword(){return SWORDS[save.equipped]}
+
+const ARMORS = {
+  none:{name:'No Armor',desc:'Unprotected.',hpBonus:0,def:0,col:[0.4,0.6,0.4],killReq:0,levelReq:0},
+  iron_vest:{name:'Iron Vest',desc:'+50 HP.',hpBonus:50,def:0,col:[0.5,0.5,0.55],killReq:0,levelReq:0},
+  chain_mail:{name:'Chain Mail',desc:'+150 HP · 5% DEF.',hpBonus:150,def:5,col:[0.55,0.55,0.6],killReq:1,levelReq:0},
+  knight_armor:{name:'Knight Armor',desc:'+400 HP · 8% DEF.',hpBonus:400,def:8,col:[0.6,0.6,0.65],killReq:3,levelReq:0},
+  shadow_mail:{name:'Shadow Mail',desc:'+900 HP · 12% DEF.',hpBonus:900,def:12,col:[0.2,0.2,0.3],killReq:0,levelReq:0,bossReq:'beatVoidTitan'},
+  dark_plate:{name:'Dark Plate',desc:'+2000 HP · 15% DEF.',hpBonus:2000,def:15,col:[0.15,0.15,0.2],killReq:0,levelReq:0,bossReq:'beatVoidEmperor'},
+  divine_mail:{name:'Divine Mail',desc:'+5000 HP · 20% DEF.',hpBonus:5000,def:20,col:[0.9,0.8,0.4],killReq:0,levelReq:0,bossReq:'beatTheAlmighty'},
+  abyss_vest:{name:'Abyss Vest',desc:'+12000 HP · 24% DEF.',hpBonus:12000,def:24,col:[0.1,0.0,0.2],killReq:0,levelReq:0,bossReq:'beatAbyssCrawler'},
+  void_hide:{name:'Void Hide',desc:'+28000 HP · 27% DEF.',hpBonus:28000,def:27,col:[0.15,0.0,0.3],killReq:0,levelReq:0,bossReq:'beatVoidHydra'},
+  chaos_mail:{name:'Chaos Mail',desc:'+65000 HP · 30% DEF.',hpBonus:65000,def:30,col:[0.5,0.08,0.0],killReq:0,levelReq:0,bossReq:'beatChaosKnight'},
+  shadow_god_scale:{name:'Shadow God Scale',desc:'+150000 HP · 33% DEF.',hpBonus:150000,def:33,col:[0.08,0.08,0.12],killReq:0,levelReq:0,bossReq:'beatShadowGod'},
+  eternal_plate:{name:'Eternal Plate',desc:'+350000 HP · 36% DEF.',hpBonus:350000,def:36,col:[0.05,0.05,0.1],killReq:0,levelReq:0,bossReq:'beatEternalDevourer'},
+  primordial_hide:{name:'Primordial Hide',desc:'+800000 HP · 39% DEF.',hpBonus:800000,def:39,col:[0.7,0.35,0.0],killReq:0,levelReq:0,bossReq:'beatPrimordialBeast'},
+  chaos_dragon_scale:{name:'Chaos Dragon Scale',desc:'+1800000 HP · 42% DEF.',hpBonus:1800000,def:42,col:[0.6,0.1,0.0],killReq:0,levelReq:0,bossReq:'beatChaosDragon'},
+  reality_armor:{name:'Reality Armor',desc:'+4000000 HP · 45% DEF.',hpBonus:4000000,def:45,col:[0.0,0.6,0.7],killReq:0,levelReq:0,bossReq:'beatRealityBreaker'},
+  dimension_plate:{name:'Dimension Plate',desc:'+9000000 HP · 48% DEF.',hpBonus:9000000,def:48,col:[0.0,0.4,0.8],killReq:0,levelReq:0,bossReq:'beatDimensionLord'},
+  absolute_mail:{name:'Absolute Mail',desc:'+20000000 HP · 55% DEF.',hpBonus:20000000,def:55,col:[0.9,0.9,1.0],killReq:0,levelReq:0,bossReq:'beatTheAbsolute'},
+  celestial_void:{name:'Celestial Void',desc:'+50000 HP · 28% DEF.',hpBonus:50000,def:28,col:[0.4,0.0,0.7],killReq:0,levelReq:100000},
+  abyss_transcendence:{name:'Abyss Transcendence',desc:'+5000000 HP · 50% DEF.',hpBonus:5000000,def:50,col:[0.1,0.0,0.25],killReq:0,levelReq:800000},
+  chaos_god_plate:{name:'Chaos God Plate',desc:'+50000000 HP · 60% DEF.',hpBonus:50000000,def:60,col:[0.8,0.2,0.0],killReq:0,levelReq:2000000},
+  godly_armor:{name:'GODLY ARMOR',desc:'+999999999 HP · 75% DEF.',hpBonus:999999999,def:75,col:[1.0,1.0,0.8],killReq:0,levelReq:2000000,bossReq:'beatTheAbsolute'}
+};
+function curArmor(){return ARMORS[save.armor]||ARMORS['none'];}
+function applyArmor(){const a=curArmor();player.maxHp=100+a.hpBonus;player.hp=player.maxHp;}
+
 function xpForLevel(l){return l*10}
 
 // ---- INPUT ----
@@ -342,7 +426,7 @@ let gameState='menu'; // menu, fight, shop, dead, win
 let gameTime=0,dt=0,lastTime=0;
 
 // Player
-let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,grounded:true,atkCd:0,invTimer:0,atkAnim:0,iceThrowCd:0,iceSpikesCd:0,lavaBallCd:0,magmaBurstCd:0,voidLanceCd:0,omegaStrikeCd:0,
+let player={pos:v3(0,0,8),vel:v3(),yaw:0,hp:100,maxHp:100,defense:0,grounded:true,atkCd:0,invTimer:0,atkAnim:0,iceThrowCd:0,iceSpikesCd:0,lavaBallCd:0,magmaBurstCd:0,voidLanceCd:0,omegaStrikeCd:0,
   shadowCutterCd:0,voidHammerCd:0,phantomBladeCd:0,nightmareCleaverCd:0,darkExcaliburCd:0,soulCutterCd:0,abyssHammerCd:0,wraithBladeCd:0,emperorsCutterCd:0,excaliburNoctisCd:0,
   stormCutterCd:0,thunderHammerCd:0,heavensEdgeCd:0,celestialMaceCd:0,excaliburCaelumCd:0,dragonsCutterCd:0,godHammerCd:0,archangelSwordCd:0,divinusQCd:0,ultimateBladeCd:0};
 let camYaw=0,camPitch=0.7,camDist=12;
@@ -440,6 +524,35 @@ function generateDivineArena(){
   for(let i=0;i<16;i++){
     const a=rand()*TAU,r=1+rand()*9;
     flowers.push({x:sin(a)*r,z:cos(a)*r,col:[1,0.9,0.3],s:0.12+rand()*0.1,divine:true});
+  }
+}
+
+function generateAbyssArena(){
+  currentArena='abyss';
+  trees=[];rocks=[];flowers=[];grassPatches=[];lavaPools=[];MC={};
+  for(let i=0;i<16;i++){
+    const a=rand()*TAU,r=3+rand()*9;
+    rocks.push({x:sin(a)*r,z:cos(a)*r,s:0.8+rand()*2,rot:rand()*TAU,void:true,abyss:true});
+  }
+  for(let i=0;i<8;i++){
+    const a=rand()*TAU,r=1+rand()*9;
+    lavaPools.push({x:sin(a)*r,z:cos(a)*r,w:2+rand()*3,d:2+rand()*3,phase:rand()*TAU});
+  }
+}
+function generateChaosArena(){
+  currentArena='chaos';
+  trees=[];rocks=[];flowers=[];grassPatches=[];lavaPools=[];MC={};
+  for(let i=0;i<20;i++){
+    const a=rand()*TAU,r=2+rand()*10;
+    rocks.push({x:sin(a)*r,z:cos(a)*r,s:0.6+rand()*2.5,rot:rand()*TAU,fire:true,void:true,chaos:true});
+  }
+  for(let i=0;i<10;i++){
+    const a=rand()*TAU,r=1+rand()*9;
+    lavaPools.push({x:sin(a)*r,z:cos(a)*r,w:2.5+rand()*3.5,d:2.5+rand()*3.5,phase:rand()*TAU});
+  }
+  for(let i=0;i<8;i++){
+    const a=i*TAU/8;
+    flowers.push({x:sin(a)*10,z:cos(a)*10,col:[1,0.3,0.0],s:0.2+rand()*0.1,divine:true});
   }
 }
 
@@ -557,6 +670,66 @@ function spawnBoss(type){
     document.getElementById('boss-name').textContent=boss.name;
     document.getElementById('boss-hud').style.display='block';
     updateBossHP();
+  } else if(type==='abyss_crawler'){
+    boss={type:'abyss_crawler',name:'ABYSS CRAWLER',pos:v3(0,0,0),vel:v3(),hp:350000,maxHp:350000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:3,speed:3.5,floatY:0,
+      clawCd:0.9,sinkCd:4,voidCd:2.5,crushCd:6};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='void_hydra'){
+    boss={type:'void_hydra',name:'VOID HYDRA',pos:v3(0,0,0),vel:v3(),hp:600000,maxHp:600000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:3.5,speed:3,floatY:0,
+      headCd:0.7,spiralCd:3,triCd:5,rampageCd:7};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='chaos_knight'){
+    boss={type:'chaos_knight',name:'CHAOS KNIGHT',pos:v3(0,0,0),vel:v3(),hp:1000000,maxHp:1000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:2.5,speed:5,floatY:0,
+      slashCd:0.6,chargeCd:3,spinCd:4,explosionCd:5.5};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='shadow_god'){
+    boss={type:'shadow_god',name:'SHADOW GOD',pos:v3(0,0,0),vel:v3(),hp:1800000,maxHp:1800000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:4,speed:4,floatY:0,
+      darkCd:0.5,curseCd:3,obliterateCd:4,godRageCd:6};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='eternal_devourer'){
+    boss={type:'eternal_devourer',name:'ETERNAL DEVOURER',pos:v3(0,0,0),vel:v3(),hp:3000000,maxHp:3000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:4.5,speed:4.5,floatY:0,
+      consumeCd:0.4,vortexCd:3,annihilateCd:4,devourCd:6};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='primordial_beast'){
+    boss={type:'primordial_beast',name:'PRIMORDIAL BEAST',pos:v3(0,0,0),vel:v3(),hp:5000000,maxHp:5000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:4,speed:5,floatY:0,
+      biteCd:0.35,roarCd:3,stampedeCd:4,primordialCd:5};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='chaos_dragon'){
+    boss={type:'chaos_dragon',name:'CHAOS DRAGON',pos:v3(0,0,0),vel:v3(),hp:9000000,maxHp:9000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:5,speed:4.5,floatY:0,
+      breathCd:0.3,wingCd:2.5,infernoCd:4,chaosCd:5};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='reality_breaker'){
+    boss={type:'reality_breaker',name:'REALITY BREAKER',pos:v3(0,0,0),vel:v3(),hp:15000000,maxHp:15000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:3.5,speed:6,floatY:0,
+      shardCd:0.25,riftCd:2,collapsCd:3.5,breakCd:4};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='dimension_lord'){
+    boss={type:'dimension_lord',name:'DIMENSION LORD',pos:v3(0,0,0),vel:v3(),hp:25000000,maxHp:25000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:4,speed:5.5,floatY:0,
+      dimCd:0.2,portalCd:2,eraseCd:3,dominateCd:4};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
+  } else if(type==='the_absolute'){
+    boss={type:'the_absolute',name:'THE ABSOLUTE',pos:v3(0,0,0),vel:v3(),hp:50000000,maxHp:50000000,
+      phase:0,timer:0,atkCd:2,moveTimer:0,stunTimer:0,size:5,speed:6,floatY:0,
+      absCd:0.15,voidCd:1.5,realityCd:2.5,absoluteCd:3,oblivionCd:4,isAbsolute:true};
+    document.getElementById('boss-name').textContent=boss.name;
+    document.getElementById('boss-hud').style.display='block';updateBossHP();
   }
 }
 
@@ -575,6 +748,7 @@ function startFight(type){
     :'SPACE=Attack · Walk into boss to hit';
   document.getElementById('atk-prompt').textContent=atkPromptText;
   player.pos=v3(0,0,5);player.vel=v3();player.yaw=0;
+  applyArmor();
   player.hp=player.maxHp;player.grounded=true;player.atkCd=0;player.invTimer=0;player.atkAnim=0;
   player.iceThrowCd=0;player.iceSpikesCd=0;player.lavaBallCd=0;player.magmaBurstCd=0;player.voidLanceCd=0;player.omegaStrikeCd=0;
   player.shadowCutterCd=0;player.voidHammerCd=0;player.phantomBladeCd=0;player.nightmareCleaverCd=0;player.darkExcaliburCd=0;
@@ -586,6 +760,8 @@ function startFight(type){
   else if(type==='void_titan')generateVoidArena();
   else if(['shadow_wraith','phantom_mage','nightmare_beast','dark_colossus','void_emperor'].includes(type))generateShadowArena();
   else if(['storm_eagle','thunder_colossus','celestial_dragon','divine_titan','the_almighty'].includes(type))generateDivineArena();
+  else if(['abyss_crawler','void_hydra','chaos_knight','shadow_god','eternal_devourer'].includes(type))generateAbyssArena();
+  else if(['primordial_beast','chaos_dragon','reality_breaker','dimension_lord','the_absolute'].includes(type))generateChaosArena();
   else generateGrassArena();
   spawnBoss(type);
   updateHUD();
@@ -605,7 +781,7 @@ function goMenu(){
   document.getElementById('win-screen').style.display='none';
   document.getElementById('shop').style.display='none';
   // Update menu stats
-  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name}`;
+  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name} · ${curArmor().name}`;
   // Fire boss unlock
   const fireBtn=document.getElementById('fire-boss-btn');
   if(save.kills>=1){
@@ -644,18 +820,31 @@ function goMenu(){
   setBossBtn('cdragon-btn','celestial_dragon','🐉','CELESTIAL DRAGON',save.beatThunderColossus,'Beat Thunder Colossus');
   setBossBtn('dtitan-btn','divine_titan','✨','DIVINE TITAN',save.beatCelestialDragon,'Beat Celestial Dragon');
   setBossBtn('almighty-btn','the_almighty','👼','THE ALMIGHTY',save.beatDivineTitan,'Beat Divine Titan');
+  // World 4: Eternal Abyss
+  setBossBtn('acrawler-btn','abyss_crawler','🕳','ABYSS CRAWLER',save.beatTheAlmighty,'Beat The Almighty');
+  setBossBtn('vhydra-btn','void_hydra','🐍','VOID HYDRA',save.beatAbyssCrawler,'Beat Abyss Crawler');
+  setBossBtn('cknight-btn','chaos_knight','⚔','CHAOS KNIGHT',save.beatVoidHydra,'Beat Void Hydra');
+  setBossBtn('sgod-btn','shadow_god','🌑','SHADOW GOD',save.beatChaosKnight,'Beat Chaos Knight');
+  setBossBtn('edevourer-btn','eternal_devourer','💀','ETERNAL DEVOURER',save.beatShadowGod,'Beat Shadow God');
+  // World 5: Primordial Chaos
+  setBossBtn('pbeast-btn','primordial_beast','🦴','PRIMORDIAL BEAST',save.beatEternalDevourer,'Beat Eternal Devourer');
+  setBossBtn('cdragon2-btn','chaos_dragon','🐉','CHAOS DRAGON',save.beatPrimordialBeast,'Beat Primordial Beast');
+  setBossBtn('rbreaker-btn','reality_breaker','💎','REALITY BREAKER',save.beatChaosDragon,'Beat Chaos Dragon');
+  setBossBtn('dlord-btn','dimension_lord','🌀','DIMENSION LORD',save.beatRealityBreaker,'Beat Reality Breaker');
+  setBossBtn('absolute-btn','the_absolute','⚡','THE ABSOLUTE',save.beatDimensionLord,'Beat Dimension Lord');
 }
 
 // ---- SHOP ----
-function openShop(){
+function openShop(tab='swords'){
   document.getElementById('menu').style.display='none';
   document.getElementById('shop').style.display='flex';
-  renderShop();
+  document.getElementById('shop-title').textContent=tab==='armors'?'ARMOR SHOP':'SWORD SHOP';
+  if(tab==='armors')renderArmorShop();else renderShop();
 }
 function closeShop(){
   document.getElementById('shop').style.display='none';
   document.getElementById('menu').style.display='flex';
-  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name}`;
+  document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name} · ${curArmor().name}`;
 }
 function renderShop(){
   const cont=document.getElementById('shop-items');
@@ -678,6 +867,35 @@ function renderShop(){
     div.onclick=()=>{
       if(!unlocked)return;
       save.equipped=id;saveSave();renderShop();
+    };
+    cont.appendChild(div);
+  }
+}
+
+function renderArmorShop(){
+  const cont=document.getElementById('shop-items');
+  cont.innerHTML='';
+  for(const[id,ar] of Object.entries(ARMORS)){
+    if(id==='none')continue;
+    let unlocked=true;
+    if(ar.killReq&&save.kills<ar.killReq)unlocked=false;
+    if(ar.levelReq&&save.level<ar.levelReq)unlocked=false;
+    if(ar.bossReq&&!save[ar.bossReq])unlocked=false;
+    const equipped=save.armor===id;
+    const div=document.createElement('div');
+    div.className='shop-item'+(unlocked?' owned':'')+(unlocked?'':' locked');
+    const c=ar.col;
+    div.innerHTML=`
+      <div style="width:50px;height:50px;border-radius:4px;background:#0a0a0a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🛡</div>
+      <div class="si-info">
+        <div class="si-name">${ar.name}${equipped?' (EQUIPPED)':''}</div>
+        <div class="si-desc">${ar.desc}${unlocked?'':' — '+(ar.bossReq?'Beat '+ar.bossReq.replace('beat','').replace(/([A-Z])/g,' $1').trim():ar.levelReq?'Level '+ar.levelReq:''+ar.killReq+' Kills')}</div>
+      </div>
+      <div class="si-cost ${unlocked?'owned-tag':''}">${unlocked?(equipped?'EQUIPPED':'EQUIP'):'🔒'}</div>`;
+    div.onclick=()=>{
+      if(!unlocked)return;
+      save.armor=id;saveSave();applyArmor();renderArmorShop();
+      document.getElementById('menu-stats').textContent=`Level ${save.level} · ${save.kills} Kills · ${curSword().name} · ${curArmor().name}`;
     };
     cont.appendChild(div);
   }
@@ -1065,7 +1283,7 @@ function updatePlayer(){
 
 function hurtPlayer(dmg){
   if(player.invTimer>0)return;
-  player.hp-=dmg;player.invTimer=0.6;
+  player.hp-=Math.ceil(dmg*(1-curArmor().def/100));player.invTimer=0.6;
   spawnParticles(player.pos,6,[1,0.2,0.2]);
   updateHUD();
   if(player.hp<=0){
@@ -1086,7 +1304,9 @@ function bossDefeated(){
   const levelRewards={
     grass:1,fire:1,void_titan:100,
     shadow_wraith:200,phantom_mage:300,nightmare_beast:400,dark_colossus:600,void_emperor:800,
-    storm_eagle:1000,thunder_colossus:2000,celestial_dragon:3000,divine_titan:5000,the_almighty:10000
+    storm_eagle:1000,thunder_colossus:2000,celestial_dragon:3000,divine_titan:5000,the_almighty:10000,
+    abyss_crawler:15000, void_hydra:25000, chaos_knight:40000, shadow_god:70000, eternal_devourer:120000,
+    primordial_beast:200000, chaos_dragon:350000, reality_breaker:600000, dimension_lord:1000000, the_absolute:2000000
   };
   const levelsGained=levelRewards[boss?.type]||1;
   if(boss?.type==='fire')save.beatFireGolem=true;
@@ -1100,6 +1320,17 @@ function bossDefeated(){
   if(boss?.type==='thunder_colossus')save.beatThunderColossus=true;
   if(boss?.type==='celestial_dragon')save.beatCelestialDragon=true;
   if(boss?.type==='divine_titan')save.beatDivineTitan=true;
+  if(boss?.type==='the_almighty')save.beatTheAlmighty=true;
+  if(boss?.type==='abyss_crawler')save.beatAbyssCrawler=true;
+  if(boss?.type==='void_hydra')save.beatVoidHydra=true;
+  if(boss?.type==='chaos_knight')save.beatChaosKnight=true;
+  if(boss?.type==='shadow_god')save.beatShadowGod=true;
+  if(boss?.type==='eternal_devourer')save.beatEternalDevourer=true;
+  if(boss?.type==='primordial_beast')save.beatPrimordialBeast=true;
+  if(boss?.type==='chaos_dragon')save.beatChaosDragon=true;
+  if(boss?.type==='reality_breaker')save.beatRealityBreaker=true;
+  if(boss?.type==='dimension_lord')save.beatDimensionLord=true;
+  if(boss?.type==='the_absolute')save.beatTheAbsolute=true;
   const prevLevel=save.level;
   save.level+=levelsGained;
   // Check if any new swords unlocked in range
@@ -1752,6 +1983,121 @@ function updateBoss(){
           type:'holy_spike',life:2,dmg:100,mesh:getBox(0.35,2.5,0.35,1,0.95,0.6),delay:0.25+i*0.1,started:false});
       }
     }
+  } else if(boss.type==='abyss_crawler'){
+    if(hpPct<0.3&&boss.phase<2){boss.phase=2;boss.speed=5.5;showMsg('ABYSS CRAWLER ENRAGES!',2);spawnParticles(boss.pos,40,[0.1,0.0,0.3]);}
+    else if(hpPct<0.6&&boss.phase<1){boss.phase=1;boss.speed=4.5;showMsg('The abyss deepens!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(200);
+    boss.clawCd-=dt;boss.sinkCd-=dt;boss.voidCd-=dt;boss.crushCd-=dt;
+    if(boss.clawCd<=0){boss.clawCd=max(0.9-boss.phase*0.15,0.3);const n=1+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.5,0.1,dir.z+(rand()-0.5)*0.5);projectiles.push({pos:v3(boss.pos.x,1.5,boss.pos.z),vel:v3scale(v3norm(s),14+boss.phase*2),type:'void_bolt',life:4,dmg:200,mesh:getSph(0.22,0.1,0.0,0.4)});}}
+    if(boss.sinkCd<=0){boss.sinkCd=max(4-boss.phase,2);showMsg('Abyss Sink!',1);for(let i=0;i<8+boss.phase*4;i++){const rx=player.pos.x+(rand()-0.5)*8;const rz=player.pos.z+(rand()-0.5)*8;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,15,0),type:'void_spike',life:2,dmg:250,mesh:getBox(0.35,2.5,0.35,0.05,0.0,0.2),delay:0.15+i*0.08,started:false});}}
+    if(boss.voidCd<=0){boss.voidCd=max(2.5-boss.phase*0.4,1);const cnt=18+boss.phase*4;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3(sin(a)*8,0.3,cos(a)*8),type:'void_bolt',life:5,dmg:180,mesh:getSph(0.2,0.1,0.0,0.4)});}}
+    if(boss.phase>=1&&boss.crushCd<=0){boss.crushCd=max(6-boss.phase,3);showMsg('ABYSS CRUSH!',1.5);for(let i=0;i<20+boss.phase*8;i++){const rx=player.pos.x+(rand()-0.5)*12;const rz=player.pos.z+(rand()-0.5)*12;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,18,0),type:'void_spike',life:2.5,dmg:300,mesh:getBox(0.4,3,0.4,0.05,0.0,0.25),delay:0.1+i*0.06,started:false});}}
+  } else if(boss.type==='void_hydra'){
+    if(hpPct<0.25&&boss.phase<3){boss.phase=3;boss.speed=5;showMsg('VOID HYDRA GOES BERSERK!',2);spawnParticles(boss.pos,50,[0.2,0.0,0.5]);}
+    else if(hpPct<0.5&&boss.phase<2){boss.phase=2;boss.speed=4.5;showMsg('Void Hydra multiplies!',2);}
+    else if(hpPct<0.7&&boss.phase<1){boss.phase=1;boss.speed=4;showMsg('Another head appears!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(350);
+    boss.headCd-=dt;boss.spiralCd-=dt;boss.triCd-=dt;boss.rampageCd-=dt;
+    if(boss.headCd<=0){boss.headCd=max(0.7-boss.phase*0.12,0.22);const n=1+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.6,0.1,dir.z+(rand()-0.5)*0.6);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),15+boss.phase*2),type:'void_bolt',life:4,dmg:320,mesh:getSph(0.23,0.2,0.0,0.5)});}}
+    if(boss.spiralCd<=0){boss.spiralCd=max(3-boss.phase*0.4,1.2);showMsg('Hydra Spiral!',1);const cnt=20+boss.phase*5;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3(sin(a)*9,0.4,cos(a)*9),type:'void_bolt',life:5,dmg:280,mesh:getSph(0.2,0.2,0.0,0.5)});}}
+    if(boss.phase>=1&&boss.triCd<=0){boss.triCd=max(5-boss.phase,2.5);showMsg('Triple Strike!',1);for(let h=0;h<3+boss.phase;h++){const ha=atan2(dir.x,dir.z)+((h-(1+boss.phase*0.5))*0.4);for(let i=0;i<5;i++){projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3(sin(ha)*16,0.2,cos(ha)*16),type:'void_bolt',life:3,dmg:350,mesh:getSph(0.18,0.2,0.0,0.5)});}}}
+    if(boss.phase>=2&&boss.rampageCd<=0){boss.rampageCd=7;showMsg('HYDRA RAMPAGE!',2);for(let i=0;i<30;i++){const rx=player.pos.x+(rand()-0.5)*14;const rz=player.pos.z+(rand()-0.5)*14;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,17,0),type:'void_spike',life:2.5,dmg:400,mesh:getBox(0.38,2.8,0.38,0.15,0.0,0.4),delay:0.08+i*0.06,started:false});}}
+  } else if(boss.type==='chaos_knight'){
+    if(hpPct<0.2&&boss.phase<3){boss.phase=3;boss.speed=8;showMsg('CHAOS KNIGHT UNLEASHES CHAOS!',2);spawnParticles(boss.pos,50,[0.8,0.2,0.0]);}
+    else if(hpPct<0.45&&boss.phase<2){boss.phase=2;boss.speed=6.5;showMsg('Chaos Knight charges up!',2);}
+    else if(hpPct<0.65&&boss.phase<1){boss.phase=1;boss.speed=5.5;showMsg('Chaos empowers the knight!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(500);
+    boss.slashCd-=dt;boss.chargeCd-=dt;boss.spinCd-=dt;boss.explosionCd-=dt;
+    if(boss.slashCd<=0){boss.slashCd=max(0.6-boss.phase*0.1,0.2);const n=2+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),17+boss.phase*3),type:'chaos_bolt',life:3,dmg:450,mesh:getSph(0.22,0.9,0.2,0.0)});}}
+    if(boss.chargeCd<=0){boss.chargeCd=max(3-boss.phase*0.3,1.2);showMsg('CHAOS CHARGE!',1);const ba=atan2(dir.x,dir.z);for(let i=0;i<5+boss.phase*2;i++){const a=ba+((i-2-boss.phase)*0.25);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3(sin(a)*20,0.1,cos(a)*20),type:'chaos_bolt',life:3,dmg:480,mesh:getBox(0.04,0.04,1.5,0.9,0.2,0.0)});}}
+    if(boss.spinCd<=0){boss.spinCd=max(4-boss.phase*0.4,1.8);showMsg('Chaos Spin!',1);const cnt=24+boss.phase*6;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3(sin(a)*10,0.5,cos(a)*10),type:'chaos_bolt',life:5,dmg:400,mesh:getSph(0.2,0.9,0.2,0.0)});}}
+    if(boss.phase>=1&&boss.explosionCd<=0){boss.explosionCd=max(5.5-boss.phase*0.6,2.5);showMsg('CHAOS EXPLOSION!',1.5);for(let i=0;i<20+boss.phase*8;i++){const rx=player.pos.x+(rand()-0.5)*10;const rz=player.pos.z+(rand()-0.5)*10;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,16,0),type:'chaos_bolt',life:2,dmg:520,mesh:getBox(0.35,2.5,0.35,0.9,0.2,0.0),delay:0.1+i*0.07,started:false});}}
+  } else if(boss.type==='shadow_god'){
+    if(hpPct<0.15&&boss.phase<4){boss.phase=4;boss.speed=6.5;showMsg('SHADOW GOD AWAKENS!',3);spawnParticles(boss.pos,70,[0.0,0.0,0.0]);}
+    else if(hpPct<0.35&&boss.phase<3){boss.phase=3;boss.speed=5.5;showMsg('Darkness consumes all!',2);}
+    else if(hpPct<0.55&&boss.phase<2){boss.phase=2;boss.speed=5;showMsg('Shadow God grows wrathful!',2);}
+    else if(hpPct<0.75&&boss.phase<1){boss.phase=1;boss.speed=4.5;showMsg('Shadows gather!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(700);
+    boss.darkCd-=dt;boss.curseCd-=dt;boss.obliterateCd-=dt;boss.godRageCd-=dt;
+    if(boss.darkCd<=0){boss.darkCd=max(0.5-boss.phase*0.07,0.15);const n=2+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.6,0.1,dir.z+(rand()-0.5)*0.6);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),18+boss.phase*2),type:'void_bolt',life:4,dmg:600,mesh:getSph(0.2,0.05,0.0,0.1)});}}
+    if(boss.curseCd<=0){boss.curseCd=max(3-boss.phase*0.3,1.2);showMsg('Shadow Curse!',1);const cnt=28+boss.phase*5;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3(sin(a)*11,0.5,cos(a)*11),type:'void_bolt',life:5,dmg:550,mesh:getSph(0.18,0.05,0.0,0.1)});}}
+    if(boss.obliterateCd<=0){boss.obliterateCd=max(4-boss.phase*0.35,1.8);showMsg('OBLITERATE!',1.5);for(let i=0;i<25+boss.phase*8;i++){const rx=player.pos.x+(rand()-0.5)*14;const rz=player.pos.z+(rand()-0.5)*14;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,18,0),type:'void_spike',life:2.5,dmg:680,mesh:getBox(0.4,3,0.4,0.05,0.0,0.1),delay:0.08+i*0.055,started:false});}}
+    if(boss.phase>=2&&rand()<0.08+boss.phase*0.03){const px=player.pos.x+(rand()-0.5)*18;const pz=player.pos.z+(rand()-0.5)*18;projectiles.push({pos:v3(px,12,pz),vel:v3((rand()-0.5)*3,-22,(rand()-0.5)*3),type:'void_bolt',life:3,dmg:620,mesh:getSph(0.17,0.05,0.0,0.1)});}
+    if(boss.phase>=3&&boss.godRageCd<=0){boss.godRageCd=6;showMsg('GOD RAGE!',2);const ba=atan2(dir.x,dir.z);for(let i=0;i<12+boss.phase*3;i++){const a=ba+(i-(6+boss.phase*1.5))*0.2;projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),vel:v3(sin(a)*25,0.1,cos(a)*25),type:'holy_beam',life:3,dmg:750,mesh:getBox(0.04,0.04,2,0.1,0.0,0.15)});}}
+  } else if(boss.type==='eternal_devourer'){
+    if(hpPct<0.15&&boss.phase<4){boss.phase=4;boss.speed=7;showMsg('ETERNAL DEVOURER UNLEASHED!',3);spawnParticles(boss.pos,80,[0.1,0.0,0.2]);}
+    else if(hpPct<0.3&&boss.phase<3){boss.phase=3;boss.speed=6;showMsg('The void hungers endlessly!',2);}
+    else if(hpPct<0.5&&boss.phase<2){boss.phase=2;boss.speed=5.5;showMsg('Eternal Devourer grows!',2);}
+    else if(hpPct<0.7&&boss.phase<1){boss.phase=1;boss.speed=5;showMsg('The devouring begins!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(1000);
+    boss.consumeCd-=dt;boss.vortexCd-=dt;boss.annihilateCd-=dt;boss.devourCd-=dt;
+    if(boss.consumeCd<=0){boss.consumeCd=max(0.4-boss.phase*0.06,0.12);const n=2+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.5,0.1,dir.z+(rand()-0.5)*0.5);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),19+boss.phase*2),type:'almighty_bolt',life:4,dmg:900,mesh:getSph(0.22,0.1,0.0,0.2)});}}
+    if(boss.vortexCd<=0){boss.vortexCd=max(3-boss.phase*0.3,1.2);showMsg('VOID VORTEX!',1.5);const cnt=32+boss.phase*6;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3(sin(a)*12,0.6,cos(a)*12),type:'almighty_bolt',life:5,dmg:850,mesh:getSph(0.19,0.1,0.0,0.2)});}}
+    if(boss.annihilateCd<=0){boss.annihilateCd=max(4-boss.phase*0.35,1.8);showMsg('ANNIHILATE!',1.5);for(let i=0;i<30+boss.phase*10;i++){const rx=player.pos.x+(rand()-0.5)*16;const rz=player.pos.z+(rand()-0.5)*16;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,19,0),type:'holy_spike',life:2.5,dmg:950,mesh:getBox(0.42,3.2,0.42,0.1,0.0,0.2),delay:0.07+i*0.05,started:false});}}
+    if(rand()<0.1+boss.phase*0.04){const px=player.pos.x+(rand()-0.5)*20;const pz=player.pos.z+(rand()-0.5)*20;projectiles.push({pos:v3(px,14,pz),vel:v3((rand()-0.5)*4,-24,(rand()-0.5)*4),type:'almighty_bolt',life:3,dmg:880,mesh:getSph(0.18,0.1,0.0,0.2)});}
+    if(boss.phase>=2&&boss.devourCd<=0){boss.devourCd=6;showMsg('ETERNAL DEVOUR!',2);const ba=atan2(dir.x,dir.z);for(let i=0;i<14+boss.phase*4;i++){const a=ba+(i-(7+boss.phase*2))*0.18;projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),vel:v3(sin(a)*28,0.1,cos(a)*28),type:'holy_beam',life:3,dmg:1000,mesh:getBox(0.04,0.04,2.2,0.15,0.0,0.25)});}}
+  } else if(boss.type==='primordial_beast'){
+    if(hpPct<0.15&&boss.phase<4){boss.phase=4;boss.speed=8;showMsg('PRIMORDIAL BEAST GOES PRIMAL!',3);spawnParticles(boss.pos,80,[0.8,0.4,0.0]);}
+    else if(hpPct<0.3&&boss.phase<3){boss.phase=3;boss.speed=7;showMsg('Ancient fury awakens!',2);}
+    else if(hpPct<0.5&&boss.phase<2){boss.phase=2;boss.speed=6;showMsg('Primordial rage!',2);}
+    else if(hpPct<0.7&&boss.phase<1){boss.phase=1;boss.speed=5.5;showMsg('The beast stirs!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(1500);
+    boss.biteCd-=dt;boss.roarCd-=dt;boss.stampedeCd-=dt;boss.primordialCd-=dt;
+    if(boss.biteCd<=0){boss.biteCd=max(0.35-boss.phase*0.05,0.1);const n=2+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),20+boss.phase*3),type:'chaos_bolt',life:4,dmg:1400,mesh:getSph(0.22,0.85,0.4,0.0)});}}
+    if(boss.roarCd<=0){boss.roarCd=max(3-boss.phase*0.25,1.2);showMsg('PRIMAL ROAR!',1.5);const cnt=36+boss.phase*7;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3(sin(a)*13,0.7,cos(a)*13),type:'chaos_bolt',life:5,dmg:1300,mesh:getSph(0.2,0.85,0.4,0.0)});}}
+    if(boss.stampedeCd<=0){boss.stampedeCd=max(4-boss.phase*0.3,1.8);showMsg('STAMPEDE!',1.5);for(let i=0;i<35+boss.phase*10;i++){const rx=player.pos.x+(rand()-0.5)*18;const rz=player.pos.z+(rand()-0.5)*18;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,20,0),type:'chaos_bolt',life:2.5,dmg:1500,mesh:getBox(0.44,3.5,0.44,0.85,0.4,0.0),delay:0.06+i*0.04,started:false});}}
+    if(rand()<0.12+boss.phase*0.04){const px=player.pos.x+(rand()-0.5)*22;const pz=player.pos.z+(rand()-0.5)*22;projectiles.push({pos:v3(px,16,pz),vel:v3((rand()-0.5)*5,-26,(rand()-0.5)*5),type:'chaos_bolt',life:3,dmg:1350,mesh:getSph(0.19,0.85,0.4,0.0)});}
+    if(boss.phase>=2&&boss.primordialCd<=0){boss.primordialCd=5;showMsg('PRIMORDIAL FURY!',2);for(let i=0;i<18+boss.phase*5;i++){const a=i*TAU/(18+boss.phase*5)+boss.phase*0.3;projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),vel:v3(sin(a)*30,0.1,cos(a)*30),type:'chaos_bolt',life:3,dmg:1600,mesh:getBox(0.04,0.04,2.5,0.85,0.4,0.0)});}}
+  } else if(boss.type==='chaos_dragon'){
+    if(hpPct<0.12&&boss.phase<4){boss.phase=4;boss.speed=7.5;showMsg('CHAOS DRAGON IS FULLY UNLEASHED!',3);spawnParticles(boss.pos,100,[1,0.2,0.0]);}
+    else if(hpPct<0.28&&boss.phase<3){boss.phase=3;boss.speed=6.5;showMsg('Chaos fire engulfs all!',2);}
+    else if(hpPct<0.5&&boss.phase<2){boss.phase=2;boss.speed=6;showMsg('Chaos Dragon breathes chaos!',2);}
+    else if(hpPct<0.72&&boss.phase<1){boss.phase=1;boss.speed=5.5;showMsg('The dragon awakens!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(2500);
+    boss.breathCd-=dt;boss.wingCd-=dt;boss.infernoCd-=dt;boss.chaosCd-=dt;
+    if(boss.breathCd<=0){boss.breathCd=max(0.3-boss.phase*0.04,0.09);const n=3+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.5,0.1+rand()*0.2,dir.z+(rand()-0.5)*0.5);projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3scale(v3norm(s),22+boss.phase*3),type:'fireball',life:4,dmg:2200,mesh:getSph(0.25,1,0.25,0.0)});}}
+    if(boss.wingCd<=0){boss.wingCd=max(2.5-boss.phase*0.25,1);showMsg('CHAOS WING!',1.5);const cnt=40+boss.phase*8;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),vel:v3(sin(a)*14,0.8,cos(a)*14),type:'fireball',life:5,dmg:2000,mesh:getSph(0.21,1,0.25,0.0)});}}
+    if(boss.infernoCd<=0){boss.infernoCd=max(4-boss.phase*0.3,1.8);showMsg('CHAOS INFERNO!',1.5);for(let i=0;i<40+boss.phase*12;i++){const rx=player.pos.x+(rand()-0.5)*20;const rz=player.pos.z+(rand()-0.5)*20;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,21,0),type:'fire_spike',life:2.5,dmg:2400,mesh:getBox(0.45,3.8,0.45,1,0.25,0.0),delay:0.05+i*0.035,started:false});}}
+    if(rand()<0.15+boss.phase*0.05){const px=player.pos.x+(rand()-0.5)*24;const pz=player.pos.z+(rand()-0.5)*24;projectiles.push({pos:v3(px,18,pz),vel:v3((rand()-0.5)*6,-28,(rand()-0.5)*6),type:'fireball',life:3,dmg:2100,mesh:getSph(0.2,1,0.25,0.0)});}
+    if(boss.phase>=2&&boss.chaosCd<=0){boss.chaosCd=4.5;showMsg('CHAOS STORM!',2);for(let i=0;i<22+boss.phase*6;i++){const a=i*TAU/(22+boss.phase*6)+gameTime*0.5;projectiles.push({pos:v3(boss.pos.x,3.5,boss.pos.z),vel:v3(sin(a)*32,0.2,cos(a)*32),type:'fireball',life:3,dmg:2600,mesh:getBox(0.04,0.04,2.8,1,0.25,0.0)});}}
+  } else if(boss.type==='reality_breaker'){
+    if(hpPct<0.1&&boss.phase<4){boss.phase=4;boss.speed=9;showMsg('REALITY SHATTERS!!!',3);spawnParticles(boss.pos,100,[0.0,0.9,0.9]);}
+    else if(hpPct<0.25&&boss.phase<3){boss.phase=3;boss.speed=8;showMsg('Reality collapses!',2);}
+    else if(hpPct<0.45&&boss.phase<2){boss.phase=2;boss.speed=7;showMsg('Dimensions fracture!',2);}
+    else if(hpPct<0.65&&boss.phase<1){boss.phase=1;boss.speed=6;showMsg('Reality cracks!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(4000);
+    boss.shardCd-=dt;boss.riftCd-=dt;boss.collapsCd-=dt;boss.breakCd-=dt;
+    if(boss.shardCd<=0){boss.shardCd=max(0.25-boss.phase*0.04,0.08);const n=3+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),24+boss.phase*3),type:'almighty_bolt',life:4,dmg:3800,mesh:getSph(0.2,0.0,0.9,0.9)});}}
+    if(boss.riftCd<=0){boss.riftCd=max(2-boss.phase*0.2,0.9);showMsg('RIFT!',1.5);const cnt=44+boss.phase*8;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3(sin(a)*15,0.9,cos(a)*15),type:'almighty_bolt',life:5,dmg:3500,mesh:getSph(0.19,0.0,0.9,0.9)});}}
+    if(boss.collapsCd<=0){boss.collapsCd=max(3.5-boss.phase*0.3,1.6);showMsg('DIMENSIONAL COLLAPSE!',1.5);for(let i=0;i<45+boss.phase*12;i++){const rx=player.pos.x+(rand()-0.5)*22;const rz=player.pos.z+(rand()-0.5)*22;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,22,0),type:'holy_spike',life:2.5,dmg:4200,mesh:getBox(0.45,4,0.45,0.0,0.9,0.9),delay:0.05+i*0.03,started:false});}}
+    if(rand()<0.18+boss.phase*0.06){const px=player.pos.x+(rand()-0.5)*26;const pz=player.pos.z+(rand()-0.5)*26;projectiles.push({pos:v3(px,20,pz),vel:v3((rand()-0.5)*7,-30,(rand()-0.5)*7),type:'almighty_bolt',life:3,dmg:3600,mesh:getSph(0.18,0.0,0.9,0.9)});}
+    if(boss.phase>=2&&boss.breakCd<=0){boss.breakCd=4;showMsg('REALITY BREAK!',2);for(let i=0;i<26+boss.phase*7;i++){const a=i*TAU/(26+boss.phase*7);projectiles.push({pos:v3(boss.pos.x,4,boss.pos.z),vel:v3(sin(a)*35,0.1,cos(a)*35),type:'almighty_bolt',life:3,dmg:4500,mesh:getBox(0.04,0.04,3,0.0,0.9,0.9)});}}
+  } else if(boss.type==='dimension_lord'){
+    if(hpPct<0.1&&boss.phase<4){boss.phase=4;boss.speed=9;showMsg('DIMENSION LORD DOMINATES!',3);spawnParticles(boss.pos,100,[0.0,0.4,1.0]);}
+    else if(hpPct<0.25&&boss.phase<3){boss.phase=3;boss.speed=8;showMsg('All dimensions bow!',2);}
+    else if(hpPct<0.45&&boss.phase<2){boss.phase=2;boss.speed=7;showMsg('Dimension Lord commands!',2);}
+    else if(hpPct<0.65&&boss.phase<1){boss.phase=1;boss.speed=6;showMsg('Dimensions shift!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(7000);
+    boss.dimCd-=dt;boss.portalCd-=dt;boss.eraseCd-=dt;boss.dominateCd-=dt;
+    if(boss.dimCd<=0){boss.dimCd=max(0.2-boss.phase*0.03,0.07);const n=3+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);projectiles.push({pos:v3(boss.pos.x,2,boss.pos.z),vel:v3scale(v3norm(s),26+boss.phase*3),type:'void_bolt',life:4,dmg:6500,mesh:getSph(0.21,0.0,0.35,1.0)});}}
+    if(boss.portalCd<=0){boss.portalCd=max(2-boss.phase*0.18,0.85);showMsg('PORTAL STORM!',1.5);const cnt=48+boss.phase*9;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3(sin(a)*16,1.0,cos(a)*16),type:'void_bolt',life:5,dmg:6000,mesh:getSph(0.2,0.0,0.35,1.0)});}}
+    if(boss.eraseCd<=0){boss.eraseCd=max(3-boss.phase*0.25,1.5);showMsg('DIMENSION ERASE!',1.5);for(let i=0;i<50+boss.phase*14;i++){const rx=player.pos.x+(rand()-0.5)*24;const rz=player.pos.z+(rand()-0.5)*24;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,24,0),type:'void_spike',life:2.5,dmg:7000,mesh:getBox(0.46,4.2,0.46,0.0,0.35,1.0),delay:0.04+i*0.025,started:false});}}
+    if(rand()<0.2+boss.phase*0.07){const px=player.pos.x+(rand()-0.5)*28;const pz=player.pos.z+(rand()-0.5)*28;projectiles.push({pos:v3(px,22,pz),vel:v3((rand()-0.5)*8,-32,(rand()-0.5)*8),type:'void_bolt',life:3,dmg:6200,mesh:getSph(0.18,0.0,0.35,1.0)});}
+    if(boss.dominateCd<=0){boss.dominateCd=3.5;showMsg('DIMENSIONAL DOMINATION!',2);for(let i=0;i<30+boss.phase*8;i++){const a=i*TAU/(30+boss.phase*8)+gameTime*0.8;projectiles.push({pos:v3(boss.pos.x,4,boss.pos.z),vel:v3(sin(a)*38,0.15,cos(a)*38),type:'void_bolt',life:3,dmg:7500,mesh:getBox(0.04,0.04,3.2,0.0,0.35,1.0)});}}
+  } else if(boss.type==='the_absolute'){
+    if(hpPct<0.08&&boss.phase<5){boss.phase=5;boss.speed=10;showMsg('THE ABSOLUTE IS ABSOLUTE!!!',4);spawnParticles(boss.pos,150,[1,1,1]);}
+    else if(hpPct<0.18&&boss.phase<4){boss.phase=4;boss.speed=9;showMsg('Nothing can stop this!',3);}
+    else if(hpPct<0.32&&boss.phase<3){boss.phase=3;boss.speed=8;showMsg('THE ABSOLUTE enrages!',2);}
+    else if(hpPct<0.5&&boss.phase<2){boss.phase=2;boss.speed=7;showMsg('Absolute power!',2);}
+    else if(hpPct<0.7&&boss.phase<1){boss.phase=1;boss.speed=6;showMsg('The absolute begins!',2);}
+    if(dist<boss.size+0.5)hurtPlayer(15000);
+    boss.absCd-=dt;boss.voidCd-=dt;boss.realityCd-=dt;boss.absoluteCd-=dt;boss.oblivionCd-=dt;
+    if(boss.absCd<=0){boss.absCd=max(0.15-boss.phase*0.02,0.05);const n=3+boss.phase;for(let i=0;i<n;i++){const s=v3(dir.x+(rand()-0.5)*0.4,0.1,dir.z+(rand()-0.5)*0.4);projectiles.push({pos:v3(boss.pos.x,2.5,boss.pos.z),vel:v3scale(v3norm(s),28+boss.phase*3),type:'almighty_bolt',life:4,dmg:14000,mesh:getSph(0.24,1,1,1)});}}
+    if(boss.voidCd<=0){boss.voidCd=max(1.5-boss.phase*0.15,0.6);showMsg('ABSOLUTE VOID!',2);const cnt=56+boss.phase*10;for(let a=0;a<TAU;a+=TAU/cnt){projectiles.push({pos:v3(boss.pos.x,3,boss.pos.z),vel:v3(sin(a)*18,1.2,cos(a)*18),type:'almighty_bolt',life:5,dmg:13000,mesh:getSph(0.21,1,1,1)});}}
+    if(boss.realityCd<=0){boss.realityCd=max(2.5-boss.phase*0.2,1.2);showMsg('REALITY ANNIHILATION!',2);for(let i=0;i<55+boss.phase*15;i++){const rx=player.pos.x+(rand()-0.5)*26;const rz=player.pos.z+(rand()-0.5)*26;projectiles.push({pos:v3(rx,-2,rz),vel:v3(0,26,0),type:'holy_spike',life:2.5,dmg:15000,mesh:getBox(0.48,4.5,0.48,1,1,0.9),delay:0.04+i*0.022,started:false});}}
+    if(rand()<0.25+boss.phase*0.07){const px=player.pos.x+(rand()-0.5)*32;const pz=player.pos.z+(rand()-0.5)*32;projectiles.push({pos:v3(px,25,pz),vel:v3((rand()-0.5)*9,-35,(rand()-0.5)*9),type:'almighty_bolt',life:3,dmg:13500,mesh:getSph(0.19,1,1,1)});}
+    if(boss.absoluteCd<=0){boss.absoluteCd=3;showMsg('ABSOLUTE STRIKE!',2.5);const ba=atan2(dir.x,dir.z);for(let i=0;i<34+boss.phase*9;i++){const a=ba+(i-(17+boss.phase*4.5))*0.16;projectiles.push({pos:v3(boss.pos.x,4,boss.pos.z),vel:v3(sin(a)*40,0.1,cos(a)*40),type:'almighty_bolt',life:3,dmg:16000,mesh:getBox(0.04,0.04,3.5,1,1,0.9)});}}
+    if(boss.oblivionCd<=0){boss.oblivionCd=3.5;showMsg('OBLIVION!',2);for(let i=0;i<38+boss.phase*10;i++){const a=i*TAU/(38+boss.phase*10)+gameTime;projectiles.push({pos:v3(boss.pos.x,4.5,boss.pos.z),vel:v3(sin(a)*42,0.2,cos(a)*42),type:'holy_beam',life:3,dmg:18000,mesh:getBox(0.04,0.04,3.8,1,0.98,0.7)});}}
   }
 }
 
@@ -1937,6 +2283,28 @@ function render(){
       const pv=0.85+sin(gameTime*1.5+lp.phase)*0.1;
       drawMesh(getBox(lp.w,0.05,lp.d,1,pv,0.5+pv*0.3),m4translate(lp.x,0.01,lp.z),VP);
       drawMesh(getBox(lp.w+0.2,0.02,lp.d+0.2,1,0.95,0.7),m4translate(lp.x,0.0,lp.z),VP);
+    }
+  } else if(currentArena==='abyss'){
+    gl.uniform3f(uLight,0.2,0.0,0.5);
+    gl.uniform3f(uFog,0.03,0.0,0.1);
+    gl.uniform1f(uFogD,22);
+    gl.clearColor(0.01,0.0,0.04,1);
+    drawMesh(getBox(30,0.1,30,0.04,0.0,0.1),m4translate(0,-0.05,0),VP);
+    for(const lp of lavaPools){
+      const pv=0.1+sin(gameTime*1.3+lp.phase)*0.05;
+      drawMesh(getBox(lp.w,0.07,lp.d,0.1,0.0,pv*5),m4translate(lp.x,0.01,lp.z),VP);
+      drawMesh(getBox(lp.w+0.1,0.03,lp.d+0.1,0.2,0.0,0.6),m4translate(lp.x,0.0,lp.z),VP);
+    }
+  } else if(currentArena==='chaos'){
+    gl.uniform3f(uLight,0.8,0.3,0.0);
+    gl.uniform3f(uFog,0.15,0.03,0.0);
+    gl.uniform1f(uFogD,28);
+    gl.clearColor(0.06,0.01,0.0,1);
+    drawMesh(getBox(30,0.1,30,0.1,0.04,0.02),m4translate(0,-0.05,0),VP);
+    for(const lp of lavaPools){
+      const lv=0.3+sin(gameTime*2.2+lp.phase)*0.1;
+      drawMesh(getBox(lp.w,0.08,lp.d,1,lv*0.4,0),m4translate(lp.x,0.02,lp.z),VP);
+      drawMesh(getBox(lp.w+0.1,0.04,lp.d+0.1,1,0.2,0.0),m4translate(lp.x,0.0,lp.z),VP);
     }
   } else {
     gl.uniform3f(uLight,0.4,0.8,0.3);
