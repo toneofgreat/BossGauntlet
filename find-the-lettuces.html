@@ -985,35 +985,37 @@ const player={
 // ================================================================
 //  FLOOR HEIGHT
 // ================================================================
-function getFloorY(px,pz){
-  // All platform arrays
+function getFloorY(px,pz,py){
+  const eyeH=1.8;
+  // Only land on a platform if player's feet are within 3 units below its bottom surface.
+  // This prevents the player snapping up through platforms they walk underneath.
   for(const [x,y,z,w,h,d] of PLATFORMS){
-    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2&&py-eyeH>=y-3) return y+h;
   }
   for(const [x,y,z,w,h,d] of SEWPLATS){
-    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2&&py-eyeH>=y-3) return y+h;
   }
   for(const [x,y,z,w,h,d] of MEGAOBBY){
-    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2&&py-eyeH>=y-3) return y+h;
   }
   for(const [x,y,z,w,h,d] of SKYOBBY){
-    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2&&py-eyeH>=y-3) return y+h;
   }
   for(let di=0;di<DOOMOBBY.length;di++){
     const [x,y,z,w,h,d]=DOOMOBBY[di];
     if(!doomMeshes[di]||!doomMeshes[di].visible) continue;
-    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2) return y+h;
+    if(px>=x-w/2&&px<=x+w/2&&pz>=z-d/2&&pz<=z+d/2&&py-eyeH>=y-3) return y+h;
   }
   // Fire escape
   for(let fl=0;fl<8;fl++){const fpz=SZ+(fl%2===0?7:-7);if(px>=SX+5&&px<=SX+9&&pz>=fpz-1.5&&pz<=fpz+1.5)return fl*9+2+.5;}
   // Escape room floor
-  if(px>=ERX-9&&px<=ERX+57&&pz>=ERZ-9&&pz<=ERZ+9&&camera.position.y>ERY-5) return ERY;
+  if(px>=ERX-9&&px<=ERX+57&&pz>=ERZ-9&&pz<=ERZ+9&&py>ERY-5) return ERY;
   // Quiz platform
   if(px>=ERX+54&&px<=ERX+66&&pz>=ERZ-6&&pz<=ERZ+6) return ERY+1;
   // Sky island
   if(px>=SKX-17.5&&px<=SKX+17.5&&pz>=SKZ-17.5&&pz<=SKZ+17.5) return 202;
   // House roof
-  if(px>=HX-9&&px<=HX+9&&pz>=HZ-7&&pz<=HZ+7&&camera.position.y>7) return 8.5;
+  if(px>=HX-9&&px<=HX+9&&pz>=HZ-7&&pz<=HZ+7&&py>7) return 8.5;
   // Underground chamber
   if(px>=-47&&px<=-33&&pz>=-47&&pz<=-33) return -9.7;
   // Sewer ramp
@@ -1180,6 +1182,7 @@ function foundLettuce(data,mesh){
   foundTimer=5;
   mesh.userData.collected=true;
   refreshCard(data);
+  saveGame();
 
   // Special triggers
   if(data.id==='sr4'){
@@ -1252,6 +1255,7 @@ function applyGate(gate){
     escapeComplete=true;
     sr4Mesh.visible=true;
   }
+  saveGame();
 }
 
 // ================================================================
@@ -1552,16 +1556,20 @@ function animate(){
     if(!wallHitDyn(camera.position.x,nz)){camera.position.z=nz;}
     else{player.vel.z=0;}
 
-    // Gravity + floor
-    camera.position.y+=player.vel.y*dt;
-    const floorY=getFloorY(camera.position.x,camera.position.z);
+    // Gravity + floor (sub-stepped so fast falls never tunnel through thin platforms)
     const eyeH=1.8;
-    if(camera.position.y<floorY+eyeH){
-      camera.position.y=floorY+eyeH;
-      player.vel.y=0;
-      player.onGround=true;
-    } else {
-      player.onGround=false;
+    const vSteps=Math.ceil(Math.abs(player.vel.y*dt)/0.8)+1;
+    const vDt=dt/vSteps;
+    player.onGround=false;
+    for(let vs=0;vs<vSteps;vs++){
+      camera.position.y+=player.vel.y*vDt;
+      const floorY=getFloorY(camera.position.x,camera.position.z,camera.position.y);
+      if(camera.position.y<floorY+eyeH){
+        camera.position.y=floorY+eyeH;
+        player.vel.y=0;
+        player.onGround=true;
+        break;
+      }
     }
     if(keys['Space']&&player.onGround){player.vel.y=player.jumpPow;player.onGround=false;}
 
@@ -1606,6 +1614,43 @@ function animate(){
 
   renderer.render(scene,camera);
 }
+// ================================================================
+//  SAVE / LOAD
+// ================================================================
+function saveGame(){
+  localStorage.setItem('findTheLettuces_save',JSON.stringify({
+    found:LETTUCES.filter(l=>l.found).map(l=>l.id),
+    gates:Object.keys(gateState).filter(k=>gateState[k]),
+    quizComplete,
+    escapeComplete,
+  }));
+}
+function loadGame(){
+  const raw=localStorage.getItem('findTheLettuces_save');
+  if(!raw) return;
+  try{
+    const state=JSON.parse(raw);
+    // Restore gates first (they may make lettuces visible)
+    (state.gates||[]).forEach(gate=>{gateState[gate]=true;applyGate(gate);});
+    if(state.quizComplete) quizComplete=true;
+    if(state.escapeComplete) escapeComplete=true;
+    // Reveal doom obby if sr4 was already found
+    if((state.found||[]).includes('sr4')) doomMeshes.forEach(m=>m.visible=true);
+    if((state.found||[]).includes('doom')) doomObbyComplete=true;
+    // Hide all already-found lettuces
+    (state.found||[]).forEach(id=>{
+      const lo=lettuceObjects.find(l=>l.data.id===id);
+      if(!lo) return;
+      lo.data.found=true;
+      lo.mesh.visible=false;
+      lo.mesh.userData.collected=false;
+      refreshCard(lo.data);
+    });
+    score=LETTUCES.filter(l=>l.found).length;
+    document.getElementById('score-count').textContent=score;
+  } catch(e){console.warn('Save load failed:',e);}
+}
+loadGame();
 animate();
 </script>
 </body>
