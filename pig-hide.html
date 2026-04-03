@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pig Hunt — Multiplayer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a12;font-family:'Courier New',monospace;color:#fff;overflow:hidden}
+#canvas{display:block;width:100vw;height:100vh}
+
+/* ---- SCREENS ---- */
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;background:rgba(0,0,0,.92)}
+.screen.hide{display:none!important}
+h1.title{font-size:clamp(28px,5vw,56px);letter-spacing:6px;margin-bottom:4px;background:linear-gradient(90deg,#ffb6c1,#ff69b4,#ff1493);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{color:#888;font-size:12px;letter-spacing:3px;margin-bottom:28px}
+input[type=text]{background:#111;border:2px solid #333;color:#fff;font-family:inherit;font-size:16px;padding:10px 16px;border-radius:8px;width:260px;text-align:center;outline:none;margin-bottom:12px}
+input[type=text]:focus{border-color:#ff69b4}
+.btn{background:linear-gradient(135deg,#d63384,#a020a0);border:none;color:#fff;font-family:inherit;font-size:15px;letter-spacing:2px;padding:12px 32px;border-radius:8px;cursor:pointer;transition:all .15s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(214,51,132,.4)}
+.btn.sec{background:#1a1a2e;border:2px solid #333;color:#aaa;font-size:13px;padding:8px 20px}
+.btn.sec:hover{border-color:#ff69b4;color:#ff69b4}
+.coins-disp{background:#111;border:2px solid #ffb600;border-radius:8px;padding:6px 18px;font-size:16px;color:#ffb600;letter-spacing:2px;margin-bottom:20px}
+
+/* ---- SKIN SHOP ---- */
+#shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;max-width:700px;width:100%;margin-bottom:20px;max-height:340px;overflow-y:auto;padding:4px}
+.scard{background:#111;border:2px solid #222;border-radius:10px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.scard:hover{border-color:#555}
+.scard.selected{border-color:#ff69b4;background:#1a0a12}
+.scard.locked{opacity:.5;cursor:default}
+.scard .sicon{font-size:32px;display:block;margin-bottom:6px}
+.scard .sname{font-size:10px;letter-spacing:1px;color:#ccc}
+.scard .scost{font-size:9px;color:#ffb600;margin-top:3px}
+.lock-badge{position:absolute;top:4px;right:4px;font-size:14px}
+
+/* ---- LOBBY ---- */
+#lobby-players{max-width:400px;width:100%;margin-bottom:18px}
+.lplayer{background:#111;border:2px solid #222;border-radius:8px;padding:10px 16px;margin-bottom:6px;display:flex;align-items:center;gap:10px;font-size:13px}
+.lplayer .pname{flex:1;letter-spacing:1px}
+.lplayer .pready{font-size:11px;padding:3px 10px;border-radius:4px;letter-spacing:1px}
+.lplayer .pready.yes{background:#1a4a1a;color:#4f4}
+.lplayer .pready.no{background:#2a1a1a;color:#a44}
+#lobby-status{color:#888;font-size:12px;letter-spacing:2px;margin-bottom:14px;text-align:center}
+
+/* ---- COUNTDOWN ---- */
+#countdown-num{font-size:120px;background:linear-gradient(90deg,#ffb6c1,#ff1493);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:pulse .8s ease-in-out infinite alternate}
+@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
+#role-reveal{font-size:22px;letter-spacing:4px;margin-top:16px;text-align:center}
+
+/* ---- HUD ---- */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10;display:none}
+#hud-top{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:14px;align-items:center}
+#timer-box{background:rgba(0,0,0,.75);border:2px solid #ff69b4;border-radius:8px;padding:6px 18px;font-size:20px;letter-spacing:3px;color:#ff69b4}
+#role-box{background:rgba(0,0,0,.75);border:2px solid #888;border-radius:8px;padding:6px 16px;font-size:13px;letter-spacing:2px}
+#alive-box{background:rgba(0,0,0,.75);border:2px solid #444;border-radius:8px;padding:6px 14px;font-size:12px;color:#aaa;letter-spacing:1px}
+#crosshair{position:absolute;top:50%;left:50%;width:24px;height:24px;transform:translate(-50%,-50%)}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.85)}
+#crosshair::before{width:2px;height:100%;left:50%;transform:translateX(-50%)}
+#crosshair::after{width:100%;height:2px;top:50%;transform:translateY(-50%)}
+#interact-hint{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#ffe066;padding:7px 20px;border-radius:20px;font-size:13px;letter-spacing:1px;display:none}
+#pig-controls{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:10px;pointer-events:all}
+.pig-btn{background:rgba(255,105,180,.2);border:2px solid #ff69b4;border-radius:8px;padding:8px 18px;color:#ff69b4;font-family:inherit;font-size:12px;cursor:pointer;letter-spacing:2px}
+.pig-btn:hover{background:rgba(255,105,180,.4)}
+#caught-msg{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);color:#f44;font-size:28px;letter-spacing:4px;display:none;text-align:center;text-shadow:0 0 20px #f44}
+#puzzle-notif{position:absolute;top:120px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0a2a0a,#165a16);border:2px solid #4f4;border-radius:10px;padding:10px 24px;font-size:13px;color:#afe;letter-spacing:1px;display:none;text-align:center}
+#sonar-cooldown{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);color:#888;font-size:11px;letter-spacing:2px;display:none}
+
+/* ---- PUZZLE POPUP ---- */
+#puzzle-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#080818;border:3px solid #66f;border-radius:14px;padding:28px 36px;z-index:60;min-width:340px;text-align:center;display:none}
+#pz-title{color:#aaf;font-size:16px;letter-spacing:3px;margin-bottom:6px}
+#pz-q{color:#ffe066;font-size:14px;line-height:1.5;margin-bottom:18px}
+.pz-opt{display:block;width:100%;text-align:left;background:#0a0a1a;border:2px solid #1a1a3a;border-radius:7px;color:#aaf;padding:9px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;font-size:12px;transition:all .15s}
+.pz-opt:hover:not([disabled]){border-color:#44f;background:#0f0f22}
+.pz-opt.right{border-color:#4f4;color:#4f4;background:#0a2a0a}
+.pz-opt.wrong{border-color:#f44;color:#f55;background:#2a0a0a}
+#pz-msg{color:#888;font-size:11px;min-height:14px;margin:6px 0}
+#pz-close{margin-top:6px;background:none;border:1px solid #333;color:#555;padding:6px 20px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px}
+
+/* ---- END SCREEN ---- */
+#end-screen{max-width:500px;width:100%;text-align:center}
+#end-title{font-size:32px;letter-spacing:4px;margin-bottom:8px}
+#end-sub{color:#888;font-size:13px;margin-bottom:4px;letter-spacing:2px}
+#end-coin{font-size:22px;color:#ffb600;margin-bottom:20px;letter-spacing:2px}
+#end-results{background:#111;border-radius:10px;padding:16px;margin-bottom:20px;width:100%}
+.eresult{padding:8px 12px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:10px;font-size:13px}
+.eresult:last-child{border-bottom:none}
+.eresult .estatus{font-size:10px;padding:2px 8px;border-radius:4px;letter-spacing:1px}
+.estatus.win{background:#1a3a1a;color:#4f4}
+.estatus.lose{background:#2a1a1a;color:#a44}
+
+/* ---- CONNECTION ---- */
+#connecting{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#1a0a1a;border:2px solid #ff69b4;border-radius:8px;padding:6px 18px;font-size:11px;color:#ff69b4;letter-spacing:2px;z-index:80;display:none}
+</style>
+</head>
+<body>
+
+<!-- Main Menu -->
+<div id="screen-menu" class="screen">
+  <h1 class="title">🐷 PIG HUNT</h1>
+  <div class="sub">MULTIPLAYER HIDE & SEEK</div>
+  <div class="coins-disp">🪙 <span id="menu-coins">0</span> COINS</div>
+  <input type="text" id="name-input" maxlength="18" placeholder="Enter your name..." autocomplete="off"/>
+  <div id="shop-grid"></div>
+  <div style="display:flex;gap:12px">
+    <button class="btn" id="play-btn">▶ FIND A GAME</button>
+    <button class="btn sec" id="shop-btn">🛒 SHOP</button>
+  </div>
+  <div style="margin-top:14px"><a href="index.html" style="color:#555;font-size:11px;text-decoration:none;letter-spacing:1px">← BACK TO PLATYFY</a></div>
+</div>
+
+<!-- Lobby -->
+<div id="screen-lobby" class="screen hide">
+  <h1 class="title" style="font-size:28px">LOBBY</h1>
+  <div class="sub">WAITING FOR PLAYERS</div>
+  <div id="lobby-status">Need at least 2 players. All must be ready.</div>
+  <div id="lobby-players"></div>
+  <button class="btn" id="ready-btn">✓ READY UP</button>
+  <button class="btn sec" id="lobby-back" style="margin-top:8px">← LEAVE</button>
+</div>
+
+<!-- Countdown -->
+<div id="screen-countdown" class="screen hide">
+  <div id="countdown-num">5</div>
+  <div id="role-reveal"></div>
+</div>
+
+<!-- HUD (overlaid on canvas) -->
+<div id="hud">
+  <div id="hud-top">
+    <div id="timer-box">3:00</div>
+    <div id="role-box">HIDER</div>
+    <div id="alive-box">👥 ?</div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="interact-hint"></div>
+  <div id="pig-controls" style="display:none">
+    <button class="pig-btn" id="sniff-btn">👃 SNIFF [Q]</button>
+    <button class="pig-btn" id="catch-btn">🐾 CATCH [E]</button>
+  </div>
+  <div id="caught-msg">😵 YOU WERE CAUGHT!<br><span style="font-size:14px">You are now a ghost...</span></div>
+  <div id="puzzle-notif"></div>
+  <div id="sonar-cooldown"></div>
+</div>
+
+<!-- Puzzle Popup -->
+<div id="puzzle-popup">
+  <div id="pz-title">🧩 PUZZLE</div>
+  <div id="pz-q">Question here</div>
+  <button class="pz-opt" data-i="0"></button>
+  <button class="pz-opt" data-i="1"></button>
+  <button class="pz-opt" data-i="2"></button>
+  <button class="pz-opt" data-i="3"></button>
+  <div id="pz-msg"></div>
+  <button id="pz-close">Cancel</button>
+</div>
+
+<!-- End Screen -->
+<div id="screen-end" class="screen hide">
+  <div id="end-screen">
+    <div id="end-title">GAME OVER</div>
+    <div id="end-sub"></div>
+    <div id="end-coin"></div>
+    <div id="end-results"></div>
+    <button class="btn" id="end-back">↩ LOBBY</button>
+  </div>
+</div>
+
+<div id="connecting">CONNECTING...</div>
+<canvas id="canvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+// ================================================================
+//  SKIN DATA
+// ================================================================
+const SKINS = [
+  { id:'basic',       name:'Basic',        icon:'🧍', cost:0,  color:0x4ade80, desc:'The classic.' },
+  { id:'policeman',   name:'Policeman',    icon:'👮', cost:2,  color:0x3b82f6, desc:'Law enforcement.' },
+  { id:'robber',      name:'Robber',       icon:'🕵️', cost:3,  color:0x374151, desc:'On the run.' },
+  { id:'rich_man',    name:'Rich Man',     icon:'🎩', cost:5,  color:0xf59e0b, desc:'Old money.' },
+  { id:'plunger_man', name:'Plunger Man',  icon:'🪠', cost:7,  color:0x6b7280, desc:'Plunger included.' },
+  { id:'god_man',     name:'God Man',      icon:'✨', cost:15, color:0xfffde7, desc:'Chosen one.' },
+];
+
+const PIG_SKINS = [
+  { id:'pig_basic',   name:'Normal Pig',   icon:'🐷', cost:0,  color:0xffb6c1 },
+  { id:'pig_cop',     name:'Cop Pig',      icon:'🐽', cost:4,  color:0x3b82f6 },
+  { id:'pig_king',    name:'King Pig',     icon:'👑', cost:8,  color:0xf59e0b },
+  { id:'pig_devil',   name:'Devil Pig',    icon:'😈', cost:12, color:0xdc2626 },
+];
+
+// ================================================================
+//  COIN / SAVE SYSTEM
+// ================================================================
+function getCoins() { return parseInt(localStorage.getItem('pigHunt_coins')||'0'); }
+function addCoins(n) { localStorage.setItem('pigHunt_coins', getCoins()+n); updateCoinDisplay(); }
+function getSkin() { return localStorage.getItem('pigHunt_skin')||'basic'; }
+function setSkin(id) { localStorage.setItem('pigHunt_skin', id); }
+function getOwnedSkins() { return JSON.parse(localStorage.getItem('pigHunt_owned')||'["basic","pig_basic"]'); }
+function addOwnedSkin(id) {
+  const owned = getOwnedSkins();
+  if (!owned.includes(id)) { owned.push(id); localStorage.setItem('pigHunt_owned', JSON.stringify(owned)); }
+}
+function updateCoinDisplay() {
+  document.getElementById('menu-coins').textContent = getCoins();
+}
+
+// ================================================================
+//  PUZZLE DATA
+// ================================================================
+const PUZZLES = [
+  { q:'What is 7 × 8?', opts:['48','56','54','64'], ans:1 },
+  { q:'Which planet is closest to the Sun?', opts:['Venus','Earth','Mercury','Mars'], ans:2 },
+  { q:'How many sides does a hexagon have?', opts:['5','6','7','8'], ans:1 },
+  { q:'What color do you get mixing red + blue?', opts:['Green','Yellow','Purple','Orange'], ans:2 },
+  { q:'What is the capital of France?', opts:['London','Berlin','Rome','Paris'], ans:3 },
+];
+
+// ================================================================
+//  MAP DATA
+// ================================================================
+const MAP_BUILDINGS = [
+  { x:-35, z:-30, w:14, h:10, d:12, color:0x8b6914, name:'Barn' },
+  { x:30,  z:20,  w:10, h:14, d:10, color:0x607080, name:'Factory' },
+  { x:-20, z:30,  w:8,  h:6,  d:8,  color:0xa04030, name:'Shed' },
+  { x:40,  z:-35, w:12, h:8,  d:8,  color:0x5a7a4a, name:'Farmhouse' },
+  { x:-40, z:10,  w:6,  h:12, d:6,  color:0x4060a0, name:'Tower' },
+  { x:10,  z:-45, w:16, h:6,  d:10, color:0x907030, name:'Warehouse' },
+  { x:-55, z:-50, w:8,  h:7,  d:8,  color:0x603050, name:'Hut' },
+  { x:55,  z:40,  w:10, h:9,  d:10, color:0x407060, name:'Garage' },
+];
+
+const MAP_PUZZLE_POS = [
+  { x:-10, z:-20 },
+  { x:20,  z:-10 },
+  { x:-25, z:20  },
+  { x:30,  z:-30 },
+  { x:0,   z:30  },
+];
+
+// ================================================================
+//  THREE.JS SETUP
+// ================================================================
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.007);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 400);
+camera.position.set(0, 1.8, 0);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const sun = new THREE.DirectionalLight(0xfff8d0, 1.1);
+sun.position.set(50,100,50); sun.castShadow=true;
+sun.shadow.mapSize.width=2048; sun.shadow.mapSize.height=2048;
+sun.shadow.camera.near=1; sun.shadow.camera.far=500;
+sun.shadow.camera.left=-120; sun.shadow.camera.right=120;
+sun.shadow.camera.top=120; sun.shadow.camera.bottom=-120;
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0xc0e0ff, 0.3).position.set(-30,40,-30));
+
+// ================================================================
+//  WORLD BUILDING
+// ================================================================
+function box3(w,h,d,color,x,y,z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color}));
+  m.position.set(x, y+h/2, z); m.castShadow=true; m.receiveShadow=true;
+  scene.add(m); return m;
+}
+function cyl3(rt,rb,h,color,x,y,z,segs=8) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,segs), new THREE.MeshLambertMaterial({color}));
+  m.position.set(x,y+h/2,z); m.castShadow=true; scene.add(m); return m;
+}
+function sph3(r,color,x,y,z) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r,10,7), new THREE.MeshLambertMaterial({color}));
+  m.position.set(x,y,z); scene.add(m); return m;
+}
+
+// Ground
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(250,250), new THREE.MeshLambertMaterial({color:0x5a8a3a}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+// Dirt paths
+for(let z=-90;z<=90;z+=3) box3(5,.08,3, 0xc8a060, 0,0,z);
+for(let x=-90;x<=90;x+=3) box3(3,.08,5, 0xc8a060, x,0,20);
+
+// Buildings (collision tracking too)
+const COLLIDERS = []; // {x1,x2,z1,z2}
+MAP_BUILDINGS.forEach(b => {
+  box3(b.w, b.h, b.d, b.color, b.x, 0, b.z);
+  box3(b.w+.4, .4, b.d+.4, 0x333, b.x, b.h, b.z); // roof edge
+  COLLIDERS.push({ x1:b.x-b.w/2, x2:b.x+b.w/2, z1:b.z-b.d/2, z2:b.z+b.d/2 });
+});
+
+// Map boundary walls
+const MAP_R = 75;
+COLLIDERS.push({x1:-MAP_R-2,x2:-MAP_R,z1:-MAP_R,z2:MAP_R});
+COLLIDERS.push({x1:MAP_R,x2:MAP_R+2,z1:-MAP_R,z2:MAP_R});
+COLLIDERS.push({x1:-MAP_R,x2:MAP_R,z1:-MAP_R-2,z2:-MAP_R});
+COLLIDERS.push({x1:-MAP_R,x2:MAP_R,z1:MAP_R,z2:MAP_R+2});
+box3(150,.2,2, 0x4a6a3a, 0,0,-MAP_R);
+box3(150,.2,2, 0x4a6a3a, 0,0,MAP_R);
+box3(2,.2,150, 0x4a6a3a, -MAP_R,0,0);
+box3(2,.2,150, 0x4a6a3a, MAP_R,0,0);
+
+// Trees
+[[-50,-40],[50,-45],[-60,30],[55,10],[0,-60],[30,55],[-30,-60],[60,-20]].forEach(([tx,tz]) => {
+  cyl3(.25,.4,5, 0x7a4a1a, tx,0,tz);
+  sph3(3.5, 0x228b22, tx,7.5,tz);
+});
+
+// Hay bales
+[[-8,8],[15,-5],[25,5],[-15,-15],[40,0],[-40,-20]].forEach(([hx,hz]) => {
+  box3(2,1.5,2, 0xd4a017, hx,0,hz);
+  COLLIDERS.push({x1:hx-1,x2:hx+1,z1:hz-1,z2:hz+1});
+});
+
+// Fences
+for(let i=-3;i<=3;i++) { box3(.15,1.5,.15,0xa06030,i*5,0,-18); if(i>-3) box3(5,.15,.15,0xa06030,i*5-2.5,.8,-18); }
+
+// Puzzle terminals
+const puzzleMeshes = [];
+MAP_PUZZLE_POS.forEach((p,i) => {
+  const base = box3(1.4, .4, 1.4, 0x312e81, p.x, 0, p.z);
+  const pillar = cyl3(.3,.35,2, 0x4338ca, p.x, .4, p.z);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.4), new THREE.MeshBasicMaterial({color:0x818cf8}));
+  gem.position.set(p.x, 2.8, p.z);
+  scene.add(gem);
+  const pl = new THREE.PointLight(0x818cf8, 2, 8);
+  pl.position.set(p.x, 3, p.z);
+  scene.add(pl);
+  puzzleMeshes.push({ gem, pl, id:i });
+});
+
+// ================================================================
+//  CHARACTER FACTORY
+// ================================================================
+function makeSkinColor(skinId) {
+  const s = SKINS.find(s=>s.id===skinId) || SKINS[0];
+  return s.color;
+}
+function makePigSkinColor(skinId) {
+  const s = PIG_SKINS.find(s=>s.id===skinId) || PIG_SKINS[0];
+  return s.color;
+}
+
+function makeCharGroup(color, isPig=false, isGhost=false) {
+  const g = new THREE.Group();
+  const opacity = isGhost ? 0.35 : 1;
+  const side = isGhost ? THREE.DoubleSide : THREE.FrontSide;
+  const mat = c => new THREE.MeshLambertMaterial({color:c, transparent:isGhost, opacity, side});
+
+  if (isPig) {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(.55,10,7), mat(color));
+    body.position.y=.7; body.scale.set(1,.75,.9); g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.38,10,7), mat(color));
+    head.position.y=1.45; g.add(head);
+    const snout = new THREE.Mesh(new THREE.CylinderGeometry(.14,.17,.1,10), mat(0xff9999));
+    snout.position.set(0,1.38,.38); snout.rotation.x=Math.PI/2; g.add(snout);
+    [-0.22,0.22].forEach(ex=>{
+      const ear=new THREE.Mesh(new THREE.SphereGeometry(.14,7,5), mat(color));
+      ear.position.set(ex,1.72,0); g.add(ear);
+    });
+    // Nostrils
+    const nm = new THREE.MeshBasicMaterial({color:0x8b0000});
+    [-0.05,0.05].forEach(nx=>{
+      const n=new THREE.Mesh(new THREE.SphereGeometry(.03),nm);
+      n.position.set(nx,1.38,.48); g.add(n);
+    });
+  } else {
+    const body=new THREE.Mesh(new THREE.BoxGeometry(.7,1.1,.45), mat(color));
+    body.position.y=.55; g.add(body);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(.55,.55,.55), mat(color));
+    head.position.y=1.38; g.add(head);
+    // Eyes
+    const eyeMat=new THREE.MeshBasicMaterial({color:0x111});
+    [-0.12,0.12].forEach(ex=>{
+      const eye=new THREE.Mesh(new THREE.SphereGeometry(.07),eyeMat);
+      eye.position.set(ex,1.42,.29); g.add(eye);
+    });
+    // Arms
+    [-0.43,0.43].forEach(ax=>{
+      const arm=new THREE.Mesh(new THREE.BoxGeometry(.2,.7,.25), mat(new THREE.Color(color).offsetHSL(0,0,-.1).getHex()));
+      arm.position.set(ax,.55,0); g.add(arm);
+    });
+    // Legs
+    [-0.2,0.2].forEach(lx=>{
+      const leg=new THREE.Mesh(new THREE.BoxGeometry(.28,.6,.3), mat(new THREE.Color(color).offsetHSL(0,0,-.15).getHex()));
+      leg.position.set(lx,-.35,0); g.add(leg);
+    });
+  }
+  return g;
+}
+
+// ================================================================
+//  GAME STATE
+// ================================================================
+let myId = null;
+let myRole = null;
+let myAlive = true;
+let currentSkin = getSkin();
+let roomState = {};
+let gameRunning = false;
+let timeLeft = 180;
+let sonarCooldown = 0;
+let pzOpen = false;
+let pzId = -1;
+
+// Other player meshes
+const playerMeshes = {}; // id -> group
+
+// ================================================================
+//  SOCKET.IO
+// ================================================================
+const SERVER_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:3002'
+  : 'https://bossgauntlet-pig.glitch.me'; // fallback demo URL
+
+const socket = io(SERVER_URL, { autoConnect:false });
+
+document.getElementById('connecting').style.display = 'block';
+socket.connect();
+
+socket.on('connect', () => {
+  myId = socket.id;
+  document.getElementById('connecting').style.display = 'none';
+});
+socket.on('connect_error', () => {
+  document.getElementById('connecting').textContent = 'SERVER OFFLINE — solo mode';
+  document.getElementById('connecting').style.display = 'block';
+});
+socket.on('disconnect', () => {
+  document.getElementById('connecting').style.display = 'block';
+  document.getElementById('connecting').textContent = 'DISCONNECTED';
+});
+
+socket.on('room_update', data => {
+  roomState = data;
+  if (screenIs('lobby')) renderLobby();
+});
+
+socket.on('countdown', n => {
+  showScreen('countdown');
+  document.getElementById('countdown-num').textContent = n;
+});
+
+socket.on('game_start', ({ pig, players, duration }) => {
+  roomState.players = players;
+  roomState.pig = pig;
+  timeLeft = duration;
+  myRole = players[myId]?.role || 'spectator';
+  myAlive = true;
+
+  // Position self
+  const me = players[myId];
+  if (me) camera.position.set(me.x, me.y, me.z);
+
+  // Rebuild other player meshes
+  Object.keys(playerMeshes).forEach(id => { scene.remove(playerMeshes[id]); delete playerMeshes[id]; });
+  Object.entries(players).forEach(([id, p]) => {
+    if (id === myId) return;
+    const isPig = (id === pig);
+    const color = isPig ? makePigSkinColor(p.skin) : makeSkinColor(p.skin);
+    const mesh = makeCharGroup(color, isPig, false);
+    mesh.position.set(p.x, 0, p.z);
+    scene.add(mesh);
+    playerMeshes[id] = mesh;
+  });
+
+  startGameUI();
+});
+
+socket.on('player_moved', ({ id, x, y, z, ry }) => {
+  if (id === myId) return;
+  const mesh = playerMeshes[id];
+  if (mesh) { mesh.position.set(x, 0, z); mesh.rotation.y = ry; }
+});
+
+socket.on('player_caught', ({ id }) => {
+  if (id === myId) {
+    myAlive = false;
+    document.getElementById('caught-msg').style.display = 'block';
+    setTimeout(()=>document.getElementById('caught-msg').style.display='none', 4000);
+  }
+  // Make ghost
+  const mesh = playerMeshes[id];
+  if (mesh) {
+    mesh.traverse(c => { if(c.material) { c.material.transparent=true; c.material.opacity=0.3; } });
+  }
+  updateAliveCount();
+});
+
+socket.on('puzzle_solved', ({ puzzleId, solverName }) => {
+  const pm = puzzleMeshes[puzzleId];
+  if (pm) {
+    pm.gem.material.color.setHex(0x4ade80);
+    pm.pl.color.setHex(0x4ade80);
+  }
+  showNotif(`✅ ${solverName} solved puzzle ${puzzleId+1}!`);
+  roomState.puzzles[puzzleId] = { solved:true };
+});
+
+socket.on('sonar_result', hiders => {
+  // Flash red dots on screen briefly - using a simple DOM approach
+  hiders.forEach(h => {
+    // Show a directional arrow for each hidden player
+    const dx = h.x - camera.position.x;
+    const dz = h.z - camera.position.z;
+    const angle = Math.atan2(dx, dz);
+    flashSonarPing(angle, Math.sqrt(dx*dx+dz*dz));
+  });
+});
+
+socket.on('time_update', t => { timeLeft = t; updateTimer(); });
+
+socket.on('game_end', ({ pigWins, winners }) => {
+  gameRunning = false;
+  const iWon = winners.includes(myId);
+  if (iWon) addCoins(1);
+  showEndScreen(pigWins, winners, iWon);
+});
+
+// ================================================================
+//  SONAR PINGS
+// ================================================================
+const sonarDiv = document.createElement('div');
+sonarDiv.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:11';
+document.body.appendChild(sonarDiv);
+
+function flashSonarPing(angle, dist) {
+  const ping = document.createElement('div');
+  const cx=window.innerWidth/2, cy=window.innerHeight/2;
+  const r = Math.min(180, 60 + dist*1.5);
+  const px = cx + Math.sin(angle)*r;
+  const py = cy + Math.cos(angle)*r;
+  ping.style.cssText=`position:absolute;left:${px-8}px;top:${py-8}px;width:16px;height:16px;border-radius:50%;background:#ff4444;opacity:.9;transition:all 1.5s`;
+  sonarDiv.appendChild(ping);
+  requestAnimationFrame(()=>{ ping.style.opacity='0'; ping.style.transform='scale(2)'; });
+  setTimeout(()=>ping.remove(), 1600);
+}
+
+// ================================================================
+//  PLAYER CONTROLS
+// ================================================================
+const player = { vel:new THREE.Vector3(), yaw:Math.PI, pitch:0, speed:9, sprintMult:1.8, jumpPow:14, gravity:-18, onGround:true };
+const keys = {};
+let locked = false;
+canvas.addEventListener('click', () => { if(gameRunning&&!pzOpen) canvas.requestPointerLock(); });
+document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement===canvas; });
+document.addEventListener('keydown', e => { keys[e.code]=true; if(e.code==='Space') e.preventDefault(); });
+document.addEventListener('keyup', e => { keys[e.code]=false; });
+document.addEventListener('mousemove', e => {
+  if(!locked) return;
+  player.yaw -= e.movementX*.0022;
+  player.pitch = Math.max(-1.2, Math.min(1.2, player.pitch - e.movementY*.0022));
+});
+
+function getFloor(px, pz) {
+  // Map boundary
+  if(px < -MAP_R || px > MAP_R || pz < -MAP_R || pz > MAP_R) return 0;
+  return 0;
+}
+
+function wallCollide(px, pz) {
+  const R = 0.45;
+  for(const c of COLLIDERS) {
+    if(px+R>c.x1&&px-R<c.x2&&pz+R>c.z1&&pz-R<c.z2) return true;
+  }
+  return false;
+}
+
+const moveDir = new THREE.Vector3();
+const tmpEuler = new THREE.Euler(0,0,0,'YXZ');
+const tmpQuat = new THREE.Quaternion();
+let moveTimer = 0;
+
+function updatePlayer(dt) {
+  if(!gameRunning || !myAlive || pzOpen) return;
+
+  moveDir.set(0,0,0);
+  if(keys['KeyW']||keys['ArrowUp'])    moveDir.z-=1;
+  if(keys['KeyS']||keys['ArrowDown'])  moveDir.z+=1;
+  if(keys['KeyA']||keys['ArrowLeft'])  moveDir.x-=1;
+  if(keys['KeyD']||keys['ArrowRight']) moveDir.x+=1;
+  if(moveDir.length()>0) moveDir.normalize();
+
+  const spd = player.speed * (keys['ShiftLeft']||keys['ShiftRight'] ? player.sprintMult : 1);
+  moveDir.multiplyScalar(spd);
+  tmpEuler.set(0, player.yaw, 0);
+  tmpQuat.setFromEuler(tmpEuler);
+  moveDir.applyQuaternion(tmpQuat);
+
+  const nx = camera.position.x + moveDir.x * dt;
+  if(!wallCollide(nx, camera.position.z)) camera.position.x=nx; else moveDir.x=0;
+  const nz = camera.position.z + moveDir.z * dt;
+  if(!wallCollide(camera.position.x, nz)) camera.position.z=nz; else moveDir.z=0;
+
+  // Jump + gravity (sub-stepped)
+  player.vel.y += player.gravity * dt;
+  const steps = Math.ceil(Math.abs(player.vel.y*dt)/0.5)+1;
+  const vdt = dt/steps;
+  for(let s=0;s<steps;s++){
+    camera.position.y += player.vel.y * vdt;
+    const floor = getFloor(camera.position.x,camera.position.z) + 1.8;
+    if(camera.position.y < floor){ camera.position.y=floor; player.vel.y=0; player.onGround=true; break; }
+    else { player.onGround=false; }
+  }
+  if(keys['Space'] && player.onGround){ player.vel.y=player.jumpPow; player.onGround=false; }
+
+  tmpEuler.set(player.pitch, player.yaw, 0, 'YXZ');
+  camera.quaternion.setFromEuler(tmpEuler);
+
+  // Sonar cooldown
+  if(sonarCooldown > 0) {
+    sonarCooldown -= dt;
+    if(myRole==='pig') document.getElementById('sonar-cooldown').textContent = `SNIFF COOLDOWN: ${Math.ceil(sonarCooldown)}s`;
+  } else {
+    if(myRole==='pig') document.getElementById('sonar-cooldown').textContent = 'SNIFF READY [Q]';
+  }
+
+  // Q = sonar
+  if(keys['KeyQ'] && myRole==='pig' && sonarCooldown<=0) {
+    sonarCooldown = 15;
+    socket.emit('sonar');
+    keys['KeyQ']=false;
+  }
+
+  // E = catch or puzzle
+  if(keys['KeyE']) {
+    keys['KeyE'] = false;
+    if(myRole==='pig') {
+      tryCatch();
+    } else {
+      tryPuzzle();
+    }
+  }
+
+  // Send position every 50ms
+  moveTimer += dt;
+  if(moveTimer > 0.05) {
+    moveTimer = 0;
+    socket.emit('move', { x:camera.position.x, y:camera.position.y, z:camera.position.z, ry:player.yaw });
+  }
+}
+
+function tryCatch() {
+  if(!roomState.players) return;
+  let closest = null, closestDist = 3.5;
+  Object.entries(roomState.players).forEach(([id,p]) => {
+    if(id===myId || p.role!=='hider' || !p.alive) return;
+    const dx = camera.position.x - p.x, dz = camera.position.z - p.z;
+    const d = Math.sqrt(dx*dx+dz*dz);
+    if(d < closestDist) { closestDist=d; closest=id; }
+  });
+  if(closest) socket.emit('catch_attempt', { targetId:closest });
+  else showNotif('No hider in range!');
+}
+
+function tryPuzzle() {
+  for(let i=0;i<MAP_PUZZLE_POS.length;i++) {
+    if(roomState.puzzles && roomState.puzzles[i]?.solved) continue;
+    const pp = MAP_PUZZLE_POS[i];
+    const dx=camera.position.x-pp.x, dz=camera.position.z-pp.z;
+    if(Math.sqrt(dx*dx+dz*dz) < 4) {
+      openPuzzle(i);
+      return;
+    }
+  }
+}
+
+// ================================================================
+//  PUZZLE UI
+// ================================================================
+let pzAnswered = false;
+function openPuzzle(id) {
+  if(pzOpen) return;
+  pzId = id;
+  pzOpen = true;
+  pzAnswered = false;
+  if(locked) document.exitPointerLock();
+  const q = PUZZLES[id];
+  document.getElementById('pz-q').textContent = q.q;
+  document.getElementById('pz-msg').textContent = '';
+  const opts = document.querySelectorAll('.pz-opt');
+  opts.forEach((btn,i)=>{
+    btn.textContent = q.opts[i];
+    btn.className = 'pz-opt';
+    btn.disabled = false;
+    btn.onclick = () => answerPuzzle(i, q.ans, opts, id);
+  });
+  document.getElementById('puzzle-popup').style.display='block';
+}
+function answerPuzzle(chosen, correct, btns, id) {
+  if(pzAnswered) return;
+  pzAnswered = true;
+  btns.forEach(b=>b.disabled=true);
+  if(chosen===correct) {
+    btns[chosen].classList.add('right');
+    document.getElementById('pz-msg').textContent='✓ Correct! +5 seconds speed boost';
+    socket.emit('solve_puzzle', { puzzleId:id });
+    setTimeout(closePuzzle, 1200);
+  } else {
+    btns[chosen].classList.add('wrong');
+    btns[correct].classList.add('right');
+    document.getElementById('pz-msg').textContent='✗ Wrong! The pig can see you!';
+    // Notify pig of your position
+    socket.emit('solve_puzzle', { puzzleId:-1 }); // fake — just notif
+    setTimeout(() => { pzAnswered=false; btns.forEach((b,i)=>{ b.className='pz-opt'; b.disabled=false; }); document.getElementById('pz-msg').textContent=''; }, 1800);
+  }
+}
+document.getElementById('pz-close').addEventListener('click', closePuzzle);
+function closePuzzle() {
+  document.getElementById('puzzle-popup').style.display='none';
+  pzOpen=false;
+}
+
+// ================================================================
+//  HUD
+// ================================================================
+function updateTimer() {
+  const m = Math.floor(timeLeft/60), s = Math.floor(timeLeft%60);
+  document.getElementById('timer-box').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+}
+function updateAliveCount() {
+  if(!roomState.players) return;
+  const alive = Object.values(roomState.players).filter(p=>p.role==='hider'&&p.alive).length;
+  const total = Object.values(roomState.players).filter(p=>p.role==='hider').length;
+  document.getElementById('alive-box').textContent = `👥 ${alive}/${total} alive`;
+}
+function showNotif(text) {
+  const el = document.getElementById('puzzle-notif');
+  el.textContent = text; el.style.display='block';
+  setTimeout(()=>el.style.display='none', 3500);
+}
+function startGameUI() {
+  showScreen('game');
+  document.getElementById('hud').style.display='block';
+  const rb = document.getElementById('role-box');
+  if(myRole==='pig') {
+    rb.textContent='🐷 YOU ARE THE PIG';
+    rb.style.borderColor='#ff69b4';
+    document.getElementById('pig-controls').style.display='flex';
+    document.getElementById('sonar-cooldown').style.display='block';
+  } else if(myRole==='spectator') {
+    rb.textContent='👻 SPECTATING';
+    rb.style.borderColor='#888';
+  } else {
+    rb.textContent='🫥 HIDING';
+    rb.style.borderColor='#4ade80';
+    document.getElementById('pig-controls').style.display='none';
+  }
+  updateAliveCount();
+  gameRunning = true;
+  if(myRole!=='spectator') canvas.requestPointerLock();
+}
+
+// Pig buttons
+document.getElementById('sniff-btn').addEventListener('click', () => {
+  if(sonarCooldown>0) return;
+  sonarCooldown=15; socket.emit('sonar');
+});
+document.getElementById('catch-btn').addEventListener('click', tryCatch);
+
+// ================================================================
+//  INTERACT HINT
+// ================================================================
+function updateHints() {
+  if(!gameRunning||myRole==='pig'||myRole==='spectator'||!myAlive) {
+    document.getElementById('interact-hint').style.display='none'; return;
+  }
+  for(let i=0;i<MAP_PUZZLE_POS.length;i++) {
+    if(roomState.puzzles && roomState.puzzles[i]?.solved) continue;
+    const pp = MAP_PUZZLE_POS[i];
+    const dx=camera.position.x-pp.x, dz=camera.position.z-pp.z;
+    if(Math.sqrt(dx*dx+dz*dz)<4) {
+      document.getElementById('interact-hint').textContent='[E] Solve Puzzle '+Number(i+1);
+      document.getElementById('interact-hint').style.display='block';
+      return;
+    }
+  }
+  document.getElementById('interact-hint').style.display='none';
+}
+
+// ================================================================
+//  END SCREEN
+// ================================================================
+function showEndScreen(pigWins, winners, iWon) {
+  document.getElementById('hud').style.display='none';
+  document.exitPointerLock();
+  gameRunning=false;
+
+  document.getElementById('end-title').textContent = pigWins ? '🐷 PIG WINS!' : '🎉 HIDERS WIN!';
+  document.getElementById('end-sub').textContent = iWon ? 'You won this round!' : 'Better luck next time...';
+  document.getElementById('end-coin').textContent = iWon ? '🪙 +1 COIN EARNED!' : '';
+
+  const results = document.getElementById('end-results');
+  results.innerHTML = '';
+  if(roomState.players) {
+    Object.values(roomState.players).forEach(p => {
+      const won = winners.includes(p.id);
+      const div = document.createElement('div');
+      div.className='eresult';
+      div.innerHTML=`<span style="font-size:20px">${p.id===roomState.pig?'🐷':'🧍'}</span>
+        <span style="flex:1;letter-spacing:1px">${p.name}${p.id===myId?' (you)':''}</span>
+        <span class="estatus ${won?'win':'lose'}">${won?'WIN':'LOST'}</span>`;
+      results.appendChild(div);
+    });
+  }
+  updateCoinDisplay();
+  showScreen('end');
+}
+
+document.getElementById('end-back').addEventListener('click', () => {
+  socket.emit('join', { name: localStorage.getItem('pigHunt_name')||'Player', skin: getSkin() });
+  showScreen('lobby');
+});
+
+// ================================================================
+//  LOBBY UI
+// ================================================================
+function renderLobby() {
+  const container = document.getElementById('lobby-players');
+  container.innerHTML='';
+  if(!roomState.players) return;
+  const ps = Object.values(roomState.players);
+  ps.forEach(p => {
+    const div = document.createElement('div');
+    div.className='lplayer';
+    const skin = SKINS.find(s=>s.id===p.skin)||SKINS[0];
+    div.innerHTML=`<span style="font-size:22px">${skin.icon}</span>
+      <span class="pname">${p.name}${p.id===myId?' (you)':''}</span>
+      <span class="pready ${p.ready?'yes':'no'}">${p.ready?'READY':'NOT READY'}</span>`;
+    container.appendChild(div);
+  });
+  const total = ps.filter(p=>p.role!=='spectator').length;
+  const ready = ps.filter(p=>p.ready).length;
+  document.getElementById('lobby-status').textContent = total<2
+    ? 'Need at least 2 players' : `${ready}/${total} ready`;
+}
+
+document.getElementById('ready-btn').addEventListener('click', () => socket.emit('ready'));
+document.getElementById('lobby-back').addEventListener('click', () => {
+  socket.disconnect();
+  showScreen('menu');
+});
+
+// ================================================================
+//  MAIN MENU / SHOP UI
+// ================================================================
+function buildShopGrid() {
+  const grid = document.getElementById('shop-grid');
+  grid.innerHTML='';
+  const owned = getOwnedSkins();
+  const coins = getCoins();
+  [...SKINS, ...PIG_SKINS].forEach(s => {
+    const isOwned = owned.includes(s.id);
+    const canAfford = coins >= s.cost;
+    const isSelected = getSkin()===s.id;
+    const card = document.createElement('div');
+    card.className=`scard ${isSelected?'selected':''} ${!isOwned?'locked':''}`;
+    card.innerHTML=`${!isOwned?'<span class="lock-badge">🔒</span>':''}
+      <span class="sicon">${s.icon}</span>
+      <div class="sname">${s.name}</div>
+      <div class="scost">${s.cost===0?'FREE':'🪙 '+s.cost}</div>`;
+    card.addEventListener('click', () => {
+      if(isOwned) { setSkin(s.id); currentSkin=s.id; buildShopGrid(); }
+      else if(canAfford) {
+        if(confirm(`Buy ${s.name} for ${s.cost} coins?`)) {
+          addCoins(-s.cost); addOwnedSkin(s.id); setSkin(s.id);
+          currentSkin=s.id; buildShopGrid();
+        }
+      } else {
+        alert(`Need ${s.cost - coins} more coins to unlock ${s.name}!`);
+      }
+    });
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById('play-btn').addEventListener('click', () => {
+  const name = document.getElementById('name-input').value.trim() || 'Player';
+  localStorage.setItem('pigHunt_name', name);
+  socket.emit('join', { name, skin: getSkin() });
+  showScreen('lobby');
+  renderLobby();
+});
+document.getElementById('shop-btn').addEventListener('click', buildShopGrid);
+
+// ================================================================
+//  SCREEN MANAGER
+// ================================================================
+const SCREENS = {
+  menu:'screen-menu', lobby:'screen-lobby', countdown:'screen-countdown',
+  game:'game-canvas', end:'screen-end',
+};
+function screenIs(id) { return !document.getElementById(SCREENS[id]||'screen-'+id)?.classList.contains('hide'); }
+function showScreen(id) {
+  Object.entries(SCREENS).forEach(([k,v]) => {
+    const el=document.getElementById(v);
+    if(el) el.classList.add('hide');
+  });
+  // Show canvas when game
+  canvas.style.display = id==='game' ? 'block' : 'none';
+  if(id==='game') return;
+  const el = document.getElementById(SCREENS[id]||'screen-'+id);
+  if(el) el.classList.remove('hide');
+  if(id!=='game') document.getElementById('hud').style.display='none';
+}
+
+// ================================================================
+//  ANIMATE
+// ================================================================
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), .05);
+  const t = clock.getElapsedTime();
+
+  updatePlayer(dt);
+  updateHints();
+
+  // Pulse puzzle gems
+  puzzleMeshes.forEach((pm,i) => {
+    pm.gem.rotation.y += dt*1.2;
+    pm.gem.position.y = 2.8 + Math.sin(t*1.5+i)*.15;
+    pm.pl.intensity = 1.5 + Math.sin(t*2+i)*.5;
+    if(roomState.puzzles?.[i]?.solved) {
+      pm.gem.material.color.setHex(0x4ade80);
+    }
+  });
+
+  // Rotate other player meshes toward pig (or just face camera direction)
+  if(roomState.players) {
+    Object.entries(roomState.players).forEach(([id,p]) => {
+      if(id===myId) return;
+      const mesh = playerMeshes[id];
+      if(mesh) mesh.rotation.y = p.ry||0;
+    });
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+buildShopGrid();
+updateCoinDisplay();
+const savedName = localStorage.getItem('pigHunt_name');
+if(savedName) document.getElementById('name-input').value=savedName;
+showScreen('menu');
+canvas.style.display='none';
+animate();
+</script>
+</body>
+</html>

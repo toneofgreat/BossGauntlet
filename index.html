@@ -37,6 +37,15 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Find the Lettuces card */
 .bg-ltc{background:linear-gradient(135deg,#051a05,#0a2a0a,#1a3a0a)}
 .bg-ltc canvas{width:100%;height:100%}
+/* Pig Hide card */
+.bg-pig{background:linear-gradient(135deg,#1a0a10,#2a1020,#1a0a1a)}
+.bg-pig canvas{width:100%;height:100%}
+/* Roblox clone card */
+.bg-rblx{background:linear-gradient(135deg,#1a0000,#2a0505,#0a0000)}
+.bg-rblx canvas{width:100%;height:100%}
+/* Superhero Tycoon card */
+.bg-hero{background:linear-gradient(135deg,#0a0a2a,#0a1a3a,#1a0a2a)}
+.bg-hero canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -82,6 +91,30 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>FIND THE LETTUCES</h2>
       <p>3D exploration game across a lettuce farm, obby, skyscraper, and sewers. Hunt all 16 hidden lettuces — including a secret one needing a 4-letter code!</p>
       <span class="tag" style="background:#1a3a1a;color:#4f4">3D EXPLORATION</span>
+    </div>
+  </a>
+  <a href="pig-hide.html" class="card">
+    <div class="card-img bg-pig"><canvas id="c6"></canvas></div>
+    <div class="card-body">
+      <h2>PIG HIDE</h2>
+      <p>3D multiplayer hide-and-seek. One player is the pig — hunt down all the hiders before time runs out! Solve puzzles, earn coins, and unlock skins.</p>
+      <span class="tag" style="background:#2a0a1a;color:#f4a">MULTIPLAYER</span>
+    </div>
+  </a>
+  <a href="roblox.html" class="card">
+    <div class="card-img bg-rblx"><canvas id="c7"></canvas></div>
+    <div class="card-body">
+      <h2>ROBLOX HUB</h2>
+      <p>Explore top Roblox-style games: Adopt Me, Blox Fruits, Jailbreak, and more. Browse the avatar shop, featured events, and popular picks.</p>
+      <span class="tag" style="background:#2a0000;color:#f66">GAME HUB</span>
+    </div>
+  </a>
+  <a href="superhero-tycoon.html" class="card">
+    <div class="card-img bg-hero"><canvas id="c8"></canvas></div>
+    <div class="card-body">
+      <h2>SUPERHERO TYCOON</h2>
+      <p>Build your hero HQ, unlock legendary superheroes, and battle villains in escalating waves. Click to earn, upgrade buildings, prestige for huge bonuses!</p>
+      <span class="tag" style="background:#0a0a2a;color:#88f">TYCOON</span>
     </div>
   </a>
 </div>
@@ -241,6 +274,144 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.fillText('🥬 FIND THE LETTUCES 🥬',w/2,h/2);
     ctx.font='11px Courier New';ctx.fillStyle='#2a8a2a';
     ctx.fillText('16 hidden lettuces to find!',w/2,h/2+18);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Pig Hide preview: pig chasing people in 3D world ----
+(function(){
+  const c=document.getElementById('c6'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const hiders=[{x:.2,z:2},{x:.7,z:1.5},{x:.5,z:3}];
+  function proj(x,y,z){const f=120/z;return{px:w/2+x*f,py:h/2+y*f};}
+  function draw(){
+    t+=0.025;ctx.fillStyle='rgba(10,5,10,0.2)';ctx.fillRect(0,0,w,h);
+    // Ground
+    ctx.fillStyle='#1a0f0a';ctx.fillRect(0,h*0.6,w,h*0.4);
+    // Buildings
+    [[.15,.55],[.75,.6],[.45,.8]].forEach(([bx,bz],i)=>{
+      const rx=bx*2-1;
+      const rrx=rx*cos(t*0.2)-bz*sin(t*0.2);
+      const rrz=rx*sin(t*0.2)+bz*cos(t*0.2);
+      if(rrz<0.5)return;
+      const p=proj(rrx,0.05,rrz);
+      ctx.fillStyle=['#3a1a1a','#1a1a3a','#1a3a1a'][i];
+      ctx.fillRect(p.px-18,p.py-35,36,40);
+    });
+    // Pig
+    const pa=t*0.5;
+    const px=0.3*cos(pa)*2-1,pz=2+sin(pa)*0.5;
+    const rrx=px*cos(t*0.2)-pz*sin(t*0.2),rrz=px*sin(t*0.2)+pz*cos(t*0.2);
+    if(rrz>0.5){
+      const pp=proj(rrx,-0.1,rrz);
+      ctx.fillStyle='#ffb6c1';ctx.beginPath();ctx.arc(pp.px,pp.py,10,0,PI*2);ctx.fill();
+      ctx.fillStyle='#ff8080';ctx.beginPath();ctx.arc(pp.px,pp.py-6,6,0,PI*2);ctx.fill();
+      ctx.font='16px serif';ctx.textAlign='center';ctx.fillText('🐷',pp.px,pp.py+4);
+    }
+    // Hiders
+    hiders.forEach((hd,i)=>{
+      const rx=hd.x*2-1;
+      const rrx2=rx*cos(t*0.2)-hd.z*sin(t*0.2),rrz2=rx*sin(t*0.2)+hd.z*cos(t*0.2);
+      if(rrz2>0.5){
+        const hp=proj(rrx2,-0.1,rrz2);
+        ctx.font='16px serif';ctx.textAlign='center';ctx.fillText(['🧍','👮','🕵️'][i],hp.px,hp.py+4);
+      }
+    });
+    // HUD overlay
+    ctx.font='bold 13px Courier New';ctx.fillStyle='#f4a';ctx.textAlign='center';
+    ctx.fillText('🐷 PIG HIDE',w/2,18);
+    ctx.font='10px Courier New';ctx.fillStyle='#888';
+    ctx.fillText('MULTIPLAYER 3D',w/2,32);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Roblox Hub preview: game thumbnails grid ----
+(function(){
+  const c=document.getElementById('c7'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const tiles=[
+    {icon:'🐾',label:'Adopt Me',hue:200},{icon:'⚔️',label:'Blox Fruits',hue:280},
+    {icon:'🚔',label:'Jailbreak',hue:40},{icon:'🏠',label:'Bloxburg',hue:80},
+    {icon:'🐷',label:'Piggy',hue:340},{icon:'🔫',label:'Arsenal',hue:60},
+  ];
+  function draw(){
+    t+=0.02;ctx.fillStyle='rgba(10,0,0,0.2)';ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#1a0000';ctx.fillRect(0,0,w,h*0.15);
+    // Roblox logo area
+    ctx.fillStyle='#e2231a';ctx.fillRect(8,5,28,28);
+    ctx.font='bold 20px serif';ctx.textAlign='left';ctx.fillStyle='#fff';ctx.fillText('R',14,26);
+    ctx.font='bold 14px Courier New';ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText('Roblox',42,22);
+    // Grid of game tiles
+    const cols=3,tileW=w/cols-4,tileH=(h*0.82)/2-4;
+    tiles.forEach((tile,i)=>{
+      const col=i%cols,row=Math.floor(i/cols);
+      const tx=col*(tileW+4)+2,ty=h*0.17+row*(tileH+4);
+      const grd=ctx.createLinearGradient(tx,ty,tx+tileW,ty+tileH);
+      grd.addColorStop(0,`hsl(${tile.hue},30%,10%)`);
+      grd.addColorStop(1,`hsl(${tile.hue+30},25%,15%)`);
+      ctx.fillStyle=grd;ctx.fillRect(tx,ty,tileW,tileH);
+      ctx.font=`${Math.round(tileH*0.35)}px serif`;ctx.textAlign='center';
+      ctx.fillText(tile.icon,tx+tileW/2,ty+tileH*0.55+sin(t+i)*2);
+      ctx.font='8px Courier New';ctx.fillStyle='#999';
+      ctx.fillText(tile.label,tx+tileW/2,ty+tileH-4);
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Superhero Tycoon preview: hero + city ----
+(function(){
+  const c=document.getElementById('c8'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.025;ctx.fillStyle='rgba(5,5,15,0.2)';ctx.fillRect(0,0,w,h);
+    // City
+    [[0.1,0.5],[0.2,0.35],[0.35,0.25],[0.55,0.2],[0.7,0.3],[0.85,0.45]].forEach(([bx,by],i)=>{
+      const bw=0.1+i*0.01;
+      ctx.fillStyle=`hsl(${220+i*15},20%,${10+i*2}%)`;
+      ctx.fillRect(bx*w,by*h,bw*w,h*(1-by));
+      // Windows
+      for(let wr=0;wr<5;wr++)for(let wc=0;wc<3;wc++){
+        if(sin(t*1.5+wr*wc+i*2)>0.1){
+          ctx.fillStyle=`hsla(${220+i*20},80%,60%,0.6)`;
+          ctx.fillRect((bx+0.01+wc*0.028)*w,(by+0.05+wr*0.08)*h,0.018*w,0.04*h);
+        }
+      }
+    });
+    // Ground
+    ctx.fillStyle='#0a0a15';ctx.fillRect(0,h*0.85,w,h*0.15);
+    // Hero flying
+    const hx=w/2+sin(t*0.6)*w*0.15,hy=h*0.35+cos(t*0.4)*h*0.1;
+    // Cape
+    ctx.fillStyle='rgba(200,30,30,0.7)';ctx.beginPath();
+    ctx.moveTo(hx,hy);ctx.lineTo(hx-18+sin(t*2)*6,hy+28);ctx.lineTo(hx-6,hy+14);ctx.closePath();ctx.fill();
+    // Body
+    ctx.fillStyle='#2244bb';ctx.fillRect(hx-8,hy-8,16,18);
+    // Head & hero icon
+    ctx.font='16px serif';ctx.textAlign='center';ctx.fillText('🦸',hx,hy);
+    // Glow
+    const grd=ctx.createRadialGradient(hx,hy,0,hx,hy,35);
+    grd.addColorStop(0,'rgba(68,102,255,0.3)');grd.addColorStop(1,'rgba(68,102,255,0)');
+    ctx.fillStyle=grd;ctx.beginPath();ctx.arc(hx,hy,35,0,PI*2);ctx.fill();
+    // Power bar
+    const barW=w*0.6,barX=(w-barW)/2,barY=h-22;
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(barX-1,barY-1,barW+2,12);
+    const pct=(sin(t*0.3)*0.5+0.5);
+    const barGrd=ctx.createLinearGradient(barX,0,barX+barW,0);
+    barGrd.addColorStop(0,'#4466ff');barGrd.addColorStop(1,'#aa44ff');
+    ctx.fillStyle=barGrd;ctx.fillRect(barX,barY,barW*pct,10);
+    ctx.font='bold 10px Courier New';ctx.fillStyle='#88f';ctx.textAlign='center';
+    ctx.fillText('⚡ SUPERHERO TYCOON ⚡',w/2,16);
     requestAnimationFrame(draw);
   }
   draw();

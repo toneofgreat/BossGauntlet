@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Roblox</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+
+/* Nav */
+nav{background:#232527;height:56px;display:flex;align-items:center;padding:0 16px;gap:12px;border-bottom:1px solid #2a2a2a;position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:8px;text-decoration:none;flex-shrink:0}
+.logo svg{width:28px;height:28px}
+.logo-text{font-size:24px;font-weight:900;color:#fff;letter-spacing:-1px}
+.search-bar{flex:1;max-width:440px;position:relative;margin:0 8px}
+.search-bar input{width:100%;background:#393b3d;border:none;border-radius:8px;padding:8px 40px 8px 16px;color:#fff;font-size:14px;outline:none}
+.search-bar input::placeholder{color:#878787}
+.search-bar input:focus{background:#444}
+.search-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#878787;font-size:16px}
+nav .spacer{flex:1}
+.nav-btn{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;text-decoration:none}
+.btn-login{background:transparent;color:#fff;border:2px solid #393b3d}
+.btn-login:hover{background:#393b3d}
+.btn-signup{background:#0055d4;color:#fff}
+.btn-signup:hover{background:#0044bb}
+.nav-icon{width:36px;height:36px;background:#393b3d;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0}
+.nav-icon:hover{background:#444}
+
+/* Sidebar */
+.layout{display:flex;min-height:calc(100vh - 56px)}
+.sidebar{width:64px;background:#232527;border-right:1px solid #2a2a2a;display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px;flex-shrink:0}
+.sb-item{width:48px;height:48px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:20px;gap:2px;text-decoration:none;color:#878787;transition:.15s}
+.sb-item:hover,.sb-item.active{background:#393b3d;color:#fff}
+.sb-item span{font-size:9px;color:inherit}
+
+/* Main content */
+main{flex:1;overflow-x:hidden;padding:20px 24px}
+.section-title{font-size:18px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.section-title a{font-size:13px;color:#0066ff;text-decoration:none;font-weight:500}
+.section-title a:hover{text-decoration:underline}
+
+/* Featured carousel */
+.featured{width:100%;height:340px;border-radius:12px;overflow:hidden;position:relative;margin-bottom:28px;background:#111;cursor:pointer}
+.featured-bg{width:100%;height:100%;object-fit:cover}
+.featured-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,transparent 50%)}
+.featured-content{position:absolute;bottom:24px;left:24px}
+.featured-badge{background:#0055d4;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;margin-bottom:8px;display:inline-block;letter-spacing:.5px}
+.featured-title{font-size:32px;font-weight:900;line-height:1.1;margin-bottom:6px;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.featured-meta{font-size:13px;color:#ccc;display:flex;gap:12px;align-items:center}
+.featured-play{background:#0055d4;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:15px;font-weight:700;cursor:pointer;margin-top:12px;display:inline-flex;align-items:center;gap:6px}
+.featured-play:hover{background:#0044bb}
+.carousel-dots{position:absolute;bottom:14px;right:20px;display:flex;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.4);cursor:pointer}
+.dot.active{background:#fff}
+
+/* Games grid */
+.games-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:32px}
+.game-card{border-radius:10px;overflow:hidden;cursor:pointer;transition:.15s;background:#2a2a2a;text-decoration:none;color:#fff}
+.game-card:hover{transform:translateY(-2px)}
+.game-thumb{width:100%;aspect-ratio:4/3;overflow:hidden;position:relative}
+.game-thumb-canvas{width:100%;height:100%;display:block}
+.game-info{padding:10px 10px 12px}
+.game-name{font-size:13px;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.game-stats{font-size:11px;color:#878787;display:flex;gap:8px;align-items:center}
+.game-stats .live{color:#4ade80;font-weight:600}
+
+/* Category row */
+.category-row{display:flex;gap:10px;margin-bottom:28px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.category-row::-webkit-scrollbar{display:none}
+.cat-pill{flex-shrink:0;background:#2a2a2a;border-radius:20px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border:2px solid transparent;transition:.15s;white-space:nowrap}
+.cat-pill:hover,.cat-pill.active{border-color:#0055d4;color:#69a8ff}
+
+/* Sort of announcement banner */
+.banner{background:linear-gradient(135deg,#0d2559,#1a0536);border-radius:12px;padding:20px 24px;display:flex;align-items:center;gap:16px;margin-bottom:28px;cursor:pointer}
+.banner:hover{filter:brightness(1.1)}
+.banner-icon{font-size:40px;flex-shrink:0}
+.banner-text h3{font-size:16px;font-weight:700;margin-bottom:4px}
+.banner-text p{font-size:13px;color:#aaa}
+.banner-cta{margin-left:auto;background:#0055d4;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+
+/* Avatar store banner */
+.store-row{display:flex;gap:14px;margin-bottom:32px;overflow-x:auto;scrollbar-width:none}
+.store-row::-webkit-scrollbar{display:none}
+.store-item{flex-shrink:0;width:140px;background:#2a2a2a;border-radius:10px;overflow:hidden;cursor:pointer;transition:.15s}
+.store-item:hover{transform:translateY(-2px)}
+.store-img{height:140px;background:linear-gradient(135deg,#232323,#3a3a3a);display:flex;align-items:center;justify-content:center;font-size:48px}
+.store-info{padding:8px 10px 10px}
+.store-name{font-size:12px;font-weight:600;margin-bottom:3px}
+.store-price{font-size:12px;color:#ffd700;display:flex;align-items:center;gap:4px}
+
+/* Footer */
+footer{background:#232527;border-top:1px solid #2a2a2a;padding:24px;text-align:center;color:#878787;font-size:12px;line-height:2}
+footer a{color:#878787;text-decoration:none;margin:0 10px}
+footer a:hover{color:#fff}
+.footer-logo{font-size:20px;font-weight:900;color:#fff;margin-bottom:12px}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#1a1a1a}
+::-webkit-scrollbar-thumb{background:#393b3d;border-radius:3px}
+
+@media(max-width:600px){
+  .sidebar{display:none}
+  main{padding:16px}
+  .featured{height:220px}
+  .featured-title{font-size:22px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="logo">
+    <svg viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="6" fill="#e2231a"/>
+      <text x="4" y="22" font-size="20" font-weight="900" fill="#fff" font-family="Arial">R</text>
+    </svg>
+    <span class="logo-text">Roblox</span>
+  </a>
+  <div class="search-bar">
+    <input type="text" placeholder="Search" id="searchInput">
+    <span class="search-icon">🔍</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav-icon">🔔</div>
+  <div class="nav-icon">💬</div>
+  <div class="nav-icon">👤</div>
+  <a href="#" class="nav-btn btn-login">Log In</a>
+  <a href="#" class="nav-btn btn-signup">Sign Up</a>
+</nav>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a href="#" class="sb-item active">🏠<span>Home</span></a>
+    <a href="#" class="sb-item">🔥<span>Popular</span></a>
+    <a href="#" class="sb-item">🎮<span>Games</span></a>
+    <a href="#" class="sb-item">🛍️<span>Avatar</span></a>
+    <a href="#" class="sb-item">📦<span>Create</span></a>
+    <a href="#" class="sb-item">👥<span>Friends</span></a>
+    <a href="#" class="sb-item">💰<span>Robux</span></a>
+    <a href="#" class="sb-item">⚙️<span>More</span></a>
+  </aside>
+
+  <main>
+
+    <!-- Featured -->
+    <div class="featured" id="featured">
+      <canvas id="featCanvas" style="width:100%;height:100%;display:block"></canvas>
+      <div class="featured-overlay"></div>
+      <div class="featured-content">
+        <div class="featured-badge">✨ FEATURED</div>
+        <div class="featured-title" id="featTitle">Brookhaven 🏡RP</div>
+        <div class="featured-meta">
+          <span class="live">● 842,317 Playing</span>
+          <span>⭐ 95%</span>
+          <span>👍 4.2M</span>
+        </div>
+        <button class="featured-play" onclick="alert('Play!')">▶ Play</button>
+      </div>
+      <div class="carousel-dots">
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="category-row">
+      <div class="cat-pill active">All</div>
+      <div class="cat-pill">🔥 Popular</div>
+      <div class="cat-pill">🆕 New</div>
+      <div class="cat-pill">⚔️ Fighting</div>
+      <div class="cat-pill">🏃 Obby</div>
+      <div class="cat-pill">🏠 Roleplay</div>
+      <div class="cat-pill">🔫 Shooter</div>
+      <div class="cat-pill">🏎️ Racing</div>
+      <div class="cat-pill">🧱 Tycoon</div>
+      <div class="cat-pill">⚙️ Simulator</div>
+      <div class="cat-pill">🌍 Adventure</div>
+      <div class="cat-pill">🧩 Puzzle</div>
+    </div>
+
+    <!-- Promoted banner -->
+    <div class="banner">
+      <div class="banner-icon">🎉</div>
+      <div class="banner-text">
+        <h3>Summer Creator Challenge 2025</h3>
+        <p>Build amazing experiences and win exclusive items, Robux, and more!</p>
+      </div>
+      <button class="banner-cta">Learn More</button>
+    </div>
+
+    <!-- Popular Now -->
+    <div class="section-title">
+      <span>🔥 Popular Now</span>
+      <a href="#">See All</a>
+    </div>
+    <div class="games-grid" id="popularGrid"></div>
+
+    <!-- Recommended -->
+    <div class="section-title">
+      <span>⭐ Recommended For You</span>
+      <a href="#">See All</a>
+    </div>
+    <div class="games-grid" id="recommendedGrid"></div>
+
+    <!-- Avatar Shop -->
+    <div class="section-title">
+      <span>🛍️ Avatar Shop Picks</span>
+      <a href="#">Shop All</a>
+    </div>
+    <div class="store-row" id="storeRow"></div>
+
+    <!-- Top Earning -->
+    <div class="section-title">
+      <span>💎 Top Earning</span>
+      <a href="#">See All</a>
+    </div>
+    <div class="games-grid" id="topGrid"></div>
+
+  </main>
+</div>
+
+<footer>
+  <div class="footer-logo">Roblox</div>
+  <div>
+    <a href="#">About Us</a>
+    <a href="#">Jobs</a>
+    <a href="#">Blog</a>
+    <a href="#">Parents</a>
+    <a href="#">Help</a>
+    <a href="#">Terms</a>
+    <a href="#">Privacy</a>
+    <a href="#">Contact</a>
+  </div>
+  <div style="margin-top:8px">© 2025 Roblox Corporation. All Rights Reserved.</div>
+</footer>
+
+<script>
+const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
+
+const GAMES=[
+  {name:'Adopt Me!',players:'521,432',rating:'94%',likes:'3.1M',icon:'🐾',hue:200,tag:'ROLEPLAY'},
+  {name:'Murder Mystery 2',players:'312,891',rating:'91%',likes:'2.4M',icon:'🔪',hue:20,tag:'MYSTERY'},
+  {name:'Blox Fruits',players:'487,204',rating:'88%',likes:'1.9M',icon:'⚔️',hue:280,tag:'FIGHTER'},
+  {name:'Pet Simulator X',players:'198,432',rating:'89%',likes:'1.5M',icon:'🐶',hue:40,tag:'SIMULATOR'},
+  {name:'Tower of Hell',players:'145,209',rating:'85%',likes:'1.2M',icon:'🏗️',hue:160,tag:'OBBY'},
+  {name:'Piggy',players:'89,321',rating:'92%',likes:'980K',icon:'🐷',hue:340,tag:'HORROR'},
+  {name:'Arsenal',players:'234,100',rating:'87%',likes:'1.1M',icon:'🔫',hue:60,tag:'SHOOTER'},
+  {name:'Natural Disaster',players:'67,890',rating:'90%',likes:'870K',icon:'🌪️',hue:190,tag:'SURVIVAL'},
+  {name:'Jailbreak',players:'178,432',rating:'86%',likes:'1.3M',icon:'🚔',hue:230,tag:'OPEN WORLD'},
+  {name:'Royale High',players:'156,321',rating:'93%',likes:'1.8M',icon:'👑',hue:300,tag:'ROLEPLAY'},
+  {name:'Work at Pizza Place',players:'88,432',rating:'91%',likes:'760K',icon:'🍕',hue:20,tag:'TYCOON'},
+  {name:'Welcome to Bloxburg',players:'201,890',rating:'92%',likes:'2.0M',icon:'🏠',hue:80,tag:'ROLEPLAY'},
+];
+
+const AVATARS=[
+  {name:'Cyber Wings',price:'240',icon:'🦋'},
+  {name:'Dragon Armor',price:'450',icon:'🐉'},
+  {name:'Neon Crown',price:'888',icon:'👑'},
+  {name:'Shadow Cloak',price:'120',icon:'🌑'},
+  {name:'Rainbow Hair',price:'75',icon:'🌈'},
+  {name:'Space Helmet',price:'320',icon:'🪐'},
+  {name:'Golden Sword',price:'599',icon:'⚔️'},
+  {name:'Cat Ears',price:'40',icon:'🐱'},
+];
+
+function makeGameCanvas(game){
+  const c=document.createElement('canvas');
+  c.className='game-thumb-canvas';
+  c.style.cssText='width:100%;height:100%;display:block';
+  const ctx=c.getContext('2d');
+  let t=rand()*100;
+  const h=game.hue;
+  function draw(){
+    t+=0.03;
+    const w=c.parentElement?.offsetWidth||180,ht=Math.round(w*3/4);
+    if(c.width!==w){c.width=w;c.height=ht;}
+    ctx.fillStyle=`hsl(${h},30%,12%)`;
+    ctx.fillRect(0,0,w,ht);
+    // Animated bg shapes
+    for(let i=0;i<5;i++){
+      const bx=w*(0.1+i*0.2+sin(t*0.4+i)*0.08);
+      const by=ht*(0.3+cos(t*0.3+i)*0.25);
+      ctx.fillStyle=`hsla(${h+i*20},60%,30%,0.4)`;
+      ctx.beginPath();ctx.arc(bx,by,20+sin(t+i)*8,0,PI*2);ctx.fill();
+    }
+    // Ground
+    ctx.fillStyle=`hsl(${h},25%,18%)`;
+    ctx.fillRect(0,ht*0.7,w,ht*0.3);
+    // Icon
+    ctx.font=`${Math.round(ht*0.28)}px serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(game.icon,w/2,ht*0.4+sin(t)*3);
+    // Glow
+    ctx.fillStyle=`hsla(${h},80%,60%,${0.08+sin(t*2)*0.04})`;
+    ctx.beginPath();ctx.arc(w/2,ht*0.4,ht*0.25,0,PI*2);ctx.fill();
+    requestAnimationFrame(draw);
+  }
+  draw();
+  return c;
+}
+
+function renderGrid(gridId, games){
+  const grid=document.getElementById(gridId);
+  games.forEach(g=>{
+    const card=document.createElement('a');
+    card.href='#';card.className='game-card';
+    card.onclick=e=>{e.preventDefault();alert(`Opening: ${g.name}`)};
+    const thumb=document.createElement('div');
+    thumb.className='game-thumb';
+    thumb.appendChild(makeGameCanvas(g));
+    const info=document.createElement('div');
+    info.className='game-info';
+    info.innerHTML=`
+      <div class="game-name">${g.name}</div>
+      <div class="game-stats">
+        <span class="live">● ${g.players}</span>
+        <span>⭐ ${g.rating}</span>
+      </div>
+    `;
+    card.appendChild(thumb);card.appendChild(info);
+    grid.appendChild(card);
+  });
+}
+
+renderGrid('popularGrid', GAMES.slice(0,6));
+renderGrid('recommendedGrid', GAMES.slice(6,12));
+renderGrid('topGrid', GAMES.slice(3,9));
+
+// Store row
+const storeRow=document.getElementById('storeRow');
+AVATARS.forEach(item=>{
+  const el=document.createElement('div');
+  el.className='store-item';
+  el.onclick=()=>alert(`Buy: ${item.name}`);
+  el.innerHTML=`
+    <div class="store-img">${item.icon}</div>
+    <div class="store-info">
+      <div class="store-name">${item.name}</div>
+      <div class="store-price">💰 ${item.price}</div>
+    </div>
+  `;
+  storeRow.appendChild(el);
+});
+
+// Featured banner animation
+(function(){
+  const c=document.getElementById('featCanvas');
+  const ctx=c.getContext('2d');
+  let t=0;
+  const FEATURED_GAMES=[
+    {title:"Brookhaven 🏡RP",players:"842,317",hue:220},
+    {title:"Adopt Me!",players:"521,432",hue:160},
+    {title:"Blox Fruits",players:"487,204",hue:280},
+    {title:"Jailbreak",players:"178,432",hue:40},
+  ];
+  let cur=0;
+  const dots=document.querySelectorAll('.dot');
+  setInterval(()=>{
+    cur=(cur+1)%FEATURED_GAMES.length;
+    document.getElementById('featTitle').textContent=FEATURED_GAMES[cur].title;
+    dots.forEach((d,i)=>d.classList.toggle('active',i===cur));
+  },4000);
+  function draw(){
+    t+=0.015;
+    const w=c.parentElement?.offsetWidth||800,h=c.parentElement?.offsetHeight||340;
+    if(c.width!==w){c.width=w;c.height=h;}
+    const hue=FEATURED_GAMES[cur].hue;
+    // BG gradient
+    const grd=ctx.createLinearGradient(0,0,w,h);
+    grd.addColorStop(0,`hsl(${hue},40%,8%)`);
+    grd.addColorStop(1,`hsl(${hue+40},30%,12%)`);
+    ctx.fillStyle=grd;ctx.fillRect(0,0,w,h);
+    // Floating blobs
+    for(let i=0;i<6;i++){
+      const bx=w*(0.1+i*0.15+sin(t*0.3+i*1.3)*0.08);
+      const by=h*(0.2+cos(t*0.25+i)*0.3);
+      ctx.fillStyle=`hsla(${hue+i*15},60%,30%,0.25)`;
+      ctx.beginPath();ctx.arc(bx,by,50+sin(t+i)*20,0,PI*2);ctx.fill();
+    }
+    // Stars
+    for(let i=0;i<80;i++){
+      const sx=(Math.sin(i*137.5+t*0.1)*0.5+0.5)*w;
+      const sy=(Math.cos(i*97.3+t*0.05)*0.5+0.5)*h;
+      const sa=0.3+0.7*Math.abs(sin(t*1.5+i));
+      ctx.fillStyle=`rgba(255,255,255,${sa*0.6})`;
+      ctx.fillRect(sx,sy,1,1);
+    }
+    // Building silhouettes
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    const blds=[{x:0,w:60,h:180},{x:70,w:50,h:140},{x:130,w:80,h:220},{x:220,w:40,h:160},{x:270,w:70,h:200},{x:w-120,w:60,h:170},{x:w-200,w:80,h:190},{x:w-290,w:50,h:140}];
+    blds.forEach(b=>{ctx.fillRect(b.x,h-b.h,b.w,b.h);});
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// Category pills
+document.querySelectorAll('.cat-pill').forEach(p=>{
+  p.addEventListener('click',function(){
+    document.querySelectorAll('.cat-pill').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter') alert(`Searching for: ${e.target.value}`);
+});
+</script>
+</body>
+</html>
