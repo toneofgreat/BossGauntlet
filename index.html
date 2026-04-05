@@ -46,6 +46,12 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Superhero Tycoon card */
 .bg-hero{background:linear-gradient(135deg,#0a0a2a,#0a1a3a,#1a0a2a)}
 .bg-hero canvas{width:100%;height:100%}
+/* Weight Lifting Simulator card */
+.bg-wls{background:linear-gradient(135deg,#0a0a1a,#100820,#1a0a2a)}
+.bg-wls canvas{width:100%;height:100%}
+/* Escape Engine card */
+.bg-esc{background:linear-gradient(135deg,#050510,#0a0a20,#100510)}
+.bg-esc canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -115,6 +121,22 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>SUPERHERO TYCOON</h2>
       <p>Build your hero HQ, unlock legendary superheroes, and battle villains in escalating waves. Click to earn, upgrade buildings, prestige for huge bonuses!</p>
       <span class="tag" style="background:#0a0a2a;color:#88f">TYCOON</span>
+    </div>
+  </a>
+  <a href="strength-simulator.html" class="card">
+    <div class="card-img bg-wls"><canvas id="c10"></canvas></div>
+    <div class="card-body">
+      <h2>WEIGHT LIFTING SIM</h2>
+      <p>Lift from Dirt all the way to the Universe! 22 weights, auto-clicker, 4 rebirths (2×–8× multipliers), multiplayer leaderboard, and PVP battles.</p>
+      <span class="tag" style="background:#0a0820;color:#ccf">SIMULATOR</span>
+    </div>
+  </a>
+  <a href="escape-engine/index.html" class="card">
+    <div class="card-img bg-esc"><canvas id="c9"></canvas></div>
+    <div class="card-body">
+      <h2>STATION LUMIÈRE</h2>
+      <p>3D escape room set aboard a dark Franco-American research station. Restore 3 critical systems, decode bilingual clues, and activate the emergency beacon.</p>
+      <span class="tag" style="background:#050520;color:#88f">3D ESCAPE ROOM</span>
     </div>
   </a>
 </div>
@@ -412,6 +434,119 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.fillStyle=barGrd;ctx.fillRect(barX,barY,barW*pct,10);
     ctx.font='bold 10px Courier New';ctx.fillStyle='#88f';ctx.textAlign='center';
     ctx.fillText('⚡ SUPERHERO TYCOON ⚡',w/2,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Weight Lifting Sim preview: cosmic weights floating ----
+(function(){
+  const c=document.getElementById('c10'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const weights=['🟤','⚫','🌿','🌸','🪵','🪨','🌳','🐺','🌍','🌌','☀️','✨'];
+  const cols=['#c8941e','#999','#3d8','#f9c','#a63','#89a','#3b3','#aac','#36e','#a4f','#fc0','#fff'];
+  function draw(){
+    t+=0.018;ctx.fillStyle='rgba(5,4,15,0.2)';ctx.fillRect(0,0,w,h);
+    // Stars
+    for(let i=0;i<60;i++){
+      const sx=(sin(i*137.5)*0.5+0.5)*w,sy=(cos(i*97.3)*0.5+0.5)*h;
+      const sa=0.3+0.7*Math.abs(sin(t*0.8+i));
+      ctx.fillStyle=`rgba(255,255,255,${sa*0.5})`;ctx.fillRect(sx,sy,1,1);
+    }
+    // Ground glow
+    ctx.fillStyle='rgba(80,40,180,0.12)';ctx.fillRect(0,h*0.72,w,h*0.28);
+    // Floating weights at different depths
+    for(let i=0;i<6;i++){
+      const wx=(0.08+i*0.165)*w+sin(t*0.5+i)*12;
+      const wy=h*0.35+cos(t*0.4+i*0.8)*22+sin(t*0.6+i)*8;
+      const s=18+i*3;
+      ctx.font=`${s}px serif`;ctx.textAlign='center';
+      ctx.globalAlpha=0.6+sin(t+i)*0.3;
+      ctx.fillText(weights[i],wx,wy);
+      // Glow
+      const g=ctx.createRadialGradient(wx,wy,0,wx,wy,s);
+      g.addColorStop(0,cols[i]+'44');g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(wx,wy,s,0,PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    // Big universe weight in center
+    ctx.font=`${36+sin(t*2)*4}px serif`;ctx.textAlign='center';
+    ctx.globalAlpha=0.8+sin(t*1.5)*0.2;
+    ctx.fillText('✨',w/2,h/2+sin(t)*8);ctx.globalAlpha=1;
+    const gg=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,50);
+    gg.addColorStop(0,'rgba(220,220,255,0.15)');gg.addColorStop(1,'transparent');
+    ctx.fillStyle=gg;ctx.beginPath();ctx.arc(w/2,h/2,55,0,PI*2);ctx.fill();
+    ctx.font='bold 11px Courier New';ctx.fillStyle='#99f';ctx.textAlign='center';
+    ctx.fillText('💪 WEIGHT LIFTING SIM',w/2,h-10);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Station Lumière escape room preview: dark corridors, glowing puzzles ----
+(function(){
+  const c=document.getElementById('c9'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const particles=[];for(let i=0;i<18;i++)particles.push({x:rand()*1,y:rand()*1,vx:(rand()-.5)*0.002,vy:-0.001-rand()*0.002,a:rand(),hue:200+rand()*80});
+  function draw(){
+    t+=0.018;
+    // Dark room
+    ctx.fillStyle='rgba(2,2,8,0.25)';ctx.fillRect(0,0,w,h);
+    // Floor perspective lines
+    ctx.strokeStyle='rgba(60,60,120,0.3)';ctx.lineWidth=1;
+    for(let i=0;i<5;i++){
+      const x=w*i/4;
+      ctx.beginPath();ctx.moveTo(x,h);ctx.lineTo(w/2,h*0.35);ctx.stroke();
+    }
+    for(let i=0;i<4;i++){
+      const y=h*0.5+i*h*0.13;
+      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+    }
+    // Exit door (glowing)
+    const pulse=0.5+sin(t*1.2)*0.5;
+    const dx=w/2-15,dy=h*0.36,dw=30,dh=45;
+    ctx.strokeStyle=`rgba(80,140,255,${0.4+pulse*0.4})`;ctx.lineWidth=2;
+    ctx.strokeRect(dx,dy,dw,dh);
+    ctx.fillStyle=`rgba(40,80,200,${0.08+pulse*0.1})`;ctx.fillRect(dx,dy,dw,dh);
+    // Glow around door
+    const gd=ctx.createRadialGradient(w/2,dy+dh/2,0,w/2,dy+dh/2,50);
+    gd.addColorStop(0,`rgba(80,140,255,${0.15*pulse})`);gd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gd;ctx.beginPath();ctx.arc(w/2,dy+dh/2,50,0,PI*2);ctx.fill();
+    // Puzzle panels on walls
+    [[0.12,0.48],[0.82,0.48]].forEach(([px,py],i)=>{
+      const panelX=px*w,panelY=py*h,pw=26,ph=32;
+      ctx.fillStyle='rgba(10,10,30,0.8)';ctx.fillRect(panelX-pw/2,panelY-ph/2,pw,ph);
+      ctx.strokeStyle=`rgba(${i?'255,120,60':'60,220,120'},${0.5+sin(t*2+i)*0.5})`;ctx.lineWidth=1.5;
+      ctx.strokeRect(panelX-pw/2,panelY-ph/2,pw,ph);
+      // Blinking lights on panel
+      for(let r=0;r<2;r++)for(let cc=0;cc<3;cc++){
+        const on=sin(t*3+r*3+cc*5+i*7)>0;
+        ctx.fillStyle=on?`hsl(${i?30:140},80%,55%)`:'#111';
+        ctx.beginPath();ctx.arc(panelX-8+cc*8,panelY-5+r*10,2.5,0,PI*2);ctx.fill();
+      }
+    });
+    // Floating dust particles
+    for(const p of particles){
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.y<0){p.y=1;p.x=rand();}
+      if(p.x<0||p.x>1){p.vx*=-1;}
+      ctx.globalAlpha=0.3+sin(t+p.a*10)*0.2;
+      ctx.fillStyle=`hsl(${p.hue},60%,60%)`;
+      ctx.beginPath();ctx.arc(p.x*w,p.y*h,1,0,PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // HUD text
+    ctx.font='bold 12px Courier New';ctx.fillStyle=`rgba(100,160,255,${0.7+sin(t)*0.3})`;ctx.textAlign='center';
+    ctx.fillText('STATION LUMIÈRE',w/2,14);
+    ctx.font='9px Courier New';ctx.fillStyle='rgba(100,100,160,0.8)';
+    ctx.fillText('RESTORE THE SYSTEMS',w/2,26);
+    // Scan line
+    const sy=((t*40)%h);
+    ctx.fillStyle='rgba(80,140,255,0.04)';ctx.fillRect(0,sy,w,3);
     requestAnimationFrame(draw);
   }
   draw();
