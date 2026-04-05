@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escape Engine — Station Lumière</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-content">
+      <h1>STATION LUMIÈRE</h1>
+      <p class="subtitle">Franco-American Research Station &bull; North Atlantic</p>
+      <div class="loading-bar">
+        <div class="loading-fill" id="loading-fill"></div>
+      </div>
+      <p class="loading-text" id="loading-text">Initializing systems...</p>
+    </div>
+  </div>
+
+  <!-- Start Screen (after loading) -->
+  <div id="start-screen" class="hidden">
+    <div class="start-content">
+      <h1>STATION LUMIÈRE</h1>
+      <p class="subtitle">Franco-American Research Station &bull; North Atlantic</p>
+      <div class="briefing">
+        <p>Emergency transmission received. The Franco-American research station <em>Lumière</em> has gone dark. Automated systems have failed. The crew is missing.</p>
+        <p>Your mission: restore the station's three critical systems and activate the emergency beacon.</p>
+        <p class="hint">The station was operated by a bilingual team. Their notes are in both English and French.</p>
+      </div>
+      <button id="start-btn">CLIQUEZ POUR COMMENCER<br><span class="btn-sub">Click to Begin</span></button>
+      <p class="controls-hint">WASD to move &bull; Mouse to look &bull; Click to interact &bull; ESC to release cursor</p>
+    </div>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <!-- Crosshair -->
+    <div id="crosshair">
+      <div class="crosshair-dot"></div>
+    </div>
+
+    <!-- Interaction Prompt -->
+    <div id="interaction-prompt" class="hidden">
+      <span id="prompt-icon">✋</span>
+      <span id="prompt-text">Interact</span>
+    </div>
+
+    <!-- Narrative Display -->
+    <div id="narrative-panel" class="hidden">
+      <div class="narrative-header">
+        <span id="narrative-title"></span>
+        <button id="narrative-close">&times;</button>
+      </div>
+      <div id="narrative-body"></div>
+    </div>
+
+    <!-- Room Title (shown on room enter) -->
+    <div id="room-title" class="hidden">
+      <h2 id="room-title-text"></h2>
+      <p id="room-subtitle-text"></p>
+    </div>
+
+    <!-- Puzzle Completion Banner -->
+    <div id="completion-banner" class="hidden">
+      <h2 id="completion-text"></h2>
+    </div>
+
+    <!-- Objective Hint (subtle, bottom of screen) -->
+    <div id="objective-hint" class="hidden">
+      <p id="objective-text"></p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

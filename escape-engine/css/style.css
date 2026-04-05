@@ -1,0 +1,353 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  background: #000;
+  font-family: 'Courier New', monospace;
+  color: #e0e0e0;
+}
+
+canvas#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+.hidden { display: none !important; }
+
+/* Loading Screen */
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  background: #0a1628;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-content h1 {
+  font-size: 3rem;
+  letter-spacing: 0.5em;
+  color: #4ecdc4;
+  text-shadow: 0 0 30px rgba(78, 205, 196, 0.5);
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  font-size: 0.9rem;
+  color: #6a8caf;
+  letter-spacing: 0.3em;
+  margin-bottom: 2rem;
+}
+
+.loading-bar {
+  width: 300px;
+  height: 3px;
+  background: #1a3a5c;
+  margin: 0 auto 1rem;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-fill {
+  height: 100%;
+  width: 0%;
+  background: #4ecdc4;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(78, 205, 196, 0.8);
+}
+
+.loading-text {
+  font-size: 0.8rem;
+  color: #4a6a8a;
+  letter-spacing: 0.2em;
+}
+
+/* Start Screen */
+#start-screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 22, 40, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.start-content {
+  text-align: center;
+  max-width: 600px;
+  padding: 2rem;
+}
+
+.start-content h1 {
+  font-size: 2.5rem;
+  letter-spacing: 0.5em;
+  color: #4ecdc4;
+  text-shadow: 0 0 30px rgba(78, 205, 196, 0.5);
+  margin-bottom: 0.5rem;
+}
+
+.briefing {
+  margin: 2rem 0;
+  text-align: left;
+  line-height: 1.8;
+  color: #8ab4d4;
+  font-size: 0.95rem;
+}
+
+.briefing p {
+  margin-bottom: 1rem;
+}
+
+.briefing .hint {
+  color: #f4a261;
+  font-style: italic;
+}
+
+#start-btn {
+  background: transparent;
+  border: 1px solid #4ecdc4;
+  color: #4ecdc4;
+  padding: 1rem 3rem;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.3em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 1.5rem;
+}
+
+#start-btn:hover {
+  background: rgba(78, 205, 196, 0.15);
+  box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+}
+
+.btn-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  color: #6a8caf;
+}
+
+.controls-hint {
+  font-size: 0.75rem;
+  color: #3a5a7a;
+  letter-spacing: 0.15em;
+}
+
+/* HUD */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Crosshair */
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.crosshair-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(78, 205, 196, 0.6);
+  box-shadow: 0 0 6px rgba(78, 205, 196, 0.3);
+}
+
+/* Interaction Prompt */
+#interaction-prompt {
+  position: absolute;
+  bottom: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 22, 40, 0.8);
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  padding: 0.5rem 1.2rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  color: #4ecdc4;
+  backdrop-filter: blur(4px);
+  animation: promptFadeIn 0.2s ease;
+}
+
+#prompt-icon {
+  margin-right: 0.5rem;
+}
+
+@keyframes promptFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(5px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Narrative Panel */
+#narrative-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 22, 40, 0.95);
+  border: 1px solid rgba(78, 205, 196, 0.4);
+  padding: 2rem;
+  max-width: 550px;
+  width: 90%;
+  max-height: 70vh;
+  overflow-y: auto;
+  border-radius: 4px;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  animation: panelSlideIn 0.3s ease;
+}
+
+.narrative-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(78, 205, 196, 0.2);
+}
+
+#narrative-title {
+  color: #f4a261;
+  font-size: 1rem;
+  letter-spacing: 0.2em;
+  font-weight: bold;
+}
+
+#narrative-close {
+  background: none;
+  border: none;
+  color: #4a6a8a;
+  font-size: 1.5rem;
+  cursor: pointer;
+  pointer-events: auto;
+  padding: 0 0.3rem;
+}
+
+#narrative-close:hover {
+  color: #4ecdc4;
+}
+
+#narrative-body {
+  line-height: 1.8;
+  color: #8ab4d4;
+  font-size: 0.9rem;
+}
+
+#narrative-body p {
+  margin-bottom: 0.8rem;
+}
+
+#narrative-body .french {
+  color: #f4a261;
+  font-style: italic;
+}
+
+#narrative-body .emphasis {
+  color: #4ecdc4;
+}
+
+@keyframes panelSlideIn {
+  from { opacity: 0; transform: translate(-50%, -48%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* Room Title */
+#room-title {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  animation: titleFadeIn 1s ease;
+}
+
+#room-title-text {
+  font-size: 2rem;
+  letter-spacing: 0.5em;
+  color: #4ecdc4;
+  text-shadow: 0 0 20px rgba(78, 205, 196, 0.5);
+}
+
+#room-subtitle-text {
+  font-size: 0.85rem;
+  color: #6a8caf;
+  letter-spacing: 0.3em;
+  margin-top: 0.5rem;
+}
+
+@keyframes titleFadeIn {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Completion Banner */
+#completion-banner {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  animation: bannerPulse 2s ease;
+}
+
+#completion-text {
+  font-size: 1.5rem;
+  letter-spacing: 0.4em;
+  color: #2a9d8f;
+  text-shadow: 0 0 30px rgba(42, 157, 143, 0.8);
+}
+
+@keyframes bannerPulse {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.9); }
+  20% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+  30% { opacity: 1; transform: translateX(-50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Objective Hint */
+#objective-hint {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+#objective-text {
+  font-size: 0.75rem;
+  color: rgba(106, 140, 175, 0.6);
+  letter-spacing: 0.15em;
+}
+
+/* Scrollbar styling for narrative panel */
+#narrative-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+#narrative-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#narrative-panel::-webkit-scrollbar-thumb {
+  background: rgba(78, 205, 196, 0.3);
+  border-radius: 2px;
+}
