@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Lettuce Hunt 50</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#87ceeb;overflow:hidden;font-family:'Courier New',monospace}
+#c{display:block;width:100vw;height:100vh;touch-action:none}
+#hud{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);border:3px solid #4f4;border-radius:14px;padding:8px 24px;color:#4f4;font-size:13px;letter-spacing:3px;z-index:10;text-align:center;pointer-events:none}
+#score{font-size:26px;font-weight:bold;color:#4f4;line-height:1}
+#back-btn{position:fixed;top:14px;left:14px;background:rgba(0,0,0,.75);border:2px solid #888;border-radius:8px;padding:8px 16px;color:#ccc;font-size:12px;cursor:pointer;z-index:10;text-decoration:none;letter-spacing:1px}
+#back-btn:hover{border-color:#fff;color:#fff}
+#help{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.6);font-size:11px;letter-spacing:2px;pointer-events:none;z-index:10;text-align:center}
+#win{position:fixed;inset:0;background:rgba(0,20,0,.95);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:100;cursor:pointer}
+#win-emoji{font-size:80px;margin-bottom:16px;animation:bounce .6s ease-in-out infinite alternate}
+@keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-16px)}}
+#win-title{color:#4f4;font-size:32px;letter-spacing:4px;margin-bottom:8px}
+#win-sub{color:#8b8;font-size:14px;letter-spacing:2px;margin-bottom:4px}
+#win-click{position:absolute;bottom:28px;color:#4f4;font-size:13px;letter-spacing:2px;animation:blink 1s step-start infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+#popup{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#0a3a0a,#1a6a1a);border:3px solid #4f4;border-radius:14px;padding:10px 28px;color:#afe;font-size:15px;letter-spacing:2px;display:none;z-index:20;pointer-events:none;text-align:center;white-space:nowrap}
+#minimap{position:fixed;bottom:14px;right:14px;width:120px;height:120px;background:rgba(0,0,0,.65);border:2px solid #4f4;border-radius:8px;z-index:10;pointer-events:none}
+#minimap canvas{width:100%;height:100%}
+/* Touch controls */
+#touch-ui{display:none;position:fixed;inset:0;pointer-events:none;z-index:15}
+#joy-zone{position:absolute;bottom:30px;left:20px;width:130px;height:130px;pointer-events:all;touch-action:none}
+#joy-base{position:absolute;inset:0;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.28);border-radius:50%}
+#joy-knob{position:absolute;width:50px;height:50px;background:rgba(255,255,255,.35);border-radius:50%;top:40px;left:40px;pointer-events:none}
+#jump-btn{position:absolute;bottom:40px;right:20px;width:80px;height:80px;background:rgba(80,220,80,.2);border:3px solid rgba(80,220,80,.5);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#4f4;font-size:14px;font-weight:bold;pointer-events:all;touch-action:none;user-select:none;letter-spacing:1px}
+#look-zone{position:absolute;right:0;top:0;bottom:0;left:170px;pointer-events:all;touch-action:none}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div style="font-size:10px;letter-spacing:3px;color:#8b8">LETTUCES FOUND</div>
+  <div id="score">0 / 50</div>
+</div>
+<a href="index.html" id="back-btn">← PLATYFY</a>
+<div id="help">WASD / drag to look / SPACE to jump</div>
+<div id="win">
+  <div id="win-emoji">🥬</div>
+  <div id="win-title">ALL 50 LETTUCES!</div>
+  <div id="win-sub">You're the ultimate lettuce hunter!</div>
+  <div id="win-click">▶ CLICK TO RETURN ◀</div>
+</div>
+<div id="popup"></div>
+<div id="minimap"><canvas id="mm"></canvas></div>
+<div id="touch-ui">
+  <div id="joy-zone"><div id="joy-base"></div><div id="joy-knob"></div></div>
+  <div id="look-zone"></div>
+  <div id="jump-btn">JUMP</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ===================== RENDERER =====================
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setSize(innerWidth, innerHeight);
+window.addEventListener('resize', () => {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// ===================== SCENE =====================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 80, 220);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 400);
+
+// ===================== LIGHTING =====================
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.5);
+sun.position.set(60, 100, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 400;
+sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
+sun.shadow.camera.top = 120; sun.shadow.camera.bottom = -120;
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xaac8ff, 0.65));
+
+// ===================== MATERIALS =====================
+const M = {};
+const mc = (hex, emissive) => {
+  const mat = new THREE.MeshLambertMaterial({color:hex});
+  if(emissive) mat.emissive = new THREE.Color(emissive);
+  return mat;
+};
+M.ground  = mc(0x5aad3a);
+M.grass2  = mc(0x3d8a2a);
+M.red     = mc(0xe03020);
+M.blue    = mc(0x2a5ae0);
+M.yellow  = mc(0xeebb22);
+M.green   = mc(0x22aa33);
+M.purple  = mc(0xaa22cc);
+M.orange  = mc(0xee7722);
+M.pink    = mc(0xee33aa);
+M.cyan    = mc(0x22ccee);
+M.white   = mc(0xffffff);
+M.lgray   = mc(0xaaaaaa);
+M.gray    = mc(0x888888);
+M.dgray   = mc(0x444444);
+M.brown   = mc(0x885522);
+M.wood    = mc(0xaa7733);
+M.leaf    = mc(0x2a9a1a);
+M.leaftop = mc(0x3ab32a);
+M.sand    = mc(0xddcc88);
+M.water   = new THREE.MeshLambertMaterial({color:0x2266bb, transparent:true, opacity:0.72});
+M.gold    = mc(0xffcc00);
+M.lettuce = new THREE.MeshLambertMaterial({color:0x44ee44, emissive:new THREE.Color(0x115511)});
+M.lstem   = mc(0xccdd22);
+M.sky     = mc(0xaaddff);
+
+// ===================== WORLD BUILDING =====================
+const collidables = []; // {minX,maxX,minZ,maxZ,top}
+
+function box(x, y, z, w, h, d, mat, collidable=true) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  if(collidable) {
+    collidables.push({
+      minX: x - w/2, maxX: x + w/2,
+      minZ: z - d/2, maxZ: z + d/2,
+      top: y + h/2,
+    });
+  }
+  return mesh;
+}
+
+// Ground plane
+{
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), M.ground);
+  m.rotation.x = -Math.PI/2; m.receiveShadow = true;
+  scene.add(m);
+}
+// Ground collision is y=0 (handled directly in physics)
+
+// Decorative grass patches near spawn
+for(let i = 0; i < 30; i++) {
+  const a = i * 2.5, r = 5 + (i % 7) * 8;
+  box(Math.cos(a)*r, 0.15, Math.sin(a)*r, 2.5, 0.3, 2.5, M.grass2, false);
+}
+
+// ---- VILLAGE ZONE (x:20-80, z:-35 to 35) ----
+// Red tall building
+box(35, 8, 0,   12, 16, 12, M.red);
+box(35, 16.5, 0, 12, 1, 12, M.dgray);     // roof deck
+box(35, 17.2, 0, 10, 0.5, 10, M.gray);    // inner roof
+// windows
+for(let fx of [-2.5, 2.5]) for(let fy of [5, 9, 13]) {
+  box(35+fx, fy, -6.1, 1.8, 1.8, 0.2, M.cyan, false);
+}
+// Blue building with steps leading up
+box(58, 5.5, -16, 14, 11, 14, M.blue);
+box(58, 11.5, -16, 14, 1, 14, M.white);   // roof
+for(let i = 0; i < 5; i++) box(46+i*2.6, 1+i*1.1, -16, 2.5, 2+i*2.2, 7, M.lgray); // steps
+// Yellow house
+box(28, 3.5, -25, 10, 7, 10, M.yellow);
+box(28, 7.5, -25, 12, 1.5, 12, M.orange); // roof overhang
+// Purple tower
+box(68, 13, 18, 8, 26, 8, M.purple);
+box(68, 26.5, 18, 10, 1, 10, M.dgray);    // top deck
+box(68, 14, 18, 12, 0.8, 12, M.lgray);    // mid balcony
+// Village paths
+box(20, 0.05, 0, 10, 0.1, 50, M.gray, false);   // main street
+box(50, 0.05, -5, 30, 0.1, 8, M.gray, false);   // side street
+
+// ---- OBBY ZONE (x:-25 to -80, z:-20 to -85) ----
+const OCOLS = [M.red, M.blue, M.yellow, M.green, M.purple, M.orange, M.pink, M.cyan, M.red, M.blue, M.yellow, M.green, M.cyan];
+const OPLATS = [
+  [-28, 2.5, -22, 7, 1, 7],
+  [-38, 5,   -30, 6, 1, 6],
+  [-30, 8,   -40, 5, 1, 5],
+  [-44, 11,  -46, 6, 1, 6],
+  [-34, 14,  -56, 5, 1, 5],
+  [-50, 17,  -62, 6, 1, 6],
+  [-38, 20,  -70, 5, 1, 5],
+  [-55, 23,  -66, 6, 1, 6],
+  [-62, 20,  -52, 5, 1, 5],
+  [-68, 16,  -38, 6, 1, 6],
+  [-72, 12,  -26, 5, 1, 5],
+  [-62, 8,   -18, 6, 1, 6],
+  [-50, 28,  -78, 8, 1, 8], // top platform
+];
+OPLATS.forEach(([x,y,z,w,h,d], i) => box(x,y,z,w,h,d, OCOLS[i]));
+// Obby signpost
+box(-20, 1.5, -15, 1, 3, 1, M.wood, false);
+box(-20, 3.5, -15, 4, 1, 0.3, M.yellow, false);
+
+// ---- FOREST ZONE (x:-20 to -80, z:25 to 85) ----
+function tree(x, z) {
+  box(x, 2.5, z, 1.4, 5, 1.4, M.wood, false);
+  box(x, 6, z, 5, 2.5, 5, M.leaf, false);
+  box(x, 8, z, 3, 2, 3, M.leaftop, false);
+  // collidable top of tree (for lettuce placement)
+  collidables.push({minX:x-1.5, maxX:x+1.5, minZ:z-1.5, maxZ:z+1.5, top:9.1});
+}
+const TREES = [
+  [-30,30],[-42,36],[-35,46],[-50,40],[-57,30],[-62,52],[-45,56],
+  [-32,62],[-66,46],[-72,36],[-57,66],[-42,72],[-26,52],[-72,62],
+  [-26,41],[-52,26],[-62,26],[-46,31],[-36,56],[-70,72]
+];
+TREES.forEach(([x,z]) => tree(x, z));
+
+// ---- MOUNTAIN ZONE (x:20-85, z:35-95) ----
+const MLayers = [
+  {cx:55, cz:65, size:48, y:2},
+  {cx:55, cz:65, size:36, y:6},
+  {cx:55, cz:65, size:26, y:10},
+  {cx:55, cz:65, size:18, y:14},
+  {cx:55, cz:65, size:12, y:18},
+  {cx:55, cz:65, size:6,  y:22},
+];
+MLayers.forEach(({cx,cz,size,y}, i) => box(cx, y, cz, size, 4, size, i%2===0 ? M.gray : M.dgray));
+// Mountain staircase path from south
+for(let i = 0; i < 8; i++) {
+  box(28 + i*3.5, i*2.8 + 1.5, 65, 3.5, i*2.8+3, 6, M.lgray);
+}
+
+// ---- BEACH ZONE (z:95-145) ----
+{
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(200, 70), M.sand);
+  m.rotation.x = -Math.PI/2; m.position.set(0, 0.05, 115);
+  m.receiveShadow = true; scene.add(m);
+}
+box(0, -0.5, 148, 200, 1, 40, M.water, false);
+// Beach huts
+box(-35, 3, 102, 8, 6, 8, M.wood);
+box(-35, 6.5, 102, 10, 1.5, 10, M.orange); // roof
+box(35, 3, 102, 8, 6, 8, M.wood);
+box(35, 6.5, 102, 10, 1.5, 10, M.yellow);
+// Pier
+for(let i = 0; i < 9; i++) box(5, 0.3, 128 + i*2.2, 4, 0.6, 2, M.wood);
+
+// ---- BRIDGES ----
+box(13, 0.6, 0, 12, 0.5, 5, M.wood);     // spawn → village
+box(23, 0.3, 40, 5, 0.6, 20, M.lgray);   // spawn → mountain base
+box(0, 0.1, 75, 6, 0.2, 32, M.sand, false); // path to beach
+
+// ---- FLOATING ISLAND ----
+box(-10, 22, -102, 22, 4, 22, M.ground);
+box(-10, 24.1, -102, 20, 0.5, 20, M.grass2, false);
+// Stepping stones up to island
+box(-10, 5,  -82, 3.5, 1, 3.5, M.gray);
+box(-10, 11, -90, 3.5, 1, 3.5, M.yellow);
+box(-10, 17, -97, 3.5, 1, 3.5, M.orange);
+
+// ---- RAINBOW BRIDGE (bonus) ----
+const rbcols = [M.red,M.orange,M.yellow,M.green,M.cyan,M.blue,M.purple];
+for(let i = 0; i < 14; i++) box(-50 + i*4, 6 + Math.sin(i*0.6)*3, -15, 4, 0.8, 4, rbcols[i%7]);
+
+// ===================== PLAYER AVATAR =====================
+const charGroup = new THREE.Group();
+// Legs
+const legMat = new THREE.MeshLambertMaterial({color:0x2244bb});
+box2(charGroup, -0.2, 0.45, 0, 0.35, 0.9, 0.35, legMat);
+box2(charGroup,  0.2, 0.45, 0, 0.35, 0.9, 0.35, legMat);
+// Body
+const bodyMat = new THREE.MeshLambertMaterial({color:0x3366dd});
+box2(charGroup, 0, 1.25, 0, 0.7, 0.7, 0.5, bodyMat);
+// Arms
+const armMat = new THREE.MeshLambertMaterial({color:0x3366dd});
+box2(charGroup, -0.5, 1.15, 0, 0.25, 0.7, 0.3, armMat);
+box2(charGroup,  0.5, 1.15, 0, 0.25, 0.7, 0.3, armMat);
+// Head
+const headMat = new THREE.MeshLambertMaterial({color:0xffcc99});
+box2(charGroup, 0, 1.95, 0, 0.65, 0.65, 0.65, headMat);
+// Hat
+box2(charGroup, 0, 2.45, 0, 0.75, 0.35, 0.75, new THREE.MeshLambertMaterial({color:0x22cc22}));
+box2(charGroup, 0, 2.7, 0, 0.5, 0.35, 0.5, new THREE.MeshLambertMaterial({color:0x22cc22}));
+scene.add(charGroup);
+
+function box2(parent, x, y, z, w, h, d, mat) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  m.position.set(x,y,z); m.castShadow = true;
+  parent.add(m);
+}
+
+// ===================== LETTUCES =====================
+const LPOS = [
+  // Spawn area (8)
+  [6, 1, 6], [-7, 1, 8], [11, 1, -5], [-10, 1, -8],
+  [16, 1, 3], [-14, 1, 14], [3, 1, -18], [-3, 1, 18],
+  // Village (10)
+  [35, 18, 0], [58, 12.5, -16], [28, 8.5, -25], [68, 27.5, 18],
+  [68, 15.3, 18], [30, 1, -8], [52, 1, -10], [45, 1, 12],
+  [64, 1, -5], [38, 1, 22],
+  // Obby (10)
+  [-28, 4, -22], [-38, 6.5, -30], [-30, 9.5, -40], [-44, 12.5, -46],
+  [-34, 15.5, -56], [-50, 18.5, -62], [-38, 21.5, -70], [-55, 24.5, -66],
+  [-62, 21.5, -52], [-50, 29.5, -78],
+  // Forest (8)
+  [-30, 1, 32], [-43, 1, 43], [-42, 1, 36], [-52, 1, 53],
+  [-63, 1, 48], [-67, 1, 38], [-57, 1, 66], [-28, 1, 62],
+  // Mountain (8)
+  [28, 1, 52], [32, 3.5, 65], [39, 6.5, 65], [46, 9.5, 65],
+  [55, 12.5, 58], [55, 16.5, 62], [55, 20.5, 58], [55, 24.5, 65],
+  // Beach (4)
+  [-32, 1, 100], [32, 1, 104], [5, 1.5, 138], [-6, 1, 118],
+  // Floating island (2)
+  [-8, 25.5, -100], [-14, 25.5, -105],
+];
+
+const lettuces = [];
+const LCOLLECT_R2 = 3.5 * 3.5;
+
+function makeLettuce(x, y, z) {
+  const g = new THREE.Group();
+  // Main head (layered boxes for leaf look)
+  const lm = new THREE.MeshLambertMaterial({color:0x33dd33, emissive:new THREE.Color(0x0f4f0f)});
+  const lm2 = new THREE.MeshLambertMaterial({color:0x55ff55, emissive:new THREE.Color(0x115511)});
+  const m1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.7), lm);
+  m1.position.y = 0.35; g.add(m1);
+  const m2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.9), lm2);
+  m2.position.y = 0.18; g.add(m2);
+  // 4 outer leaves
+  for(let a = 0; a < 4; a++) {
+    const ang = a * Math.PI/2;
+    const lf = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.35), lm);
+    lf.position.set(Math.sin(ang)*0.52, 0.25, Math.cos(ang)*0.52);
+    lf.rotation.z = Math.sin(ang)*0.3; lf.rotation.x = Math.cos(ang)*0.3;
+    g.add(lf);
+  }
+  // Stem
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.18),
+    new THREE.MeshLambertMaterial({color:0xdddd22}));
+  stem.position.y = -0.1; g.add(stem);
+  // Glow sphere (subtle)
+  const glow = new THREE.PointLight(0x44ff44, 0.8, 4);
+  glow.position.y = 0.5; g.add(glow);
+  g.position.set(x, y, z);
+  scene.add(g);
+  return {group:g, pos:new THREE.Vector3(x, y, z), collected:false};
+}
+
+LPOS.forEach(([x,y,z]) => lettuces.push(makeLettuce(x, y, z)));
+
+// ===================== PLAYER STATE =====================
+const playerPos = new THREE.Vector3(0, 2, 0);
+const playerVel = new THREE.Vector3(0, 0, 0);
+let playerYaw = 0;
+let cameraPitch = 0.38;
+let onGround = false;
+let collected = 0;
+let popupTimer = 0;
+let legSwing = 0;
+
+// ===================== INPUT =====================
+const keys = {};
+let jumpQueued = false;
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(e.code === 'Space') { e.preventDefault(); jumpQueued = true; }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Mouse drag
+let dragging = false, lastMX = 0, lastMY = 0;
+canvas.addEventListener('mousedown', e => { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
+window.addEventListener('mouseup', () => dragging = false);
+window.addEventListener('mousemove', e => {
+  if(!dragging) return;
+  playerYaw -= (e.clientX - lastMX) * 0.004;
+  cameraPitch = Math.max(-0.15, Math.min(1.25, cameraPitch + (e.clientY - lastMY) * 0.003));
+  lastMX = e.clientX; lastMY = e.clientY;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+// ===================== TOUCH CONTROLS =====================
+const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+if(isMobile) {
+  document.getElementById('touch-ui').style.display = 'block';
+  document.getElementById('help').textContent = 'Drag right side to look • Left stick to move • JUMP button';
+}
+
+let joyId = -1, lookId = -1;
+let joyMX = 0, joyMZ = 0;
+let lookLastX = 0, lookLastY = 0;
+const JOY_R = 42;
+const joyZone = document.getElementById('joy-zone');
+const joyKnob = document.getElementById('joy-knob');
+const lookZone = document.getElementById('look-zone');
+const jumpBtn  = document.getElementById('jump-btn');
+
+function joyCenter() { return {cx: joyZone.getBoundingClientRect().left + 65, cy: joyZone.getBoundingClientRect().top + 65}; }
+
+joyZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  joyId = t.identifier;
+}, {passive:false});
+
+lookZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  lookId = t.identifier; lookLastX = t.clientX; lookLastY = t.clientY;
+}, {passive:false});
+
+jumpBtn.addEventListener('touchstart', e => { e.preventDefault(); jumpQueued = true; }, {passive:false});
+
+window.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for(const t of e.changedTouches) {
+    if(t.identifier === joyId) {
+      const {cx, cy} = joyCenter();
+      const dx = t.clientX - cx, dy = t.clientY - cy;
+      const len = Math.sqrt(dx*dx+dy*dy);
+      const cl = Math.min(len, JOY_R);
+      joyMX = len > 1 ? (dx/len)*cl/JOY_R : 0;
+      joyMZ = len > 1 ? (dy/len)*cl/JOY_R : 0;
+      const kx = 40 + (len>1 ? dx/len*cl : 0);
+      const ky = 40 + (len>1 ? dy/len*cl : 0);
+      joyKnob.style.left = kx + 'px'; joyKnob.style.top = ky + 'px';
+    }
+    if(t.identifier === lookId) {
+      playerYaw -= (t.clientX - lookLastX) * 0.005;
+      cameraPitch = Math.max(-0.15, Math.min(1.25, cameraPitch + (t.clientY - lookLastY) * 0.004));
+      lookLastX = t.clientX; lookLastY = t.clientY;
+    }
+  }
+}, {passive:false});
+
+window.addEventListener('touchend', e => {
+  for(const t of e.changedTouches) {
+    if(t.identifier === joyId) { joyId = -1; joyMX = 0; joyMZ = 0; joyKnob.style.left = '40px'; joyKnob.style.top = '40px'; }
+    if(t.identifier === lookId) { lookId = -1; }
+  }
+});
+
+// ===================== MINIMAP =====================
+const mm = document.getElementById('mm');
+mm.width = 120; mm.height = 120;
+const mmCtx = mm.getContext('2d');
+
+function drawMinimap() {
+  mmCtx.fillStyle = '#112211';
+  mmCtx.fillRect(0, 0, 120, 120);
+  const cx = 60, cy = 60, scale = 0.38;
+  // Lettuces
+  for(const l of lettuces) {
+    if(l.collected) continue;
+    const mx = cx + (l.pos.x - playerPos.x) * scale;
+    const mz = cy + (l.pos.z - playerPos.z) * scale;
+    if(mx < 0 || mx > 120 || mz < 0 || mz > 120) continue;
+    mmCtx.fillStyle = '#44ee44';
+    mmCtx.fillRect(mx-1.5, mz-1.5, 3, 3);
+  }
+  // Player dot
+  mmCtx.fillStyle = '#ffffff';
+  mmCtx.beginPath(); mmCtx.arc(cx, cy, 3.5, 0, Math.PI*2); mmCtx.fill();
+  // Player direction
+  mmCtx.strokeStyle = '#ffffff'; mmCtx.lineWidth = 1.5;
+  mmCtx.beginPath();
+  mmCtx.moveTo(cx, cy);
+  mmCtx.lineTo(cx + Math.sin(playerYaw)*9, cy + Math.cos(playerYaw)*9);
+  mmCtx.stroke();
+  // Border
+  mmCtx.strokeStyle = '#4f4'; mmCtx.lineWidth = 2;
+  mmCtx.strokeRect(1, 1, 118, 118);
+}
+
+// ===================== PHYSICS =====================
+function updatePlayer(dt) {
+  // Input
+  const fwX = Math.sin(playerYaw), fwZ = Math.cos(playerYaw);
+  const rtX = Math.cos(playerYaw), rtZ = -Math.sin(playerYaw);
+  let mx = 0, mz = 0;
+  if(keys['KeyW'] || keys['ArrowUp'])    { mx += fwX; mz += fwZ; }
+  if(keys['KeyS'] || keys['ArrowDown'])  { mx -= fwX; mz -= fwZ; }
+  if(keys['KeyD'] || keys['ArrowRight']) { mx += rtX; mz += rtZ; }
+  if(keys['KeyA'] || keys['ArrowLeft'])  { mx -= rtX; mz -= rtZ; }
+  // Joystick (joyMX=right, joyMZ=forward-down => -fwd)
+  mx += joyMX * rtX + (-joyMZ) * fwX;
+  mz += joyMX * rtZ + (-joyMZ) * fwZ;
+
+  const speed = 10;
+  const len = Math.sqrt(mx*mx + mz*mz);
+  if(len > 0.01) {
+    const ns = Math.min(len, 1);
+    playerVel.x = (mx/len)*ns*speed;
+    playerVel.z = (mz/len)*ns*speed;
+    legSwing += dt * 8;
+    charGroup.rotation.y = playerYaw;
+  } else {
+    playerVel.x *= 0.75;
+    playerVel.z *= 0.75;
+  }
+
+  // Gravity
+  if(!onGround) playerVel.y -= 26 * dt;
+  else playerVel.y = Math.max(playerVel.y, 0);
+
+  // Jump
+  if(jumpQueued && onGround) { playerVel.y = 14; onGround = false; }
+  jumpQueued = false;
+
+  // Integrate position
+  const prevY = playerPos.y;
+  playerPos.x += playerVel.x * dt;
+  playerPos.y += playerVel.y * dt;
+  playerPos.z += playerVel.z * dt;
+
+  // Ground
+  onGround = false;
+  if(playerPos.y <= 0) { playerPos.y = 0; playerVel.y = 0; onGround = true; }
+
+  // Platform collisions
+  for(const p of collidables) {
+    if(playerPos.x > p.minX && playerPos.x < p.maxX &&
+       playerPos.z > p.minZ && playerPos.z < p.maxZ) {
+      if(prevY >= p.top - 0.05 && playerPos.y < p.top && playerVel.y <= 0) {
+        playerPos.y = p.top;
+        playerVel.y = 0;
+        onGround = true;
+      }
+    }
+  }
+
+  // Bounds & fall reset
+  playerPos.x = Math.max(-140, Math.min(140, playerPos.x));
+  playerPos.z = Math.max(-140, Math.min(140, playerPos.z));
+  if(playerPos.y < -25) { playerPos.set(0, 2, 0); playerVel.set(0,0,0); }
+}
+
+// ===================== CAMERA =====================
+function updateCamera() {
+  const dist = 8.5;
+  const hDist = Math.cos(cameraPitch) * dist;
+  const vDist = Math.sin(cameraPitch) * dist;
+  camera.position.set(
+    playerPos.x - Math.sin(playerYaw) * hDist,
+    playerPos.y + vDist + 1.5,
+    playerPos.z - Math.cos(playerYaw) * hDist
+  );
+  camera.lookAt(playerPos.x, playerPos.y + 1.2, playerPos.z);
+}
+
+// ===================== CHARACTER ANIMATION =====================
+function updateChar() {
+  charGroup.position.set(playerPos.x, playerPos.y, playerPos.z);
+  const moving = Math.abs(playerVel.x) + Math.abs(playerVel.z) > 0.5;
+  charGroup.children.forEach((c, i) => {
+    // Leg swing for first 2 children (legs)
+    if(i < 2 && moving) {
+      c.rotation.x = Math.sin(legSwing + (i===0 ? 0 : Math.PI)) * 0.5;
+    } else if(i < 2) {
+      c.rotation.x *= 0.8;
+    }
+    // Arm swing opposite to legs (arms are children 3 and 4)
+    if((i === 3 || i === 4) && moving) {
+      c.rotation.x = Math.sin(legSwing + (i===3 ? Math.PI : 0)) * 0.4;
+    } else if((i === 3 || i === 4) && !moving) {
+      c.rotation.x *= 0.8;
+    }
+  });
+}
+
+// ===================== LETTUCE COLLECTION =====================
+function checkLettuces() {
+  for(const l of lettuces) {
+    if(l.collected) continue;
+    const dx = playerPos.x - l.pos.x;
+    const dy = (playerPos.y + 1) - l.pos.y;
+    const dz = playerPos.z - l.pos.z;
+    if(dx*dx + dy*dy + dz*dz < LCOLLECT_R2) {
+      l.collected = true;
+      l.group.visible = false;
+      collected++;
+      document.getElementById('score').textContent = collected + ' / 50';
+      showPopup('🥬 Found! ' + collected + ' / 50');
+      if(collected >= 50) setTimeout(showWin, 600);
+    }
+  }
+}
+
+// ===================== UI =====================
+function showPopup(text) {
+  const p = document.getElementById('popup');
+  p.textContent = text;
+  p.style.display = 'block';
+  popupTimer = 2;
+}
+
+function showWin() {
+  document.getElementById('win').style.display = 'flex';
+  document.getElementById('win').onclick = () => location.href = 'index.html';
+}
+
+// ===================== GAME LOOP =====================
+let lastTime = 0;
+function loop(t) {
+  requestAnimationFrame(loop);
+  const dt = Math.min((t - lastTime) / 1000, 0.05);
+  lastTime = t;
+  if(dt <= 0) return;
+
+  updatePlayer(dt);
+  updateCamera();
+  updateChar();
+  checkLettuces();
+
+  // Spin lettuces
+  const st = t * 0.001;
+  lettuces.forEach((l, i) => {
+    if(!l.collected) {
+      l.group.rotation.y = st * 1.5 + i * 0.8;
+      l.group.position.y = l.pos.y + Math.sin(st * 2 + i) * 0.12;
+    }
+  });
+
+  // Popup timer
+  if(popupTimer > 0) {
+    popupTimer -= dt;
+    if(popupTimer <= 0) document.getElementById('popup').style.display = 'none';
+  }
+
+  drawMinimap();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(loop);
+
+// ===================== WIN SCREEN =====================
+document.getElementById('win').addEventListener('click', () => { location.href='index.html'; });
+
+// ===================== CLOUDS =====================
+for(let i = 0; i < 18; i++) {
+  const cx = (Math.random()-0.5)*300;
+  const cy = 45 + Math.random()*30;
+  const cz = (Math.random()-0.5)*300;
+  for(let j = 0; j < 4; j++) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(12+Math.random()*10, 5+Math.random()*4, 10+Math.random()*8),
+      new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.88})
+    );
+    m.position.set(cx + (Math.random()-0.5)*16, cy + (Math.random()-0.5)*4, cz + (Math.random()-0.5)*12);
+    scene.add(m);
+  }
+}
+
+</script>
+</body>
+</html>

@@ -52,6 +52,12 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Escape Engine card */
 .bg-esc{background:linear-gradient(135deg,#050510,#0a0a20,#100510)}
 .bg-esc canvas{width:100%;height:100%}
+/* Lettuce Hunt 50 card */
+.bg-lh50{background:linear-gradient(135deg,#051a05,#0d3a0a,#1a5a0a)}
+.bg-lh50 canvas{width:100%;height:100%}
+/* Planet Clicker card */
+.bg-pc{background:linear-gradient(135deg,#05050f,#0a0820,#150a2a)}
+.bg-pc canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -137,6 +143,22 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>STATION LUMIÈRE</h2>
       <p>3D escape room set aboard a dark Franco-American research station. Restore 3 critical systems, decode bilingual clues, and activate the emergency beacon.</p>
       <span class="tag" style="background:#050520;color:#88f">3D ESCAPE ROOM</span>
+    </div>
+  </a>
+  <a href="planet-clicker.html" class="card">
+    <div class="card-img bg-pc"><canvas id="c12"></canvas></div>
+    <div class="card-body">
+      <h2>PLANET CLICKER</h2>
+      <p>Roblox-style simulator. Hold planets from Moon to Galaxy and beyond — 15 items, 11 rebirths with up to 6 billion× multiplier, auto-clicker, size upgrades, and top-40 leaderboards!</p>
+      <span class="tag" style="background:#050510;color:#88ccff">SIMULATOR</span>
+    </div>
+  </a>
+  <a href="lettuce-hunt-50.html" class="card">
+    <div class="card-img bg-lh50"><canvas id="c11"></canvas></div>
+    <div class="card-body">
+      <h2>LETTUCE HUNT 50</h2>
+      <p>3D Roblox-style open world. Explore the village, obby towers, forest, mountain, beach, and a secret floating island — find all 50 hidden lettuces! Mobile friendly.</p>
+      <span class="tag" style="background:#0a2a0a;color:#4f4">3D EXPLORATION</span>
     </div>
   </a>
 </div>
@@ -594,6 +616,98 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     const pp=proj(sin(t*0.7)*0.5,-0.6,2.2+cos(t*0.5)*0.3);
     ctx.fillStyle='#5580ff';ctx.fillRect(pp.px-8,pp.py-14,16,20);
     ctx.fillStyle='#ffccaa';ctx.beginPath();ctx.arc(pp.px,pp.py-18,7,0,PI*2);ctx.fill();
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Lettuce Hunt 50 preview: spinning lettuces in a 3D field ----
+(function(){
+  const c=document.getElementById('c11'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const items=[];
+  for(let i=0;i<12;i++) items.push({x:rand(),z:0.5+rand()*2.5,a:rand()*PI*2,sp:0.4+rand()*0.6});
+  function proj(x,z){const f=120/z;return{px:w/2+x*f,py:h*0.55+f*0.3,s:f};}
+  function draw(){
+    t+=0.025;
+    ctx.fillStyle='rgba(5,18,5,0.18)';ctx.fillRect(0,0,w,h);
+    // Ground grid lines
+    ctx.strokeStyle='rgba(40,120,20,0.3)';ctx.lineWidth=1;
+    for(let gz=0.6;gz<4;gz+=0.7){
+      const p1=proj(-2,gz),p2=proj(2,gz);
+      ctx.beginPath();ctx.moveTo(p1.px,p1.py);ctx.lineTo(p2.px,p2.py);ctx.stroke();
+    }
+    // Sort by z
+    const sorted=[...items].sort((a,b)=>b.z-a.z);
+    sorted.forEach(item=>{
+      item.a+=0.04*item.sp;
+      const rx=item.x*cos(t*0.3)-item.z*sin(t*0.3);
+      const rz=item.x*sin(t*0.3)+item.z*cos(t*0.3);
+      if(rz<0.4)return;
+      const p=proj(rx,rz);
+      const sz=p.s*0.018+3;
+      const bob=sin(t*2+item.a)*sz*0.4;
+      // Lettuce leaf
+      ctx.fillStyle='#33dd33';
+      ctx.beginPath();ctx.arc(p.px,p.py-bob,sz*1.2,0,PI*2);ctx.fill();
+      ctx.fillStyle='#55ff55';
+      ctx.beginPath();ctx.arc(p.px,p.py-bob,sz*0.7,0,PI*2);ctx.fill();
+      // Stem
+      ctx.fillStyle='#dddd22';
+      ctx.fillRect(p.px-sz*0.2,p.py-bob+sz*0.6,sz*0.4,sz*0.7);
+    });
+    // Title
+    ctx.font=`bold ${Math.floor(w*0.085)}px Courier New`;
+    ctx.fillStyle='rgba(80,240,80,0.9)';ctx.textAlign='center';
+    ctx.fillText('🥬 50',w/2,h*0.25);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Planet Clicker preview: orbiting planets ----
+(function(){
+  const c=document.getElementById('c12'),ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const planets=[
+    {orb:60,speed:.7,r:10,col:['#e0e0f0','#aaaacc']},
+    {orb:88,speed:.4,r:13,col:['#ff7050','#aa2200']},
+    {orb:115,speed:.25,r:16,col:['#44aaee','#1144aa']},
+    {orb:145,speed:.15,r:19,col:['#f5c060','#995520']},
+  ];
+  function glow(cx,cy,r2,col){
+    const g=ctx.createRadialGradient(cx,cy,r2*.5,cx,cy,r2*2.5);
+    g.addColorStop(0,col+'44');g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,r2*2.5,0,PI*2);ctx.fill();
+  }
+  function draw(){
+    t+=0.018;
+    ctx.fillStyle='rgba(2,2,16,0.2)';ctx.fillRect(0,0,w,h);
+    const cx=w/2,cy=h/2;
+    // Sun at center
+    glow(cx,cy,12,'#ffcc00');
+    const sg=ctx.createRadialGradient(cx-3,cy-3,1,cx,cy,12);
+    sg.addColorStop(0,'#ffffaa');sg.addColorStop(.5,'#ffcc00');sg.addColorStop(1,'#ff6600');
+    ctx.fillStyle=sg;ctx.beginPath();ctx.arc(cx,cy,12,0,PI*2);ctx.fill();
+    // Orbits + planets
+    for(const p of planets){
+      ctx.strokeStyle='rgba(100,120,200,0.12)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(cx,cy,p.orb,0,PI*2);ctx.stroke();
+      const ang=t*p.speed;
+      const px=cx+cos(ang)*p.orb, py=cy+sin(ang)*p.orb*(0.5);
+      glow(px,py,p.r,p.col[0]);
+      const g2=ctx.createRadialGradient(px-p.r*.3,py-p.r*.3,p.r*.1,px,py,p.r);
+      g2.addColorStop(0,p.col[0]);g2.addColorStop(1,p.col[1]);
+      ctx.fillStyle=g2;ctx.beginPath();ctx.arc(px,py,p.r,0,PI*2);ctx.fill();
+    }
+    // Coins text
+    ctx.font=`bold ${Math.floor(w*0.075)}px Courier New`;
+    ctx.fillStyle='rgba(255,220,0,0.85)';ctx.textAlign='center';
+    ctx.fillText('🪐 CLICK!',cx,h*.22);
     requestAnimationFrame(draw);
   }
   draw();
