@@ -18,11 +18,14 @@ local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 -- Wait for server remotes & shared data
-local Remotes  = ReplicatedStorage:WaitForChild("Remotes", 10)
-local LoadData = Remotes:WaitForChild("LoadData", 10)
-local SaveData = Remotes:WaitForChild("SaveData", 10)
-local GetLB    = Remotes:WaitForChild("GetLB", 10)
 local ItemData = require(ReplicatedStorage:WaitForChild("ItemData", 10))
+local LoadData, SaveData, GetLB
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+if Remotes then
+	LoadData = Remotes:FindFirstChild("LoadData")
+	SaveData = Remotes:FindFirstChild("SaveData")
+	GetLB    = Remotes:FindFirstChild("GetLB")
+end
 
 local ITEMS      = ItemData.Items
 local REBIRTHS   = ItemData.Rebirths
@@ -544,6 +547,7 @@ local function checkSizeMilestones()
 end
 
 local function syncToServer()
+	if not SaveData then return end
 	SaveData:FireServer({
 		coins=state.coins, strength=state.strength, rebirths=state.rebirths,
 		mult=state.mult, heldItem=state.heldItem, sizeMult=state.sizeMult,
@@ -652,6 +656,7 @@ end)
 LBBtn.MouseButton1Click:Connect(function()
 	LBOverlay.Visible=true
 	task.spawn(function()
+		if not GetLB then return end
 		local ok1,sr = pcall(function() return GetLB:InvokeServer("strength") end)
 		local ok2,tr = pcall(function() return GetLB:InvokeServer("time")     end)
 		if ok1 and sr then populateLB(LBStrScroll,  sr, fmtNum)  end
@@ -664,19 +669,21 @@ BackBtn.MouseButton1Click:Connect(function() syncToServer() end)
 -- ═══════════════════════════════════════════════════════════════════════
 --  DATA FROM SERVER
 -- ═══════════════════════════════════════════════════════════════════════
-LoadData.OnClientEvent:Connect(function(data)
-	state.coins       = data.coins       or 0
-	state.strength    = data.strength    or 0
-	state.rebirths    = data.rebirths    or 0
-	state.mult        = data.mult        or 1
-	state.heldItem    = math.clamp(data.heldItem or 1, 1, #ITEMS)
-	state.sizeMult    = data.sizeMult    or 1.0
-	state.nextSizeIdx = data.nextSizeIdx or 1
-	state.timePlayed  = data.timePlayed  or 0
-	dataLoaded = true
-	applyPlanet(state.heldItem)
-	updateUI()
-end)
+if LoadData then
+	LoadData.OnClientEvent:Connect(function(data)
+		state.coins       = data.coins       or 0
+		state.strength    = data.strength    or 0
+		state.rebirths    = data.rebirths    or 0
+		state.mult        = data.mult        or 1
+		state.heldItem    = math.clamp(data.heldItem or 1, 1, #ITEMS)
+		state.sizeMult    = data.sizeMult    or 1.0
+		state.nextSizeIdx = data.nextSizeIdx or 1
+		state.timePlayed  = data.timePlayed  or 0
+		dataLoaded = true
+		applyPlanet(state.heldItem)
+		updateUI()
+	end)
+end
 
 -- Offline fallback (Studio with no server)
 task.delay(3, function()

@@ -6,9 +6,12 @@ local DataStoreService    = game:GetService("DataStoreService")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 
 local SAVE_KEY = "PlanetClicker_v1"
-local GameStore     = DataStoreService:GetDataStore(SAVE_KEY)
-local StrengthLB    = DataStoreService:GetOrderedDataStore("StrengthLB_v1")
-local TimeLB        = DataStoreService:GetOrderedDataStore("TimeLB_v1")
+local GameStore, StrengthLB, TimeLB
+pcall(function()
+	GameStore  = DataStoreService:GetDataStore(SAVE_KEY)
+	StrengthLB = DataStoreService:GetOrderedDataStore("StrengthLB_v1")
+	TimeLB     = DataStoreService:GetOrderedDataStore("TimeLB_v1")
+end)
 
 -- ── Remotes ──────────────────────────────────────────────────────────
 local Remotes = Instance.new("Folder")
@@ -37,7 +40,7 @@ end
 -- ── Load / Save ───────────────────────────────────────────────────────
 local function loadData(player)
 	local ok, result = pcall(function()
-		return GameStore:GetAsync(tostring(player.UserId))
+		return GameStore and GameStore:GetAsync(tostring(player.UserId))
 	end)
 	if ok and result then
 		-- merge with defaults in case new fields were added
@@ -51,14 +54,13 @@ end
 local function saveData(player, data)
 	if not data then return end
 	pcall(function()
-		GameStore:SetAsync(tostring(player.UserId), data)
-	end)
-	-- update leaderboards
-	pcall(function()
-		StrengthLB:SetAsync(tostring(player.UserId), math.floor(data.strength))
+		if GameStore then GameStore:SetAsync(tostring(player.UserId), data) end
 	end)
 	pcall(function()
-		TimeLB:SetAsync(tostring(player.UserId), math.floor(data.timePlayed))
+		if StrengthLB then StrengthLB:SetAsync(tostring(player.UserId), math.floor(data.strength)) end
+	end)
+	pcall(function()
+		if TimeLB then TimeLB:SetAsync(tostring(player.UserId), math.floor(data.timePlayed)) end
 	end)
 end
 
@@ -83,6 +85,7 @@ end
 -- ── Leaderboard fetch ────────────────────────────────────────────────
 local function getTop40(store)
 	local results = {}
+	if not store then return results end
 	local ok, pages = pcall(function()
 		return store:GetSortedAsync(false, 40)
 	end)
