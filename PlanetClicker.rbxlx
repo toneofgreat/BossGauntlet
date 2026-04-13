@@ -1,0 +1,1068 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="DataModel">
+    <Properties>
+      <string name="Name">PlanetClicker</string>
+    </Properties>
+    <Item class="ServerScriptService">
+      <Properties>
+        <string name="Name">ServerScriptService</string>
+      </Properties>
+      <Item class="Script">
+        <Properties>
+          <string name="Name">GameServer</string>
+          <bool name="Disabled">false</bool>
+          <ProtectedString name="Source">-- Script: GameServer
+-- Handles DataStore persistence, leaderstats, leaderboard, and remotes
+
+local Players             = game:GetService(&quot;Players&quot;)
+local DataStoreService    = game:GetService(&quot;DataStoreService&quot;)
+local ReplicatedStorage   = game:GetService(&quot;ReplicatedStorage&quot;)
+
+local SAVE_KEY = &quot;PlanetClicker_v1&quot;
+local GameStore     = DataStoreService:GetDataStore(SAVE_KEY)
+local StrengthLB    = DataStoreService:GetOrderedDataStore(&quot;StrengthLB_v1&quot;)
+local TimeLB        = DataStoreService:GetOrderedDataStore(&quot;TimeLB_v1&quot;)
+
+-- ── Remotes ──────────────────────────────────────────────────────────
+local Remotes = Instance.new(&quot;Folder&quot;)
+Remotes.Name  = &quot;Remotes&quot;
+Remotes.Parent = ReplicatedStorage
+
+local function makeEvent(name)
+	local e = Instance.new(&quot;RemoteEvent&quot;); e.Name = name; e.Parent = Remotes; return e
+end
+local function makeFunc(name)
+	local f = Instance.new(&quot;RemoteFunction&quot;); f.Name = name; f.Parent = Remotes; return f
+end
+
+local LoadData     = makeEvent(&quot;LoadData&quot;)
+local SaveData     = makeEvent(&quot;SaveData&quot;)
+local GetLB        = makeFunc(&quot;GetLB&quot;)
+
+-- ── Default data ─────────────────────────────────────────────────────
+local function defaultData()
+	return {
+		coins=0, strength=0, rebirths=0, mult=1,
+		heldItem=1, sizeMult=1.0, nextSizeIdx=1, timePlayed=0,
+	}
+end
+
+-- ── Load / Save ───────────────────────────────────────────────────────
+local function loadData(player)
+	local ok, result = pcall(function()
+		return GameStore:GetAsync(tostring(player.UserId))
+	end)
+	if ok and result then
+		-- merge with defaults in case new fields were added
+		local d = defaultData()
+		for k,v in pairs(result) do d[k] = v end
+		return d
+	end
+	return defaultData()
+end
+
+local function saveData(player, data)
+	if not data then return end
+	pcall(function()
+		GameStore:SetAsync(tostring(player.UserId), data)
+	end)
+	-- update leaderboards
+	pcall(function()
+		StrengthLB:SetAsync(tostring(player.UserId), math.floor(data.strength))
+	end)
+	pcall(function()
+		TimeLB:SetAsync(tostring(player.UserId), math.floor(data.timePlayed))
+	end)
+end
+
+-- ── Leaderstats (shown above head) ───────────────────────────────────
+local function setupLeaderstats(player, data)
+	local ls = Instance.new(&quot;Folder&quot;)
+	ls.Name = &quot;leaderstats&quot;
+
+	local coins = Instance.new(&quot;NumberValue&quot;, ls)
+	coins.Name = &quot;Coins&quot;; coins.Value = data.coins
+
+	local strength = Instance.new(&quot;NumberValue&quot;, ls)
+	strength.Name = &quot;Strength&quot;; strength.Value = data.strength
+
+	local rb = Instance.new(&quot;NumberValue&quot;, ls)
+	rb.Name = &quot;Rebirths&quot;; rb.Value = data.rebirths
+
+	ls.Parent = player
+	return ls
+end
+
+-- ── Leaderboard fetch ────────────────────────────────────────────────
+local function getTop40(store)
+	local results = {}
+	local ok, pages = pcall(function()
+		return store:GetSortedAsync(false, 40)
+	end)
+	if not ok then return results end
+	local ok2, page = pcall(function() return pages:GetCurrentPage() end)
+	if not ok2 then return results end
+	for _, entry in ipairs(page) do
+		local name = &quot;[unknown]&quot;
+		local ok3, plr = pcall(function()
+			return Players:GetNameFromUserIdAsync(tonumber(entry.key))
+		end)
+		if ok3 then name = plr end
+		table.insert(results, {name=name, value=entry.value})
+	end
+	return results
+end
+
+GetLB.OnServerInvoke = function(player, lbType)
+	if lbType == &quot;strength&quot; then
+		return getTop40(StrengthLB)
+	elseif lbType == &quot;time&quot; then
+		return getTop40(TimeLB)
+	end
+	return {}
+end
+
+-- ── Player lifecycle ─────────────────────────────────────────────────
+local playerDataCache = {}
+
+Players.PlayerAdded:Connect(function(player)
+	local data = loadData(player)
+	playerDataCache[player.UserId] = data
+
+	local ls = setupLeaderstats(player, data)
+	LoadData:FireClient(player, data)
+
+	-- Keep leaderstats synced when SaveData fires
+	SaveData.OnServerEvent:Connect(function(p, incoming)
+		if p ~= player then return end
+		playerDataCache[p.UserId] = incoming
+		-- update leaderstats display
+		local lsFolder = p:FindFirstChild(&quot;leaderstats&quot;)
+		if lsFolder then
+			local c = lsFolder:FindFirstChild(&quot;Coins&quot;)
+			if c then c.Value = math.floor(incoming.coins or 0) end
+			local s = lsFolder:FindFirstChild(&quot;Strength&quot;)
+			if s then s.Value = math.floor(incoming.strength or 0) end
+			local r = lsFolder:FindFirstChild(&quot;Rebirths&quot;)
+			if r then r.Value = incoming.rebirths or 0 end
+		end
+		saveData(p, incoming)
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	local data = playerDataCache[player.UserId]
+	if data then
+		saveData(player, data)
+		playerDataCache[player.UserId] = nil
+	end
+end)
+
+-- Auto-save every 60 seconds
+while true do
+	task.wait(60)
+	for userId, data in pairs(playerDataCache) do
+		local player = Players:GetPlayerByUserId(userId)
+		if player then
+			saveData(player, data)
+		end
+	end
+end
+</ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="ReplicatedStorage">
+      <Properties>
+        <string name="Name">ReplicatedStorage</string>
+      </Properties>
+      <Item class="ModuleScript">
+        <Properties>
+          <string name="Name">ItemData</string>
+          <ProtectedString name="Source">-- ModuleScript: ItemData
+-- All game data: items, rebirths, size milestones
+
+return {
+	Items = {
+		-- {name, cost, rbReq, cpc, color1, color2, material, special}
+		{name=&quot;Moon&quot;,          cost=0,       rbReq=0, cpc=1,
+		 col=BrickColor.new(&quot;Medium stone grey&quot;), mat=Enum.Material.SmoothPlastic,
+		 lightCol=Color3.fromRGB(180,180,220), lightBright=0.4,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5,5,5), special=&quot;smiley&quot;},
+
+		{name=&quot;Mars&quot;,          cost=20,      rbReq=0, cpc=5,
+		 col=BrickColor.new(&quot;Bright red&quot;),   mat=Enum.Material.SmoothPlastic,
+		 lightCol=Color3.fromRGB(255,100,0), lightBright=0.9,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5,5,5), special=&quot;fire&quot;},
+
+		{name=&quot;Earth&quot;,         cost=200,     rbReq=0, cpc=10,
+		 col=BrickColor.new(&quot;Bright blue&quot;),  mat=Enum.Material.SmoothPlastic,
+		 lightCol=Color3.fromRGB(80,160,255),lightBright=0.7,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5,5,5), special=&quot;sparkles_blue&quot;},
+
+		{name=&quot;Neptune&quot;,       cost=1500,    rbReq=0, cpc=20,
+		 col=BrickColor.new(&quot;Navy blue&quot;),    mat=Enum.Material.SmoothPlastic,
+		 lightCol=Color3.fromRGB(50,100,255),lightBright=1.0,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5.5,5.5,5.5), special=&quot;sparkles_blue&quot;},
+
+		{name=&quot;Jupiter&quot;,       cost=4000,    rbReq=0, cpc=50,
+		 col=BrickColor.new(&quot;Nougat&quot;),       mat=Enum.Material.SmoothPlastic,
+		 lightCol=Color3.fromRGB(220,150,60),lightBright=0.6,
+		 shape=Enum.PartType.Ball, size=Vector3.new(6,6,6), special=&quot;smoke&quot;},
+
+		{name=&quot;Sun&quot;,           cost=25000,   rbReq=0, cpc=75,
+		 col=BrickColor.new(&quot;Bright yellow&quot;),mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(255,230,100),lightBright=3,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5.5,5.5,5.5), special=&quot;sparkles&quot;},
+
+		{name=&quot;Red Sun&quot;,       cost=50000,   rbReq=0, cpc=100,
+		 col=BrickColor.new(&quot;Bright red&quot;),   mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(255,30,0),  lightBright=3,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5.5,5.5,5.5), special=&quot;fire&quot;},
+
+		{name=&quot;North Star&quot;,    cost=100000,  rbReq=0, cpc=250,
+		 col=BrickColor.new(&quot;White&quot;),        mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(200,220,255),lightBright=4,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5,5,5), special=&quot;sparkles&quot;},
+
+		{name=&quot;Black Hole&quot;,    cost=300000,  rbReq=0, cpc=500,
+		 col=BrickColor.new(&quot;Really black&quot;), mat=Enum.Material.Glass,
+		 lightCol=Color3.fromRGB(140,0,255), lightBright=2,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5.5,5.5,5.5), special=&quot;sparkles_purple&quot;},
+
+		{name=&quot;Black Hole Bar&quot;,cost=1e6,     rbReq=0, cpc=750,
+		 col=BrickColor.new(&quot;Really black&quot;), mat=Enum.Material.Glass,
+		 lightCol=Color3.fromRGB(100,0,200), lightBright=2,
+		 shape=Enum.PartType.Block, size=Vector3.new(10,2.5,2.5), special=&quot;sparkles_purple&quot;},
+
+		{name=&quot;Aura Cube&quot;,     cost=590e9,   rbReq=4, cpc=1000,
+		 col=BrickColor.new(&quot;Hot pink&quot;),     mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(255,0,255), lightBright=3,
+		 shape=Enum.PartType.Block, size=Vector3.new(5,5,5), special=&quot;rainbow&quot;},
+
+		{name=&quot;Godly Star&quot;,    cost=12e12,   rbReq=5, cpc=5000,
+		 col=BrickColor.new(&quot;Bright yellow&quot;),mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(255,210,0), lightBright=4,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5.5,5.5,5.5), special=&quot;sparkles&quot;},
+
+		{name=&quot;Galaxy&quot;,        cost=100e12,  rbReq=5, cpc=7500,
+		 col=BrickColor.new(&quot;Medium lilac&quot;), mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(120,60,255),lightBright=2.5,
+		 shape=Enum.PartType.Ball, size=Vector3.new(6,6,6), special=&quot;sparkles_purple&quot;},
+
+		{name=&quot;Universe&quot;,      cost=15e15,   rbReq=8, cpc=10000,
+		 col=BrickColor.new(&quot;Really black&quot;), mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(40,40,200), lightBright=2,
+		 shape=Enum.PartType.Ball, size=Vector3.new(6.5,6.5,6.5), special=&quot;sparkles_purple&quot;},
+
+		{name=&quot;Half's Gold&quot;,   cost=200e18,  rbReq=9, cpc=25000,
+		 col=BrickColor.new(&quot;Bright yellow&quot;),mat=Enum.Material.Neon,
+		 lightCol=Color3.fromRGB(255,220,50),lightBright=4,
+		 shape=Enum.PartType.Ball, size=Vector3.new(5.5,5.5,5.5), special=&quot;sparkles&quot;},
+	},
+
+	Rebirths = {
+		{name=&quot;Rebirth I&quot;,    cost=1e5,    mult=3},
+		{name=&quot;Rebirth II&quot;,   cost=1e6,    mult=6},
+		{name=&quot;Rebirth III&quot;,  cost=1e7,    mult=12},
+		{name=&quot;Rebirth IV&quot;,   cost=1e8,    mult=100000},
+		{name=&quot;Rebirth V&quot;,    cost=1e11,   mult=150000},
+		{name=&quot;Rebirth VI&quot;,   cost=1e12,   mult=1000000},
+		{name=&quot;Rebirth VII&quot;,  cost=5e12,   mult=50000000},
+		{name=&quot;Rebirth VIII&quot;, cost=2e14,   mult=150000000},
+		{name=&quot;Rebirth IX&quot;,   cost=8e15,   mult=1000000000},
+		{name=&quot;Rebirth X&quot;,    cost=3.5e17, mult=3000000000},
+		{name=&quot;Rebirth XI&quot;,   cost=59e18,  mult=6000000000},
+	},
+
+	SizeMilestones = {
+		{str=19e3,  factor=1.5},
+		{str=19e6,  factor=1.8},
+		{str=1e12,  factor=2.16},
+		{str=10e18, factor=2.59},
+		{str=1e21,  factor=3.11},
+	},
+}
+</ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="StarterPlayer">
+      <Properties>
+        <string name="Name">StarterPlayer</string>
+      </Properties>
+      <Item class="StarterPlayerScripts">
+        <Properties>
+          <string name="Name">StarterPlayerScripts</string>
+        </Properties>
+        <Item class="LocalScript">
+          <Properties>
+            <string name="Name">PlanetClicker</string>
+            <bool name="Disabled">false</bool>
+            <ProtectedString name="Source">-- LocalScript: PlanetClicker
+-- Full client-side game logic + GUI
+
+local Players           = game:GetService(&quot;Players&quot;)
+local RunService        = game:GetService(&quot;RunService&quot;)
+local TweenService      = game:GetService(&quot;TweenService&quot;)
+local ReplicatedStorage = game:GetService(&quot;ReplicatedStorage&quot;)
+local StarterGui        = game:GetService(&quot;StarterGui&quot;)
+
+-- Hide default Roblox UI so our buttons aren't covered
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.EmotesMenu, false)
+end)
+
+local player    = Players.LocalPlayer
+local playerGui = player:WaitForChild(&quot;PlayerGui&quot;)
+
+-- Wait for server remotes &amp; shared data
+local Remotes  = ReplicatedStorage:WaitForChild(&quot;Remotes&quot;, 10)
+local LoadData = Remotes:WaitForChild(&quot;LoadData&quot;, 10)
+local SaveData = Remotes:WaitForChild(&quot;SaveData&quot;, 10)
+local GetLB    = Remotes:WaitForChild(&quot;GetLB&quot;, 10)
+local ItemData = require(ReplicatedStorage:WaitForChild(&quot;ItemData&quot;, 10))
+
+local ITEMS      = ItemData.Items
+local REBIRTHS   = ItemData.Rebirths
+local SIZE_MILES = ItemData.SizeMilestones
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  STATE
+-- ═══════════════════════════════════════════════════════════════════════
+local state = {
+	coins=0, strength=0, rebirths=0, mult=1,
+	heldItem=1, sizeMult=1.0, nextSizeIdx=1, timePlayed=0,
+	autoOn=false,
+}
+local dataLoaded  = false
+local autoTimer   = 0
+local clickBounce = 0
+local rainbowHue  = 0
+local notifTimer  = 0
+local syncInterval= 0
+local SYNC_EVERY  = 30
+local popupTimer  = 0
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  UTILS
+-- ═══════════════════════════════════════════════════════════════════════
+local function fmtNum(n)
+	if not n or n ~= n then return &quot;0&quot; end
+	if n &gt;= 1e21 then return string.format(&quot;%.2fsx&quot;, n/1e21)
+	elseif n &gt;= 1e18 then return string.format(&quot;%.2fqi&quot;, n/1e18)
+	elseif n &gt;= 1e15 then return string.format(&quot;%.2fq&quot;,  n/1e15)
+	elseif n &gt;= 1e12 then return string.format(&quot;%.2ft&quot;,  n/1e12)
+	elseif n &gt;= 1e9  then return string.format(&quot;%.2fb&quot;,  n/1e9)
+	elseif n &gt;= 1e6  then return string.format(&quot;%.2fm&quot;,  n/1e6)
+	elseif n &gt;= 1e3  then return string.format(&quot;%.2fk&quot;,  n/1e3)
+	else return tostring(math.floor(n)) end
+end
+
+local function fmtMult(m)
+	if m &gt;= 1e9  then return string.format(&quot;%.1fbx&quot;, m/1e9)
+	elseif m &gt;= 1e6  then return string.format(&quot;%.1fmx&quot;, m/1e6)
+	elseif m &gt;= 1e3  then return string.format(&quot;%.1fkx&quot;, m/1e3)
+	else return &quot;x&quot;..tostring(math.floor(m)) end
+end
+
+local function fmtTime(s)
+	local h = math.floor(s/3600)
+	local m = math.floor((s%3600)/60)
+	local sec = math.floor(s%60)
+	if h &gt; 0 then return string.format(&quot;%dh %dm&quot;, h, m) end
+	if m &gt; 0 then return string.format(&quot;%dm %ds&quot;, m, sec) end
+	return string.format(&quot;%ds&quot;, sec)
+end
+
+local function newUI(class, props, parent)
+	local obj = Instance.new(class)
+	for k,v in pairs(props) do obj[k] = v end
+	if parent then obj.Parent = parent end
+	return obj
+end
+local function corner(r, parent)
+	local c = Instance.new(&quot;UICorner&quot;); c.CornerRadius=UDim.new(0,r); c.Parent=parent
+end
+local function stroke(thick, col, parent)
+	local s = Instance.new(&quot;UIStroke&quot;); s.Thickness=thick; s.Color=col; s.Parent=parent
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  ROOT GUI
+-- ═══════════════════════════════════════════════════════════════════════
+local Gui = newUI(&quot;ScreenGui&quot;, {
+	Name=&quot;PlanetClickerGui&quot;, ResetOnSpawn=false,
+	ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
+	IgnoreGuiInset=true,
+}, playerGui)
+
+local BG = newUI(&quot;Frame&quot;, {
+	Size=UDim2.new(1,0,1,0),
+	BackgroundColor3=Color3.fromRGB(3,3,18),
+	BorderSizePixel=0,
+}, Gui)
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  TOP BAR  (full width, 50px tall)
+-- ═══════════════════════════════════════════════════════════════════════
+local TopBar = newUI(&quot;Frame&quot;, {
+	Size=UDim2.new(1,0,0,50),
+	BackgroundColor3=Color3.fromRGB(6,6,26),
+	BorderSizePixel=0, ZIndex=5,
+}, BG)
+stroke(1, Color3.fromRGB(30,50,120), TopBar)
+
+-- Back button (far left)
+local BackBtn = newUI(&quot;TextButton&quot;, {
+	Size=UDim2.new(0,80,0,36), Position=UDim2.new(0,6,0,7),
+	Text=&quot;← MENU&quot;, Font=Enum.Font.GothamBold, TextSize=11,
+	TextColor3=Color3.fromRGB(160,170,200),
+	BackgroundColor3=Color3.fromRGB(10,10,30),
+	BorderSizePixel=0, ZIndex=6,
+}, TopBar)
+corner(6, BackBtn)
+stroke(1, Color3.fromRGB(40,50,100), BackBtn)
+
+-- Stat boxes in top bar
+local statValues = {}
+local function statBox(lbl, id, col, xPos)
+	local box = newUI(&quot;Frame&quot;, {
+		Size=UDim2.new(0,108,0,38), Position=UDim2.new(0,xPos,0,6),
+		BackgroundColor3=Color3.fromRGB(10,10,35), BorderSizePixel=0, ZIndex=5,
+	}, TopBar)
+	corner(6, box)
+	stroke(1, Color3.fromRGB(30,50,120), box)
+	newUI(&quot;TextLabel&quot;, {
+		Size=UDim2.new(1,0,0,14), Position=UDim2.new(0,0,0,2),
+		Text=lbl, TextColor3=Color3.fromRGB(80,100,160),
+		Font=Enum.Font.GothamBold, TextSize=9, BackgroundTransparency=1,
+		TextXAlignment=Enum.TextXAlignment.Center,
+	}, box)
+	local val = newUI(&quot;TextLabel&quot;, {
+		Name=id, Size=UDim2.new(1,-4,0,20), Position=UDim2.new(0,2,0,16),
+		Text=&quot;0&quot;, TextColor3=col, Font=Enum.Font.GothamBold, TextSize=14,
+		BackgroundTransparency=1, TextXAlignment=Enum.TextXAlignment.Center,
+		TextTruncate=Enum.TextTruncate.AtEnd,
+	}, box)
+	statValues[id] = val
+	return val
+end
+
+statBox(&quot;COINS&quot;,     &quot;coins&quot;,    Color3.fromRGB(255,220,50),  92)
+statBox(&quot;MULT&quot;,      &quot;mult&quot;,     Color3.fromRGB(255,100,200), 208)
+statBox(&quot;STRENGTH&quot;,  &quot;strength&quot;, Color3.fromRGB(100,255,120), 324)
+statBox(&quot;REBIRTHS&quot;,  &quot;rebirths&quot;, Color3.fromRGB(200,150,255), 440)
+statBox(&quot;PER CLICK&quot;, &quot;cpc&quot;,      Color3.fromRGB(100,200,255), 556)
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  LAYOUT  (below top bar, two columns)
+--    Left col  : planet + auto click button
+--    Right col : shop + rebirth + LB buttons
+-- ═══════════════════════════════════════════════════════════════════════
+local CONTENT_Y    = 54    -- pixels below topbar
+local RIGHT_W      = 250   -- right panel width
+local RIGHT_MARGIN = 6
+
+-- ── RIGHT PANEL ──────────────────────────────────────────────────────
+local RightPanel = newUI(&quot;Frame&quot;, {
+	Size=UDim2.new(0,RIGHT_W, 1,-(CONTENT_Y+4)),
+	Position=UDim2.new(1,-(RIGHT_W+RIGHT_MARGIN), 0, CONTENT_Y+2),
+	BackgroundColor3=Color3.fromRGB(6,6,24),
+	BorderSizePixel=0, ZIndex=3,
+}, BG)
+corner(10, RightPanel)
+stroke(1, Color3.fromRGB(25,40,110), RightPanel)
+
+-- Panel title
+newUI(&quot;TextLabel&quot;, {
+	Size=UDim2.new(1,0,0,26), Position=UDim2.new(0,0,0,2),
+	Text=&quot;🛒  SHOP&quot;, Font=Enum.Font.GothamBold, TextSize=13,
+	TextColor3=Color3.fromRGB(100,140,255), BackgroundTransparency=1, ZIndex=4,
+	TextXAlignment=Enum.TextXAlignment.Center,
+}, RightPanel)
+
+-- Scrollable shop list (takes most of panel height, leaving room for buttons)
+local ShopScroll = newUI(&quot;ScrollingFrame&quot;, {
+	Size=UDim2.new(1,-8, 1,-180),   -- leave 180px at bottom for buttons
+	Position=UDim2.new(0,4, 0,30),
+	BackgroundTransparency=1, BorderSizePixel=0,
+	ScrollBarThickness=5, ZIndex=4,
+	CanvasSize=UDim2.new(0,0,0,0),
+	AutomaticCanvasSize=Enum.AutomaticSize.Y,
+	ScrollingDirection=Enum.ScrollingDirection.Y,
+}, RightPanel)
+newUI(&quot;UIListLayout&quot;,{Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, ShopScroll)
+newUI(&quot;UIPadding&quot;,{PaddingLeft=UDim.new(0,2),PaddingRight=UDim.new(0,2),PaddingTop=UDim.new(0,2)}, ShopScroll)
+
+-- Divider
+newUI(&quot;Frame&quot;,{
+	Size=UDim2.new(1,-16,0,1), Position=UDim2.new(0,8, 1,-178),
+	BackgroundColor3=Color3.fromRGB(30,50,120), BorderSizePixel=0, ZIndex=4,
+}, RightPanel)
+
+-- ── REBIRTH BUTTON ────────────────────────────────────────────────────
+local RebirthBtn = newUI(&quot;TextButton&quot;, {
+	Size=UDim2.new(1,-16,0,42), Position=UDim2.new(0,8, 1,-174),
+	BackgroundColor3=Color3.fromRGB(40,8,80), BorderSizePixel=0,
+	Text=&quot;🔄  REBIRTH&quot;, Font=Enum.Font.GothamBold, TextSize=15,
+	TextColor3=Color3.fromRGB(220,160,255), ZIndex=5,
+}, RightPanel)
+corner(10, RebirthBtn)
+stroke(2, Color3.fromRGB(120,40,200), RebirthBtn)
+
+-- Rebirth info label
+local RebirthInfo = newUI(&quot;TextLabel&quot;, {
+	Size=UDim2.new(1,-16,0,28), Position=UDim2.new(0,8, 1,-130),
+	Text=&quot;Next: Rebirth I · 100k coins · x3&quot;,
+	Font=Enum.Font.Gotham, TextSize=10,
+	TextColor3=Color3.fromRGB(160,120,200), BackgroundTransparency=1, ZIndex=5,
+	TextXAlignment=Enum.TextXAlignment.Center, TextWrapped=true,
+}, RightPanel)
+
+-- ── AUTO-CLICKER BUTTON ───────────────────────────────────────────────
+local AutoBtn = newUI(&quot;TextButton&quot;, {
+	Size=UDim2.new(1,-16,0,36), Position=UDim2.new(0,8, 1,-100),
+	BackgroundColor3=Color3.fromRGB(8,25,8), BorderSizePixel=0,
+	Text=&quot;⚡  AUTO-CLICKER: OFF&quot;, Font=Enum.Font.GothamBold, TextSize=12,
+	TextColor3=Color3.fromRGB(100,200,100), ZIndex=5,
+}, RightPanel)
+corner(8, AutoBtn)
+stroke(2, Color3.fromRGB(30,80,30), AutoBtn)
+
+-- ── LEADERBOARD BUTTON ────────────────────────────────────────────────
+local LBBtn = newUI(&quot;TextButton&quot;, {
+	Size=UDim2.new(1,-16,0,34), Position=UDim2.new(0,8, 1,-58),
+	BackgroundColor3=Color3.fromRGB(10,20,40), BorderSizePixel=0,
+	Text=&quot;🏆  LEADERBOARD (TOP 40)&quot;, Font=Enum.Font.GothamBold, TextSize=11,
+	TextColor3=Color3.fromRGB(150,170,255), ZIndex=5,
+}, RightPanel)
+corner(8, LBBtn)
+stroke(1, Color3.fromRGB(40,60,120), LBBtn)
+
+-- ── BUILD SHOP ITEMS ──────────────────────────────────────────────────
+local shopButtons = {}
+for i, item in ipairs(ITEMS) do
+	local btn = newUI(&quot;TextButton&quot;, {
+		Name=&quot;Item_&quot;..i, Size=UDim2.new(1,0,0,52),
+		BackgroundColor3=Color3.fromRGB(10,12,35), BorderSizePixel=0,
+		Text=&quot;&quot;, ZIndex=4, LayoutOrder=i,
+	}, ShopScroll)
+	corner(7, btn)
+
+	-- Left color stripe
+	local stripe = newUI(&quot;Frame&quot;,{Size=UDim2.new(0,4,1,0),BackgroundColor3=item.lightCol,BorderSizePixel=0},btn)
+	corner(4,stripe)
+
+	-- Mini viewport icon
+	local mVPF = newUI(&quot;ViewportFrame&quot;,{
+		Size=UDim2.new(0,40,0,40), Position=UDim2.new(0,8,0,6),
+		BackgroundColor3=Color3.fromRGB(5,5,20), BorderSizePixel=0,
+		LightColor=Color3.fromRGB(255,255,255),
+		LightDirection=Vector3.new(-1,-1,-1),
+	}, btn)
+	corner(20, mVPF)
+	local mCam = Instance.new(&quot;Camera&quot;)
+	mCam.CFrame = CFrame.new(Vector3.new(0,0,8), Vector3.new(0,0,0))
+	mCam.Parent = mVPF; mVPF.CurrentCamera = mCam
+	local mPart = Instance.new(&quot;Part&quot;)
+	mPart.Anchored=true; mPart.CFrame=CFrame.new(0,0,0)
+	mPart.Shape=item.shape; mPart.Size=item.size*.5
+	mPart.BrickColor=item.col; mPart.Material=item.mat
+	mPart.CastShadow=false; mPart.Parent=mVPF
+	local mLight = Instance.new(&quot;PointLight&quot;,mPart)
+	mLight.Range=15; mLight.Brightness=item.lightBright; mLight.Color=item.lightCol
+
+	newUI(&quot;TextLabel&quot;,{
+		Size=UDim2.new(1,-58,0,18), Position=UDim2.new(0,56,0,4),
+		Text=item.name, Font=Enum.Font.GothamBold, TextSize=12,
+		TextColor3=Color3.fromRGB(200,210,255), BackgroundTransparency=1, ZIndex=5,
+		TextXAlignment=Enum.TextXAlignment.Left,
+	},btn)
+	newUI(&quot;TextLabel&quot;,{
+		Size=UDim2.new(1,-58,0,14), Position=UDim2.new(0,56,0,22),
+		Text=&quot;+&quot;..(fmtNum(item.cpc))..&quot; / click&quot;, Font=Enum.Font.Gotham, TextSize=10,
+		TextColor3=Color3.fromRGB(100,200,255), BackgroundTransparency=1, ZIndex=5,
+		TextXAlignment=Enum.TextXAlignment.Left,
+	},btn)
+	local costLbl = newUI(&quot;TextLabel&quot;,{
+		Name=&quot;CostLbl&quot;, Size=UDim2.new(1,-58,0,13), Position=UDim2.new(0,56,0,36),
+		Text=item.cost==0 and &quot;FREE&quot; or &quot;💰 &quot;..fmtNum(item.cost),
+		Font=Enum.Font.Gotham, TextSize=10,
+		TextColor3=Color3.fromRGB(255,210,40), BackgroundTransparency=1, ZIndex=5,
+		TextXAlignment=Enum.TextXAlignment.Left,
+	},btn)
+	if item.rbReq &gt; 0 then
+		newUI(&quot;TextLabel&quot;,{
+			Size=UDim2.new(0,60,0,14), Position=UDim2.new(1,-62,0,2),
+			Text=&quot;🔒 &quot;..item.rbReq..&quot;RB&quot;, Font=Enum.Font.GothamBold, TextSize=9,
+			TextColor3=Color3.fromRGB(160,120,80), BackgroundTransparency=1, ZIndex=5,
+			TextXAlignment=Enum.TextXAlignment.Right,
+		},btn)
+	end
+
+	shopButtons[i] = {btn=btn, miniPart=mPart, miniVPF=mVPF, costLbl=costLbl}
+	btn.MouseButton1Click:Connect(function() buyItem(i) end)
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  CENTER: VIEWPORT FRAME (planet) + click button
+-- ═══════════════════════════════════════════════════════════════════════
+-- Center column sits to the left of RightPanel
+local LEFT_W = UDim2.new(1,-(RIGHT_W+RIGHT_MARGIN+8), 1,-(CONTENT_Y+4))
+local VPF_SIZE = 290
+
+local VPF = newUI(&quot;ViewportFrame&quot;,{
+	Size=UDim2.new(0,VPF_SIZE,0,VPF_SIZE),
+	Position=UDim2.new(0.5,-(RIGHT_W//2+RIGHT_MARGIN)-(VPF_SIZE//2), 0, CONTENT_Y+14),
+	BackgroundColor3=Color3.fromRGB(5,5,20), BorderSizePixel=0, ZIndex=2,
+	LightColor=Color3.fromRGB(255,255,255),
+	LightDirection=Vector3.new(-1,-1.5,-1),
+	ImageColor3=Color3.fromRGB(5,5,20),
+	Ambient=Color3.fromRGB(35,35,55),
+},BG)
+corner(145, VPF)
+stroke(2, Color3.fromRGB(40,70,180), VPF)
+
+local vpfCam = Instance.new(&quot;Camera&quot;)
+vpfCam.CFrame = CFrame.new(Vector3.new(0,0,12), Vector3.new(0,0,0))
+vpfCam.Parent = VPF; VPF.CurrentCamera = vpfCam
+
+local planetPart = Instance.new(&quot;Part&quot;)
+planetPart.Anchored=true; planetPart.CastShadow=false
+planetPart.CFrame=CFrame.new(0,0,0)
+planetPart.Shape=Enum.PartType.Ball
+planetPart.Size=Vector3.new(5,5,5)
+planetPart.BrickColor=BrickColor.new(&quot;Medium stone grey&quot;)
+planetPart.Material=Enum.Material.SmoothPlastic
+planetPart.Parent=VPF
+
+local planetLight = Instance.new(&quot;PointLight&quot;, planetPart)
+planetLight.Range=20; planetLight.Brightness=0.4
+
+-- Transparent click button exactly over VPF
+local ClickBtn = newUI(&quot;TextButton&quot;,{
+	Size=UDim2.new(0,VPF_SIZE,0,VPF_SIZE),
+	Position=UDim2.new(0.5,-(RIGHT_W//2+RIGHT_MARGIN)-(VPF_SIZE//2), 0, CONTENT_Y+14),
+	BackgroundTransparency=1, Text=&quot;&quot;, ZIndex=10,
+},BG)
+corner(145, ClickBtn)
+
+-- Planet name below VPF
+local PlanetLabel = newUI(&quot;TextLabel&quot;,{
+	Size=UDim2.new(0,VPF_SIZE,0,24),
+	Position=UDim2.new(0.5,-(RIGHT_W//2+RIGHT_MARGIN)-(VPF_SIZE//2), 0, CONTENT_Y+14+VPF_SIZE+4),
+	Text=&quot;MOON&quot;, Font=Enum.Font.GothamBold, TextSize=14,
+	TextColor3=Color3.fromRGB(180,200,255), BackgroundTransparency=1, ZIndex=3,
+	TextXAlignment=Enum.TextXAlignment.Center,
+},BG)
+
+-- Click popup label
+local ClickPopup = newUI(&quot;TextLabel&quot;,{
+	Size=UDim2.new(0,220,0,36),
+	Position=UDim2.new(0.5,-(RIGHT_W//2+RIGHT_MARGIN)-110, 0, CONTENT_Y+10),
+	Text=&quot;&quot;, Font=Enum.Font.GothamBold, TextSize=22,
+	TextColor3=Color3.fromRGB(255,220,50), BackgroundTransparency=1, ZIndex=15,
+	TextXAlignment=Enum.TextXAlignment.Center,
+	TextStrokeTransparency=0.3, TextStrokeColor3=Color3.fromRGB(0,0,0),
+},BG)
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  NOTIFICATION BAR
+-- ═══════════════════════════════════════════════════════════════════════
+local NotifBar = newUI(&quot;Frame&quot;,{
+	Size=UDim2.new(0,380,0,42),
+	Position=UDim2.new(0.5,-190, 0, CONTENT_Y+4),
+	BackgroundColor3=Color3.fromRGB(10,40,10),
+	BorderSizePixel=0, ZIndex=20, Visible=false,
+},BG)
+corner(10, NotifBar)
+stroke(2, Color3.fromRGB(50,200,50), NotifBar)
+local NotifLbl = newUI(&quot;TextLabel&quot;,{
+	Size=UDim2.new(1,0,1,0), Text=&quot;&quot;,
+	Font=Enum.Font.GothamBold, TextSize=13,
+	TextColor3=Color3.fromRGB(150,255,150), BackgroundTransparency=1, ZIndex=21,
+	TextXAlignment=Enum.TextXAlignment.Center, TextWrapped=true,
+},NotifBar)
+
+local function showNotif(text)
+	NotifLbl.Text=text; NotifBar.Visible=true; notifTimer=3.5
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  LEADERBOARD OVERLAY
+-- ═══════════════════════════════════════════════════════════════════════
+local LBOverlay = newUI(&quot;Frame&quot;,{
+	Size=UDim2.new(0,520,0,480),
+	Position=UDim2.new(0.5,-260, 0.5,-240),
+	BackgroundColor3=Color3.fromRGB(4,4,18),
+	BorderSizePixel=0, ZIndex=30, Visible=false,
+},BG)
+corner(14, LBOverlay)
+stroke(2, Color3.fromRGB(50,80,200), LBOverlay)
+
+newUI(&quot;TextLabel&quot;,{
+	Size=UDim2.new(1,0,0,34), Position=UDim2.new(0,0,0,4),
+	Text=&quot;🏆  LEADERBOARD — TOP 40&quot;,
+	Font=Enum.Font.GothamBold, TextSize=16,
+	TextColor3=Color3.fromRGB(150,180,255), BackgroundTransparency=1, ZIndex=31,
+	TextXAlignment=Enum.TextXAlignment.Center,
+},LBOverlay)
+
+local LBClose = newUI(&quot;TextButton&quot;,{
+	Size=UDim2.new(0,36,0,26), Position=UDim2.new(1,-42,0,6),
+	Text=&quot;✕&quot;, Font=Enum.Font.GothamBold, TextSize=13,
+	TextColor3=Color3.fromRGB(255,100,100),
+	BackgroundColor3=Color3.fromRGB(40,10,10),
+	ZIndex=32, BorderSizePixel=0,
+},LBOverlay)
+corner(6, LBClose)
+
+local function makeLBCol(title, xPos, w)
+	local col = newUI(&quot;Frame&quot;,{
+		Size=UDim2.new(0,w,1,-60), Position=UDim2.new(0,xPos,0,44),
+		BackgroundColor3=Color3.fromRGB(8,8,28), BorderSizePixel=0, ZIndex=31,
+	},LBOverlay)
+	corner(8, col)
+	stroke(1, Color3.fromRGB(30,50,120), col)
+	newUI(&quot;TextLabel&quot;,{
+		Size=UDim2.new(1,0,0,20), Position=UDim2.new(0,0,0,2),
+		Text=title, Font=Enum.Font.GothamBold, TextSize=10,
+		TextColor3=Color3.fromRGB(100,130,200), BackgroundTransparency=1, ZIndex=32,
+		TextXAlignment=Enum.TextXAlignment.Center,
+	},col)
+	local scroll = newUI(&quot;ScrollingFrame&quot;,{
+		Size=UDim2.new(1,-4,1,-24), Position=UDim2.new(0,2,0,22),
+		BackgroundTransparency=1, BorderSizePixel=0,
+		ScrollBarThickness=3, ZIndex=32,
+		CanvasSize=UDim2.new(0,0,0,0), AutomaticCanvasSize=Enum.AutomaticSize.Y,
+	},col)
+	newUI(&quot;UIListLayout&quot;,{Padding=UDim.new(0,2)},scroll)
+	return scroll
+end
+local LBStrScroll  = makeLBCol(&quot;⚡ TOP STRENGTH&quot;,   8,   248)
+local LBTimeScroll = makeLBCol(&quot;⏱ TOP TIME PLAYED&quot;, 264, 248)
+
+local function populateLB(scroll, rows, valFmt)
+	for _,c in ipairs(scroll:GetChildren()) do
+		if not c:IsA(&quot;UIListLayout&quot;) then c:Destroy() end
+	end
+	for i, row in ipairs(rows) do
+		local col3 = i==1 and Color3.fromRGB(255,210,0)
+		         or  i==2 and Color3.fromRGB(180,180,220)
+		         or  i==3 and Color3.fromRGB(200,130,80)
+		         or           Color3.fromRGB(140,150,180)
+		local r = newUI(&quot;Frame&quot;,{
+			Size=UDim2.new(1,-2,0,20),
+			BackgroundColor3=Color3.fromRGB(10,12,35), BorderSizePixel=0, ZIndex=33,
+		},scroll)
+		corner(4,r)
+		newUI(&quot;TextLabel&quot;,{Size=UDim2.new(0,22,1,0),Text=&quot;#&quot;..i,
+			Font=Enum.Font.GothamBold,TextSize=9,TextColor3=col3,
+			BackgroundTransparency=1,ZIndex=34,TextXAlignment=Enum.TextXAlignment.Center},r)
+		newUI(&quot;TextLabel&quot;,{Size=UDim2.new(1,-80,1,0),Position=UDim2.new(0,22,0,0),
+			Text=row.name or &quot;???&quot;,Font=Enum.Font.Gotham,TextSize=10,
+			TextColor3=Color3.fromRGB(200,210,240),BackgroundTransparency=1,ZIndex=34,
+			TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},r)
+		newUI(&quot;TextLabel&quot;,{Size=UDim2.new(0,68,1,0),Position=UDim2.new(1,-70,0,0),
+			Text=valFmt(row.value),Font=Enum.Font.GothamBold,TextSize=9,
+			TextColor3=col3,BackgroundTransparency=1,ZIndex=34,
+			TextXAlignment=Enum.TextXAlignment.Right},r)
+	end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  PLANET EFFECTS
+-- ═══════════════════════════════════════════════════════════════════════
+local fireEffect, smokeEffect, sparkleEffect, smileGui = nil,nil,nil,nil
+
+local function clearEffects()
+	if fireEffect    then fireEffect:Destroy();    fireEffect    = nil end
+	if smokeEffect   then smokeEffect:Destroy();   smokeEffect   = nil end
+	if sparkleEffect then sparkleEffect:Destroy(); sparkleEffect = nil end
+	if smileGui      then smileGui:Destroy();      smileGui      = nil end
+end
+
+local function applyPlanet(idx)
+	local cfg = ITEMS[idx]; if not cfg then return end
+	clearEffects()
+	local sz = cfg.size * state.sizeMult
+	planetPart.Shape    = cfg.shape
+	planetPart.Size     = sz
+	planetPart.BrickColor = cfg.col
+	planetPart.Material   = cfg.mat
+	planetLight.Color     = cfg.lightCol
+	planetLight.Brightness= cfg.lightBright
+	vpfCam.CFrame = CFrame.new(Vector3.new(0,0, math.max(9, sz.X*2)), Vector3.new(0,0,0))
+
+	local sp = cfg.special
+	if sp==&quot;fire&quot; then
+		local f=Instance.new(&quot;Fire&quot;,planetPart)
+		f.Size=3;f.Heat=6;f.Color=Color3.fromRGB(255,80,0);f.SecondaryColor=Color3.fromRGB(255,200,0)
+		fireEffect=f
+	elseif sp==&quot;smoke&quot; then
+		local s=Instance.new(&quot;Smoke&quot;,planetPart)
+		s.Opacity=0.08;s.RiseVelocity=1;s.Size=3;s.Color=Color3.fromRGB(180,130,80)
+		smokeEffect=s
+	elseif sp==&quot;sparkles&quot; then
+		local s=Instance.new(&quot;Sparkles&quot;,planetPart)
+		s.SparkleColor=Color3.fromRGB(255,240,150);sparkleEffect=s
+	elseif sp==&quot;sparkles_blue&quot; then
+		local s=Instance.new(&quot;Sparkles&quot;,planetPart)
+		s.SparkleColor=Color3.fromRGB(100,180,255);sparkleEffect=s
+	elseif sp==&quot;sparkles_purple&quot; then
+		local s=Instance.new(&quot;Sparkles&quot;,planetPart)
+		s.SparkleColor=Color3.fromRGB(180,80,255);sparkleEffect=s
+	elseif sp==&quot;rainbow&quot; then
+		local s=Instance.new(&quot;Sparkles&quot;,planetPart)
+		s.SparkleColor=Color3.fromRGB(255,0,255);sparkleEffect=s
+	elseif sp==&quot;smiley&quot; then
+		local bg=Instance.new(&quot;BillboardGui&quot;,planetPart)
+		bg.Size=UDim2.new(0,80,0,80);bg.StudsOffset=Vector3.new(0,0,2.8);bg.AlwaysOnTop=true
+		local lbl=Instance.new(&quot;TextLabel&quot;,bg)
+		lbl.Size=UDim2.new(1,0,1,0);lbl.Text=&quot;:)&quot;;lbl.TextScaled=true
+		lbl.Font=Enum.Font.GothamBold;lbl.TextColor3=Color3.fromRGB(20,20,40)
+		lbl.BackgroundTransparency=1
+		smileGui=bg
+	end
+	PlanetLabel.Text = cfg.name:upper()
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  GAME LOGIC
+-- ═══════════════════════════════════════════════════════════════════════
+local function getCPC() return ITEMS[state.heldItem].cpc * state.mult end
+
+local function checkSizeMilestones()
+	while state.nextSizeIdx &lt;= #SIZE_MILES and state.strength &gt;= SIZE_MILES[state.nextSizeIdx].str do
+		state.sizeMult = SIZE_MILES[state.nextSizeIdx].factor
+		showNotif(&quot;🪐 Size upgrade! Planet is now &quot;..string.format(&quot;%.2f&quot;, state.sizeMult)..&quot;× bigger!&quot;)
+		state.nextSizeIdx += 1
+		applyPlanet(state.heldItem)
+	end
+end
+
+local function syncToServer()
+	SaveData:FireServer({
+		coins=state.coins, strength=state.strength, rebirths=state.rebirths,
+		mult=state.mult, heldItem=state.heldItem, sizeMult=state.sizeMult,
+		nextSizeIdx=state.nextSizeIdx, timePlayed=state.timePlayed,
+	})
+end
+
+local function doClick()
+	if not dataLoaded then return end
+	local earned = getCPC()
+	state.coins    += earned
+	state.strength += earned
+	checkSizeMilestones()
+	clickBounce = 1
+	ClickPopup.Text = &quot;+&quot;..fmtNum(earned)
+	popupTimer = 1.2
+end
+
+function buyItem(idx)
+	if not dataLoaded then return end
+	local item = ITEMS[idx]
+	if state.rebirths &lt; item.rbReq then
+		showNotif(&quot;🔒 Need &quot;..item.rbReq..&quot; rebirths for &quot;..item.name..&quot;!&quot;); return
+	end
+	if state.coins &lt; item.cost then
+		showNotif(&quot;💰 Not enough coins for &quot;..item.name..&quot;!&quot;); return
+	end
+	state.coins   -= item.cost
+	state.heldItem = idx
+	applyPlanet(idx)
+	showNotif(&quot;✅ Now holding &quot;..item.name..&quot;!&quot;)
+end
+
+local function doRebirth()
+	if not dataLoaded then return end
+	if state.rebirths &gt;= #REBIRTHS then showNotif(&quot;🌟 Max rebirths reached!&quot;); return end
+	local rb = REBIRTHS[state.rebirths + 1]
+	if state.coins &lt; rb.cost then
+		showNotif(&quot;Need &quot;..fmtNum(rb.cost)..&quot; coins to rebirth!&quot;); return
+	end
+	state.rebirths += 1
+	state.mult      = rb.mult
+	state.coins     = 0
+	state.heldItem  = 1
+	applyPlanet(1)
+	showNotif(&quot;🌟 &quot;..rb.name..&quot;! Multiplier → &quot;..fmtMult(rb.mult))
+	syncToServer()
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  UI UPDATE
+-- ═══════════════════════════════════════════════════════════════════════
+local function updateUI()
+	statValues.coins.Text    = fmtNum(state.coins)
+	statValues.mult.Text     = fmtMult(state.mult)
+	statValues.strength.Text = fmtNum(state.strength)
+	statValues.rebirths.Text = tostring(state.rebirths)
+	statValues.cpc.Text      = fmtNum(getCPC())
+
+	if state.rebirths &lt; #REBIRTHS then
+		local rb = REBIRTHS[state.rebirths+1]
+		RebirthInfo.Text = rb.name..&quot; · &quot;..fmtNum(rb.cost)..&quot; · &quot;..fmtMult(rb.mult)
+		RebirthBtn.BackgroundColor3 = state.coins &gt;= rb.cost
+			and Color3.fromRGB(60,10,110) or Color3.fromRGB(25,6,50)
+	else
+		RebirthInfo.Text = &quot;⭐ MAX REBIRTHS ACHIEVED!&quot;
+		RebirthBtn.BackgroundColor3 = Color3.fromRGB(15,6,30)
+	end
+
+	for i, sd in ipairs(shopButtons) do
+		local item   = ITEMS[i]
+		local locked = state.rebirths &lt; item.rbReq
+		local held   = i == state.heldItem
+		local afford = not locked and state.coins &gt;= item.cost
+		if held then
+			sd.btn.BackgroundColor3=Color3.fromRGB(8,35,8)
+			stroke(2,Color3.fromRGB(50,200,50),sd.btn)
+		elseif locked then
+			sd.btn.BackgroundColor3=Color3.fromRGB(8,8,18)
+			sd.btn.BackgroundTransparency=0.4
+		elseif afford then
+			sd.btn.BackgroundColor3=Color3.fromRGB(14,18,50)
+			stroke(1,Color3.fromRGB(60,90,200),sd.btn)
+		else
+			sd.btn.BackgroundColor3=Color3.fromRGB(10,10,28)
+			stroke(1,Color3.fromRGB(22,30,70),sd.btn)
+		end
+	end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  BUTTON CONNECTIONS
+-- ═══════════════════════════════════════════════════════════════════════
+ClickBtn.MouseButton1Click:Connect(doClick)
+RebirthBtn.MouseButton1Click:Connect(doRebirth)
+LBClose.MouseButton1Click:Connect(function() LBOverlay.Visible=false end)
+
+AutoBtn.MouseButton1Click:Connect(function()
+	state.autoOn = not state.autoOn
+	AutoBtn.Text = state.autoOn and &quot;⚡  AUTO-CLICKER: ON&quot; or &quot;⚡  AUTO-CLICKER: OFF&quot;
+	AutoBtn.BackgroundColor3 = state.autoOn
+		and Color3.fromRGB(8,40,8) or Color3.fromRGB(8,25,8)
+	stroke(2, state.autoOn and Color3.fromRGB(50,200,50) or Color3.fromRGB(30,80,30), AutoBtn)
+end)
+
+LBBtn.MouseButton1Click:Connect(function()
+	LBOverlay.Visible=true
+	task.spawn(function()
+		local ok1,sr = pcall(function() return GetLB:InvokeServer(&quot;strength&quot;) end)
+		local ok2,tr = pcall(function() return GetLB:InvokeServer(&quot;time&quot;)     end)
+		if ok1 and sr then populateLB(LBStrScroll,  sr, fmtNum)  end
+		if ok2 and tr then populateLB(LBTimeScroll, tr, fmtTime) end
+	end)
+end)
+
+BackBtn.MouseButton1Click:Connect(function() syncToServer() end)
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  DATA FROM SERVER
+-- ═══════════════════════════════════════════════════════════════════════
+LoadData.OnClientEvent:Connect(function(data)
+	state.coins       = data.coins       or 0
+	state.strength    = data.strength    or 0
+	state.rebirths    = data.rebirths    or 0
+	state.mult        = data.mult        or 1
+	state.heldItem    = math.clamp(data.heldItem or 1, 1, #ITEMS)
+	state.sizeMult    = data.sizeMult    or 1.0
+	state.nextSizeIdx = data.nextSizeIdx or 1
+	state.timePlayed  = data.timePlayed  or 0
+	dataLoaded = true
+	applyPlanet(state.heldItem)
+	updateUI()
+end)
+
+-- Offline fallback (Studio with no server)
+task.delay(3, function()
+	if not dataLoaded then
+		dataLoaded=true; applyPlanet(state.heldItem); updateUI()
+	end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════
+--  MAIN LOOP
+-- ═══════════════════════════════════════════════════════════════════════
+local lastT = tick()
+RunService.RenderStepped:Connect(function()
+	local now = tick()
+	local dt  = math.min(now - lastT, 0.05)
+	lastT = now
+
+	state.timePlayed += dt
+
+	-- Auto-clicker: 5 clicks per second
+	if state.autoOn and dataLoaded then
+		autoTimer += dt
+		while autoTimer &gt;= 0.2 do
+			autoTimer -= 0.2
+			local e = getCPC()
+			state.coins    += e
+			state.strength += e
+			checkSizeMilestones()
+		end
+	end
+
+	-- Rotate planet
+	planetPart.CFrame = planetPart.CFrame * CFrame.Angles(0, math.rad(dt*40), 0)
+
+	-- Click bounce
+	if clickBounce &gt; 0 then
+		clickBounce = math.max(0, clickBounce - dt*5)
+		local s = 1 + clickBounce*0.12
+		planetPart.Size = ITEMS[state.heldItem].size * state.sizeMult * s
+	end
+
+	-- Rainbow cube
+	if state.heldItem == 11 then
+		rainbowHue = (rainbowHue + dt*120) % 360
+		planetPart.Color = Color3.fromHSV(rainbowHue/360, 1, 1)
+		planetLight.Color = Color3.fromHSV(rainbowHue/360, 0.8, 1)
+		planetPart.CFrame = planetPart.CFrame * CFrame.Angles(math.rad(dt*60), 0, math.rad(dt*30))
+	end
+
+	-- Rotate mini icons in shop
+	for _, sd in ipairs(shopButtons) do
+		sd.miniPart.CFrame = sd.miniPart.CFrame * CFrame.Angles(0, math.rad(dt*50), 0)
+	end
+
+	-- Click popup animation
+	if popupTimer &gt; 0 then
+		popupTimer -= dt
+		ClickPopup.TextTransparency = math.max(0, 1 - popupTimer*2)
+		ClickPopup.Position = UDim2.new(
+			0.5, -(RIGHT_W//2+RIGHT_MARGIN)-110,
+			0,   CONTENT_Y + 10 - (1.2-popupTimer)*30
+		)
+		if popupTimer &lt;= 0 then
+			ClickPopup.Text=&quot;&quot;; ClickPopup.TextTransparency=0
+		end
+	end
+
+	-- Notification fade
+	if notifTimer &gt; 0 then
+		notifTimer -= dt
+		if notifTimer &lt;= 0 then NotifBar.Visible=false end
+	end
+
+	-- Periodic server sync
+	syncInterval += dt
+	if syncInterval &gt;= SYNC_EVERY then
+		syncInterval=0; syncToServer()
+	end
+
+	updateUI()
+end)
+</ProtectedString>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
