@@ -2,13 +2,14 @@
   <Item class="DataModel" referent="RBX0">
     <Properties><string name="Name">RivalsMemed</string></Properties>
     <Item class="Workspace" referent="RBX1">
-      <Properties><string name="Name">Workspace</string></Properties>
+      <Properties><string name="Name">Workspace</string><bool name="FilteringEnabled">true</bool></Properties>
       <Item class="SpawnLocation" referent="RBX2">
         <Properties>
           <string name="Name">SpawnLocation</string>
           <bool name="Anchored">true</bool>
           <CoordinateFrame name="CFrame"><X>0</X><Y>0.5</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
-          <Vector3 name="size"><X>6</X><Y>1</Y><Z>6</Z></Vector3>
+          <Vector3 name="Size"><X>6</X><Y>1</Y><Z>6</Z></Vector3>
+          <BrickColor name="BrickColor">37</BrickColor>
         </Properties>
       </Item>
       <Item class="Part" referent="RBX3">
@@ -17,7 +18,7 @@
           <bool name="Anchored">true</bool>
           <bool name="Locked">true</bool>
           <CoordinateFrame name="CFrame"><X>0</X><Y>-10</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
-          <Vector3 name="size"><X>512</X><Y>20</Y><Z>512</Z></Vector3>
+          <Vector3 name="Size"><X>512</X><Y>20</Y><Z>512</Z></Vector3>
           <BrickColor name="BrickColor">194</BrickColor>
         </Properties>
       </Item>
@@ -196,7 +197,7 @@ local function buildMap(mapIdx)
 	local sky = workspace:FindFirstChild("Sky")
 	if sky then sky:Destroy() end
 
-	local fog = Instance.new("Atmosphere"); fog.Density=0.4; fog.Color=mapDef.fogColor; fog.Parent=Lighting
+	Lighting.FogColor=mapDef.fogColor; Lighting.FogEnd=mapDef.fogEnd or 200; Lighting.FogStart=0
 
 	-- Floor
 	local fl = Instance.new("Part")
@@ -366,7 +367,8 @@ end
 -- ── Bot AI Loop ────────────────────────────────────────────────────────
 local spawnList = {}
 
-task.delay(1, function()
+-- Build map immediately on server start
+do
 	-- Select map (default 1, Rizz Arena)
 	spawnList = buildMap(currentMap)
 
@@ -385,7 +387,7 @@ task.delay(1, function()
 			if hrp then hrp.CFrame=CFrame.new(sp+Vector3.new(0,3,0)) end
 		end
 	end
-end)
+end
 
 -- ── Bot physics loop ──────────────────────────────────────────────────
 local function getNearestPlayer(pos)
@@ -404,7 +406,9 @@ end
 
 RunService.Heartbeat:Connect(function(dt)
 	for _,bot in ipairs(bots) do
-		if not bot.alive then continue end
+		if not bot.alive then
+			-- respawn countdown handled elsewhere
+		else
 		local pos=bot.root.CFrame.Position
 		local target=getNearestPlayer(pos)
 
@@ -453,6 +457,7 @@ RunService.Heartbeat:Connect(function(dt)
 			)
 			bot.root.CFrame=CFrame.new(newPos,newPos+bot.moveDir)
 		end
+		end -- end else (alive)
 	end
 end)
 

@@ -42,7 +42,7 @@ local function buildMap(mapIdx)
 	local sky = workspace:FindFirstChild("Sky")
 	if sky then sky:Destroy() end
 
-	local fog = Instance.new("Atmosphere"); fog.Density=0.4; fog.Color=mapDef.fogColor; fog.Parent=Lighting
+	Lighting.FogColor=mapDef.fogColor; Lighting.FogEnd=mapDef.fogEnd or 200; Lighting.FogStart=0
 
 	-- Floor
 	local fl = Instance.new("Part")
@@ -212,7 +212,8 @@ end
 -- ── Bot AI Loop ────────────────────────────────────────────────────────
 local spawnList = {}
 
-task.delay(1, function()
+-- Build map immediately on server start
+do
 	-- Select map (default 1, Rizz Arena)
 	spawnList = buildMap(currentMap)
 
@@ -231,7 +232,7 @@ task.delay(1, function()
 			if hrp then hrp.CFrame=CFrame.new(sp+Vector3.new(0,3,0)) end
 		end
 	end
-end)
+end
 
 -- ── Bot physics loop ──────────────────────────────────────────────────
 local function getNearestPlayer(pos)
@@ -250,7 +251,9 @@ end
 
 RunService.Heartbeat:Connect(function(dt)
 	for _,bot in ipairs(bots) do
-		if not bot.alive then continue end
+		if not bot.alive then
+			-- respawn countdown handled elsewhere
+		else
 		local pos=bot.root.CFrame.Position
 		local target=getNearestPlayer(pos)
 
@@ -299,6 +302,7 @@ RunService.Heartbeat:Connect(function(dt)
 			)
 			bot.root.CFrame=CFrame.new(newPos,newPos+bot.moveDir)
 		end
+		end -- end else (alive)
 	end
 end)
 
