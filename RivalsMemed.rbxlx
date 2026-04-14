@@ -1,0 +1,1028 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <Item class="DataModel" referent="RBX0">
+    <Properties><string name="Name">RivalsMemed</string></Properties>
+    <Item class="Workspace" referent="RBX1">
+      <Properties><string name="Name">Workspace</string></Properties>
+      <Item class="SpawnLocation" referent="RBX2">
+        <Properties>
+          <string name="Name">SpawnLocation</string>
+          <bool name="Anchored">true</bool>
+          <CoordinateFrame name="CFrame"><X>0</X><Y>0.5</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
+          <Vector3 name="size"><X>6</X><Y>1</Y><Z>6</Z></Vector3>
+        </Properties>
+      </Item>
+      <Item class="Part" referent="RBX3">
+        <Properties>
+          <string name="Name">Baseplate</string>
+          <bool name="Anchored">true</bool>
+          <bool name="Locked">true</bool>
+          <CoordinateFrame name="CFrame"><X>0</X><Y>-10</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame>
+          <Vector3 name="size"><X>512</X><Y>20</Y><Z>512</Z></Vector3>
+          <BrickColor name="BrickColor">194</BrickColor>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="ReplicatedStorage" referent="RBX4">
+      <Properties><string name="Name">ReplicatedStorage</string></Properties>
+      <Item class="ModuleScript" referent="RBX5">
+        <Properties>
+          <string name="Name">WeaponData</string>
+          <ProtectedString name="Source">-- ModuleScript: WeaponData
+return {
+	Weapons = {
+		{id="sigma", name="Sigma Blaster",       emoji="🔫", type="auto",  dmg=22,  ammo=30,  fr=0.10, reload=1.8, range=300, spread=0.04, color=BrickColor.new("Bright blue"),   col=Color3.fromRGB(68,136,255)},
+		{id="ratio", name="Ratio Rifle",          emoji="📡", type="semi",  dmg=150, ammo=5,   fr=1.2,  reload=2.5, range=500, spread=0.005,color=BrickColor.new("Reddish brown"), col=Color3.fromRGB(255,136,68),  zoom=true},
+		{id="sussy", name="Sussy Shotgun",        emoji="🟥", type="semi",  dmg=14,  ammo=8,   fr=0.8,  reload=2.0, range=60,  spread=0.15, color=BrickColor.new("Bright red"),    col=Color3.fromRGB(255,68,0),    pellets=8},
+		{id="skill", name="Skill Issue Pistol",   emoji="💀", type="semi",  dmg=40,  ammo=12,  fr=0.3,  reload=1.5, range=250, spread=0.02, color=BrickColor.new("Mid gray"),      col=Color3.fromRGB(180,180,180)},
+		{id="npc",   name="NPC Destroyer 9000",   emoji="🤖", type="auto",  dmg=8,   ammo=100, fr=0.05, reload=3.0, range=150, spread=0.09, color=BrickColor.new("Bright orange"), col=Color3.fromRGB(255,136,0)},
+		{id="knife", name="No Cap Knife",         emoji="🔪", type="melee", dmg=200, ammo=-1,  fr=0.5,  reload=0,   range=8,   spread=0,    color=BrickColor.new("White"),         col=Color3.fromRGB(220,220,220)},
+		{id="bruh",  name="Bruh Bomb",            emoji="💥", type="semi",  dmg=90,  ammo=3,   fr=1.5,  reload=2.5, range=200, spread=0.01, color=BrickColor.new("Bright red"),    col=Color3.fromRGB(255,0,50),    explosive=true},
+		{id="rizz",  name="W Rizz Rifle",         emoji="🌊", type="burst", dmg=20,  ammo=24,  fr=0.5,  reload=1.8, range=280, spread=0.04, color=BrickColor.new("Cyan"),          col=Color3.fromRGB(0,255,255),   burst=3},
+		{id="chad",  name="Gigachad Cannon",      emoji="💪", type="semi",  dmg=65,  ammo=6,   fr=1.0,  reload=2.2, range=350, spread=0.01, color=BrickColor.new("Bright yellow"), col=Color3.fromRGB(255,204,0)},
+		{id="grass", name="Touch Grass Bow",      emoji="🏹", type="semi",  dmg=100, ammo=10,  fr=1.0,  reload=2.0, range=400, spread=0.005,color=BrickColor.new("Bright green"),  col=Color3.fromRGB(0,170,68)},
+	},
+
+	BotNames = {"xX_NPC_Xx","Rizzless_Larry","Cringe_Kevin","Skill_Issue_Sam","L_Bozo_Bot","Copium_Chad","No_Bitties_Bob"},
+
+	KillMessages = {
+		"{k} got ratio'd by {v}","{k} has no bitches","{k} caught an L",
+		"{k} is literally an NPC","{k} got skill issued by {v}",
+		"{v} deleted {k}","{k} just isn't built different","{k} took the L fr fr",
+	},
+
+	Maps = {
+		{
+			name = "RIZZ ARENA",
+			skyColor = Color3.fromRGB(20,0,40),
+			fogColor = Color3.fromRGB(20,0,40), fogEnd = 200,
+			floor = {size=Vector3.new(120,2,120), pos=Vector3.new(0,-1,0), color=BrickColor.new("Dark indigo"), mat=Enum.Material.SmoothPlastic},
+			spawns = {Vector3.new(0,1,-40), Vector3.new(0,1,40), Vector3.new(-40,1,0), Vector3.new(40,1,0), Vector3.new(-25,1,-25), Vector3.new(25,1,25), Vector3.new(-25,1,25), Vector3.new(25,1,-25)},
+			boxes = {
+				-- outer walls
+				{size=Vector3.new(120,12,2), pos=Vector3.new(0,5,-60), color=BrickColor.new("Dark indigo")},
+				{size=Vector3.new(120,12,2), pos=Vector3.new(0,5,60),  color=BrickColor.new("Dark indigo")},
+				{size=Vector3.new(2,12,120), pos=Vector3.new(-60,5,0), color=BrickColor.new("Dark indigo")},
+				{size=Vector3.new(2,12,120), pos=Vector3.new(60,5,0),  color=BrickColor.new("Dark indigo")},
+				-- center platform
+				{size=Vector3.new(14,2,14), pos=Vector3.new(0,1,0),   color=BrickColor.new("Medium lilac")},
+				{size=Vector3.new(8,4,8),   pos=Vector3.new(0,3,0),   color=BrickColor.new("Bright violet")},
+				-- side cover
+				{size=Vector3.new(10,3,3),  pos=Vector3.new(-22,1.5,0), color=BrickColor.new("Dark purple")},
+				{size=Vector3.new(10,3,3),  pos=Vector3.new(22,1.5,0),  color=BrickColor.new("Dark purple")},
+				{size=Vector3.new(3,3,10),  pos=Vector3.new(0,1.5,-22), color=BrickColor.new("Dark purple")},
+				{size=Vector3.new(3,3,10),  pos=Vector3.new(0,1.5,22),  color=BrickColor.new("Dark purple")},
+				-- corner boxes
+				{size=Vector3.new(5,5,5),   pos=Vector3.new(-35,2.5,-35), color=BrickColor.new("Violet")},
+				{size=Vector3.new(5,5,5),   pos=Vector3.new(35,2.5,35),   color=BrickColor.new("Violet")},
+				{size=Vector3.new(5,5,5),   pos=Vector3.new(-35,2.5,35),  color=BrickColor.new("Violet")},
+				{size=Vector3.new(5,5,5),   pos=Vector3.new(35,2.5,-35),  color=BrickColor.new("Violet")},
+				-- pillars
+				{size=Vector3.new(3,12,3),  pos=Vector3.new(-50,6,-50), color=BrickColor.new("Medium lilac"), mat=Enum.Material.Neon},
+				{size=Vector3.new(3,12,3),  pos=Vector3.new(50,6,50),   color=BrickColor.new("Medium lilac"), mat=Enum.Material.Neon},
+				{size=Vector3.new(3,12,3),  pos=Vector3.new(-50,6,50),  color=BrickColor.new("Medium lilac"), mat=Enum.Material.Neon},
+				{size=Vector3.new(3,12,3),  pos=Vector3.new(50,6,-50),  color=BrickColor.new("Medium lilac"), mat=Enum.Material.Neon},
+			},
+			lights = {
+				{pos=Vector3.new(0,20,0),    color=Color3.fromRGB(200,0,255), bright=3, range=120},
+				{pos=Vector3.new(-30,10,-30),color=Color3.fromRGB(255,0,150), bright=2, range=60},
+				{pos=Vector3.new(30,10,30),  color=Color3.fromRGB(0,255,150), bright=2, range=60},
+				{pos=Vector3.new(-30,10,30), color=Color3.fromRGB(255,100,0), bright=1.5,range=50},
+				{pos=Vector3.new(30,10,-30), color=Color3.fromRGB(0,100,255), bright=1.5,range=50},
+			},
+		},
+		{
+			name = "GIGACHAD GRAVEYARD",
+			skyColor = Color3.fromRGB(2,2,10),
+			fogColor = Color3.fromRGB(5,3,15), fogEnd = 150,
+			floor = {size=Vector3.new(160,2,160), pos=Vector3.new(0,-1,0), color=BrickColor.new("Black"), mat=Enum.Material.Grass},
+			spawns = {Vector3.new(0,1,-45), Vector3.new(0,1,45), Vector3.new(-45,1,0), Vector3.new(45,1,0), Vector3.new(-30,1,-30), Vector3.new(30,1,30), Vector3.new(-30,1,30), Vector3.new(30,1,-30)},
+			boxes = {
+				-- outer walls
+				{size=Vector3.new(160,10,2), pos=Vector3.new(0,4,-80),  color=BrickColor.new("Really black")},
+				{size=Vector3.new(160,10,2), pos=Vector3.new(0,4,80),   color=BrickColor.new("Really black")},
+				{size=Vector3.new(2,10,160), pos=Vector3.new(-80,4,0),  color=BrickColor.new("Really black")},
+				{size=Vector3.new(2,10,160), pos=Vector3.new(80,4,0),   color=BrickColor.new("Really black")},
+				-- gravestones
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(10,2,6),    color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-10,2,8),   color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-15,2,-5),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(12,2,-10),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-8,2,-14),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(5,2,18),    color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-20,2,12),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(18,2,-17),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-12,2,20),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(22,2,5),    color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-22,2,-8),  color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(0,2,-22),   color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(0,2,22),    color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-25,2,0),   color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(25,2,0),    color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(15,2,15),   color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(-15,2,-15), color=BrickColor.new("Dark stone grey")},
+				{size=Vector3.new(2,4,0.6),   pos=Vector3.new(8,2,-20),   color=BrickColor.new("Dark stone grey")},
+				-- trees (trunks)
+				{size=Vector3.new(1.5,14,1.5),pos=Vector3.new(-35,6,-35), color=BrickColor.new("Dark orange"), mat=Enum.Material.Wood},
+				{size=Vector3.new(1.5,14,1.5),pos=Vector3.new(35,6,35),   color=BrickColor.new("Dark orange"), mat=Enum.Material.Wood},
+				{size=Vector3.new(1.5,14,1.5),pos=Vector3.new(-35,6,35),  color=BrickColor.new("Dark orange"), mat=Enum.Material.Wood},
+				{size=Vector3.new(1.5,14,1.5),pos=Vector3.new(35,6,-35),  color=BrickColor.new("Dark orange"), mat=Enum.Material.Wood},
+				-- big cover rocks
+				{size=Vector3.new(6,4,4),     pos=Vector3.new(-30,2,10),  color=BrickColor.new("Dark stone grey"), mat=Enum.Material.SmoothPlastic},
+				{size=Vector3.new(6,4,4),     pos=Vector3.new(30,2,-10),  color=BrickColor.new("Dark stone grey"), mat=Enum.Material.SmoothPlastic},
+				{size=Vector3.new(4,4,6),     pos=Vector3.new(10,2,30),   color=BrickColor.new("Dark stone grey"), mat=Enum.Material.SmoothPlastic},
+				{size=Vector3.new(4,4,6),     pos=Vector3.new(-10,2,-30), color=BrickColor.new("Dark stone grey"), mat=Enum.Material.SmoothPlastic},
+			},
+			lights = {
+				{pos=Vector3.new(0,30,0),    color=Color3.fromRGB(100,100,200), bright=1, range=200},
+				{pos=Vector3.new(-30,8,-30), color=Color3.fromRGB(80,0,180),    bright=2.5, range=50},
+				{pos=Vector3.new(30,8,30),   color=Color3.fromRGB(0,180,100),   bright=1.5, range=50},
+				{pos=Vector3.new(-30,8,30),  color=Color3.fromRGB(180,0,80),    bright=1.5, range=50},
+				{pos=Vector3.new(30,8,-30),  color=Color3.fromRGB(0,80,180),    bright=1.5, range=50},
+			},
+		},
+	},
+}
+</ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="ServerScriptService" referent="RBX6">
+      <Properties><string name="Name">ServerScriptService</string></Properties>
+      <Item class="Script" referent="RBX7">
+        <Properties>
+          <string name="Name">GameServer</string>
+          <bool name="Disabled">false</bool>
+          <ProtectedString name="Source">-- Script: GameServer (RIVALS but MEMED)
+local Players        = game:GetService("Players")
+local RunService     = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting       = game:GetService("Lighting")
+
+local WeaponData = require(ReplicatedStorage:WaitForChild("WeaponData"))
+local MAPS       = WeaponData.Maps
+local BOT_NAMES  = WeaponData.BotNames
+local KILL_MSGS  = WeaponData.KillMessages
+
+-- ── Remotes ──────────────────────────────────────────────────────────
+local Remotes = Instance.new("Folder"); Remotes.Name="Remotes"; Remotes.Parent=ReplicatedStorage
+local function mkE(n) local e=Instance.new("RemoteEvent"); e.Name=n; e.Parent=Remotes; return e end
+local function mkF(n) local f=Instance.new("RemoteFunction"); f.Name=n; f.Parent=Remotes; return f end
+
+local DamageBot   = mkE("DamageBot")    -- client→server: botModel, dmg
+local KillFeed    = mkE("KillFeed")     -- server→all: killer, victim
+local PlayerDied  = mkE("PlayerDied")   -- server→player: killerName
+local GameWon     = mkE("GameWon")      -- server→all: winnerName
+local GetLB       = mkF("GetLB")        -- server→client: leaderboard data
+
+-- ── State ─────────────────────────────────────────────────────────────
+local currentMap  = 1   -- 1 = Rizz Arena, 2 = Gigachad Graveyard (set via vote or default)
+local mapFolder   = nil
+local bots        = {}  -- list of bot data tables
+local gameOver    = false
+local kills       = {}  -- [playerName or botName] = killCount
+
+local KILLS_TO_WIN = 15
+
+-- ── Map Builder ───────────────────────────────────────────────────────
+local function buildMap(mapIdx)
+	if mapFolder then mapFolder:Destroy() end
+	mapFolder = Instance.new("Folder"); mapFolder.Name="MapFolder"; mapFolder.Parent=workspace
+
+	local mapDef = MAPS[mapIdx]
+
+	-- Sky/fog
+	Lighting.Ambient         = Color3.fromRGB(50,50,80)
+	Lighting.OutdoorAmbient  = Color3.fromRGB(30,30,60)
+	local sky = workspace:FindFirstChild("Sky")
+	if sky then sky:Destroy() end
+
+	local fog = Instance.new("Atmosphere"); fog.Density=0.4; fog.Color=mapDef.fogColor; fog.Parent=Lighting
+
+	-- Floor
+	local fl = Instance.new("Part")
+	fl.Name="Floor"; fl.Anchored=true; fl.CanCollide=true
+	fl.Size=mapDef.floor.size; fl.CFrame=CFrame.new(mapDef.floor.pos)
+	fl.BrickColor=mapDef.floor.color
+	fl.Material=mapDef.floor.mat or Enum.Material.SmoothPlastic
+	fl.Parent=mapFolder
+
+	-- Boxes
+	for _, bd in ipairs(mapDef.boxes) do
+		local p = Instance.new("Part")
+		p.Anchored=true; p.CanCollide=true
+		p.Size=bd.size; p.CFrame=CFrame.new(bd.pos)
+		p.BrickColor=bd.color
+		p.Material=bd.mat or Enum.Material.SmoothPlastic
+		p.CastShadow=true
+		p.Parent=mapFolder
+	end
+
+	-- Lights
+	for _, ld in ipairs(mapDef.lights) do
+		local lp = Instance.new("Part")
+		lp.Anchored=true; lp.CanCollide=false; lp.Transparency=1
+		lp.Size=Vector3.new(1,1,1); lp.CFrame=CFrame.new(ld.pos)
+		lp.Parent=mapFolder
+		local pl = Instance.new("PointLight", lp)
+		pl.Color=ld.color; pl.Brightness=ld.bright; pl.Range=ld.range
+	end
+
+	return mapDef.spawns
+end
+
+-- ── Bot Builder ───────────────────────────────────────────────────────
+local function makeBot(name, pos, spawns)
+	local m = Instance.new("Model"); m.Name=name
+
+	local root = Instance.new("Part")
+	root.Name="HumanoidRootPart"; root.Anchored=false; root.CanCollide=false
+	root.Transparency=1; root.Size=Vector3.new(2,2,1)
+	root.CFrame=CFrame.new(pos); root.Parent=m
+
+	local torso = Instance.new("Part")
+	torso.Name="Torso"; torso.Anchored=false; torso.CanCollide=true
+	torso.Size=Vector3.new(2,2,1)
+	torso.BrickColor=BrickColor.new("Bright red")
+	torso.Material=Enum.Material.SmoothPlastic
+	torso.CFrame=CFrame.new(pos); torso.Parent=m
+
+	local head = Instance.new("Part")
+	head.Name="Head"; head.Anchored=false; head.CanCollide=false
+	head.Size=Vector3.new(1.5,1.5,1.5)
+	head.BrickColor=BrickColor.new("Bright yellow")
+	head.CFrame=CFrame.new(pos+Vector3.new(0,1.75,0)); head.Parent=m
+
+	-- Welds
+	local w1=Instance.new("WeldConstraint"); w1.Part0=root; w1.Part1=torso; w1.Parent=m
+	local w2=Instance.new("WeldConstraint"); w2.Part0=root; w2.Part1=head;  w2.Parent=m
+
+	-- Keep bot on ground with a floor constraint
+	local bg=Instance.new("BodyGyro",root); bg.MaxTorque=Vector3.new(1e5,0,1e5); bg.P=1e4; bg.CFrame=CFrame.new()
+
+	-- HP value
+	local hp=Instance.new("NumberValue",m); hp.Name="HP"; hp.Value=100
+
+	-- Tag
+	local isBot=Instance.new("BoolValue",m); isBot.Name="IsBot"; isBot.Value=true
+
+	-- Billboard name
+	local bg2=Instance.new("BillboardGui",head); bg2.Size=UDim2.new(0,120,0,28); bg2.StudsOffset=Vector3.new(0,1.5,0); bg2.AlwaysOnTop=false
+	local lbl=Instance.new("TextLabel",bg2); lbl.Size=UDim2.new(1,0,1,0)
+	lbl.Text=name; lbl.TextScaled=true; lbl.Font=Enum.Font.GothamBold
+	lbl.TextColor3=Color3.fromRGB(255,80,80); lbl.BackgroundTransparency=1
+
+	m.PrimaryPart=root; m.Parent=workspace
+
+	kills[name]=0
+
+	return {
+		model=m, root=root, torso=torso, head=head, hpVal=hp,
+		name=name, alive=true, deaths=0,
+		shootTimer=1+math.random()*2,
+		moveTimer=0, moveDir=Vector3.new(1,0,0),
+		spawns=spawns,
+	}
+end
+
+-- ── Bot respawn ───────────────────────────────────────────────────────
+local function respawnBot(bot)
+	local sp=bot.spawns[math.random(#bot.spawns)]
+	local cf=CFrame.new(sp+Vector3.new(math.random(-3,3),0,math.random(-3,3)))
+	bot.root.CFrame=cf
+	bot.hpVal.Value=100
+	bot.alive=true
+	bot.model:FindFirstChild("Head").BrickColor=BrickColor.new("Bright yellow")
+	bot.model:FindFirstChild("Torso").BrickColor=BrickColor.new("Bright red")
+end
+
+-- ── Damage Bot Remote ─────────────────────────────────────────────────
+DamageBot.OnServerEvent:Connect(function(player, botModel, dmg, weaponId)
+	if gameOver then return end
+	if not botModel or not botModel.Parent then return end
+	local bot=nil
+	for _,b in ipairs(bots) do if b.model==botModel then bot=b; break end end
+	if not bot or not bot.alive then return end
+
+	-- Clamp damage (anti-cheat lite)
+	dmg=math.min(dmg,250)
+	bot.hpVal.Value=bot.hpVal.Value-dmg
+	-- Flash head
+	bot.head.BrickColor=BrickColor.new("Bright orange")
+	task.delay(0.1,function() if bot.head then bot.head.BrickColor=BrickColor.new("Bright yellow") end end)
+
+	if bot.hpVal.Value&lt;=0 and bot.alive then
+		bot.alive=false
+		bot.deaths=bot.deaths+1
+		bot.head.BrickColor=BrickColor.new("Dark stone grey")
+		bot.torso.BrickColor=BrickColor.new("Dark stone grey")
+
+		local killer=player.Name
+		kills[killer]=(kills[killer]or 0)+1
+
+		-- Update leaderstats
+		local ls=player:FindFirstChild("leaderstats")
+		if ls then
+			local k=ls:FindFirstChild("Kills"); if k then k.Value=kills[killer] end
+		end
+
+		-- Kill feed to all
+		KillFeed:FireAllClients(killer, bot.name)
+
+		if kills[killer]&gt;=KILLS_TO_WIN and not gameOver then
+			gameOver=true
+			GameWon:FireAllClients(killer)
+		end
+
+		-- Respawn bot after 3s
+		task.delay(3, function() if bot then respawnBot(bot) end end)
+	end
+end)
+
+-- ── Leaderstats ────────────────────────────────────────────────────────
+Players.PlayerAdded:Connect(function(player)
+	local ls=Instance.new("Folder"); ls.Name="leaderstats"; ls.Parent=player
+	local k=Instance.new("NumberValue",ls); k.Name="Kills"; k.Value=0
+	local d=Instance.new("NumberValue",ls); d.Name="Deaths"; d.Value=0
+	kills[player.Name]=0
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	kills[player.Name]=nil
+end)
+
+GetLB.OnServerInvoke=function()
+	local t={}
+	for name,k in pairs(kills) do
+		table.insert(t,{name=name,kills=k})
+	end
+	-- add bots
+	for _,b in ipairs(bots) do
+		table.insert(t,{name=b.name,kills=kills[b.name]or 0,deaths=b.deaths,isBot=true})
+	end
+	table.sort(t,function(a,b) return (a.kills or 0)&gt;(b.kills or 0) end)
+	return t
+end
+
+-- ── Bot AI Loop ────────────────────────────────────────────────────────
+local spawnList = {}
+
+task.delay(1, function()
+	-- Select map (default 1, Rizz Arena)
+	spawnList = buildMap(currentMap)
+
+	-- Spawn bots
+	for i,name in ipairs(BOT_NAMES) do
+		local sp=spawnList[((i-1)%#spawnList)+1]
+		local bot=makeBot(name, sp+Vector3.new(0,1,0), spawnList)
+		table.insert(bots,bot)
+	end
+
+	-- Spawn all current players
+	for _,player in ipairs(Players:GetPlayers()) do
+		local sp=spawnList[math.random(#spawnList)]
+		if player.Character then
+			local hrp=player.Character:FindFirstChild("HumanoidRootPart")
+			if hrp then hrp.CFrame=CFrame.new(sp+Vector3.new(0,3,0)) end
+		end
+	end
+end)
+
+-- ── Bot physics loop ──────────────────────────────────────────────────
+local function getNearestPlayer(pos)
+	local best,bestDist=nil,math.huge
+	for _,p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local d=(hrp.Position-pos).Magnitude
+				if d&lt;bestDist then bestDist=d; best={player=p,pos=hrp.Position,dist=d} end
+			end
+		end
+	end
+	return best
+end
+
+RunService.Heartbeat:Connect(function(dt)
+	for _,bot in ipairs(bots) do
+		if not bot.alive then continue end
+		local pos=bot.root.CFrame.Position
+		local target=getNearestPlayer(pos)
+
+		if target and target.dist&lt;60 then
+			-- Chase
+			local dir=(target.pos-pos)*Vector3.new(1,0,1)
+			if dir.Magnitude&gt;0.1 then
+				dir=dir.Unit
+				local newPos=pos+dir*dt*10
+				newPos=Vector3.new(newPos.X,0.8,newPos.Z) -- keep on ground
+				bot.root.CFrame=CFrame.new(newPos,newPos+dir)
+			end
+
+			-- Shoot
+			bot.shootTimer-=dt
+			if bot.shootTimer&lt;=0 and target.dist&lt;40 then
+				bot.shootTimer=1.2+math.random()*1.5
+				-- Check line of sight
+				local rp=RaycastParams.new()
+				rp.FilterDescendantsInstances={bot.model, mapFolder}
+				rp.FilterType=Enum.RaycastFilterType.Exclude
+				local result=workspace:Raycast(pos+Vector3.new(0,0.5,0),(target.pos-pos).Unit*45,rp)
+				if result then
+					local hitChar=result.Instance:FindFirstAncestorOfClass("Model")
+					if hitChar==target.player.Character then
+						-- Hit the player
+						local hum=target.player.Character:FindFirstChild("Humanoid")
+						if hum and hum.Health&gt;0 then
+							local dmg=6+math.random()*10
+							hum:TakeDamage(dmg)
+						end
+					end
+				end
+			end
+		else
+			-- Patrol
+			bot.moveTimer-=dt
+			if bot.moveTimer&lt;=0 then
+				local angle=math.random()*math.pi*2
+				bot.moveDir=Vector3.new(math.cos(angle),0,math.sin(angle))
+				bot.moveTimer=1.5+math.random()*2
+			end
+			local newPos=pos+bot.moveDir*dt*5
+			newPos=Vector3.new(
+				math.clamp(newPos.X,-55,55), 0.8, math.clamp(newPos.Z,-55,55)
+			)
+			bot.root.CFrame=CFrame.new(newPos,newPos+bot.moveDir)
+		end
+	end
+end)
+
+-- Track player deaths for leaderboard
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function(char)
+		local hum=char:WaitForChild("Humanoid")
+		hum.Died:Connect(function()
+			local ls=player:FindFirstChild("leaderstats")
+			if ls then
+				local d=ls:FindFirstChild("Deaths"); if d then d.Value=d.Value+1 end
+			end
+			-- Broadcast kill feed (killed by environment/bot - simplified)
+			KillFeed:FireAllClients("???", player.Name)
+		end)
+		-- Respawn at a spawn point
+		task.delay(0.1,function()
+			local hrp=char:FindFirstChild("HumanoidRootPart")
+			if hrp and #spawnList&gt;0 then
+				local sp=spawnList[math.random(#spawnList)]
+				hrp.CFrame=CFrame.new(sp+Vector3.new(0,3,0))
+			end
+		end)
+	end)
+end)
+</ProtectedString>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="StarterPlayer" referent="RBX8">
+      <Properties><string name="Name">StarterPlayer</string></Properties>
+      <Item class="StarterPlayerScripts" referent="RBX9">
+        <Properties><string name="Name">StarterPlayerScripts</string></Properties>
+        <Item class="LocalScript" referent="RBX10">
+          <Properties>
+            <string name="Name">RivalsClient</string>
+            <bool name="Disabled">false</bool>
+            <ProtectedString name="Source">-- LocalScript: RivalsClient (RIVALS but MEMED)
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui        = game:GetService("StarterGui")
+local TweenService      = game:GetService("TweenService")
+
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.EmotesMenu, false)
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+end)
+
+local player    = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local WeaponData = require(ReplicatedStorage:WaitForChild("WeaponData"))
+local Remotes    = ReplicatedStorage:WaitForChild("Remotes", 15)
+local DamageBot  = Remotes and Remotes:WaitForChild("DamageBot")
+local KillFeed   = Remotes and Remotes:WaitForChild("KillFeed")
+local GameWon    = Remotes and Remotes:WaitForChild("GameWon")
+local GetLB      = Remotes and Remotes:WaitForChild("GetLB")
+
+local WEAPONS    = WeaponData.Weapons
+local KILL_MSGS  = WeaponData.KillMessages
+
+-- ═══════════════════════════════════════════════
+--  STATE
+-- ═══════════════════════════════════════════════
+local currentWep    = 1
+local weaponAmmo    = WEAPONS[1].ammo
+local weaponFR      = 0
+local reloading     = false
+local reloadTimer   = 0
+local zoomActive    = false
+local gameEnded     = false
+local hitmarkTimer  = 0
+local burstQueue    = 0
+local burstTimer    = 0
+local mouseHeld     = false
+
+-- ═══════════════════════════════════════════════
+--  UTILS
+-- ═══════════════════════════════════════════════
+local function newUI(class, props, parent)
+	local obj=Instance.new(class)
+	for k,v in pairs(props) do obj[k]=v end
+	if parent then obj.Parent=parent end
+	return obj
+end
+local function corner(r,p) local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,r); c.Parent=p end
+local function fmt(n) if n&gt;=1e6 then return string.format("%.1fm",n/1e6) elseif n&gt;=1e3 then return string.format("%.1fk",n/1e3) else return tostring(math.floor(n)) end end
+
+-- ═══════════════════════════════════════════════
+--  GUI CONSTRUCTION
+-- ═══════════════════════════════════════════════
+local Gui = newUI("ScreenGui",{Name="RivalsGui",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},playerGui)
+
+-- Background tint
+local BG = newUI("Frame",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,BorderSizePixel=0},Gui)
+
+-- ── Crosshair ──
+local XH = newUI("Frame",{Size=UDim2.new(0,20,0,20),Position=UDim2.new(0.5,-10,0.5,-10),BackgroundTransparency=1,ZIndex=10},BG)
+newUI("Frame",{Size=UDim2.new(0,2,0,14),Position=UDim2.new(0.5,-1,0.5,-7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},XH)
+newUI("Frame",{Size=UDim2.new(0,14,0,2),Position=UDim2.new(0.5,-7,0.5,-1),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},XH)
+
+-- ── Hit marker ──
+local HitMark = newUI("TextLabel",{
+	Size=UDim2.new(0,30,0,30),Position=UDim2.new(0.5,-15,0.5,-15),
+	Text="✕",Font=Enum.Font.GothamBold,TextSize=24,
+	TextColor3=Color3.fromRGB(255,50,50),BackgroundTransparency=1,
+	ZIndex=11,TextXAlignment=Enum.TextXAlignment.Center,
+	TextTransparency=1,
+},BG)
+
+-- ── Health bar ──
+local HPBar = newUI("Frame",{Size=UDim2.new(0,240,0,14),Position=UDim2.new(0,24,1,-44),BackgroundColor3=Color3.fromRGB(20,20,20),BorderSizePixel=0,ZIndex=5},BG)
+corner(7,HPBar)
+local HPFill = newUI("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(50,220,80),BorderSizePixel=0,ZIndex=6},HPBar)
+corner(7,HPFill)
+newUI("TextLabel",{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,-1.2,0),Text="HP",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=Color3.fromRGB(100,180,100),BackgroundTransparency=1,ZIndex=5,TextXAlignment=Enum.TextXAlignment.Left},HPBar)
+
+-- ── Ammo display ──
+local AmmoFrame = newUI("Frame",{Size=UDim2.new(0,160,0,60),Position=UDim2.new(1,-180,1,-80),BackgroundTransparency=1,ZIndex=5},BG)
+local WepName = newUI("TextLabel",{Size=UDim2.new(1,0,0,18),Position=UDim2.new(0,0,0,0),Text="Sigma Blaster",Font=Enum.Font.GothamBold,TextSize=12,TextColor3=Color3.fromRGB(0,220,150),BackgroundTransparency=1,ZIndex=6,TextXAlignment=Enum.TextXAlignment.Right},AmmoFrame)
+local AmmoCur = newUI("TextLabel",{Size=UDim2.new(1,0,0,28),Position=UDim2.new(0,0,0,18),Text="30",Font=Enum.Font.GothamBold,TextSize=28,TextColor3=Color3.fromRGB(255,255,255),BackgroundTransparency=1,ZIndex=6,TextXAlignment=Enum.TextXAlignment.Right},AmmoFrame)
+local AmmoRes = newUI("TextLabel",{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,0,46),Text="/ 30",Font=Enum.Font.Gotham,TextSize=12,TextColor3=Color3.fromRGB(130,130,130),BackgroundTransparency=1,ZIndex=6,TextXAlignment=Enum.TextXAlignment.Right},AmmoFrame)
+
+-- ── Kill counter (top right) ──
+local KillDisp = newUI("Frame",{Size=UDim2.new(0,90,0,60),Position=UDim2.new(1,-110,0,14),BackgroundTransparency=1,ZIndex=5},BG)
+local KillNum = newUI("TextLabel",{Size=UDim2.new(1,0,0,40),Text="0",Font=Enum.Font.GothamBold,TextSize=40,TextColor3=Color3.fromRGB(255,210,0),BackgroundTransparency=1,ZIndex=6,TextXAlignment=Enum.TextXAlignment.Center},KillDisp)
+newUI("TextLabel",{Size=UDim2.new(1,0,0,16),Position=UDim2.new(0,0,0,42),Text="KILLS",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=Color3.fromRGB(130,110,0),BackgroundTransparency=1,ZIndex=6,TextXAlignment=Enum.TextXAlignment.Center},KillDisp)
+
+-- ── Score / win label ──
+local ScoreLabel = newUI("TextLabel",{
+	Size=UDim2.new(0,260,0,30),Position=UDim2.new(0.5,-130,0,12),
+	Text="FIRST TO 15 KILLS WINS",Font=Enum.Font.GothamBold,TextSize=11,
+	TextColor3=Color3.fromRGB(80,80,100),BackgroundTransparency=1,ZIndex=5,
+	TextXAlignment=Enum.TextXAlignment.Center,LetterSpacing=2,
+},BG)
+
+-- ── Reload message ──
+local ReloadMsg = newUI("TextLabel",{
+	Size=UDim2.new(0,200,0,24),Position=UDim2.new(0.5,-100,0.5,40),
+	Text="RELOADING...",Font=Enum.Font.GothamBold,TextSize=14,
+	TextColor3=Color3.fromRGB(255,220,0),BackgroundTransparency=1,
+	ZIndex=10,TextXAlignment=Enum.TextXAlignment.Center,TextTransparency=1,
+},BG)
+
+-- ── Kill feed ──
+local KillFeedFrame = newUI("Frame",{Size=UDim2.new(0,300,0,200),Position=UDim2.new(1,-310,0,60),BackgroundTransparency=1,ZIndex=5},BG)
+local KillFeedLayout = newUI("UIListLayout",{Padding=UDim.new(0,3),SortOrder=Enum.SortOrder.LayoutOrder,FillDirection=Enum.FillDirection.Vertical,HorizontalAlignment=Enum.HorizontalAlignment.Right,VerticalAlignment=Enum.VerticalAlignment.Top},KillFeedFrame)
+local killFeedEntries={}
+local killFeedOrder=0
+
+local function addKillFeed(killer,victim)
+	killFeedOrder+=1
+	local msg=KILL_MSGS[math.random(#KILL_MSGS)]:gsub("{k}",victim):gsub("{v}",killer)
+	local entry=newUI("Frame",{Size=UDim2.new(0,290,0,22),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=0.4,BorderSizePixel=0,ZIndex=6,LayoutOrder=killFeedOrder},KillFeedFrame)
+	corner(4,entry)
+	local stripe=newUI("Frame",{Size=UDim2.new(0,3,1,0),BackgroundColor3=Color3.fromRGB(255,0,150),BorderSizePixel=0,ZIndex=7},entry)
+	newUI("TextLabel",{Size=UDim2.new(1,-8,1,0),Position=UDim2.new(0,8,0,0),Text=msg,Font=Enum.Font.Gotham,TextSize=11,TextColor3=Color3.fromRGB(220,220,220),BackgroundTransparency=1,ZIndex=7,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},entry)
+	table.insert(killFeedEntries,entry)
+	if #killFeedEntries&gt;6 then
+		local old=table.remove(killFeedEntries,1)
+		old:Destroy()
+	end
+	-- Fade out after 5s
+	task.delay(5,function()
+		if entry and entry.Parent then
+			TweenService:Create(entry,TweenInfo.new(0.5),{BackgroundTransparency=1}):Play()
+			task.wait(0.5); if entry.Parent then entry:Destroy() end
+		end
+	end)
+end
+
+-- ── Gun viewmodel (colored rect in corner) ──
+local GunModel = newUI("Frame",{
+	Size=UDim2.new(0,80,0,28),Position=UDim2.new(1,-100,1,-60),
+	BackgroundColor3=Color3.fromRGB(68,136,255),BorderSizePixel=0,ZIndex=8,
+},BG)
+corner(4,GunModel)
+
+-- ── Weapon wheel indicator (bottom center) ──
+local WepBar = newUI("Frame",{Size=UDim2.new(0,420,0,44),Position=UDim2.new(0.5,-210,1,-54),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=0.5,BorderSizePixel=0,ZIndex=5},BG)
+corner(10,WepBar)
+local wepSlots={}
+for i,w in ipairs(WEAPONS) do
+	local slot=newUI("TextButton",{
+		Size=UDim2.new(0,38,0,36),Position=UDim2.new(0,(i-1)*42+2,0,4),
+		BackgroundColor3=i==1 and Color3.fromRGB(0,80,40) or Color3.fromRGB(10,10,20),
+		BorderSizePixel=0,ZIndex=6,Text=w.emoji,Font=Enum.Font.GothamBold,TextSize=18,
+	},WepBar)
+	corner(6,slot)
+	slot.MouseButton1Click:Connect(function() switchWeapon(i) end)
+	wepSlots[i]=slot
+end
+
+-- ── Leaderboard overlay ──
+local LBOverlay = newUI("Frame",{
+	Size=UDim2.new(0,440,0,440),Position=UDim2.new(0.5,-220,0.5,-220),
+	BackgroundColor3=Color3.fromRGB(4,4,16),BorderSizePixel=0,ZIndex=30,Visible=false,
+},BG)
+corner(14,LBOverlay)
+local LBStroke=Instance.new("UIStroke"); LBStroke.Thickness=1; LBStroke.Color=Color3.fromRGB(40,60,140); LBStroke.Parent=LBOverlay
+newUI("TextLabel",{Size=UDim2.new(1,0,0,32),Position=UDim2.new(0,0,0,4),Text="🏆  LEADERBOARD",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=Color3.fromRGB(255,210,0),BackgroundTransparency=1,ZIndex=31,TextXAlignment=Enum.TextXAlignment.Center},LBOverlay)
+local LBRows=newUI("Frame",{Size=UDim2.new(1,-20,1,-50),Position=UDim2.new(0,10,0,40),BackgroundTransparency=1,ZIndex=31},LBOverlay)
+local LBLayout=newUI("UIListLayout",{Padding=UDim.new(0,3),SortOrder=Enum.SortOrder.LayoutOrder},LBRows)
+
+local function refreshLB()
+	for _,c in ipairs(LBRows:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end
+	if not GetLB then return end
+	local ok,data=pcall(function() return GetLB:InvokeServer() end)
+	if not ok or not data then return end
+	for i,entry in ipairs(data) do
+		local isYou=entry.name==player.Name
+		local row=newUI("Frame",{Size=UDim2.new(1,0,0,28),BackgroundColor3=isYou and Color3.fromRGB(0,40,20) or Color3.fromRGB(8,8,22),BorderSizePixel=0,ZIndex=32,LayoutOrder=i},LBRows)
+		corner(6,row)
+		if isYou then local s=Instance.new("UIStroke"); s.Thickness=1; s.Color=Color3.fromRGB(0,200,80); s.Parent=row end
+		local col3=i==1 and Color3.fromRGB(255,210,0) or i==2 and Color3.fromRGB(200,200,220) or i==3 and Color3.fromRGB(200,130,80) or Color3.fromRGB(140,150,180)
+		newUI("TextLabel",{Size=UDim2.new(0,30,1,0),Text="#"..i,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=col3,BackgroundTransparency=1,ZIndex=33,TextXAlignment=Enum.TextXAlignment.Center},row)
+		newUI("TextLabel",{Size=UDim2.new(1,-110,1,0),Position=UDim2.new(0,30,0,0),Text=(entry.isBot and "🤖 " or "")..entry.name,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=Color3.fromRGB(220,220,240),BackgroundTransparency=1,ZIndex=33,TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
+		newUI("TextLabel",{Size=UDim2.new(0,70,1,0),Position=UDim2.new(1,-70,0,0),Text=(entry.kills or 0).." kills",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=col3,BackgroundTransparency=1,ZIndex=33,TextXAlignment=Enum.TextXAlignment.Right},row)
+	end
+end
+
+-- ── Win/death overlay ──
+local WinScreen=newUI("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(0,0,0),BackgroundTransparency=0.3,ZIndex=50,Visible=false},BG)
+local WinLbl=newUI("TextLabel",{Size=UDim2.new(0,600,0,80),Position=UDim2.new(0.5,-300,0.5,-60),Text="W RIZZ 🏆",Font=Enum.Font.GothamBold,TextSize=60,TextColor3=Color3.fromRGB(255,210,0),BackgroundTransparency=1,ZIndex=51,TextXAlignment=Enum.TextXAlignment.Center},WinScreen)
+local WinSub=newUI("TextLabel",{Size=UDim2.new(0,600,0,30),Position=UDim2.new(0.5,-300,0.5,30),Text="",Font=Enum.Font.Gotham,TextSize=16,TextColor3=Color3.fromRGB(180,180,180),BackgroundTransparency=1,ZIndex=51,TextXAlignment=Enum.TextXAlignment.Center},WinScreen)
+
+-- ═══════════════════════════════════════════════
+--  HUD UPDATE
+-- ═══════════════════════════════════════════════
+local function updateHUD()
+	local wep=WEAPONS[currentWep]
+	WepName.Text=wep.emoji.." "..wep.name
+	AmmoCur.Text=wep.ammo==-1 and "∞" or tostring(weaponAmmo)
+	AmmoRes.Text=wep.ammo==-1 and "MELEE" or "/ "..wep.maxAmmo
+	GunModel.BackgroundColor3=wep.col
+	for i,s in ipairs(wepSlots) do
+		s.BackgroundColor3=i==currentWep and Color3.fromRGB(0,80,40) or Color3.fromRGB(10,10,20)
+	end
+end
+
+local function updateHP(hp,maxHp)
+	local pct=hp/maxHp
+	local w=math.max(0,pct)
+	TweenService:Create(HPFill,TweenInfo.new(0.15),{Size=UDim2.new(w,0,1,0)}):Play()
+	HPFill.BackgroundColor3=pct&gt;0.5 and Color3.fromRGB(50,220,80) or pct&gt;0.25 and Color3.fromRGB(255,140,0) or Color3.fromRGB(255,40,40)
+end
+
+local function showHitmark(kill)
+	HitMark.TextColor3=kill and Color3.fromRGB(255,220,0) or Color3.fromRGB(255,50,50)
+	TweenService:Create(HitMark,TweenInfo.new(0.05),{TextTransparency=0}):Play()
+	hitmarkTimer=kill and 0.3 or 0.15
+end
+
+-- ═══════════════════════════════════════════════
+--  WEAPON SWITCH
+-- ═══════════════════════════════════════════════
+function switchWeapon(idx)
+	if idx&lt;1 or idx&gt;#WEAPONS then return end
+	currentWep=idx
+	local wep=WEAPONS[idx]
+	weaponAmmo=wep.ammo
+	reloading=false; reloadTimer=0; weaponFR=0
+	TweenService:Create(ReloadMsg,TweenInfo.new(0.1),{TextTransparency=1}):Play()
+	-- zoom off when switching
+	if zoomActive then
+		zoomActive=false
+		local cam=workspace.CurrentCamera
+		if cam then cam.FieldOfView=70 end
+	end
+	updateHUD()
+end
+
+local function reloadWeapon()
+	local wep=WEAPONS[currentWep]
+	if wep.ammo==-1 or reloading then return end
+	reloading=true; reloadTimer=wep.reload
+	TweenService:Create(ReloadMsg,TweenInfo.new(0.1),{TextTransparency=0}):Play()
+end
+
+-- ═══════════════════════════════════════════════
+--  CAMERA SETUP (First Person)
+-- ═══════════════════════════════════════════════
+local camera = workspace.CurrentCamera
+camera.CameraType = Enum.CameraType.Scriptable
+camera.FieldOfView = 70
+
+local yaw   = 0
+local pitch = 0
+
+-- ═══════════════════════════════════════════════
+--  SHOOTING
+-- ═══════════════════════════════════════════════
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function doShot()
+	local wep=WEAPONS[currentWep]
+	if reloading then return end
+	if wep.ammo~=-1 and weaponAmmo&lt;=0 then reloadWeapon(); return end
+	if weaponFR&gt;0 then return end
+
+	weaponFR=wep.fr
+	if wep.ammo~=-1 then weaponAmmo-=1 end
+	updateHUD()
+
+	-- Gun kick animation
+	TweenService:Create(GunModel,TweenInfo.new(0.06),{Position=UDim2.new(1,-110,1,-56)}):Play()
+	task.delay(0.08,function() TweenService:Create(GunModel,TweenInfo.new(0.1),{Position=UDim2.new(1,-100,1,-60)}):Play() end)
+
+	local char=player.Character
+	if not char then return end
+	rayParams.FilterDescendantsInstances={char}
+
+	local pellets=wep.pellets or 1
+	local hitAny=false
+
+	for _=1,pellets do
+		local sp=wep.spread
+		local origin=camera.CFrame.Position
+		local lookDir=camera.CFrame.LookVector
+		local right=camera.CFrame.RightVector
+		local up=camera.CFrame.UpVector
+		local dir=(lookDir + right*(math.random()-0.5)*sp*2 + up*(math.random()-0.5)*sp*2).Unit
+
+		if wep.type=="melee" then
+			-- melee: short range sphere cast
+			for _,model in ipairs(workspace:GetChildren()) do
+				if model:FindFirstChild("IsBot") and model:FindFirstChild("HP") then
+					local root=model:FindFirstChild("HumanoidRootPart")
+					if root and (root.Position-origin).Magnitude&lt;wep.range then
+						local hpVal=model:FindFirstChild("HP")
+						if DamageBot then
+							DamageBot:FireServer(model, wep.dmg, wep.id)
+							hitAny=true
+						end
+					end
+				end
+			end
+			break
+		end
+
+		local result=workspace:Raycast(origin, dir*wep.range, rayParams)
+		if result then
+			local hitPart=result.Instance
+			local model=hitPart:FindFirstAncestorOfClass("Model")
+			if model and model:FindFirstChild("IsBot") then
+				if DamageBot then
+					DamageBot:FireServer(model, wep.dmg, wep.id)
+					hitAny=true
+				end
+			end
+
+			if wep.explosive then
+				-- Explosive: damage all bots in radius
+				for _,m in ipairs(workspace:GetChildren()) do
+					if m:FindFirstChild("IsBot") then
+						local root=m:FindFirstChild("HumanoidRootPart")
+						if root then
+							local dist=(root.Position-result.Position).Magnitude
+							if dist&lt;12 then
+								local splashDmg=wep.dmg*(1-dist/12)
+								if DamageBot then DamageBot:FireServer(m,splashDmg,wep.id) end
+								hitAny=true
+							end
+						end
+					end
+				end
+				-- Explosion visual
+				local flash=newUI("Frame",{Size=UDim2.new(0,120,0,120),Position=UDim2.new(0.5,-60,0.5,-60),BackgroundColor3=Color3.fromRGB(255,100,0),BackgroundTransparency=0.2,ZIndex=20},BG)
+				corner(60,flash)
+				task.delay(0.1,function()
+					TweenService:Create(flash,TweenInfo.new(0.3),{BackgroundTransparency=1,Size=UDim2.new(0,200,0,200),Position=UDim2.new(0.5,-100,0.5,-100)}):Play()
+					task.wait(0.3); flash:Destroy()
+				end)
+			end
+		end
+	end
+
+	if hitAny then showHitmark(false) end
+
+	-- Muzzle flash
+	local mf=newUI("Frame",{Size=UDim2.new(0,12,0,12),Position=UDim2.new(1,-95,1,-65),BackgroundColor3=Color3.fromRGB(255,240,150),BackgroundTransparency=0,ZIndex=9},BG)
+	corner(6,mf); task.delay(0.05,function() mf:Destroy() end)
+end
+
+-- ═══════════════════════════════════════════════
+--  INPUT
+-- ═══════════════════════════════════════════════
+UserInputService.InputBegan:Connect(function(input, gameP)
+	if gameP then return end
+	if input.UserInputType==Enum.UserInputType.MouseButton1 then
+		mouseHeld=true
+		doShot()
+	end
+	if input.UserInputType==Enum.UserInputType.MouseButton2 then
+		local wep=WEAPONS[currentWep]
+		if wep.zoom then
+			zoomActive=not zoomActive
+			TweenService:Create(camera,TweenInfo.new(0.15),{FieldOfView=zoomActive and 25 or 70}):Play()
+		end
+	end
+	if input.KeyCode==Enum.KeyCode.R then reloadWeapon() end
+	if input.KeyCode==Enum.KeyCode.Tab then
+		LBOverlay.Visible=true; refreshLB()
+	end
+	-- 1-0 weapon select
+	local numMap={[Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,
+		[Enum.KeyCode.Five]=5,[Enum.KeyCode.Six]=6,[Enum.KeyCode.Seven]=7,[Enum.KeyCode.Eight]=8,
+		[Enum.KeyCode.Nine]=9,[Enum.KeyCode.Zero]=10}
+	if numMap[input.KeyCode] then switchWeapon(numMap[input.KeyCode]) end
+end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType==Enum.UserInputType.MouseButton1 then mouseHeld=false end
+	if input.KeyCode==Enum.KeyCode.Tab then LBOverlay.Visible=false end
+end)
+
+-- ═══════════════════════════════════════════════
+--  REMOTE EVENTS
+-- ═══════════════════════════════════════════════
+if KillFeed then
+	KillFeed.OnClientEvent:Connect(function(killer,victim)
+		addKillFeed(killer,victim)
+		if killer==player.Name then
+			-- Update kill display
+			local ls=player:FindFirstChild("leaderstats")
+			local k=ls and ls:FindFirstChild("Kills")
+			if k then KillNum.Text=tostring(k.Value) end
+			showHitmark(true)
+		end
+	end)
+end
+
+if GameWon then
+	GameWon.OnClientEvent:Connect(function(winner)
+		gameEnded=true
+		WinScreen.Visible=true
+		WinLbl.Text=winner==player.Name and "W RIZZ 🏆" or "L + RATIO 💀"
+		WinLbl.TextColor3=winner==player.Name and Color3.fromRGB(255,210,0) or Color3.fromRGB(255,60,60)
+		WinSub.Text=winner==player.Name and "you won bestie 🏆" or winner.." won. you are literally an NPC."
+		refreshLB()
+	end)
+end
+
+-- ═══════════════════════════════════════════════
+--  SLIDE MECHANIC
+-- ═══════════════════════════════════════════════
+local sliding=false
+local slideTimer=0
+local slideCooldown=0
+
+UserInputService.InputBegan:Connect(function(input,gameP)
+	if gameP then return end
+	if input.KeyCode==Enum.KeyCode.LeftControl then
+		local char=player.Character
+		if not char then return end
+		local hum=char:FindFirstChild("Humanoid")
+		local hrp=char:FindFirstChild("HumanoidRootPart")
+		if not hum or not hrp or sliding or slideCooldown&gt;0 then return end
+		-- Check if moving
+		local vel=hrp.AssemblyLinearVelocity
+		if vel.Magnitude&lt;2 then return end
+		sliding=true; slideTimer=0.6; slideCooldown=1.5
+		hum.WalkSpeed=4
+		-- Boost forward
+		local bv=Instance.new("BodyVelocity")
+		bv.Velocity=hrp.CFrame.LookVector*22
+		bv.MaxForce=Vector3.new(1e5,0,1e5)
+		bv.Parent=hrp
+		game:GetService("Debris"):AddItem(bv,0.5)
+	end
+end)
+
+-- ═══════════════════════════════════════════════
+--  MAIN RENDER LOOP
+-- ═══════════════════════════════════════════════
+local lastTime=tick()
+
+RunService.RenderStepped:Connect(function()
+	local now=tick()
+	local dt=math.min(now-lastTime,0.05)
+	lastTime=now
+
+	local char=player.Character
+	local hum=char and char:FindFirstChild("Humanoid")
+	local hrp=char and char:FindFirstChild("HumanoidRootPart")
+
+	if not hrp then return end
+
+	-- HP display
+	if hum then
+		updateHP(hum.Health, hum.MaxHealth)
+	end
+
+	-- First person camera
+	local mouseDelta=UserInputService:GetMouseDelta()
+	yaw   -= mouseDelta.X * 0.003
+	pitch -= mouseDelta.Y * 0.003
+	pitch = math.clamp(pitch, -math.pi/2.1, math.pi/2.1)
+
+	local camCF = CFrame.new(hrp.Position + Vector3.new(0,0.7,0))
+		* CFrame.fromEulerAnglesYXZ(pitch, yaw, 0)
+	camera.CFrame = camCF
+
+	-- Make humanoid face camera yaw
+	hrp.CFrame = CFrame.new(hrp.Position) * CFrame.fromEulerAnglesYXZ(0, yaw, 0)
+
+	-- Lock mouse
+	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+
+	-- Fire rate
+	if weaponFR &gt; 0 then weaponFR -= dt end
+
+	-- Auto fire
+	if mouseHeld and WEAPONS[currentWep].type=="auto" and not gameEnded then
+		doShot()
+	end
+
+	-- Burst
+	if burstQueue &gt; 0 then
+		burstTimer -= dt
+		if burstTimer &lt;= 0 then
+			doShot(); burstQueue -= 1; burstTimer = 0.07
+		end
+	end
+
+	-- Reload
+	if reloading then
+		reloadTimer -= dt
+		if reloadTimer &lt;= 0 then
+			weaponAmmo = WEAPONS[currentWep].maxAmmo
+			reloading = false
+			TweenService:Create(ReloadMsg,TweenInfo.new(0.1),{TextTransparency=1}):Play()
+			updateHUD()
+		end
+	end
+
+	-- Hit marker fade
+	if hitmarkTimer &gt; 0 then
+		hitmarkTimer -= dt
+		if hitmarkTimer &lt;= 0 then
+			TweenService:Create(HitMark,TweenInfo.new(0.1),{TextTransparency=1}):Play()
+		end
+	end
+
+	-- Slide timer
+	if sliding then
+		slideTimer -= dt
+		if slideTimer &lt;= 0 then
+			sliding = false
+			if hum then hum.WalkSpeed = 16 end
+		end
+	end
+	if slideCooldown &gt; 0 then slideCooldown -= dt end
+
+	-- Update kills from leaderstats
+	local ls = player:FindFirstChild("leaderstats")
+	local k = ls and ls:FindFirstChild("Kills")
+	if k then KillNum.Text = tostring(k.Value) end
+end)
+
+-- Init
+updateHUD()
+</ProtectedString>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
