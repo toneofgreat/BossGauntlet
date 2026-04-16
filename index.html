@@ -60,6 +60,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Rivals Memed card */
 .bg-rivals{background:linear-gradient(135deg,#1a0030,#0d0020,#002a00)}
 .bg-pc canvas{width:100%;height:100%}
+/* Ironblood Arena card */
+.bg-iba{background:linear-gradient(135deg,#1a0000,#2a0808,#0a0005)}
+.bg-iba canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -169,6 +172,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>LETTUCE HUNT 50</h2>
       <p>3D Roblox-style open world. Explore the village, obby towers, forest, mountain, beach, and a secret floating island — find all 50 hidden lettuces! Mobile friendly.</p>
       <span class="tag" style="background:#0a2a0a;color:#4f4">3D EXPLORATION</span>
+    </div>
+  </a>
+  <a href="ironblood-arena.html" class="card">
+    <div class="card-img bg-iba"><canvas id="c13"></canvas></div>
+    <div class="card-body">
+      <h2>IRONBLOOD ARENA</h2>
+      <p>3D multiplayer combat arena. Choose your weapon, pick a boss, and fight solo or co-op. Sword duels, axe clashes, boss battles, and ranked PvP — all in a brutal iron arena.</p>
+      <span class="tag" style="background:#2a0000;color:#ff4455">3D COMBAT</span>
     </div>
   </a>
 </div>
@@ -718,6 +729,64 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.font=`bold ${Math.floor(w*0.075)}px Courier New`;
     ctx.fillStyle='rgba(255,220,0,0.85)';ctx.textAlign='center';
     ctx.fillText('🪐 CLICK!',cx,h*.22);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Ironblood Arena preview: spinning crossed swords + blood splatter ----
+(function(){
+  const c=document.getElementById('c13'),ctx=c.getContext('2d');
+  if(!c)return;
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const sparks=[];
+  for(let i=0;i<18;i++)sparks.push({a:Math.random()*Math.PI*2,r:20+Math.random()*50,s:0.5+Math.random()*2,life:Math.random()});
+  function drawSword(cx,cy,angle,len,col){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(angle);
+    // Blade
+    ctx.strokeStyle=col;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,-len*0.15);ctx.lineTo(0,-len);ctx.stroke();
+    // Guard
+    ctx.strokeStyle='#f0a500';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-len*0.22,0);ctx.lineTo(len*0.22,0);ctx.stroke();
+    // Handle
+    ctx.strokeStyle='#888';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,len*0.3);ctx.stroke();
+    // Tip glow
+    const g=ctx.createRadialGradient(0,-len,0,0,-len,8);
+    g.addColorStop(0,col);g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,-len,8,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+  function draw(){
+    t+=0.02;
+    ctx.fillStyle='rgba(5,0,2,0.18)';ctx.fillRect(0,0,w,h);
+    // Arena floor ring
+    ctx.strokeStyle='rgba(180,0,0,0.25)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(w/2,h/2,Math.min(w,h)*0.38,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='rgba(240,165,0,0.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(w/2,h/2,Math.min(w,h)*0.44,0,Math.PI*2);ctx.stroke();
+    // Crossed swords spinning
+    const slen=Math.min(w,h)*0.32;
+    drawSword(w/2,h/2,t+Math.PI*0.25,slen,'#e8e8ff');
+    drawSword(w/2,h/2,t-Math.PI*0.25,slen,'#ff3344');
+    // Clash sparks
+    for(const sp of sparks){
+      sp.life+=sp.s*0.025;if(sp.life>1)sp.life=0;
+      const sr=sp.r*(0.3+sp.life*0.7);
+      const sx=w/2+Math.cos(sp.a+t*2)*sr;
+      const sy=h/2+Math.sin(sp.a+t*2)*sr;
+      const alpha=1-sp.life;
+      ctx.fillStyle=`rgba(255,${Math.floor(100+sp.life*155)},0,${alpha*0.9})`;
+      ctx.beginPath();ctx.arc(sx,sy,2-sp.life*1.5,0,Math.PI*2);ctx.fill();
+    }
+    // Title
+    ctx.font=`bold ${Math.floor(Math.min(w,h)*0.1)}px 'Courier New'`;
+    ctx.textAlign='center';
+    const pulse=0.7+Math.sin(t*2)*0.3;
+    ctx.fillStyle=`rgba(255,26,58,${pulse})`;
+    ctx.fillText('IRONBLOOD',w/2,h/2-Math.min(w,h)*0.12);
+    ctx.fillStyle=`rgba(240,165,0,${pulse})`;
+    ctx.fillText('ARENA',w/2,h/2+Math.min(w,h)*0.1);
     requestAnimationFrame(draw);
   }
   draw();
