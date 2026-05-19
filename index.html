@@ -63,6 +63,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Ironblood Arena card */
 .bg-iba{background:linear-gradient(135deg,#1a0000,#2a0808,#0a0005)}
 .bg-iba canvas{width:100%;height:100%}
+/* Hydrogen Quest card */
+.bg-h2{background:linear-gradient(135deg,#02050f,#0a1a3a,#1a0a3a)}
+.bg-h2 canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -180,6 +183,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>IRONBLOOD ARENA</h2>
       <p>3D multiplayer combat arena. Choose your weapon, pick a boss, and fight solo or co-op. Sword duels, axe clashes, boss battles, and ranked PvP — all in a brutal iron arena.</p>
       <span class="tag" style="background:#2a0000;color:#ff4455">3D COMBAT</span>
+    </div>
+  </a>
+  <a href="hydrogen-quest.html" class="card">
+    <div class="card-img bg-h2"><canvas id="c14"></canvas></div>
+    <div class="card-body">
+      <h2>HYDROGEN QUEST</h2>
+      <p>2D quiz boss-fighter. Answer hydrogen chemistry questions, dodge attacks from the Hydrogen Atom, the Wizard, and the Question Master. Plus a full Hydrogen Wordle mode with crazy reveal animations.</p>
+      <span class="tag" style="background:#0a1a3a;color:#6ad8ff">QUIZ · BOSS DODGER</span>
     </div>
   </a>
 </div>
@@ -729,6 +740,95 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.font=`bold ${Math.floor(w*0.075)}px Courier New`;
     ctx.fillStyle='rgba(255,220,0,0.85)';ctx.textAlign='center';
     ctx.fillText('🪐 CLICK!',cx,h*.22);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Hydrogen Quest preview: orbiting electron around proton + floating wordle tiles ----
+(function(){
+  const c=document.getElementById('c14'),ctx=c.getContext('2d');
+  if(!c)return;
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  // Floating wordle-style tiles in background
+  const tiles=[];
+  const letters=['H','Y','D','R','O','G','E','N','H','2','O','F','U','S','E'];
+  const cols=['#3ec96a','#d4a838','#8a1f1f','#3ec96a','#0a1a3a','#d4a838','#8a1f1f','#3ec96a','#3ec96a','#d4a838','#3ec96a','#0a1a3a','#0a1a3a','#0a1a3a','#0a1a3a'];
+  for(let i=0;i<10;i++){
+    tiles.push({
+      x:rand()*1, y:-rand(),
+      vy:0.0015+rand()*0.002,
+      letter:letters[Math.floor(rand()*letters.length)],
+      col:cols[Math.floor(rand()*cols.length)],
+      rot:rand()*PI*2, vr:(rand()-.5)*0.02,
+      s:9+rand()*5
+    });
+  }
+  function draw(){
+    t+=0.022;
+    ctx.fillStyle='rgba(2,5,20,0.2)';ctx.fillRect(0,0,w,h);
+    // Star dust
+    for(let i=0;i<30;i++){
+      const sx=(sin(i*73.1)*0.5+0.5)*w, sy=(cos(i*51.7)*0.5+0.5)*h;
+      const a=0.2+0.6*Math.abs(sin(t*0.7+i));
+      ctx.fillStyle=`rgba(120,180,255,${a*0.35})`;ctx.fillRect(sx,sy,1,1);
+    }
+    // Falling wordle tiles
+    for(const tl of tiles){
+      tl.y+=tl.vy; tl.rot+=tl.vr;
+      if(tl.y>1.1){tl.y=-0.2; tl.x=rand();}
+      const tx=tl.x*w, ty=tl.y*h;
+      ctx.save();ctx.translate(tx,ty);ctx.rotate(tl.rot);
+      ctx.globalAlpha=0.65;
+      ctx.fillStyle=tl.col;
+      ctx.fillRect(-tl.s,-tl.s,tl.s*2,tl.s*2);
+      ctx.fillStyle='#fff';
+      ctx.font=`bold ${tl.s*1.2}px Courier New`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(tl.letter,0,1);
+      ctx.restore();
+      ctx.globalAlpha=1;
+    }
+    // Hydrogen atom in center
+    const cx=w/2, cy=h/2;
+    // Electron orbit ring
+    ctx.strokeStyle='rgba(106,216,255,0.4)';ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx,cy,Math.min(w,h)*0.32,Math.min(w,h)*0.14,t*0.5,0,PI*2);
+    ctx.stroke();
+    // Nucleus glow
+    const ng=ctx.createRadialGradient(cx,cy,2,cx,cy,Math.min(w,h)*0.22);
+    ng.addColorStop(0,'rgba(255,180,200,0.6)');
+    ng.addColorStop(0.5,'rgba(255,80,120,0.25)');
+    ng.addColorStop(1,'transparent');
+    ctx.fillStyle=ng;
+    ctx.beginPath();ctx.arc(cx,cy,Math.min(w,h)*0.22,0,PI*2);ctx.fill();
+    // Proton nucleus
+    const pg=ctx.createRadialGradient(cx-3,cy-3,2,cx,cy,Math.min(w,h)*0.1);
+    pg.addColorStop(0,'#ffffff');
+    pg.addColorStop(0.5,'#ff8aa3');
+    pg.addColorStop(1,'#7a1a3a');
+    ctx.fillStyle=pg;
+    ctx.beginPath();ctx.arc(cx,cy,Math.min(w,h)*0.1,0,PI*2);ctx.fill();
+    // Proton "H" label
+    ctx.font=`bold ${Math.floor(Math.min(w,h)*0.09)}px Courier New`;
+    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('H',cx,cy+1);
+    // Electron orbiting on the ellipse
+    const ang=t*1.6;
+    const ex=cx+cos(ang)*Math.min(w,h)*0.32;
+    const ey=cy+sin(ang)*Math.min(w,h)*0.14;
+    const eg=ctx.createRadialGradient(ex,ey,0,ex,ey,9);
+    eg.addColorStop(0,'#ffffff');eg.addColorStop(0.5,'#6ad8ff');eg.addColorStop(1,'rgba(106,216,255,0)');
+    ctx.fillStyle=eg;
+    ctx.beginPath();ctx.arc(ex,ey,9,0,PI*2);ctx.fill();
+    ctx.fillStyle='#6ad8ff';
+    ctx.beginPath();ctx.arc(ex,ey,3.5,0,PI*2);ctx.fill();
+    // Title
+    ctx.font=`bold ${Math.floor(w*0.07)}px Courier New`;
+    ctx.fillStyle='rgba(106,216,255,0.9)';ctx.textAlign='center';
+    ctx.fillText('HYDROGEN',w/2,h*0.18);
     requestAnimationFrame(draw);
   }
   draw();
