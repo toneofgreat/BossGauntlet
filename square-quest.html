@@ -226,9 +226,9 @@ function defaultSave() {
              goldenSword:false, goldenArmor:false },
     activeItem: null,
     doubleJump: false,
-    adminUnlocked: false,
-    arenaUnlocked: false,
-    goldenUnlocked: false,
+    adminUnlocked: true,
+    arenaUnlocked: true,
+    goldenUnlocked: true,
     replayUnlocked: false,
     godDefeated: false,
     demonDefeated: false
@@ -239,7 +239,12 @@ function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return defaultSave();
-    return Object.assign(defaultSave(), JSON.parse(raw));
+    const s = Object.assign(defaultSave(), JSON.parse(raw));
+    // Shops are always unlocked from the start (migrate old saves)
+    s.adminUnlocked = true;
+    s.arenaUnlocked = true;
+    s.goldenUnlocked = true;
+    return s;
   } catch { return defaultSave(); }
 }
 function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
@@ -1056,10 +1061,12 @@ function winLevel() {
   let rewardText = `+${reward} POINTS`;
   if (L.special === 'unlockAdmin') {
     save.adminUnlocked = true;
-    rewardText += ' · ADMIN SHOP UNLOCKED!';
+    save.points += 50;
+    rewardText = `+${reward + 50} POINTS · ADMIN SHOP BONUS`;
   } else if (L.special === 'unlockArena') {
     save.arenaUnlocked = true;
-    rewardText += ' · FIGHTING ARENA UNLOCKED!';
+    save.points += 50;
+    rewardText = `+${reward + 50} POINTS · ARENA BONUS`;
   } else if (L.special === 'unlockDoubleJump') {
     save.doubleJump = true;
     rewardText += ' · DOUBLE JUMP UNLOCKED!';
@@ -1764,19 +1771,8 @@ function closeDialog() {
 // After level 19 / 20 / 21 win → show extra dialog before "Next Level"
 const originalNextLevel = nextLevel;
 window.nextLevel = function() {
-  const L = LEVELS[currentLevel - 1];
-  if (L && L.special === 'unlockAdmin' && save.adminUnlocked) {
-    document.getElementById('screenLevelWin').classList.add('hidden');
-    showShop('admin');
-    _pendingNext = currentLevel + 1;
-    return;
-  }
-  if (L && L.special === 'unlockArena' && save.arenaUnlocked) {
-    document.getElementById('screenLevelWin').classList.add('hidden');
-    showArena();
-    _pendingNext = currentLevel + 1;
-    return;
-  }
+  // Shops are always available from the title screen — no mid-run redirect.
+  // Exception: first time defeating God, pop the golden shop as a victory beat.
   if (save.godDefeated && save.goldenUnlocked && !save._goldenShown) {
     save._goldenShown = true;
     document.getElementById('screenLevelWin').classList.add('hidden');
