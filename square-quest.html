@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Square Quest · Platyfy</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'Trebuchet MS','Segoe UI',sans-serif}
+html,body{width:100%;height:100%;background:#06070d;color:#e6ecff;overflow:hidden;user-select:none}
+
+canvas{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);display:block;
+       background:#0a0e1a;box-shadow:0 0 60px #3a6fff44,inset 0 0 80px #000a;border-radius:6px}
+
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+        background:radial-gradient(ellipse at center,#16204acc,#06070dee 80%);z-index:10;backdrop-filter:blur(2px)}
+.screen.hidden{display:none}
+
+h1.title{font-size:78px;letter-spacing:10px;color:#ffd86a;text-shadow:0 0 30px #ffd86a,0 0 60px #ff8a3a;margin-bottom:14px;
+         animation:titleFloat 3s ease-in-out infinite}
+@keyframes titleFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.subtitle{color:#8fb6dd;letter-spacing:4px;margin-bottom:36px;font-size:14px}
+
+.menu-btn{background:linear-gradient(180deg,#3a6fff,#1a3aaa);border:0;color:#fff;padding:16px 38px;
+          font-size:20px;letter-spacing:3px;font-weight:bold;cursor:pointer;border-radius:10px;margin:6px;
+          box-shadow:0 0 30px #3a6fff80,inset 0 -3px 0 #00000033;transition:transform 0.1s,box-shadow 0.1s}
+.menu-btn:hover{transform:scale(1.06);box-shadow:0 0 50px #6ad8ff,inset 0 -3px 0 #00000033}
+.menu-btn:active{transform:scale(0.98)}
+.menu-btn.danger{background:linear-gradient(180deg,#ff3a5a,#a31a3a);box-shadow:0 0 30px #ff3a5a80,inset 0 -3px 0 #00000033}
+.menu-btn.gold{background:linear-gradient(180deg,#ffd86a,#aa7a1a);box-shadow:0 0 30px #ffd86a80,inset 0 -3px 0 #00000033;color:#1a0a00}
+.menu-btn.purple{background:linear-gradient(180deg,#b95fff,#5a1aaa);box-shadow:0 0 30px #b95fff80,inset 0 -3px 0 #00000033}
+
+#hud{position:fixed;top:0;left:0;right:0;padding:12px 20px;display:flex;justify-content:space-between;
+     z-index:5;pointer-events:none;background:linear-gradient(180deg,#000c,#0000)}
+.hud-pill{background:#000b;border:2px solid #6ad8ff;border-radius:30px;padding:6px 14px;color:#6ad8ff;
+          font-weight:bold;letter-spacing:1px;font-size:13px;margin-right:6px;display:inline-block;
+          box-shadow:0 0 14px #6ad8ff44}
+.hud-pill.gold{border-color:#ffd86a;color:#ffd86a;box-shadow:0 0 14px #ffd86a44}
+.hud-pill.green{border-color:#6fffc0;color:#6fffc0;box-shadow:0 0 14px #6fffc044}
+.hud-pill.danger{border-color:#ff5a72;color:#ff5a72;box-shadow:0 0 14px #ff5a7244}
+.hud-pill.hidden{display:none}
+
+.hp-bar{display:inline-block;width:120px;height:10px;background:#400;border:1px solid #ff5a72;
+        vertical-align:middle;margin-left:8px;border-radius:5px;overflow:hidden}
+.hp-bar > div{height:100%;background:linear-gradient(90deg,#ff5a72,#ffd86a);transition:width 0.15s}
+
+.level-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;width:540px;max-width:95vw;margin:18px 0;padding:8px}
+.lvl-btn{aspect-ratio:1;background:#1a2040;border:2px solid #3a6fff;color:#fff;font-size:18px;font-weight:bold;
+         cursor:pointer;border-radius:8px;transition:all 0.1s;display:flex;align-items:center;justify-content:center;
+         box-shadow:0 0 14px #3a6fff44}
+.lvl-btn:hover:not(:disabled){background:#3a6fff;transform:scale(1.12)}
+.lvl-btn:disabled{opacity:0.25;cursor:not-allowed;border-color:#444;box-shadow:none}
+.lvl-btn.boss{border-color:#ff5a72;background:#3a0a1a;box-shadow:0 0 14px #ff5a7244}
+.lvl-btn.boss:hover:not(:disabled){background:#6a1a2a}
+.lvl-btn.special{border-color:#ffd86a;background:#3a2a0a;box-shadow:0 0 14px #ffd86a44}
+.lvl-btn.special:hover:not(:disabled){background:#6a4a1a}
+.lvl-btn.god{border-color:#fff;background:#222266;box-shadow:0 0 20px #fff,inset 0 0 14px #ffd86a}
+.lvl-btn.demon{border-color:#ff3a3a;background:#330000;box-shadow:0 0 20px #ff3a3a,inset 0 0 14px #ff3a3a}
+
+#dialog{background:#0a0e1ad8;border:2px solid #6ad8ff;border-radius:14px;padding:30px;max-width:540px;
+        box-shadow:0 0 60px #6ad8ff,inset 0 0 30px #6ad8ff22}
+#dialog h2{font-size:32px;color:#ffd86a;letter-spacing:3px;margin-bottom:14px;text-align:center;text-shadow:0 0 20px #ffd86a}
+#dialog p{font-size:15px;line-height:1.7;color:#cfd8e8;margin:8px 0}
+#dialog .key{display:inline-block;background:#1a2040;border:1px solid #6ad8ff;color:#6ad8ff;
+             padding:2px 10px;border-radius:6px;font-weight:bold;margin:0 3px;font-family:monospace}
+
+#shop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;width:720px;max-width:95vw;margin:12px 0}
+.shop-item{background:#0a0e1a;border:2px solid #3a6fff;padding:16px;border-radius:10px;text-align:center;
+           box-shadow:0 0 20px #3a6fff33}
+.shop-item.gold-tier{border-color:#ffd86a;box-shadow:0 0 30px #ffd86a55}
+.shop-item h3{color:#6ad8ff;letter-spacing:2px;margin-bottom:6px;font-size:16px}
+.shop-item.gold-tier h3{color:#ffd86a}
+.shop-item p{font-size:12px;color:#8fb6dd;min-height:36px;margin:6px 0}
+.shop-item .price{color:#ffd86a;font-weight:bold;font-size:18px;margin:6px 0}
+.shop-item .buy-btn{background:linear-gradient(180deg,#3a6fff,#1a3aaa);border:0;color:#fff;
+                     padding:8px 22px;border-radius:6px;cursor:pointer;font-weight:bold;letter-spacing:1px}
+.shop-item .buy-btn:hover{background:linear-gradient(180deg,#5a8fff,#3a5aca)}
+.shop-item.owned{opacity:0.7}
+.shop-item.owned .buy-btn{background:#444;cursor:default}
+.shop-item.cant-afford .buy-btn{opacity:0.4;cursor:not-allowed}
+.shop-item .icon{font-size:36px;margin:6px 0;filter:drop-shadow(0 0 14px currentColor)}
+
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);
+       background:#000d;border:2px solid #ffd86a;color:#ffd86a;padding:10px 22px;border-radius:30px;
+       font-weight:bold;letter-spacing:2px;opacity:0;transition:opacity 0.25s;z-index:20;
+       box-shadow:0 0 30px #ffd86a;font-size:14px}
+#toast.show{opacity:1}
+
+.item-hotbar{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5}
+.item-hotbar.hidden{display:none}
+.item-slot{width:52px;height:52px;background:#000b;border:2px solid #444;border-radius:8px;
+           display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;
+           position:relative;cursor:pointer;flex-direction:column}
+.item-slot small{font-size:9px;color:#8fb6dd;position:absolute;top:2px;left:4px}
+.item-slot.active{border-color:#ffd86a;box-shadow:0 0 24px #ffd86a;background:#221a08}
+.item-slot.passive{border-color:#6fffc0;box-shadow:0 0 14px #6fffc0}
+.item-slot.locked{opacity:0.15}
+
+@keyframes shake{0%,100%{transform:translate(-50%,-50%)}25%{transform:translate(-52%,-49%)}50%{transform:translate(-48%,-51%)}75%{transform:translate(-51%,-49%)}}
+canvas.shake{animation:shake 0.25s}
+
+.win-glow{color:#ffd86a;text-shadow:0 0 30px #ffd86a,0 0 60px #ff8a3a,0 0 90px #ff3a5a}
+.god-glow{color:#fff;text-shadow:0 0 30px #fff,0 0 60px #ffd86a,0 0 90px #6ad8ff;animation:godPulse 2s ease-in-out infinite}
+@keyframes godPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+.demon-glow{color:#ff3a3a;text-shadow:0 0 30px #ff3a3a,0 0 60px #aa0000,0 0 90px #000;animation:demonPulse 1.5s ease-in-out infinite}
+@keyframes demonPulse{0%,100%{filter:brightness(0.8)}50%{filter:brightness(1.5)}}
+
+.tiny{font-size:11px;color:#666;letter-spacing:1px;margin-top:24px;text-align:center;line-height:1.7}
+.tiny .key{display:inline-block;background:#1a2040;border:1px solid #6ad8ff;color:#6ad8ff;
+           padding:1px 7px;border-radius:4px;font-weight:bold;margin:0 2px;font-family:monospace;font-size:10px}
+</style>
+</head>
+<body>
+
+<canvas id="cv" width="960" height="540"></canvas>
+
+<div id="hud" class="hidden">
+  <div>
+    <span class="hud-pill" id="hud-level">LEVEL 1</span>
+    <span class="hud-pill green">HP <span class="hp-bar"><div id="hp-fill" style="width:100%"></div></span></span>
+  </div>
+  <div>
+    <span class="hud-pill gold" id="hud-points">0 PTS</span>
+    <span class="hud-pill gold hidden" id="hud-gold">0 GOLD</span>
+  </div>
+</div>
+
+<div class="item-hotbar hidden" id="hotbar"></div>
+
+<div id="screenTitle" class="screen">
+  <h1 class="title">SQUARE QUEST</h1>
+  <div class="subtitle">23 LEVELS · BOSSES · SHOPS · DOOM</div>
+  <button class="menu-btn" onclick="startGame()">START</button>
+  <button class="menu-btn gold hidden" id="btnLevelSelect" onclick="showLevelSelect()">LEVEL SELECT</button>
+  <button class="menu-btn danger" onclick="resetSave()">RESET SAVE</button>
+  <div class="tiny">
+    <span class="key">←</span> <span class="key">→</span> or <span class="key">A</span> <span class="key">D</span> to move &middot;
+    <span class="key">↑</span> / <span class="key">W</span> / <span class="key">Space</span> to jump<br>
+    <span class="key">X</span> to use item &middot; <span class="key">Q</span> <span class="key">E</span> to swap item &middot; <span class="key">Esc</span> to pause/menu
+  </div>
+</div>
+
+<div id="screenLevelSelect" class="screen hidden">
+  <h1 class="title" style="font-size:48px;letter-spacing:6px">SELECT LEVEL</h1>
+  <div class="level-grid" id="lvlGrid"></div>
+  <button class="menu-btn" onclick="show('screenTitle')">BACK</button>
+</div>
+
+<div id="screenShop" class="screen hidden">
+  <h1 class="title" id="shopTitle" style="font-size:42px;letter-spacing:5px">SHOP</h1>
+  <div id="shop-grid"></div>
+  <div style="margin-top:18px">
+    <span class="hud-pill gold">POINTS: <span id="shopPoints">0</span></span>
+    <span class="hud-pill gold hidden" id="shopGoldPill">GOLD: <span id="shopGold">0</span></span>
+  </div>
+  <button class="menu-btn" style="margin-top:24px" onclick="closeShop()">CLOSE</button>
+</div>
+
+<div id="screenArena" class="screen hidden">
+  <h1 class="title" style="font-size:42px;letter-spacing:6px;color:#ff5a72;text-shadow:0 0 30px #ff5a72">FIGHTING ARENA</h1>
+  <div class="subtitle">Replay any boss for points.</div>
+  <div id="arena-grid" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:780px"></div>
+  <div style="margin-top:14px"><span class="hud-pill gold">POINTS: <span id="arenaPoints">0</span></span></div>
+  <button class="menu-btn" style="margin-top:24px" onclick="show('screenTitle')">EXIT ARENA</button>
+</div>
+
+<div id="screenDialog" class="screen hidden">
+  <div id="dialog">
+    <h2 id="dialogTitle">TITLE</h2>
+    <div id="dialogBody"></div>
+    <div style="text-align:center;margin-top:18px">
+      <button class="menu-btn" id="dialogBtn" onclick="closeDialog()">CONTINUE</button>
+    </div>
+  </div>
+</div>
+
+<div id="screenGameOver" class="screen hidden">
+  <h1 class="title" style="color:#ff5a72;text-shadow:0 0 30px #ff5a72,0 0 60px #aa0000">YOU DIED</h1>
+  <div class="subtitle" id="goReason">A spike caught you.</div>
+  <button class="menu-btn" onclick="retryLevel()">TRY AGAIN</button>
+  <button class="menu-btn" onclick="show('screenTitle')">QUIT</button>
+</div>
+
+<div id="screenLevelWin" class="screen hidden">
+  <h1 class="title">LEVEL CLEAR!</h1>
+  <div id="levelWinReward" style="font-size:18px;color:#6fffc0;margin-bottom:14px;letter-spacing:2px"></div>
+  <button class="menu-btn" id="nextBtn" onclick="nextLevel()">NEXT LEVEL</button>
+  <button class="menu-btn" onclick="show('screenTitle')">MENU</button>
+</div>
+
+<div id="screenFinalWin" class="screen hidden">
+  <h1 class="title win-glow" style="font-size:96px">YOU WIN</h1>
+  <div class="subtitle">You beat the Demon Boss. You are a legend among legends.</div>
+  <button class="menu-btn gold" onclick="show('screenTitle')">RETURN HOME</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ===================================================================
+// SQUARE QUEST
+// 2D platformer · 23 levels · 7 bosses · 6 items · 3 shops
+// ===================================================================
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const GROUND_Y = H - 60;
+
+const PHYS = {
+  gravity: 1900,
+  jump: -720,
+  doubleJump: -640,
+  speed: 300,
+  maxFall: 1200,
+  knockback: 320
+};
+
+// ============================ SAVE =============================
+const SAVE_KEY = 'squareQuestSave_v1';
+function defaultSave() {
+  return {
+    unlockedLevel: 1,
+    points: 0,
+    gold: 0,
+    items: { sword:false, shield:false, blaster:false, grenade:false, catArmor:false, minivan:false,
+             goldenSword:false, goldenArmor:false },
+    activeItem: null,
+    doubleJump: false,
+    adminUnlocked: false,
+    arenaUnlocked: false,
+    goldenUnlocked: false,
+    replayUnlocked: false,
+    godDefeated: false,
+    demonDefeated: false
+  };
+}
+let save;
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    return Object.assign(defaultSave(), JSON.parse(raw));
+  } catch { return defaultSave(); }
+}
+function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
+function resetSave() {
+  if (!confirm('Erase all progress and start over?')) return;
+  save = defaultSave();
+  saveGame();
+  toast('SAVE WIPED');
+  refreshTitleButtons();
+  if (typeof refreshExtras === 'function') refreshExtras();
+}
+save = loadSave();
+
+// ============================ UTIL ==============================
+function show(id) {
+  ['screenTitle','screenLevelSelect','screenShop','screenArena','screenDialog',
+   'screenGameOver','screenLevelWin','screenFinalWin'].forEach(s => {
+    document.getElementById(s).classList.add('hidden');
+  });
+  document.getElementById(id).classList.remove('hidden');
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('hotbar').classList.add('hidden');
+  state = 'menu';
+  bossActive = false;
+}
+function toast(msg, ms = 1400) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function refreshTitleButtons() {
+  document.getElementById('btnLevelSelect').classList.toggle('hidden', !save.replayUnlocked);
+}
+function rectIntersect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function rand(a, b) { return a + Math.random() * (b - a); }
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+// ============================ LEVELS =============================
+const LEVELS = [
+  { id:1, name:'FIRST STEP', width:1100 },
+  { id:2, name:'OUCH',           width:1100, spikes:[{x:560,size:1}] },
+  { id:3, name:'DOUBLE TROUBLE', width:1100, spikes:[{x:540,size:2}] },
+  { id:4, name:'TWICE TWICE',    width:1200, spikes:[{x:420,size:2},{x:760,size:2}] },
+  { id:5, name:'SPIKE RUN', width:2800, scroll:true,
+    spikes: Array.from({length:10},(_,i)=>({x:300+i*220,size:1})) },
+  { id:6, name:'BLADE', width:1100, pickup:{x:520,item:'sword'}, special:'pickupDialog' },
+  { id:7, name:'TRIPLE TROUBLE', width:1200, spikes:[{x:560,size:3}] },
+  { id:8, name:'FIRST FIGHT',    width:1300, bosses:[{x:900,tier:'noob'}] },
+  { id:9, name:'PAIR OF FOOLS',  width:3200, scroll:true,
+    spikes: Array.from({length:5},(_,i)=>({x:380+i*440,size:2})),
+    bosses:[{x:1600,tier:'noob'},{x:2700,tier:'noob'}] },
+  { id:10, name:'STEP UP',       width:1400, bosses:[{x:1000,tier:'pro'}] },
+  { id:11, name:'PRICKLE PATH',  width:2400, scroll:true,
+    spikes: Array.from({length:5},(_,i)=>({x:380+i*360,size:3})) },
+  { id:12, name:'PRO ARMY',      width:2000, bosses:[{x:700,tier:'pro'},{x:1200,tier:'pro'},{x:1700,tier:'pro'}] },
+  { id:13, name:'GUARD UP',      width:1100, pickup:{x:520,item:'shield'}, special:'pickupDialog' },
+  { id:14, name:'MASTER',        width:1500, bosses:[{x:1050,tier:'master'}] },
+  { id:15, name:'LEGEND',        width:1500, bosses:[{x:1050,tier:'legend'}] },
+  { id:16, name:'QUAD',          width:1300, spikes:[{x:620,size:4}] },
+  { id:17, name:'LEGENDARY GAUNTLET', width:3800, scroll:true,
+    spikes:[{x:500,size:4},{x:1500,size:4},{x:2500,size:4},{x:3300,size:4}],
+    bosses:[{x:1000,tier:'legend'},{x:2000,tier:'legend'},{x:3000,tier:'legend'}] },
+  { id:18, name:'WEIRD WEIRD WEIRD', width:2800, scroll:true,
+    spikes:[
+      {x:280,size:1},{x:520,size:3},{x:740,size:2},
+      {x:980,size:4},{x:1280,size:1,y:GROUND_Y-300},
+      {x:1520,size:3},{x:1760,size:1,y:GROUND_Y-220},
+      {x:2020,size:4},{x:2220,size:1},{x:2480,size:2}
+    ],
+    platforms:[
+      {x:460,y:GROUND_Y-160,w:90,h:10},
+      {x:1240,y:GROUND_Y-260,w:80,h:10},
+      {x:1700,y:GROUND_Y-180,w:80,h:10},
+      {x:2380,y:GROUND_Y-220,w:80,h:10}
+    ]},
+  { id:19, name:'CASH FLOW',     width:1300, spikes:[{x:640,size:1}], special:'unlockAdmin' },
+  { id:20, name:'ARENA',         width:1300, spikes:[{x:640,size:1}], special:'unlockArena' },
+  { id:21, name:'AIR TIME',      width:1500, special:'unlockDoubleJump',
+    platforms:[{x:430,y:GROUND_Y-200,w:90,h:10},{x:720,y:GROUND_Y-340,w:90,h:10},{x:1040,y:GROUND_Y-200,w:90,h:10}] },
+  { id:22, name:'GOD',           width:1800, bosses:[{x:1200,tier:'god'}] },
+  { id:23, name:'DEMON',         width:1800, bosses:[{x:1200,tier:'demon'}] }
+];
+
+// ========================== BOSS STATS ===========================
+const BOSS_STATS = {
+  noob:    { hp: 30,  dmg: 8,  speed: 80,  color:'#6fffc0', accent:'#1aaa5a', size: 44, attackCd: 1.4, projSpeed: 220, name:'NOOB',   reward: 25 },
+  pro:     { hp: 70,  dmg: 14, speed: 120, color:'#6ad8ff', accent:'#1a5aaa', size: 50, attackCd: 1.1, projSpeed: 280, name:'PRO',    reward: 60 },
+  master:  { hp: 140, dmg: 18, speed: 150, color:'#b95fff', accent:'#5a1aaa', size: 56, attackCd: 0.95,projSpeed: 320, name:'MASTER', reward: 120 },
+  legend:  { hp: 220, dmg: 24, speed: 180, color:'#ffd86a', accent:'#aa7a1a', size: 60, attackCd: 0.85,projSpeed: 360, name:'LEGEND', reward: 200 },
+  hacker:  { hp: 320, dmg: 30, speed: 220, color:'#ff8a3a', accent:'#aa3a1a', size: 56, attackCd: 0.7, projSpeed: 420, name:'HACKER', reward: 350 },
+  god:     { hp: 600, dmg: 35, speed: 200, color:'#ffffff', accent:'#ffd86a', size: 80, attackCd: 0.65,projSpeed: 460, name:'GOD',    reward: 500, special:true },
+  demon:   { hp: 1000,dmg: 45, speed: 240, color:'#ff3a3a', accent:'#330000', size: 90, attackCd: 0.55,projSpeed: 520, name:'DEMON',  reward: 999, special:true }
+};
+
+// ============================ ITEMS ==============================
+const ITEMS = {
+  sword:       { name:'SWORD',           icon:'🗡️', use:'X to slash · 22 dmg melee',          attack:'sword' },
+  shield:      { name:'SHIELD',          icon:'🛡️', use:'X to block frontal damage',           attack:'shield' },
+  blaster:     { name:'TITANIC BLASTER', icon:'🚀', use:'X to fire a long-range blast · 65 dmg',attack:'blaster', cd:0.5 },
+  grenade:     { name:'CANDLE GRENADE',  icon:'🕯️', use:'X to lob a flaming grenade · AoE 80', attack:'grenade', cd:1.0 },
+  catArmor:    { name:'CAT ARMOR',       icon:'🐱', use:'Passive — halves all damage taken',    attack:'passive' },
+  minivan:     { name:'MINIVAN POWER',   icon:'🚐', use:'X to summon a minivan that runs over bosses · 200 dmg', attack:'minivan', cd:8 },
+  goldenSword: { name:'GOLDEN SWORD',    icon:'⚔️', use:'X to slash · 60 dmg melee, longer reach', attack:'goldenSword' },
+  goldenArmor: { name:'GOLDEN ARMOR',    icon:'👑', use:'Passive — 80% damage reduction',         attack:'passive' }
+};
+
+// =========================== GAME STATE ===========================
+let state = 'menu';      // menu | playing | dialog | paused
+let currentLevel = null;
+let bossActive = false;
+let levelStartTime = 0;
+let camX = 0;
+let player, level, spikes, platforms, bosses, projectiles, particles, pickups, door, minionVans;
+let attackCd = 0, itemCd = {};
+let attackSwingT = 0;
+let shieldHold = false;
+let lastTime = 0;
+let invuln = 0;
+let arenaMode = null;
+let arenaActiveTier = null;
+let _pendingNext = null;
+
+const keys = {};
+
+// =========================== ENTITIES ============================
+function makePlayer() {
+  return {
+    x: 80, y: GROUND_Y - 40, w: 32, h: 32,
+    vx: 0, vy: 0, prevY: 0,
+    hp: 100, maxHp: 100,
+    jumpsLeft: 0,
+    grounded: false,
+    facing: 1,
+    color: '#6ad8ff'
+  };
+}
+
+function makeBoss(cfg) {
+  const stats = BOSS_STATS[cfg.tier];
+  return {
+    x: cfg.x, y: GROUND_Y - stats.size,
+    w: stats.size, h: stats.size,
+    vx: 0, vy: 0,
+    hp: stats.hp, maxHp: stats.hp,
+    tier: cfg.tier, stats,
+    attackCd: stats.attackCd * 0.5 + Math.random(),
+    phase: 0,
+    dazed: 0,
+    flash: 0,
+    dir: -1,
+    aiTimer: 0,
+    jumpCd: 0,
+    dead: false
+  };
+}
+
+// ====================== LEVEL LOADING ===========================
+function startLevel(idx) {
+  if (idx < 1 || idx > LEVELS.length) return;
+  currentLevel = idx;
+  arenaMode = null;
+  arenaActiveTier = null;
+  loadLevelData(LEVELS[idx-1]);
+  state = 'playing';
+  bossActive = level.bosses && level.bosses.length > 0;
+  levelStartTime = performance.now();
+  document.getElementById('hud').classList.remove('hidden');
+  refreshHotbar();
+  ['screenTitle','screenLevelSelect','screenShop','screenArena','screenDialog',
+   'screenGameOver','screenLevelWin','screenFinalWin'].forEach(s => {
+    document.getElementById(s).classList.add('hidden');
+  });
+  document.getElementById('hud-level').textContent = `LEVEL ${idx} · ${level.name}`;
+  updateHud();
+  invuln = 0.4;
+  lastTime = performance.now();
+  if (level.special === 'pickupDialog') {
+    // sword/shield levels: do nothing extra, pickup spawn handles it
+  }
+  requestAnimationFrame(loop);
+}
+
+function loadLevelData(L) {
+  level = L;
+  player = makePlayer();
+  spikes = [];
+  platforms = (L.platforms || []).slice();
+  bosses = [];
+  projectiles = [];
+  particles = [];
+  pickups = [];
+  minionVans = [];
+  camX = 0;
+  attackCd = 0;
+  itemCd = {};
+  shieldHold = false;
+  // Spikes: each entry has x, size, optional y
+  for (const s of (L.spikes||[])) {
+    const baseY = (s.y !== undefined) ? s.y : GROUND_Y;
+    for (let i = 0; i < s.size; i++) {
+      spikes.push({
+        x: s.x + i * 22,
+        y: baseY - 30,
+        w: 24, h: 30
+      });
+    }
+  }
+  for (const b of (L.bosses||[])) bosses.push(makeBoss(b));
+  if (L.pickup) {
+    pickups.push({ x: L.pickup.x, y: GROUND_Y - 36, w: 28, h: 36, item: L.pickup.item, bob: 0 });
+  }
+  door = { x: L.width - 70, y: GROUND_Y - 80, w: 50, h: 80, open: !bossActive };
+}
+
+function startArenaFight(tier) {
+  arenaMode = true;
+  arenaActiveTier = tier;
+  level = { id:'arena-'+tier, name:`ARENA · ${BOSS_STATS[tier].name}`, width: 1300 };
+  player = makePlayer();
+  spikes = [];
+  platforms = [];
+  bosses = [makeBoss({ x: 900, tier })];
+  projectiles = [];
+  particles = [];
+  pickups = [];
+  minionVans = [];
+  camX = 0;
+  attackCd = 0;
+  itemCd = {};
+  door = { x: 1230, y: GROUND_Y - 80, w: 50, h: 80, open: false };
+  bossActive = true;
+  state = 'playing';
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('hud-level').textContent = `ARENA · ${BOSS_STATS[tier].name} BOSS`;
+  ['screenTitle','screenLevelSelect','screenShop','screenArena','screenDialog',
+   'screenGameOver','screenLevelWin','screenFinalWin'].forEach(s => {
+    document.getElementById(s).classList.add('hidden');
+  });
+  refreshHotbar();
+  updateHud();
+  invuln = 0.4;
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+// ============================ INPUT ==============================
+window.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  keys[e.key] = true;
+  if (state !== 'playing') return;
+  if (k === 'w' || k === 'arrowup' || k === ' ') {
+    tryJump();
+    e.preventDefault();
+  }
+  if (k === 'x') {
+    useItem();
+    e.preventDefault();
+  }
+  if (k === 'q') { cycleItem(-1); e.preventDefault(); }
+  if (k === 'e') { cycleItem(1);  e.preventDefault(); }
+  if (k === 'escape') {
+    show('screenTitle');
+  }
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  keys[k] = false;
+  keys[e.key] = false;
+  if (k === 'x') shieldHold = false;
+});
+
+function tryJump() {
+  if (player.jumpsLeft > 0) {
+    const isDouble = player.jumpsLeft === 1 && save.doubleJump;
+    player.vy = isDouble ? PHYS.doubleJump : PHYS.jump;
+    player.jumpsLeft--;
+    spawnParticles(player.x + player.w/2, player.y + player.h, 8, isDouble ? '#ffd86a' : '#6ad8ff');
+  }
+}
+
+function ownedItemKeys() {
+  return Object.keys(ITEMS).filter(k => save.items[k] && ITEMS[k].attack !== 'passive');
+}
+
+function cycleItem(dir) {
+  const list = ownedItemKeys();
+  if (list.length === 0) return;
+  let idx = list.indexOf(save.activeItem);
+  if (idx < 0) idx = -1;
+  idx = (idx + dir + list.length + 1) % (list.length + 1);
+  save.activeItem = idx === list.length ? null : list[idx];
+  saveGame();
+  refreshHotbar();
+  toast(save.activeItem ? `EQUIPPED ${ITEMS[save.activeItem].name}` : 'UNEQUIPPED');
+}
+
+function refreshHotbar() {
+  const hb = document.getElementById('hotbar');
+  hb.innerHTML = '';
+  const order = ['sword','goldenSword','shield','blaster','grenade','catArmor','goldenArmor','minivan'];
+  let visible = false;
+  order.forEach((key, i) => {
+    if (!save.items[key]) return;
+    visible = true;
+    const it = ITEMS[key];
+    const el = document.createElement('div');
+    el.className = 'item-slot';
+    if (it.attack === 'passive') el.classList.add('passive');
+    if (save.activeItem === key) el.classList.add('active');
+    el.innerHTML = `<small>${i+1}</small><span>${it.icon}</span>`;
+    el.title = `${it.name} — ${it.use}`;
+    el.onclick = () => {
+      if (it.attack === 'passive') return;
+      save.activeItem = save.activeItem === key ? null : key;
+      saveGame();
+      refreshHotbar();
+    };
+    hb.appendChild(el);
+  });
+  hb.classList.toggle('hidden', !visible);
+}
+
+// =========================== ITEM USE ============================
+function useItem() {
+  const key = save.activeItem;
+  if (!key) return;
+  if (!save.items[key]) return;
+  const it = ITEMS[key];
+  if (it.attack === 'shield') {
+    shieldHold = true;
+    return;
+  }
+  if ((itemCd[key] || 0) > 0) return;
+  if (it.attack === 'sword' || it.attack === 'goldenSword') {
+    attackSwingT = 0.18;
+    const dmg = it.attack === 'goldenSword' ? 60 : 22;
+    const reach = it.attack === 'goldenSword' ? 80 : 56;
+    const hitBox = { x: player.facing > 0 ? player.x + player.w : player.x - reach,
+                     y: player.y - 6, w: reach, h: player.h + 12 };
+    for (const b of bosses) {
+      if (b.dead) continue;
+      if (rectIntersect(hitBox, b)) damageBoss(b, dmg);
+    }
+    spawnParticles(player.x + (player.facing>0?player.w+20:-20), player.y + 16, 10,
+                   it.attack === 'goldenSword' ? '#ffd86a' : '#ccddee');
+    itemCd[key] = 0.25;
+  } else if (it.attack === 'blaster') {
+    projectiles.push({
+      x: player.x + player.w/2, y: player.y + player.h/2,
+      vx: player.facing * 720, vy: 0,
+      r: 8, dmg: 65, life: 1.4, friendly:true, type:'blaster'
+    });
+    spawnParticles(player.x + player.w/2, player.y + player.h/2, 8, '#ff8a3a');
+    itemCd[key] = it.cd;
+  } else if (it.attack === 'grenade') {
+    projectiles.push({
+      x: player.x + player.w/2, y: player.y + 10,
+      vx: player.facing * 360, vy: -480,
+      gravity: true,
+      r: 9, dmg: 80, life: 2.0, friendly:true, type:'grenade', aoe: 90
+    });
+    spawnParticles(player.x + player.w/2, player.y, 6, '#ffd86a');
+    itemCd[key] = it.cd;
+  } else if (it.attack === 'minivan') {
+    minionVans.push({ x: -100, y: GROUND_Y - 50, w: 110, h: 50, vx: 600 });
+    minionVans.push({ x: level.width + 100, y: GROUND_Y - 50, w: 110, h: 50, vx: -600 });
+    toast('MINIVANS INCOMING!');
+    itemCd[key] = it.cd;
+  }
+}
+
+function damageBoss(b, dmg) {
+  b.hp -= dmg;
+  b.flash = 0.18;
+  b.dazed = 0.25;
+  showDmgNumber(b.x + b.w/2, b.y - 10, dmg);
+  spawnParticles(b.x + b.w/2, b.y + b.h/2, 12, b.stats.accent);
+  triggerShake();
+  if (b.hp <= 0 && !b.dead) {
+    b.dead = true;
+    spawnParticles(b.x + b.w/2, b.y + b.h/2, 40, b.stats.color);
+    toast(`${b.stats.name} DOWN`);
+    // Award points
+    if (!arenaMode) save.points += b.stats.reward;
+    saveGame();
+    updateHud();
+    if (b.tier === 'god' && !save.godDefeated) {
+      save.godDefeated = true;
+      save.goldenUnlocked = true;
+      save.replayUnlocked = true;
+      save.gold += 1;
+      saveGame();
+    }
+    if (b.tier === 'demon' && !save.demonDefeated) {
+      save.demonDefeated = true;
+      saveGame();
+    }
+  }
+}
+
+// ============================ UPDATE =============================
+function update(dt) {
+  // Player input
+  let dx = 0;
+  if (keys['arrowleft']  || keys['ArrowLeft']  || keys['a']) dx -= 1;
+  if (keys['arrowright'] || keys['ArrowRight'] || keys['d']) dx += 1;
+  player.vx = dx * PHYS.speed;
+  if (dx !== 0) player.facing = dx;
+
+  // Gravity
+  player.vy += PHYS.gravity * dt;
+  if (player.vy > PHYS.maxFall) player.vy = PHYS.maxFall;
+
+  player.prevY = player.y;
+  player.x += player.vx * dt;
+  if (player.x < 0) player.x = 0;
+  if (player.x > level.width - player.w) player.x = level.width - player.w;
+  player.y += player.vy * dt;
+
+  // Ground
+  player.grounded = false;
+  if (player.y + player.h >= GROUND_Y) {
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.grounded = true;
+    player.jumpsLeft = save.doubleJump ? 2 : 1;
+  }
+  // Platforms (one-way)
+  for (const p of platforms) {
+    if (player.vy >= 0 &&
+        player.x + player.w > p.x && player.x < p.x + p.w &&
+        player.y + player.h > p.y && player.prevY + player.h <= p.y + 2) {
+      player.y = p.y - player.h;
+      player.vy = 0;
+      player.grounded = true;
+      player.jumpsLeft = save.doubleJump ? 2 : 1;
+    }
+  }
+
+  // Camera follow (only if scrolling level OR level wider than screen)
+  const targetCam = clamp(player.x + player.w/2 - W/2, 0, Math.max(0, level.width - W));
+  camX += (targetCam - camX) * Math.min(1, dt * 8);
+
+  // Spike collision (instant death)
+  if (invuln <= 0) {
+    for (const s of spikes) {
+      // narrow hitbox (90% of spike base)
+      const hit = { x: s.x + 3, y: s.y + 6, w: s.w - 6, h: s.h - 4 };
+      if (rectIntersect(player, hit)) {
+        killPlayer('A spike caught you.');
+        return;
+      }
+    }
+  }
+
+  // Pickups
+  for (const p of pickups) {
+    p.bob += dt * 3;
+    if (!p.collected && rectIntersect(player, p)) {
+      p.collected = true;
+      save.items[p.item] = true;
+      save.activeItem = p.item;
+      saveGame();
+      refreshHotbar();
+      spawnParticles(p.x + p.w/2, p.y + p.h/2, 20, '#ffd86a');
+      const it = ITEMS[p.item];
+      showDialog(it.name + ' GET!', `
+        <p>You picked up the <b style="color:#ffd86a">${it.name}</b>.</p>
+        <p>${it.use}</p>
+        <p style="margin-top:14px;color:#8fb6dd">Press <span class="key">X</span> to use it.
+        Use <span class="key">Q</span>/<span class="key">E</span> to swap between items.</p>
+      `);
+      return;
+    }
+  }
+  pickups = pickups.filter(p => !p.collected);
+
+  // Boss AI
+  for (const b of bosses) {
+    if (b.dead) continue;
+    updateBoss(b, dt);
+  }
+
+  // Projectiles
+  for (const p of projectiles) {
+    if (p.gravity) p.vy += 900 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.y > GROUND_Y - p.r) {
+      if (p.type === 'grenade') {
+        explodeAt(p.x, p.y, p.aoe, p.dmg, p.friendly);
+        p.dead = true;
+      } else if (!p.friendly) {
+        p.dead = true;
+      } else {
+        p.dead = true;
+      }
+    }
+  }
+  // Collision: player projectiles vs bosses
+  for (const p of projectiles) {
+    if (p.dead || !p.friendly) continue;
+    for (const b of bosses) {
+      if (b.dead) continue;
+      const hb = { x: p.x - p.r, y: p.y - p.r, w: p.r*2, h: p.r*2 };
+      if (rectIntersect(hb, b)) {
+        if (p.type === 'grenade') {
+          explodeAt(p.x, p.y, p.aoe, p.dmg, true);
+        } else {
+          damageBoss(b, p.dmg);
+        }
+        p.dead = true;
+        break;
+      }
+    }
+  }
+  // Collision: enemy projectiles vs player
+  if (invuln <= 0) {
+    for (const p of projectiles) {
+      if (p.dead || p.friendly) continue;
+      const hb = { x: p.x - p.r, y: p.y - p.r, w: p.r*2, h: p.r*2 };
+      if (rectIntersect(hb, player)) {
+        if (shieldHold && save.items.shield &&
+            ((p.x > player.x + player.w/2 && player.facing > 0) ||
+             (p.x < player.x + player.w/2 && player.facing < 0))) {
+          // blocked
+          spawnParticles(p.x, p.y, 8, '#6ad8ff');
+        } else {
+          damagePlayer(p.dmg, p.x, p.y);
+        }
+        p.dead = true;
+      }
+    }
+  }
+  projectiles = projectiles.filter(p => !p.dead && p.life > 0);
+
+  // Minivans
+  for (const v of minionVans) {
+    v.x += v.vx * dt;
+    for (const b of bosses) {
+      if (b.dead) continue;
+      if (rectIntersect(v, b)) {
+        damageBoss(b, 200);
+      }
+    }
+  }
+  minionVans = minionVans.filter(v => v.x > -200 && v.x < level.width + 200);
+
+  // Boss-player contact
+  if (invuln <= 0) {
+    for (const b of bosses) {
+      if (b.dead) continue;
+      if (rectIntersect(b, player)) {
+        damagePlayer(b.stats.dmg, b.x + b.w/2, b.y + b.h/2);
+        break;
+      }
+    }
+  }
+
+  // Particles
+  for (const p of particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += (p.gravity || 200) * dt;
+    p.life -= dt;
+  }
+  particles = particles.filter(p => p.life > 0);
+
+  invuln = Math.max(0, invuln - dt);
+  attackSwingT = Math.max(0, attackSwingT - dt);
+  Object.keys(itemCd).forEach(k => itemCd[k] = Math.max(0, itemCd[k] - dt));
+
+  // Door
+  if (bossActive && bosses.every(b => b.dead)) {
+    bossActive = false;
+    door.open = true;
+    if (!arenaMode) toast('DOOR UNLOCKED!');
+  }
+  if (door.open && rectIntersect(player, door)) {
+    if (arenaMode) {
+      // Award points based on tier
+      const reward = arenaActiveTier === 'noob' ? 5 : arenaActiveTier === 'pro' ? 10 :
+                     arenaActiveTier === 'master' ? 20 : arenaActiveTier === 'legend' ? 35 :
+                     arenaActiveTier === 'hacker' ? 60 : 0;
+      // (already awarded reward via points? no — arena gives flat win prize too)
+      save.points += reward;
+      saveGame();
+      toast(`+${reward} POINTS`);
+      finishArena();
+    } else {
+      winLevel();
+    }
+    return;
+  }
+
+  updateHud();
+}
+
+function updateBoss(b, dt) {
+  b.flash = Math.max(0, b.flash - dt);
+  b.dazed = Math.max(0, b.dazed - dt);
+  b.aiTimer += dt;
+
+  // Pathing: chase player
+  if (b.dazed > 0) {
+    b.vx *= 0.9;
+  } else {
+    const dx = player.x - b.x;
+    const dist = Math.abs(dx);
+    b.dir = dx > 0 ? 1 : -1;
+    if (dist > 40) b.vx = b.dir * b.stats.speed;
+    else b.vx = 0;
+  }
+
+  // Gravity for boss
+  b.vy += PHYS.gravity * dt;
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+  if (b.y + b.h >= GROUND_Y) {
+    b.y = GROUND_Y - b.h;
+    b.vy = 0;
+    // Random jump for higher tiers
+    if (b.jumpCd <= 0 && Math.random() < (b.tier === 'noob' ? 0.005 : b.tier === 'pro' ? 0.015 : 0.03)) {
+      b.vy = -650;
+      b.jumpCd = 1.4;
+    }
+  }
+  b.jumpCd = Math.max(0, b.jumpCd - dt);
+  // Clamp to level bounds
+  b.x = clamp(b.x, 0, level.width - b.w);
+
+  // Attack
+  b.attackCd -= dt;
+  if (b.attackCd <= 0 && b.dazed <= 0) {
+    bossAttack(b);
+    b.attackCd = b.stats.attackCd * (0.7 + Math.random() * 0.5);
+  }
+}
+
+function bossAttack(b) {
+  const stats = b.stats;
+  const dx = player.x + player.w/2 - (b.x + b.w/2);
+  const dy = player.y + player.h/2 - (b.y + b.h/2);
+  const dist = Math.hypot(dx, dy) || 1;
+  const ux = dx / dist, uy = dy / dist;
+
+  if (b.tier === 'noob') {
+    projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+      vx: ux * stats.projSpeed, vy: uy * stats.projSpeed,
+      r: 8, dmg: stats.dmg, life: 3, friendly:false, color:'#6fffc0' });
+  } else if (b.tier === 'pro') {
+    for (let i = -1; i <= 1; i++) {
+      const ang = Math.atan2(dy, dx) + i * 0.22;
+      projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+        vx: Math.cos(ang) * stats.projSpeed, vy: Math.sin(ang) * stats.projSpeed,
+        r: 8, dmg: stats.dmg, life: 3, friendly:false, color:'#6ad8ff' });
+    }
+  } else if (b.tier === 'master') {
+    // Ring of 8 + tracking
+    for (let i = 0; i < 8; i++) {
+      const a = (i/8) * Math.PI * 2 + b.aiTimer;
+      projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+        vx: Math.cos(a) * stats.projSpeed * 0.8, vy: Math.sin(a) * stats.projSpeed * 0.8,
+        r: 8, dmg: stats.dmg, life: 3.5, friendly:false, color:'#b95fff' });
+    }
+  } else if (b.tier === 'legend') {
+    // Spread of 5 + a big slow shot
+    for (let i = -2; i <= 2; i++) {
+      const ang = Math.atan2(dy, dx) + i * 0.18;
+      projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+        vx: Math.cos(ang) * stats.projSpeed, vy: Math.sin(ang) * stats.projSpeed,
+        r: 8, dmg: stats.dmg, life: 3, friendly:false, color:'#ffd86a' });
+    }
+    projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+      vx: ux * stats.projSpeed * 0.6, vy: uy * stats.projSpeed * 0.6,
+      r: 14, dmg: stats.dmg * 1.5, life: 4, friendly:false, color:'#ff8a3a' });
+  } else if (b.tier === 'hacker') {
+    // Teleport + burst
+    if (Math.random() < 0.3) {
+      b.x = clamp(player.x + (Math.random() < 0.5 ? 250 : -250), 0, level.width - b.w);
+      spawnParticles(b.x + b.w/2, b.y + b.h/2, 20, '#ff8a3a');
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = (i/12) * Math.PI * 2;
+      projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+        vx: Math.cos(a) * stats.projSpeed, vy: Math.sin(a) * stats.projSpeed,
+        r: 7, dmg: stats.dmg, life: 2.8, friendly:false, color:'#ff8a3a' });
+    }
+  } else if (b.tier === 'god') {
+    // Phase-based: spread, ring, rain
+    const p = Math.floor(b.aiTimer / 4) % 3;
+    if (p === 0) {
+      for (let i = -3; i <= 3; i++) {
+        const ang = Math.atan2(dy, dx) + i * 0.15;
+        projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+          vx: Math.cos(ang) * stats.projSpeed, vy: Math.sin(ang) * stats.projSpeed,
+          r: 9, dmg: stats.dmg, life: 3, friendly:false, color:'#ffffff' });
+      }
+    } else if (p === 1) {
+      for (let i = 0; i < 16; i++) {
+        const a = (i/16) * Math.PI * 2;
+        projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+          vx: Math.cos(a) * stats.projSpeed * 0.9, vy: Math.sin(a) * stats.projSpeed * 0.9,
+          r: 9, dmg: stats.dmg, life: 3.5, friendly:false, color:'#ffd86a' });
+      }
+    } else {
+      for (let i = 0; i < 5; i++) {
+        const xrain = player.x + (Math.random() - 0.5) * 280;
+        projectiles.push({ x: xrain, y: -30,
+          vx: 0, vy: 380,
+          r: 12, dmg: stats.dmg * 1.2, life: 4, friendly:false, color:'#ffffff' });
+      }
+    }
+  } else if (b.tier === 'demon') {
+    // Everything
+    const p = Math.floor(b.aiTimer / 2.5) % 4;
+    if (p === 0) {
+      for (let i = -4; i <= 4; i++) {
+        const ang = Math.atan2(dy, dx) + i * 0.12;
+        projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+          vx: Math.cos(ang) * stats.projSpeed, vy: Math.sin(ang) * stats.projSpeed,
+          r: 9, dmg: stats.dmg, life: 3.5, friendly:false, color:'#ff3a3a' });
+      }
+    } else if (p === 1) {
+      for (let i = 0; i < 20; i++) {
+        const a = (i/20) * Math.PI * 2;
+        projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+          vx: Math.cos(a) * stats.projSpeed * 0.85, vy: Math.sin(a) * stats.projSpeed * 0.85,
+          r: 8, dmg: stats.dmg, life: 4, friendly:false, color:'#aa0000' });
+      }
+    } else if (p === 2) {
+      // Meteor rain
+      for (let i = 0; i < 8; i++) {
+        const xrain = player.x + (Math.random() - 0.5) * 380;
+        projectiles.push({ x: xrain, y: -30,
+          vx: 0, vy: 450 + Math.random()*100,
+          r: 14, dmg: stats.dmg * 1.3, life: 4, friendly:false, color:'#ff3a3a' });
+      }
+    } else {
+      // Tracking missile barrage
+      for (let i = -1; i <= 1; i++) {
+        const ang = Math.atan2(dy, dx) + i * 0.4;
+        projectiles.push({ x: b.x + b.w/2, y: b.y + b.h/2,
+          vx: Math.cos(ang) * stats.projSpeed * 1.2, vy: Math.sin(ang) * stats.projSpeed * 1.2,
+          r: 10, dmg: stats.dmg * 1.5, life: 3, friendly:false, color:'#ff5a72' });
+      }
+    }
+  }
+}
+
+function explodeAt(x, y, r, dmg, friendly) {
+  spawnParticles(x, y, 30, '#ffd86a');
+  spawnParticles(x, y, 14, '#ff5a72');
+  triggerShake();
+  if (friendly) {
+    for (const b of bosses) {
+      if (b.dead) continue;
+      const cx = b.x + b.w/2, cy = b.y + b.h/2;
+      if (Math.hypot(x - cx, y - cy) < r + b.w*0.4) damageBoss(b, dmg);
+    }
+  } else {
+    if (invuln <= 0) {
+      const cx = player.x + player.w/2, cy = player.y + player.h/2;
+      if (Math.hypot(x - cx, y - cy) < r + player.w*0.4) damagePlayer(dmg, x, y);
+    }
+  }
+}
+
+function damagePlayer(amount, fx, fy) {
+  // Cat armor: half. Golden armor: 80% reduction.
+  if (save.items.goldenArmor) amount *= 0.2;
+  else if (save.items.catArmor) amount *= 0.5;
+  amount = Math.round(amount);
+  player.hp -= amount;
+  invuln = 0.6;
+  // knockback
+  const dirX = (player.x + player.w/2) - fx;
+  player.vy = -300;
+  player.vx = Math.sign(dirX || 1) * PHYS.knockback;
+  spawnParticles(fx || player.x, fy || player.y, 18, '#ff5a72');
+  triggerShake();
+  showDmgNumber(player.x + player.w/2, player.y - 12, amount, '#ff5a72');
+  if (player.hp <= 0) killPlayer('Your HP hit zero.');
+}
+
+function killPlayer(reason) {
+  document.getElementById('goReason').textContent = reason;
+  state = 'menu';
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('hotbar').classList.add('hidden');
+  document.getElementById('screenGameOver').classList.remove('hidden');
+}
+
+function winLevel() {
+  state = 'menu';
+  bossActive = false;
+  document.getElementById('hud').classList.add('hidden');
+  // Award level points
+  const reward = 10 + currentLevel * 2;
+  save.points += reward;
+  // Mark level beaten
+  if (currentLevel >= save.unlockedLevel) {
+    save.unlockedLevel = Math.min(LEVELS.length, currentLevel + 1);
+  }
+  // Special level rewards
+  const L = LEVELS[currentLevel - 1];
+  let rewardText = `+${reward} POINTS`;
+  if (L.special === 'unlockAdmin') {
+    save.adminUnlocked = true;
+    rewardText += ' · ADMIN SHOP UNLOCKED!';
+  } else if (L.special === 'unlockArena') {
+    save.arenaUnlocked = true;
+    rewardText += ' · FIGHTING ARENA UNLOCKED!';
+  } else if (L.special === 'unlockDoubleJump') {
+    save.doubleJump = true;
+    rewardText += ' · DOUBLE JUMP UNLOCKED!';
+  }
+  saveGame();
+  refreshTitleButtons();
+  document.getElementById('levelWinReward').textContent = rewardText;
+  // Final win screen if last level beaten
+  if (currentLevel === LEVELS.length) {
+    document.getElementById('screenFinalWin').classList.remove('hidden');
+  } else {
+    document.getElementById('screenLevelWin').classList.remove('hidden');
+  }
+  // After certain levels, show extras dialog
+  setTimeout(()=>{}, 200);
+}
+
+function finishArena() {
+  state = 'menu';
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('hotbar').classList.add('hidden');
+  showArena();
+}
+
+function retryLevel() {
+  if (arenaMode && arenaActiveTier) startArenaFight(arenaActiveTier);
+  else startLevel(currentLevel);
+}
+function nextLevel() {
+  if (currentLevel < LEVELS.length) startLevel(currentLevel + 1);
+  else show('screenTitle');
+}
+
+// ============================ HUD ===============================
+function updateHud() {
+  document.getElementById('hp-fill').style.width = Math.max(0, player.hp / player.maxHp * 100) + '%';
+  document.getElementById('hud-points').textContent = save.points + ' PTS';
+  const gp = document.getElementById('hud-gold');
+  if (save.goldenUnlocked) {
+    gp.classList.remove('hidden');
+    gp.textContent = save.gold + ' GOLD';
+  } else gp.classList.add('hidden');
+}
+
+// =========================== EFFECTS =============================
+function spawnParticles(x, y, n, color, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 320,
+      vy: (Math.random() - 0.7) * 320,
+      gravity: opts.gravity ?? 600,
+      life: 0.4 + Math.random() * 0.4,
+      color,
+      r: 2 + Math.random() * 3
+    });
+  }
+}
+function showDmgNumber(x, y, n, color = '#ffd86a') {
+  particles.push({
+    x, y, vx:(Math.random()-0.5)*40, vy:-160,
+    gravity: 80, life: 0.9, color, text: '-'+n, r: 0, fontSize: 16
+  });
+}
+function triggerShake() {
+  cv.classList.remove('shake');
+  void cv.offsetWidth;
+  cv.classList.add('shake');
+}
+
+// =========================== RENDER ==============================
+function render() {
+  // Background
+  ctx.fillStyle = '#0a0e1a';
+  ctx.fillRect(0, 0, W, H);
+  // Parallax stars
+  const time = performance.now() / 1000;
+  for (let i = 0; i < 60; i++) {
+    const x = ((i * 137 + camX * 0.2) % W + W) % W;
+    const y = (i * 79) % (H - 80);
+    const tw = 0.4 + 0.6 * (Math.sin(time * 2 + i) * 0.5 + 0.5);
+    ctx.fillStyle = `rgba(140,170,220,${0.15 + tw * 0.4})`;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  // Far hills
+  ctx.fillStyle = '#101630';
+  for (let i = 0; i < 6; i++) {
+    const hx = ((i * 200 - camX * 0.3) % (W + 200)) + (i % 2 ? -100 : 0);
+    ctx.beginPath();
+    ctx.moveTo(hx, GROUND_Y);
+    ctx.lineTo(hx + 100, GROUND_Y - 90 - (i%2)*40);
+    ctx.lineTo(hx + 200, GROUND_Y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(-camX, 0);
+
+  // Ground
+  const grd = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+  grd.addColorStop(0, '#1a2040');
+  grd.addColorStop(1, '#06070d');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, GROUND_Y, level.width, H - GROUND_Y);
+  // Ground top line
+  ctx.strokeStyle = '#3a6fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(level.width, GROUND_Y);
+  ctx.stroke();
+  // Grid stripes on ground
+  for (let i = 0; i < level.width; i += 60) {
+    ctx.fillStyle = 'rgba(106,216,255,0.04)';
+    ctx.fillRect(i, GROUND_Y + 2, 30, H - GROUND_Y);
+  }
+
+  // Platforms
+  for (const p of platforms) {
+    const g = ctx.createLinearGradient(0, p.y, 0, p.y + p.h);
+    g.addColorStop(0, '#6ad8ff');
+    g.addColorStop(1, '#1a3aaa');
+    ctx.fillStyle = g;
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(p.x, p.y, p.w, p.h);
+    // glow
+    ctx.fillStyle = 'rgba(106,216,255,0.18)';
+    ctx.fillRect(p.x - 4, p.y - 4, p.w + 8, p.h + 8);
+  }
+
+  // Spikes (cool glowing triangles)
+  for (const s of spikes) {
+    const cx = s.x + s.w/2;
+    const baseY = s.y + s.h;
+    // glow
+    const gg = ctx.createRadialGradient(cx, baseY - 8, 2, cx, baseY - 8, 28);
+    gg.addColorStop(0, 'rgba(255,90,114,0.6)');
+    gg.addColorStop(1, 'rgba(255,90,114,0)');
+    ctx.fillStyle = gg;
+    ctx.fillRect(s.x - 12, s.y - 12, s.w + 24, s.h + 24);
+    // spike body
+    const sg = ctx.createLinearGradient(0, s.y, 0, baseY);
+    sg.addColorStop(0, '#ff5a72');
+    sg.addColorStop(0.5, '#aa1a3a');
+    sg.addColorStop(1, '#4a0010');
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.moveTo(s.x, baseY);
+    ctx.lineTo(cx, s.y);
+    ctx.lineTo(s.x + s.w, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, s.y + 4);
+    ctx.lineTo(cx, s.y);
+    ctx.lineTo(cx + 1, s.y + 4);
+    ctx.closePath();
+    ctx.fill();
+    // base
+    ctx.strokeStyle = '#ff5a72';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(s.x, baseY);
+    ctx.lineTo(s.x + s.w, baseY);
+    ctx.stroke();
+  }
+
+  // Pickups
+  for (const p of pickups) {
+    if (p.collected) continue;
+    const yOff = Math.sin(p.bob) * 5;
+    // Aura
+    const ag = ctx.createRadialGradient(p.x + p.w/2, p.y + p.h/2 + yOff, 6, p.x + p.w/2, p.y + p.h/2 + yOff, 36);
+    ag.addColorStop(0, 'rgba(255,216,106,0.7)');
+    ag.addColorStop(1, 'rgba(255,216,106,0)');
+    ctx.fillStyle = ag;
+    ctx.fillRect(p.x - 24, p.y - 24 + yOff, p.w + 48, p.h + 48);
+    // Icon (text emoji)
+    ctx.font = '32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ITEMS[p.item].icon, p.x + p.w/2, p.y + p.h/2 + yOff);
+  }
+
+  // Door
+  if (door) {
+    const open = door.open;
+    const col = open ? '#6fffc0' : '#ff5a72';
+    // glow
+    const dg = ctx.createRadialGradient(door.x + door.w/2, door.y + door.h/2, 4, door.x + door.w/2, door.y + door.h/2, 80);
+    dg.addColorStop(0, open ? 'rgba(111,255,192,0.5)' : 'rgba(255,90,114,0.5)');
+    dg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = dg;
+    ctx.fillRect(door.x - 30, door.y - 30, door.w + 60, door.h + 60);
+    // body
+    const bg = ctx.createLinearGradient(door.x, door.y, door.x + door.w, door.y);
+    bg.addColorStop(0, open ? '#1a3a2a' : '#3a1a1a');
+    bg.addColorStop(1, open ? '#0a1a14' : '#1a0a0a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(door.x, door.y, door.w, door.h);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(door.x, door.y, door.w, door.h);
+    // arch glow
+    ctx.fillStyle = col;
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(open ? 'EXIT' : 'LOCK', door.x + door.w/2, door.y + door.h/2);
+    // pulse
+    if (open) {
+      const pulse = 0.5 + 0.5 * Math.sin(time * 4);
+      ctx.strokeStyle = `rgba(111,255,192,${pulse*0.5})`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(door.x - 4, door.y - 4, door.w + 8, door.h + 8);
+    }
+  }
+
+  // Bosses
+  for (const b of bosses) {
+    if (b.dead) continue;
+    drawBoss(b);
+  }
+
+  // Minivans
+  for (const v of minionVans) {
+    // body
+    const vg = ctx.createLinearGradient(v.x, v.y, v.x, v.y + v.h);
+    vg.addColorStop(0, '#ffd86a');
+    vg.addColorStop(1, '#aa5a1a');
+    ctx.fillStyle = vg;
+    ctx.fillRect(v.x, v.y, v.w, v.h);
+    ctx.fillStyle = '#1a2040';
+    ctx.fillRect(v.x + 10, v.y + 8, v.w - 50, 16); // window
+    ctx.fillRect(v.x + v.w - 30, v.y + 8, 22, 16);
+    // wheels
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(v.x + 22, v.y + v.h, 10, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(v.x + v.w - 22, v.y + v.h, 10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#888';
+    ctx.beginPath(); ctx.arc(v.x + 22, v.y + v.h, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(v.x + v.w - 22, v.y + v.h, 5, 0, Math.PI*2); ctx.fill();
+    // smoke trail
+    ctx.fillStyle = 'rgba(200,200,200,0.5)';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.arc(v.x + (v.vx < 0 ? v.w + i*8 : -i*8), v.y + v.h/2 + (Math.random()-0.5)*8, 6 - i, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Projectiles
+  for (const p of projectiles) {
+    const col = p.color || (p.friendly ? '#ffd86a' : '#ff5a72');
+    if (p.type === 'blaster') {
+      // long blast
+      ctx.fillStyle = col;
+      ctx.fillRect(p.x - p.r*2, p.y - p.r/2, p.r*4, p.r);
+      ctx.fillStyle = col + '80';
+      ctx.fillRect(p.x - p.r*3, p.y - p.r, p.r*6, p.r*2);
+    } else if (p.type === 'grenade') {
+      ctx.fillStyle = '#ffd86a';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      // flame
+      ctx.fillStyle = '#ff5a72';
+      ctx.beginPath(); ctx.arc(p.x + (Math.random()-0.5)*4, p.y - 8, 4, 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = col + '50';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // Player
+  drawPlayer();
+
+  // Sword swing
+  if (attackSwingT > 0 && (save.activeItem === 'sword' || save.activeItem === 'goldenSword')) {
+    const isGold = save.activeItem === 'goldenSword';
+    const reach = isGold ? 80 : 56;
+    const px = player.facing > 0 ? player.x + player.w : player.x - reach;
+    ctx.fillStyle = isGold ? 'rgba(255,216,106,0.55)' : 'rgba(220,232,255,0.4)';
+    ctx.fillRect(px, player.y - 6, reach, player.h + 12);
+    ctx.strokeStyle = isGold ? '#ffd86a' : '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, player.y - 6, reach, player.h + 12);
+  }
+
+  // Particles
+  for (const p of particles) {
+    if (p.text) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.5));
+      ctx.font = `bold ${p.fontSize}px monospace`;
+      ctx.fillStyle = p.color;
+      ctx.textAlign = 'center';
+      ctx.fillText(p.text, p.x, p.y);
+    } else {
+      ctx.globalAlpha = Math.max(0, p.life * 2);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+
+  // Boss HP bars (screen-space, top-right)
+  let yOff = 50;
+  for (const b of bosses) {
+    if (b.dead) continue;
+    const barW = 240, barH = 14;
+    const bx = W - barW - 20, by = yOff;
+    ctx.fillStyle = '#000c';
+    ctx.fillRect(bx - 4, by - 4, barW + 8, barH + 8);
+    ctx.strokeStyle = b.stats.color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, barW, barH);
+    const w = barW * Math.max(0, b.hp / b.maxHp);
+    const g = ctx.createLinearGradient(bx, by, bx + barW, by);
+    g.addColorStop(0, b.stats.accent);
+    g.addColorStop(1, b.stats.color);
+    ctx.fillStyle = g;
+    ctx.fillRect(bx, by, w, barH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(b.stats.name + ' BOSS', bx + 4, by + barH/2);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.max(0, Math.ceil(b.hp))}/${b.maxHp}`, bx + barW - 4, by + barH/2);
+    yOff += 24;
+  }
+
+  // Pause/state overlays handled by HTML screens
+}
+
+function drawPlayer() {
+  const x = player.x, y = player.y, w = player.w, h = player.h;
+  // Invuln flicker
+  if (invuln > 0 && Math.floor(invuln * 20) % 2 === 0) ctx.globalAlpha = 0.45;
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.ellipse(x + w/2, GROUND_Y + 4, w * 0.45, 5, 0, 0, Math.PI*2); ctx.fill();
+  // Body gradient
+  const bg = ctx.createLinearGradient(0, y, 0, y + h);
+  bg.addColorStop(0, '#9eecff');
+  bg.addColorStop(1, '#1a6aaa');
+  ctx.fillStyle = bg;
+  ctx.fillRect(x, y, w, h);
+  // Outline
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, w, h);
+  // Eyes
+  const eyeY = y + 12;
+  const dir = player.facing > 0 ? 1 : -1;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x + 7, eyeY, 6, 8);
+  ctx.fillRect(x + w - 13, eyeY, 6, 8);
+  ctx.fillStyle = '#06070d';
+  ctx.fillRect(x + 7 + (dir > 0 ? 2 : 0), eyeY + 2, 4, 4);
+  ctx.fillRect(x + w - 13 + (dir > 0 ? 2 : 0), eyeY + 2, 4, 4);
+  // Mouth (cute lil thing)
+  ctx.fillStyle = '#06070d';
+  ctx.fillRect(x + w/2 - 4, y + 24, 8, 2);
+  // Equipment overlay
+  if (save.activeItem === 'sword' || save.activeItem === 'goldenSword') {
+    const sw = save.activeItem === 'goldenSword';
+    ctx.fillStyle = sw ? '#ffd86a' : '#ccddee';
+    ctx.fillRect(x + (player.facing > 0 ? w : -10), y + 12, 10, 18);
+    ctx.fillStyle = '#aa6a3a';
+    ctx.fillRect(x + (player.facing > 0 ? w : -3), y + 28, 3, 6);
+  } else if (save.activeItem === 'shield' && shieldHold) {
+    ctx.fillStyle = '#6ad8ff';
+    ctx.fillRect(x + (player.facing > 0 ? w : -8), y + 6, 8, h - 4);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + (player.facing > 0 ? w : -8), y + 6, 8, h - 4);
+  } else if (save.activeItem === 'blaster') {
+    ctx.fillStyle = '#ff8a3a';
+    ctx.fillRect(x + (player.facing > 0 ? w - 4 : -16), y + 14, 20, 8);
+  } else if (save.activeItem === 'grenade') {
+    ctx.fillStyle = '#ffd86a';
+    ctx.beginPath(); ctx.arc(x + (player.facing > 0 ? w + 4 : -4), y + 18, 4, 0, Math.PI*2); ctx.fill();
+  } else if (save.activeItem === 'minivan') {
+    ctx.fillStyle = '#ffd86a';
+    ctx.fillRect(x + w/2 - 8, y - 10, 16, 6);
+  }
+  if (save.items.goldenArmor) {
+    ctx.strokeStyle = '#ffd86a';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+    // crown
+    ctx.fillStyle = '#ffd86a';
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y - 4);
+    ctx.lineTo(x + 8, y - 12);
+    ctx.lineTo(x + w/2 - 2, y - 6);
+    ctx.lineTo(x + w/2 + 2, y - 12);
+    ctx.lineTo(x + w - 8, y - 6);
+    ctx.lineTo(x + w - 4, y - 12);
+    ctx.lineTo(x + w - 4, y - 4);
+    ctx.closePath();
+    ctx.fill();
+  } else if (save.items.catArmor) {
+    // ears
+    ctx.fillStyle = '#444';
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y);
+    ctx.lineTo(x + 6, y - 8);
+    ctx.lineTo(x + 10, y);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + w - 2, y);
+    ctx.lineTo(x + w - 6, y - 8);
+    ctx.lineTo(x + w - 10, y);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBoss(b) {
+  if (b.flash > 0 && Math.floor(b.flash * 30) % 2 === 0) ctx.globalAlpha = 0.6;
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.ellipse(b.x + b.w/2, GROUND_Y + 4, b.w * 0.5, 6, 0, 0, Math.PI*2); ctx.fill();
+  // Aura
+  const ag = ctx.createRadialGradient(b.x + b.w/2, b.y + b.h/2, 8, b.x + b.w/2, b.y + b.h/2, b.w * 1.2);
+  ag.addColorStop(0, b.stats.color + '88');
+  ag.addColorStop(1, 'transparent');
+  ctx.fillStyle = ag;
+  ctx.fillRect(b.x - 30, b.y - 30, b.w + 60, b.h + 60);
+  // Body
+  const bg = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+  bg.addColorStop(0, b.stats.color);
+  bg.addColorStop(1, b.stats.accent);
+  ctx.fillStyle = bg;
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  // Outline
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(b.x, b.y, b.w, b.h);
+  // Eyes (angrier per tier)
+  const eyeY = b.y + b.h * 0.3;
+  const eyeW = b.w * 0.18;
+  const eyeH = b.h * 0.18;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(b.x + b.w * 0.18, eyeY, eyeW, eyeH);
+  ctx.fillRect(b.x + b.w * 0.64, eyeY, eyeW, eyeH);
+  ctx.fillStyle = '#000';
+  const dir = b.dir > 0 ? 0.3 : 0;
+  ctx.fillRect(b.x + b.w * (0.18 + dir*0.08), eyeY + eyeH * 0.25, eyeW * 0.55, eyeH * 0.55);
+  ctx.fillRect(b.x + b.w * (0.64 + dir*0.08), eyeY + eyeH * 0.25, eyeW * 0.55, eyeH * 0.55);
+  // Angry brows for higher tier
+  if (b.tier !== 'noob') {
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(b.x + b.w * 0.18, eyeY - 4);
+    ctx.lineTo(b.x + b.w * 0.36, eyeY + 2);
+    ctx.moveTo(b.x + b.w * 0.82, eyeY - 4);
+    ctx.lineTo(b.x + b.w * 0.64, eyeY + 2);
+    ctx.stroke();
+  }
+  // Mouth: noob = friendly, others = jagged
+  if (b.tier === 'noob') {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(b.x + b.w * 0.4, b.y + b.h * 0.7, b.w * 0.2, 3);
+  } else {
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    const mY = b.y + b.h * 0.68;
+    const mX = b.x + b.w * 0.3, mW = b.w * 0.4;
+    ctx.moveTo(mX, mY);
+    for (let i = 0; i <= 5; i++) {
+      ctx.lineTo(mX + (i/5) * mW, mY + (i%2 ? 6 : 0));
+    }
+    ctx.lineTo(mX + mW, mY);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Tier-specific flourishes
+  if (b.tier === 'master') {
+    // crystal spikes on head
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(b.x + 8, b.y);
+    ctx.lineTo(b.x + 16, b.y - 14);
+    ctx.lineTo(b.x + 24, b.y);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(b.x + b.w - 24, b.y);
+    ctx.lineTo(b.x + b.w - 16, b.y - 14);
+    ctx.lineTo(b.x + b.w - 8, b.y);
+    ctx.fill();
+  } else if (b.tier === 'legend') {
+    // gold crown
+    ctx.fillStyle = '#ffd86a';
+    ctx.beginPath();
+    ctx.moveTo(b.x + 8, b.y);
+    ctx.lineTo(b.x + 12, b.y - 14);
+    ctx.lineTo(b.x + b.w/2 - 4, b.y - 8);
+    ctx.lineTo(b.x + b.w/2, b.y - 18);
+    ctx.lineTo(b.x + b.w/2 + 4, b.y - 8);
+    ctx.lineTo(b.x + b.w - 12, b.y - 14);
+    ctx.lineTo(b.x + b.w - 8, b.y);
+    ctx.closePath(); ctx.fill();
+  } else if (b.tier === 'hacker') {
+    // glitch lines
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = `rgba(255,${Math.random()*255},${Math.random()*255},0.7)`;
+      const gy = b.y + Math.random() * b.h;
+      ctx.fillRect(b.x, gy, b.w, 2);
+    }
+  } else if (b.tier === 'god') {
+    // halo
+    const t = performance.now() / 200;
+    ctx.strokeStyle = '#ffd86a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(b.x + b.w/2, b.y - 12, b.w * 0.55, 8, 0, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(b.x + b.w/2, b.y - 12, b.w * 0.55, 8, 0, 0, Math.PI*2);
+    ctx.stroke();
+    // sparkle
+    for (let i = 0; i < 4; i++) {
+      const a = t + i * Math.PI/2;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(b.x + b.w/2 + Math.cos(a) * b.w * 0.7, b.y + b.h/2 + Math.sin(a) * b.h * 0.7, 2, 0, Math.PI*2);
+      ctx.fill();
+    }
+  } else if (b.tier === 'demon') {
+    // horns
+    ctx.fillStyle = '#330000';
+    ctx.beginPath();
+    ctx.moveTo(b.x + 4, b.y);
+    ctx.lineTo(b.x + 16, b.y - 22);
+    ctx.lineTo(b.x + 20, b.y);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(b.x + b.w - 4, b.y);
+    ctx.lineTo(b.x + b.w - 16, b.y - 22);
+    ctx.lineTo(b.x + b.w - 20, b.y);
+    ctx.closePath(); ctx.fill();
+    // fire breath sparks
+    if (Math.random() < 0.3) {
+      ctx.fillStyle = '#ff3a3a';
+      ctx.beginPath();
+      ctx.arc(b.x + b.w * (b.dir > 0 ? 0.9 : 0.1), b.y + b.h * 0.7, 4 + Math.random()*4, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// =========================== LOOP ===============================
+function loop(now) {
+  if (state !== 'playing') return;
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  update(dt);
+  if (state === 'playing') render();
+  if (state === 'playing') requestAnimationFrame(loop);
+}
+
+// =========================== MENUS ==============================
+function startGame() {
+  startLevel(save.unlockedLevel);
+}
+
+function showLevelSelect() {
+  const grid = document.getElementById('lvlGrid');
+  grid.innerHTML = '';
+  LEVELS.forEach(L => {
+    const btn = document.createElement('button');
+    btn.className = 'lvl-btn';
+    btn.textContent = L.id;
+    btn.title = L.name;
+    if (L.bosses && L.bosses.length) btn.classList.add('boss');
+    if (L.special) btn.classList.add('special');
+    if (L.id === 22) btn.classList.add('god');
+    if (L.id === 23) btn.classList.add('demon');
+    if (L.id > save.unlockedLevel) btn.disabled = true;
+    btn.onclick = () => startLevel(L.id);
+    grid.appendChild(btn);
+  });
+  show('screenLevelSelect');
+}
+
+function openShopFromMenu() {
+  showShop('admin');
+}
+
+function showShop(kind) {
+  const grid = document.getElementById('shop-grid');
+  const title = document.getElementById('shopTitle');
+  grid.innerHTML = '';
+  let items;
+  if (kind === 'golden') {
+    title.textContent = 'GOLDEN SHOP';
+    title.className = 'title win-glow';
+    items = [
+      { key:'goldenSword', name:'GOLDEN SWORD', icon:'⚔️', desc:'60 dmg melee, longer reach.', price:5, gold:true },
+      { key:'goldenArmor', name:'GOLDEN ARMOR', icon:'👑', desc:'Passive — 80% damage reduction.', price:10, gold:true }
+    ];
+    document.getElementById('shopGoldPill').classList.remove('hidden');
+  } else {
+    title.textContent = 'ADMIN SHOP';
+    title.className = 'title';
+    items = [
+      { key:'blaster',  name:'TITANIC BLASTER', icon:'🚀', desc:'Long-range blast. 65 dmg per shot.', price:125 },
+      { key:'grenade',  name:'CANDLE GRENADE',  icon:'🕯️', desc:'Lobs a flaming AoE explosive. 80 dmg.', price:75 },
+      { key:'catArmor', name:'CAT ARMOR',       icon:'🐱', desc:'Passive — halves all damage taken.', price:450 },
+      { key:'minivan',  name:'MINIVAN POWER',   icon:'🚐', desc:'Summon two minivans to run over bosses. 200 dmg each.', price:1350 }
+    ];
+    document.getElementById('shopGoldPill').classList.add('hidden');
+  }
+  for (const it of items) {
+    const owned = save.items[it.key];
+    const cost = it.gold ? save.gold : save.points;
+    const canAfford = cost >= it.price;
+    const card = document.createElement('div');
+    card.className = 'shop-item' + (it.gold ? ' gold-tier' : '') + (owned ? ' owned' : '') + (!owned && !canAfford ? ' cant-afford' : '');
+    card.innerHTML = `
+      <div class="icon" style="color:${it.gold ? '#ffd86a' : '#6ad8ff'}">${it.icon}</div>
+      <h3>${it.name}</h3>
+      <p>${it.desc}</p>
+      <div class="price">${owned ? 'OWNED' : (it.price + (it.gold ? ' GOLD' : ' PTS'))}</div>
+      <button class="buy-btn">${owned ? 'OWNED' : 'BUY'}</button>
+    `;
+    if (!owned && canAfford) {
+      card.querySelector('.buy-btn').onclick = () => {
+        if (it.gold) save.gold -= it.price;
+        else save.points -= it.price;
+        save.items[it.key] = true;
+        if (ITEMS[it.key].attack !== 'passive' && !save.activeItem) save.activeItem = it.key;
+        saveGame();
+        showShop(kind);
+        toast(`PURCHASED ${it.name}`);
+      };
+    }
+    grid.appendChild(card);
+  }
+  document.getElementById('shopPoints').textContent = save.points;
+  document.getElementById('shopGold').textContent = save.gold;
+  show('screenShop');
+}
+
+function closeShop() { show('screenTitle'); }
+
+function showArena() {
+  const grid = document.getElementById('arena-grid');
+  grid.innerHTML = '';
+  const fights = [
+    { tier:'noob',   price:5 },
+    { tier:'pro',    price:10 },
+    { tier:'master', price:20 },
+    { tier:'legend', price:35 },
+    { tier:'hacker', price:60 }
+  ];
+  for (const f of fights) {
+    const stats = BOSS_STATS[f.tier];
+    const btn = document.createElement('button');
+    btn.className = 'menu-btn';
+    btn.style.background = `linear-gradient(180deg, ${stats.color}, ${stats.accent})`;
+    btn.style.color = (f.tier === 'noob' || f.tier === 'legend') ? '#1a0a00' : '#fff';
+    btn.textContent = `${stats.name} BOSS · ${f.price} PTS`;
+    btn.onclick = () => startArenaFight(f.tier);
+    grid.appendChild(btn);
+  }
+  document.getElementById('arenaPoints').textContent = save.points;
+  show('screenArena');
+}
+
+function showDialog(title, html) {
+  document.getElementById('dialogTitle').textContent = title;
+  document.getElementById('dialogBody').innerHTML = html;
+  // We don't change state — game keeps running paused at the dialog.
+  // For pickup dialogs, pause the loop temporarily.
+  state = 'dialog';
+  document.getElementById('screenDialog').classList.remove('hidden');
+}
+
+function closeDialog() {
+  document.getElementById('screenDialog').classList.add('hidden');
+  state = 'playing';
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+// ============= Hook into special-level overlays =============
+// After level 19 / 20 / 21 win → show extra dialog before "Next Level"
+const originalNextLevel = nextLevel;
+window.nextLevel = function() {
+  const L = LEVELS[currentLevel - 1];
+  if (L && L.special === 'unlockAdmin' && save.adminUnlocked) {
+    document.getElementById('screenLevelWin').classList.add('hidden');
+    showShop('admin');
+    _pendingNext = currentLevel + 1;
+    return;
+  }
+  if (L && L.special === 'unlockArena' && save.arenaUnlocked) {
+    document.getElementById('screenLevelWin').classList.add('hidden');
+    showArena();
+    _pendingNext = currentLevel + 1;
+    return;
+  }
+  if (save.godDefeated && save.goldenUnlocked && !save._goldenShown) {
+    save._goldenShown = true;
+    document.getElementById('screenLevelWin').classList.add('hidden');
+    showShop('golden');
+    _pendingNext = currentLevel + 1;
+    return;
+  }
+  originalNextLevel();
+};
+
+// After closing shop or arena, continue if there's a pending level
+const originalCloseShop = closeShop;
+window.closeShop = function() {
+  if (_pendingNext) {
+    const n = _pendingNext;
+    _pendingNext = null;
+    saveGame();
+    if (n <= LEVELS.length) startLevel(n);
+    else show('screenFinalWin');
+    return;
+  }
+  originalCloseShop();
+};
+// Same for arena - exit button
+document.querySelectorAll('#screenArena .menu-btn').forEach(b=>{
+  if (b.textContent.includes('EXIT')) {
+    b.onclick = () => {
+      if (_pendingNext) {
+        const n = _pendingNext;
+        _pendingNext = null;
+        saveGame();
+        if (n <= LEVELS.length) startLevel(n);
+        else show('screenFinalWin');
+      } else {
+        show('screenTitle');
+      }
+    };
+  }
+});
+
+// ============= Title-screen extras: shop/arena buttons =============
+function refreshExtras() {
+  // Add admin shop / arena buttons to title screen dynamically if unlocked
+  const titleScreen = document.getElementById('screenTitle');
+  // Remove old dynamic buttons
+  titleScreen.querySelectorAll('.dynamic-btn').forEach(b => b.remove());
+  const insertBefore = titleScreen.querySelector('.menu-btn.danger');
+  function addBtn(label, cls, fn) {
+    const b = document.createElement('button');
+    b.className = 'menu-btn ' + cls + ' dynamic-btn';
+    b.textContent = label;
+    b.onclick = fn;
+    titleScreen.insertBefore(b, insertBefore);
+  }
+  if (save.adminUnlocked) addBtn('ADMIN SHOP', 'gold', () => showShop('admin'));
+  if (save.arenaUnlocked) addBtn('FIGHTING ARENA', 'danger', () => showArena());
+  if (save.goldenUnlocked) addBtn('GOLDEN SHOP', 'gold', () => showShop('golden'));
+}
+
+// Wrap show() to refresh extras on title
+const _origShow = show;
+window.show = function(id) {
+  _origShow(id);
+  if (id === 'screenTitle') { refreshExtras(); refreshTitleButtons(); }
+};
+
+refreshExtras();
+refreshTitleButtons();
+show('screenTitle');
+</script>
+</body>
+</html>

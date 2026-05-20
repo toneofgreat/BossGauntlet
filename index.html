@@ -66,6 +66,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Hydrogen Quest card */
 .bg-h2{background:linear-gradient(135deg,#02050f,#0a1a3a,#1a0a3a)}
 .bg-h2 canvas{width:100%;height:100%}
+/* Square Quest card */
+.bg-sq{background:linear-gradient(135deg,#0d0420,#1a0a3a,#3a1a5a)}
+.bg-sq canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -191,6 +194,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>HYDROGEN QUEST</h2>
       <p>2D quiz boss-fighter. Answer hydrogen chemistry questions, dodge attacks from the Hydrogen Atom, the Wizard, and the Question Master. Plus a full Hydrogen Wordle mode with crazy reveal animations.</p>
       <span class="tag" style="background:#0a1a3a;color:#6ad8ff">QUIZ · BOSS DODGER</span>
+    </div>
+  </a>
+  <a href="square-quest.html" class="card">
+    <div class="card-img bg-sq"><canvas id="c15"></canvas></div>
+    <div class="card-body">
+      <h2>SQUARE QUEST</h2>
+      <p>2D platformer. 23 levels of spikes, doors, and bosses — Noob, Pro, Master, Legend, Hacker, God, and Demon. Buy a titanic blaster, candle grenade, cat armor, and minivan power in the admin shop. Win gold from the God boss to unlock the golden shop.</p>
+      <span class="tag" style="background:#2a0a4a;color:#ffd86a">PLATFORMER · 23 LEVELS</span>
     </div>
   </a>
 </div>
@@ -829,6 +840,82 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.font=`bold ${Math.floor(w*0.07)}px Courier New`;
     ctx.fillStyle='rgba(106,216,255,0.9)';ctx.textAlign='center';
     ctx.fillText('HYDROGEN',w/2,h*0.18);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Square Quest preview: square hero jumping over spikes toward a glowing door ----
+(function(){
+  const c=document.getElementById('c15'),ctx=c.getContext('2d');
+  if(!c)return;
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.025;
+    ctx.fillStyle='rgba(13,4,32,0.25)';ctx.fillRect(0,0,w,h);
+    // Stars
+    for(let i=0;i<24;i++){
+      const sx=(sin(i*81.3)*0.5+0.5)*w, sy=(cos(i*43.7)*0.5+0.5)*h*0.7;
+      const a=0.3+0.6*Math.abs(sin(t*0.8+i));
+      ctx.fillStyle=`rgba(180,160,255,${a*0.45})`;ctx.fillRect(sx,sy,2,2);
+    }
+    const groundY=h*0.78;
+    // Ground line
+    ctx.strokeStyle='rgba(185,95,255,0.6)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(0,groundY);ctx.lineTo(w,groundY);ctx.stroke();
+    // Ground fill
+    const gg=ctx.createLinearGradient(0,groundY,0,h);
+    gg.addColorStop(0,'rgba(40,20,80,0.7)');gg.addColorStop(1,'rgba(10,4,20,0.9)');
+    ctx.fillStyle=gg;ctx.fillRect(0,groundY,w,h-groundY);
+    // Spikes (3 of them, glowing)
+    for(let i=0;i<3;i++){
+      const sx=w*(0.35+i*0.1), sw=w*0.05, base=groundY, top=base-h*0.13;
+      const sg=ctx.createRadialGradient(sx,base-h*0.06,2,sx,base-h*0.06,h*0.16);
+      sg.addColorStop(0,'rgba(255,90,114,0.55)');sg.addColorStop(1,'rgba(255,90,114,0)');
+      ctx.fillStyle=sg;ctx.fillRect(sx-sw,top-10,sw*3,h*0.18);
+      const lg=ctx.createLinearGradient(0,top,0,base);
+      lg.addColorStop(0,'#ff5a72');lg.addColorStop(1,'#4a0010');
+      ctx.fillStyle=lg;
+      ctx.beginPath();ctx.moveTo(sx-sw/2,base);ctx.lineTo(sx,top);ctx.lineTo(sx+sw/2,base);ctx.closePath();ctx.fill();
+    }
+    // Door (glowing exit at right)
+    const dx=w*0.82, dw=w*0.07, dh=h*0.28, dy=groundY-dh;
+    const dg=ctx.createRadialGradient(dx+dw/2,dy+dh/2,4,dx+dw/2,dy+dh/2,dh*0.9);
+    dg.addColorStop(0,'rgba(111,255,192,0.55)');dg.addColorStop(1,'rgba(111,255,192,0)');
+    ctx.fillStyle=dg;ctx.fillRect(dx-dw,dy-dh*0.3,dw*3,dh*1.6);
+    const dbg=ctx.createLinearGradient(dx,dy,dx+dw,dy);
+    dbg.addColorStop(0,'#1a3a2a');dbg.addColorStop(1,'#0a1a14');
+    ctx.fillStyle=dbg;ctx.fillRect(dx,dy,dw,dh);
+    ctx.strokeStyle='#6fffc0';ctx.lineWidth=2;ctx.strokeRect(dx,dy,dw,dh);
+    // Player square jumping in an arc
+    const jt=(sin(t)*0.5+0.5);
+    const px=w*0.15+jt*w*0.18;
+    const py=groundY-h*0.06-Math.abs(sin(t*1.2))*h*0.22;
+    const ps=w*0.055;
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.beginPath();ctx.ellipse(px+ps/2,groundY+2,ps*0.5,3,0,0,PI*2);ctx.fill();
+    // Body
+    const pg=ctx.createLinearGradient(0,py,0,py+ps);
+    pg.addColorStop(0,'#9eecff');pg.addColorStop(1,'#1a6aaa');
+    ctx.fillStyle=pg;ctx.fillRect(px,py,ps,ps);
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.strokeRect(px,py,ps,ps);
+    // Eyes
+    ctx.fillStyle='#fff';
+    ctx.fillRect(px+ps*0.18,py+ps*0.3,ps*0.18,ps*0.22);
+    ctx.fillRect(px+ps*0.62,py+ps*0.3,ps*0.18,ps*0.22);
+    ctx.fillStyle='#000';
+    ctx.fillRect(px+ps*0.26,py+ps*0.36,ps*0.1,ps*0.12);
+    ctx.fillRect(px+ps*0.70,py+ps*0.36,ps*0.1,ps*0.12);
+    // Sword
+    ctx.fillStyle='#ffd86a';
+    ctx.fillRect(px+ps,py+ps*0.35,ps*0.32,ps*0.13);
+    // Title
+    ctx.font=`bold ${Math.floor(w*0.08)}px Courier New`;
+    ctx.fillStyle='rgba(255,216,106,0.92)';ctx.textAlign='center';
+    ctx.fillText('SQUARE',w/2,h*0.22);
     requestAnimationFrame(draw);
   }
   draw();

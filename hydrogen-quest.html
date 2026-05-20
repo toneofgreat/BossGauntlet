@@ -1318,6 +1318,7 @@ function restartGame() {
   particles = [];
   minions = [];
   meteors = [];
+  lavaSpinners = [];
   // Reset UI
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('timer').classList.add('hidden');
@@ -1787,7 +1788,7 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-let player, boss, projectiles, playerShots, particles, minions, meteors;
+let player, boss, projectiles, playerShots, particles, minions, meteors, lavaSpinners;
 let bossActive = false;
 let lastTime = 0;
 let attackTimer = 0;
@@ -1836,6 +1837,12 @@ function startBoss() {
   particles = [];
   minions = [];
   meteors = [];
+  lavaSpinners = [];
+  // Phase 3 ambient hazards: a couple of lava spinners orbiting in the arena
+  if (bossKey === 'question') {
+    lavaSpinners.push({ cx: W*0.28, cy: H*0.62, angle: 0,           omega:  1.6, radius: 78, blades: 2, bladeR: 16, life: Infinity });
+    lavaSpinners.push({ cx: W*0.72, cy: H*0.62, angle: Math.PI*0.5, omega: -1.9, radius: 78, blades: 2, bladeR: 16, life: Infinity });
+  }
   attackTimer = 0;
   phase2Spawn = 0;
   shootCD = 0;
@@ -2003,6 +2010,8 @@ function update(dt) {
   });
   meteors.forEach(m => { m.y += m.vy * dt; m.rot += dt * 1.5; });
   meteors = meteors.filter(m => m.y < H + 80);
+  lavaSpinners.forEach(s => { s.angle += s.omega * dt; s.life -= dt; });
+  lavaSpinners = lavaSpinners.filter(s => s.life > 0);
   minions.forEach(m => {
     const tx = player.x - m.x, ty = player.y - m.y;
     const d = Math.hypot(tx, ty) || 1;
@@ -2044,6 +2053,19 @@ function update(dt) {
         // One-shot like the user asked
         damagePlayer(999, m.x, m.y);
         break;
+      }
+    }
+    // Lava spinner blades are insta-kill on touch
+    spinnerLoop:
+    for (const s of lavaSpinners) {
+      for (let i = 0; i < s.blades; i++) {
+        const a = s.angle + (i / s.blades) * Math.PI * 2;
+        const bx = s.cx + Math.cos(a) * s.radius;
+        const by = s.cy + Math.sin(a) * s.radius;
+        if (Math.hypot(bx - player.x, by - player.y) < player.r + s.bladeR) {
+          damagePlayer(999, bx, by);
+          break spinnerLoop;
+        }
       }
     }
   }
@@ -2367,14 +2389,17 @@ function finishBossQuestion(correct, isTimeout) {
     player.hp = 0;  // instant fail per spec
     return;
   }
-  // Wrong answer: bullet rain punishment
-  toast("WRONG! Brace yourself!", 1400);
-  for (let i = 0; i < 24; i++) {
-    const a = (i / 24) * Math.PI * 2;
-    projectiles.push({
-      x: boss.x, y: boss.y,
-      vx: Math.cos(a)*260, vy: Math.sin(a)*260,
-      r: 7, type: 'question', dmg: 12
+  // Wrong answer: insta-kill rain from the sky
+  toast("WRONG! THE SKY FALLS!", 1400);
+  const dropCount = 14;
+  for (let i = 0; i < dropCount; i++) {
+    const tx = (i + 0.5) * (W / dropCount) + (Math.random() - 0.5) * 30;
+    meteors.push({
+      x: tx,
+      y: -40 - Math.random() * 200,
+      vy: 220 + Math.random() * 90,
+      r: 22 + Math.random() * 8,
+      rot: Math.random() * Math.PI * 2
     });
   }
 }
@@ -2418,6 +2443,49 @@ function render() {
     ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(m.x-4, m.y-3, 3, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(m.x+4, m.y-3, 3, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Lava spinners
+  lavaSpinners.forEach(s => {
+    // Central anchor glow
+    const cg = ctx.createRadialGradient(s.cx, s.cy, 0, s.cx, s.cy, 18);
+    cg.addColorStop(0, 'rgba(255,180,80,0.85)');
+    cg.addColorStop(1, 'rgba(255,80,40,0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(s.cx, s.cy, 18, 0, Math.PI*2); ctx.fill();
+    // Each blade: trail line + lava ball at the end
+    for (let i = 0; i < s.blades; i++) {
+      const a = s.angle + (i / s.blades) * Math.PI * 2;
+      const bx = s.cx + Math.cos(a) * s.radius;
+      const by = s.cy + Math.sin(a) * s.radius;
+      // Trail (slight smear behind the blade)
+      const trailA = a - Math.sign(s.omega) * 0.35;
+      const tx = s.cx + Math.cos(trailA) * s.radius;
+      const ty = s.cy + Math.sin(trailA) * s.radius;
+      const tg = ctx.createLinearGradient(tx, ty, bx, by);
+      tg.addColorStop(0, 'rgba(255,140,40,0)');
+      tg.addColorStop(1, 'rgba(255,180,80,0.85)');
+      ctx.strokeStyle = tg;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(bx, by); ctx.stroke();
+      // Connecting arm
+      ctx.strokeStyle = 'rgba(255,120,40,0.55)';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(s.cx, s.cy); ctx.lineTo(bx, by); ctx.stroke();
+      // Lava ball
+      const bg = ctx.createRadialGradient(bx, by, 2, bx, by, s.bladeR);
+      bg.addColorStop(0, '#fff5d6');
+      bg.addColorStop(0.4, '#ff8a3a');
+      bg.addColorStop(1, '#4a1a0a');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(bx, by, s.bladeR, 0, Math.PI*2); ctx.fill();
+      // Danger halo
+      ctx.strokeStyle = 'rgba(255,90,60,' + (0.35 + 0.25*Math.sin(performance.now()/120 + i)) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, by, s.bladeR + 4, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
   });
 
   // Meteors
