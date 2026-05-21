@@ -2,13 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Boss Rush · Platyfy</title>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'Trebuchet MS','Segoe UI',sans-serif}
-html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;user-select:none}
-canvas{display:block;cursor:crosshair}
-#game{position:fixed;inset:0;width:100%;height:100%;background:#040408}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'Trebuchet MS','Segoe UI',sans-serif;
+                     -webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;user-select:none;
+          touch-action:none;overscroll-behavior:none}
+canvas{display:block;cursor:crosshair;touch-action:none}
+#game{position:fixed;inset:0;width:100%;height:100%;background:#040408;touch-action:none}
 
 /* HUD */
 #hud{position:fixed;top:0;left:0;right:0;padding:14px 20px;pointer-events:none;z-index:10;
@@ -104,6 +108,64 @@ canvas{display:block;cursor:crosshair}
 .back-link{position:fixed;top:14px;left:14px;color:#666;text-decoration:none;font-size:12px;
            letter-spacing:2px;z-index:11;padding:6px 10px;border:1px solid #333;border-radius:4px;background:#000a}
 .back-link:hover{color:#ffd86a;border-color:#ffd86a}
+
+/* Mobile touch controls */
+#touch{position:fixed;inset:0;z-index:20;pointer-events:none;display:none}
+#touch.show{display:block}
+.joy{position:absolute;left:24px;bottom:24px;width:150px;height:150px;
+     border:3px solid #ff5a72cc;border-radius:50%;background:#0009;
+     pointer-events:auto;touch-action:none;box-shadow:0 0 18px #ff5a72aa,inset 0 0 30px #00000099}
+.joy-nub{position:absolute;left:50%;top:50%;width:56px;height:56px;
+         background:radial-gradient(circle at 35% 30%,#ff8a8a,#ff3052);border-radius:50%;
+         transform:translate(-50%,-50%);pointer-events:none;
+         box-shadow:0 0 18px #ff5a72,0 4px 8px #0008;transition:none}
+.act-btns{position:absolute;right:18px;bottom:18px;display:grid;grid-template-columns:80px 80px;
+          gap:10px;pointer-events:auto}
+.act-btn{width:80px;height:80px;border-radius:50%;border:3px solid #ff5a72;
+         background:radial-gradient(circle at 35% 30%,#3a0a14cc,#1a040acc);
+         color:#fff;font-weight:bold;font-size:13px;letter-spacing:2px;
+         cursor:pointer;font-family:inherit;
+         box-shadow:0 0 14px #ff5a72aa;touch-action:none;user-select:none;
+         display:flex;align-items:center;justify-content:center;line-height:1;text-shadow:0 0 4px #000}
+.act-btn:active{background:radial-gradient(circle at 35% 30%,#ff5a72,#aa1a3a);
+                transform:scale(0.92);box-shadow:0 0 24px #ff5a72}
+.act-btn.gun{border-color:#ffd86a;box-shadow:0 0 14px #ffd86aaa;color:#ffd86a}
+.act-btn.gun:active{background:radial-gradient(circle at 35% 30%,#ffd86a,#aa7a1a);color:#000}
+.act-btn.sword{border-color:#6fffc0;box-shadow:0 0 14px #6fffc0aa;color:#6fffc0;grid-column:1/3;width:170px}
+.act-btn.sword:active{background:radial-gradient(circle at 35% 30%,#6fffc0,#1a8a5a);color:#000}
+.act-btn.dash{border-color:#aa6aff;box-shadow:0 0 14px #aa6affaa;color:#aa6aff;font-size:22px}
+.act-btn.dash:active{background:radial-gradient(circle at 35% 30%,#aa6aff,#5a1a8a);color:#fff}
+
+/* Mobile: scale title down so it fits small screens */
+@media (max-width: 760px) {
+  #title h1{font-size:38px;letter-spacing:6px}
+  #title .subtitle{font-size:11px;letter-spacing:4px;margin-bottom:24px}
+  #title button{padding:14px 36px;font-size:15px;letter-spacing:4px}
+  #title .controls{font-size:11px;letter-spacing:2px;margin-top:20px;padding:0 16px}
+  #title .bosses{gap:8px;margin-top:18px}
+  #title .boss-chip{font-size:11px;padding:6px 10px;letter-spacing:1px}
+  .boss-name{font-size:16px;letter-spacing:4px}
+  .boss-hp-bar{height:12px}
+  .label{font-size:9px;letter-spacing:2px}
+  .value{font-size:12px}
+  .hp-pip{width:14px;height:14px}
+  #hud{padding:8px 12px;gap:10px}
+  .modal-box{padding:20px 18px}
+  .modal-title{font-size:18px;letter-spacing:3px}
+  .modal-body{font-size:12px;line-height:1.6}
+  .modal-btn{padding:10px 22px;font-size:13px;letter-spacing:2px}
+  .puz-cell{width:54px;height:54px;font-size:20px}
+  .math-input{font-size:20px;width:160px}
+  #bigToast{font-size:32px;letter-spacing:6px;padding:0 14px}
+  #trollOverlay span{font-size:64px;letter-spacing:10px}
+}
+@media (max-width: 480px) {
+  .joy{width:120px;height:120px;left:14px;bottom:14px}
+  .joy-nub{width:44px;height:44px}
+  .act-btn{width:64px;height:64px;font-size:11px}
+  .act-btn.sword{width:138px}
+  .act-btns{right:12px;bottom:12px;gap:8px;grid-template-columns:64px 64px}
+}
 </style>
 </head>
 <body>
@@ -161,6 +223,16 @@ canvas{display:block;cursor:crosshair}
 <!-- Screen flash -->
 <div id="flash"></div>
 
+<!-- Mobile touch controls -->
+<div id="touch">
+  <div id="joystick" class="joy"><div id="joyNub" class="joy-nub"></div></div>
+  <div class="act-btns">
+    <button id="btnGun"   class="act-btn gun">FIRE</button>
+    <button id="btnDash"  class="act-btn dash">⚡</button>
+    <button id="btnSword" class="act-btn sword">SWORD</button>
+  </div>
+</div>
+
 <script>
 // ============================================================================
 // BOSS RUSH — five bosses, sword + gun, puzzles, math, and a final troll
@@ -184,6 +256,70 @@ window.addEventListener('keydown', e => {
   }
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ---------- touch / mobile controls ----------
+const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (isMobile) {
+  document.getElementById('touch').classList.add('show');
+  setupTouchControls();
+}
+function setupTouchControls() {
+  const joy = document.getElementById('joystick');
+  const nub = document.getElementById('joyNub');
+  let joyId = null;
+  let joyCx = 0, joyCy = 0, joyR = 60;
+  function joyStart(t) {
+    const r = joy.getBoundingClientRect();
+    joyCx = r.left + r.width / 2;
+    joyCy = r.top + r.height / 2;
+    joyR = r.width / 2 - 20;
+    joyId = t.identifier;
+    joyMove(t);
+  }
+  function joyMove(t) {
+    let dx = t.clientX - joyCx;
+    let dy = t.clientY - joyCy;
+    const d = Math.hypot(dx, dy);
+    if (d > joyR) { dx = dx / d * joyR; dy = dy / d * joyR; }
+    nub.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const TH = 14;
+    keys['ArrowLeft']  = dx < -TH;
+    keys['ArrowRight'] = dx > TH;
+    keys['ArrowUp']    = dy < -TH;
+    keys['ArrowDown']  = dy > TH;
+  }
+  function joyEnd() {
+    joyId = null;
+    nub.style.transform = 'translate(-50%, -50%)';
+    keys['ArrowLeft'] = keys['ArrowRight'] = keys['ArrowUp'] = keys['ArrowDown'] = false;
+  }
+  joy.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (joyId == null) joyStart(e.changedTouches[0]);
+  }, { passive: false });
+  joy.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) if (t.identifier === joyId) joyMove(t);
+  }, { passive: false });
+  joy.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) if (t.identifier === joyId) joyEnd();
+  }, { passive: false });
+  joy.addEventListener('touchcancel', joyEnd);
+
+  function bindBtn(id, key) {
+    const btn = document.getElementById(id);
+    btn.addEventListener('touchstart', e => { e.preventDefault(); keys[key] = true; }, { passive: false });
+    btn.addEventListener('touchend',   e => { e.preventDefault(); keys[key] = false; }, { passive: false });
+    btn.addEventListener('touchcancel', e => { keys[key] = false; });
+    // Also support clicks for desktop testing of touch UI
+    btn.addEventListener('mousedown', e => { e.preventDefault(); keys[key] = true; });
+    btn.addEventListener('mouseup',   e => { e.preventDefault(); keys[key] = false; });
+    btn.addEventListener('mouseleave', e => { keys[key] = false; });
+  }
+  bindBtn('btnGun',   ' ');
+  bindBtn('btnSword', 'x');
+  bindBtn('btnDash',  'Shift');
+}
 
 // ---------- game state ----------
 const STATE = { TITLE:'title', INTRO:'intro', FIGHT:'fight', INTERLUDE:'interlude',
