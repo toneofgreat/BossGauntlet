@@ -72,6 +72,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Cookie Quest card */
 .bg-ck{background:radial-gradient(ellipse at center,#3a1f0a 0%,#1a0a05 60%,#000 100%)}
 .bg-ck canvas{width:100%;height:100%}
+/* Boss Rush card */
+.bg-br{background:radial-gradient(ellipse at center,#3a0a14 0%,#1a040a 60%,#000 100%)}
+.bg-br canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -213,6 +216,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>COOKIE QUEST</h2>
       <p>Cookie-clicker style idle game. Click the giant cookie, buy cursors → robots → pianos → homes → companies → worlds → galaxies → universes. Unlock the Cursor Man, Happybot, King, Emperor, Universal, and Ultimate Robot Boss upgrades. Watch out — after 10 Worlds, ALIENS arrive every 5 seconds and steal your multiplier.</p>
       <span class="tag" style="background:#3a1f0a;color:#ffd86a">IDLE · CLICKER</span>
+    </div>
+  </a>
+  <a href="boss-rush.html" class="card">
+    <div class="card-img bg-br"><canvas id="c17"></canvas></div>
+    <div class="card-body">
+      <h2>BOSS RUSH</h2>
+      <p>Sword + gun bullet-hell against five hand-drawn bosses. Demon Lord with hellfire pillars, Trollface with 15 troll attacks (fake bullets, reversed controls, screen flip), Cursed Latte spawning sugar &amp; creamer enemies, Static TV that pauses for puzzles and math problems, and a Cursed Sneaker with four waves of zombies ending in a Zomboss. Watch out for the final troll ending.</p>
+      <span class="tag" style="background:#3a0a14;color:#ff5a72">ARROW KEYS · SPACE · X</span>
     </div>
   </a>
 </div>
@@ -942,6 +953,72 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.font=`bold ${Math.floor(w*0.08)}px Courier New`;
     ctx.fillStyle='rgba(255,216,106,0.92)';ctx.textAlign='center';
     ctx.fillText('COOKIE',w/2,h*0.18);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Boss Rush preview: pulsing demon head silhouette + flying bullets + sword arc ----
+(function(){
+  const c=document.getElementById('c17'),ctx=c.getContext('2d');
+  if(!c)return;
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const bullets=[];for(let i=0;i<10;i++)bullets.push({x:rand(),y:rand(),vx:(rand()-.5)*.012,vy:(rand()-.5)*.012,c:['#ff5a72','#ffd86a','#aa6aff'][i%3]});
+  function draw(){
+    t+=0.03;
+    ctx.fillStyle='rgba(8,2,6,0.32)';ctx.fillRect(0,0,w,h);
+    // Demon silhouette
+    const cx=w*0.5, cy=h*0.55, r=Math.min(w,h)*0.28;
+    const pulse=1+sin(t*1.8)*0.04;
+    // Red aura
+    const g=ctx.createRadialGradient(cx,cy,r*0.4,cx,cy,r*1.6);
+    g.addColorStop(0,'rgba(255,40,40,0.4)');g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(cx,cy,r*1.6,0,PI*2);ctx.fill();
+    // Body
+    ctx.fillStyle='#3a0608';
+    ctx.beginPath();ctx.ellipse(cx,cy+r*0.2,r*1.1*pulse,r*0.8*pulse,0,0,PI*2);ctx.fill();
+    // Horns
+    ctx.fillStyle='#1a0204';
+    ctx.beginPath();
+    ctx.moveTo(cx-r*0.6,cy-r*0.5);ctx.lineTo(cx-r*0.9,cy-r*1.1);ctx.lineTo(cx-r*0.4,cy-r*0.7);ctx.closePath();ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx+r*0.6,cy-r*0.5);ctx.lineTo(cx+r*0.9,cy-r*1.1);ctx.lineTo(cx+r*0.4,cy-r*0.7);ctx.closePath();ctx.fill();
+    // Head
+    ctx.fillStyle='#7a0a0a';
+    ctx.beginPath();ctx.arc(cx,cy-r*0.3,r*0.55*pulse,0,PI*2);ctx.fill();
+    // Eyes
+    const eyeP=0.7+sin(t*4)*0.3;
+    ctx.fillStyle=`rgba(255,${180+60*sin(t*4)},20,${eyeP})`;
+    ctx.beginPath();ctx.arc(cx-r*0.2,cy-r*0.32,r*0.08,0,PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(cx+r*0.2,cy-r*0.32,r*0.08,0,PI*2);ctx.fill();
+    // Bullets flying
+    for(const b of bullets){
+      b.x+=b.vx;b.y+=b.vy;
+      if(b.x<-0.1)b.x=1.1;if(b.x>1.1)b.x=-0.1;
+      if(b.y<-0.1)b.y=1.1;if(b.y>1.1)b.y=-0.1;
+      const bx=b.x*w,by=b.y*h;
+      const bg=ctx.createRadialGradient(bx,by,1,bx,by,8);
+      bg.addColorStop(0,'#fff');bg.addColorStop(0.5,b.c);bg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=bg;
+      ctx.beginPath();ctx.arc(bx,by,8,0,PI*2);ctx.fill();
+    }
+    // Sword arc at bottom
+    const sx=w*0.5, sy=h*0.85;
+    const swing=sin(t*3)*0.7;
+    ctx.strokeStyle='rgba(255,216,106,0.7)';
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.arc(sx,sy,r*0.5,-PI/2-1+swing,-PI/2+1+swing);
+    ctx.stroke();
+    // Title
+    ctx.font=`bold ${Math.floor(w*0.085)}px Courier New`;
+    ctx.fillStyle='rgba(255,90,114,0.95)';ctx.textAlign='center';
+    ctx.shadowColor='#ff5a72';ctx.shadowBlur=14;
+    ctx.fillText('BOSS RUSH',w/2,h*0.18);
+    ctx.shadowBlur=0;
     requestAnimationFrame(draw);
   }
   draw();
