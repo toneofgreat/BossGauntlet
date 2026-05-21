@@ -1693,8 +1693,18 @@ function refreshAffordability() {
     else if (!owned) el.onclick = null;
     ui++;
   }
+  // Rebirth button: toggle ready state as cookies accumulate from CPS
+  const next = REBIRTH_TIERS[save.rebirthLevel];
+  if (next) {
+    const ready = save.cookies >= next.cost;
+    if (ready !== _lastRebirthReady) {
+      rebuildRebirth();
+      _lastRebirthReady = ready;
+    }
+  }
 }
 let _lastUpgradeVisibleCount = -1;
+let _lastRebirthReady = false;
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 
