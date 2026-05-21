@@ -163,6 +163,10 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
           filter:drop-shadow(0 0 18px #ffd86a)}
 .gold-bar:hover{transform:scale(1.1)}
 
+.diamond-cookie{position:absolute;width:80px;height:80px;cursor:pointer;pointer-events:auto;z-index:64;
+                filter:drop-shadow(0 0 24px #aaffff)}
+.diamond-cookie:hover{transform:scale(1.15)}
+
 #toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);
        background:#000d;border:2px solid #ffd86a;color:#ffd86a;padding:10px 22px;border-radius:30px;
        font-weight:bold;letter-spacing:2px;opacity:0;transition:opacity 0.25s;z-index:200;
@@ -207,6 +211,27 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 
 /* Producer cards use SVG art instead of emoji */
 .producer .pic .b-svg{width:46px;height:46px}
+
+/* Boss Fight overlay */
+.boss-overlay{position:fixed;inset:0;z-index:400;display:none;background:#000}
+.boss-overlay.show{display:block}
+#bossCv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.boss-ui{position:absolute;top:14px;left:0;right:0;text-align:center;color:#fff;z-index:1;pointer-events:none}
+.boss-name{font-size:26px;letter-spacing:8px;font-weight:bold;color:#ff5a72;text-shadow:0 0 16px #ff5a72;margin-bottom:8px}
+.boss-hp-wrap{display:inline-block;width:640px;max-width:80vw}
+.boss-hp-bar{height:18px;background:#1a0408;border:2px solid #ff5a72;border-radius:9px;overflow:hidden;box-shadow:0 0 16px #ff5a72}
+.boss-hp-fill{height:100%;background:linear-gradient(90deg,#ff3a52,#ff8a3a,#ffd86a);transition:width 0.25s;width:100%}
+.boss-controls{font-size:13px;letter-spacing:2px;color:#cfa97a;margin-top:8px;text-shadow:0 0 6px #000}
+.boss-flee{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+           background:linear-gradient(180deg,#ff5a72,#aa1a1a);color:#fff;border:2px solid #ff8a8a;
+           padding:10px 28px;border-radius:8px;font-weight:bold;letter-spacing:3px;cursor:pointer;
+           font-family:inherit;font-size:13px;z-index:2;pointer-events:auto;box-shadow:0 0 16px #ff5a72}
+.boss-flee:hover{background:linear-gradient(180deg,#ff8a8a,#ff5a3a)}
+.boss-banner{position:absolute;top:48%;left:50%;transform:translate(-50%,-50%);
+             font-size:60px;font-weight:bold;letter-spacing:14px;color:#ffd86a;
+             text-shadow:0 0 32px #ffd86a,0 0 64px #ff5a3a;pointer-events:none;z-index:3;
+             animation:bossBannerIn 0.9s ease-out forwards}
+@keyframes bossBannerIn{from{opacity:0;transform:translate(-50%,-50%) scale(0.4)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
 
 /* Modal (Index) */
 .modal-bg{position:fixed;inset:0;background:#000c;backdrop-filter:blur(4px);z-index:300;
@@ -327,6 +352,17 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
   </div>
 </div>
 
+<!-- Boss fight overlay (fullscreen) -->
+<div id="bossOverlay" class="boss-overlay">
+  <canvas id="bossCv"></canvas>
+  <div class="boss-ui">
+    <div class="boss-name" id="bossName"></div>
+    <div class="boss-hp-wrap"><div class="boss-hp-bar"><div class="boss-hp-fill" id="bossHpFill"></div></div></div>
+    <div class="boss-controls">ARROW KEYS to move · SPACEBAR to shoot · X to dash</div>
+  </div>
+  <button class="boss-flee" onclick="endBossFight(false)">FLEE</button>
+</div>
+
 <script>
 // =====================================================================
 // COOKIE QUEST
@@ -342,8 +378,9 @@ const PRODUCERS = [
   { id:'company',  name:'Company',       icon:'🏢', baseCost: 130000,     baseCps: 260,    color:'#6fffc0' },
   { id:'world',    name:'World',         icon:'🌍', baseCost: 1.4e6,      baseCps: 1400,   color:'#5fff5f' },
   { id:'galaxy',   name:'Galaxy',        icon:'🌌', baseCost: 2e7,        baseCps: 7800,   color:'#b95fff' },
-  { id:'universe',     name:'Universe',      icon:'🌠', baseCost: 3.3e8,      baseCps: 44000,   color:'#ffd86a' },
-  { id:'divineCookie', name:'God Cookie',    icon:'✨', baseCost: 5.5e9,      baseCps: 260000,  color:'#fff6c0' }
+  { id:'universe',      name:'Universe',       icon:'🌠', baseCost: 3.3e8,      baseCps: 44000,    color:'#ffd86a' },
+  { id:'divineCookie',  name:'God Cookie',     icon:'✨', baseCost: 5.5e9,      baseCps: 260000,   color:'#fff6c0' },
+  { id:'diamondCookie', name:'Diamond Cookie', icon:'💎', baseCost: 8.5e10,     baseCps: 1.5e6,    color:'#aaffff' }
 ];
 
 // ---------- SVG building art (replaces emoji in workshop / index) ----------
@@ -436,6 +473,22 @@ const BUILDING_SVG = {
     <circle cx="11" cy="15.5" r="1.3" fill="#3a1a06"/>
     <circle cx="15" cy="14.5" r="1" fill="#3a1a06"/>
     <circle cx="8" cy="15" r="0.6" fill="#fff" opacity="0.7"/>
+  </svg>`,
+  diamondCookie: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="dia" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="50%" stop-color="#aaffff"/>
+        <stop offset="100%" stop-color="#5fc0ff"/>
+      </linearGradient>
+    </defs>
+    <polygon points="12,2 21,10 12,22 3,10" fill="url(#dia)" stroke="#1a4a8a" stroke-width="0.9" stroke-linejoin="round"/>
+    <line x1="3" y1="10" x2="21" y2="10" stroke="#1a4a8a" stroke-width="0.7"/>
+    <line x1="7" y1="6.5" x2="12" y2="22" stroke="#1a4a8a" stroke-width="0.4"/>
+    <line x1="17" y1="6.5" x2="12" y2="22" stroke="#1a4a8a" stroke-width="0.4"/>
+    <line x1="9" y1="4" x2="9" y2="10" stroke="#1a4a8a" stroke-width="0.4"/>
+    <line x1="15" y1="4" x2="15" y2="10" stroke="#1a4a8a" stroke-width="0.4"/>
+    <polygon points="9,4 12,2 12,10 9,10" fill="#fff" opacity="0.4"/>
   </svg>`
 };
 function bSvg(id) { return BUILDING_SVG[id] || ''; }
@@ -449,7 +502,8 @@ const BUILDING_LORE = {
   world:        'An entire planet has been re-purposed to bake cookies.',
   galaxy:       'Trillions of cookie planets sprawled across a billion stars.',
   universe:     'Infinite cookies end to end, with milk filling the space between.',
-  divineCookie: 'A self-baking cookie touched by divinity. It bakes more of itself.'
+  divineCookie:  'A self-baking cookie touched by divinity. It bakes more of itself.',
+  diamondCookie: 'Pure crystallized cookie essence — light refracts into more cookies on the way through.'
 };
 
 // ---------- Constants: upgrades ----------
@@ -517,7 +571,15 @@ const UPGRADES = [
     cost: 100e9, req:{ upgrade:'goldBars3s' }, special:'goldBarsSpeed', interval:2 },
   { id:'goldBars1s', name:'Faster Gold Bars · 1s', icon:'⚡', color:'#ffd86a',
     desc:'Gold bars now spawn every 1 second.',
-    cost: 1e12,  req:{ upgrade:'goldBars2s' }, special:'goldBarsSpeed', interval:1 }
+    cost: 1e12,  req:{ upgrade:'goldBars2s' }, special:'goldBarsSpeed', interval:1 },
+
+  // -- Diamond Cookie freebies (after 75 Diamond Cookies + cookie cost) --
+  { id:'diamondFreebies', name:'Free Diamond Cookies', icon:'💎', color:'#aaffff',
+    desc:'A free Diamond Cookie drifts across the screen every 5 minutes. Worth far more than a god cookie.',
+    cost: 2.5e11, req:{ producer:'diamondCookie', count:75 }, special:'diamondFreebies' },
+  { id:'diamondSpeed', name:'Diamond Rush · 2 min', icon:'⚡', color:'#aaffff',
+    desc:'Free Diamond Cookies now spawn every 2 minutes.',
+    cost: 5e12, req:{ upgrade:'diamondFreebies' }, special:'diamondSpeed', interval:120 }
 ];
 
 // Procedural tier ladder: each building gets a 2× upgrade at every milestone.
@@ -584,6 +646,8 @@ function defaultSave() {
     rebirthLevel: 0,           // 0..REBIRTH_TIERS.length
     godSpawnMult: 1,           // multiplied by 1.1 per godSpawn upgrade buy (only once available)
     goldBarInterval: 10,       // seconds between gold bar spawns (reduced by upgrades)
+    diamondInterval: 300,      // seconds between free diamond cookie spawns (5 min default)
+    bossesCleared: [],         // ids of bosses cleared ('robot', 'milk')
     lastTickAt: Date.now()
   };
 }
@@ -687,13 +751,19 @@ function buyProducer(id) {
   if (!isCheating() && save.cookies < cost) return;
   if (!isCheating()) save.cookies -= cost;
   save.producers[id]++;
-  // Universe milk tier crossings
+  // Universe milk tier crossings + boss fights
   if (id === 'universe') {
     const n = save.producers.universe;
     if (n === 1)    bigToast('🥛 MILK RISES BENEATH THE COOKIE', 'good', 2500);
     if (n === 10)   bigToast('🍫 MILK TURNS CHOCOLATE', 'good', 2500);
     if (n === 100)  bigToast('🍓 MILK TURNS STRAWBERRY', 'good', 2500);
-    if (n === 1000) bigToast('👁️ THE MILK BOSS EMERGES', 'danger', 4500);
+    if (n === 350)  setTimeout(() => startBossFight('robot'), 800);
+    if (n === 1000) setTimeout(() => { bigToast('👁️ THE MILK BOSS EMERGES', 'danger', 2000); setTimeout(() => startBossFight('milk'), 1800); }, 200);
+    // Re-trigger if previously bought (e.g., after rebirth) and not yet cleared
+    if ((n === 350 && !(save.bossesCleared||[]).includes('robot')) ||
+        (n === 1000 && !(save.bossesCleared||[]).includes('milk'))) {
+      // already handled above
+    }
   }
   checkMilestones();
   saveGame();
@@ -833,6 +903,8 @@ function rebirthGame() {
   while (aliens.length) { aliens[0].el.remove(); aliens.shift(); }
   while (godCookies.length) { godCookies[0].el.remove(); godCookies.shift(); }
   while (goldBars.length) { goldBars[0].el.remove(); goldBars.shift(); }
+  while (diamondCookies.length) { diamondCookies[0].el.remove(); diamondCookies.shift(); }
+  save.diamondInterval = 300;
   const r = document.getElementById('ultimateRobotEl'); if (r) r.remove(); ultimateRobot = null;
   saveGame();
   rebuildAll();
@@ -871,6 +943,13 @@ function buyUpgrade(id) {
     save.goldBarInterval = u.interval;
     goldBarTimer = Math.min(goldBarTimer, save.goldBarInterval);
     toast(`⚡ Gold bars every ${u.interval}s`, 'good');
+  } else if (u.special === 'diamondFreebies') {
+    diamondCookieTimer = save.diamondInterval;
+    bigToast('💎 FREE DIAMOND COOKIES UNLOCKED', 'good', 3500);
+  } else if (u.special === 'diamondSpeed') {
+    save.diamondInterval = u.interval;
+    diamondCookieTimer = Math.min(diamondCookieTimer, save.diamondInterval);
+    toast(`💎 Diamonds every ${u.interval}s`, 'good');
   } else if (u.special === 'ultimate') {
     bigToast('🤖 ULTIMATE ROBOT BOSS UNLOCKED 🤖', 'good', 3500);
     spawnUltimateRobot();
@@ -1445,6 +1524,114 @@ function triggerGodCookieEffect() {
   }
 }
 
+// ---------- Free Diamond Cookies (upgrade-driven) ----------
+const diamondCookies = [];
+function spawnDiamondCookie() {
+  const el = document.createElement('div');
+  el.className = 'diamond-cookie';
+  const startX = Math.random() < 0.5 ? -100 : window.innerWidth + 100;
+  const startY = 80 + Math.random() * (window.innerHeight - 200);
+  el.style.left = startX + 'px';
+  el.style.top = startY + 'px';
+  el.innerHTML = '<canvas width="80" height="80"></canvas>';
+  document.getElementById('fxLayer').appendChild(el);
+  drawDiamondCookieCanvas(el.querySelector('canvas'));
+  const dc = {
+    el, x: startX, y: startY,
+    vx: (startX < 0 ? 1 : -1) * (50 + Math.random() * 35),
+    vy: (Math.random() - 0.5) * 22,
+    life: 18.0,
+    clicked: false
+  };
+  el.onclick = () => {
+    if (dc.clicked) return;
+    dc.clicked = true;
+    triggerDiamondCookieEffect();
+    el.remove();
+    const i = diamondCookies.indexOf(dc); if (i >= 0) diamondCookies.splice(i, 1);
+    rebuildStats();
+  };
+  diamondCookies.push(dc);
+}
+
+function drawDiamondCookieCanvas(c) {
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 80, 80);
+  // Glow
+  const g = ctx.createRadialGradient(40, 40, 6, 40, 40, 40);
+  g.addColorStop(0, 'rgba(200,255,255,0.85)');
+  g.addColorStop(1, 'rgba(95,192,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(40, 40, 40, 0, Math.PI*2); ctx.fill();
+  // Diamond body
+  const dg = ctx.createLinearGradient(40, 8, 40, 72);
+  dg.addColorStop(0, '#ffffff');
+  dg.addColorStop(0.5, '#aaffff');
+  dg.addColorStop(1, '#3a90c8');
+  ctx.fillStyle = dg;
+  ctx.beginPath();
+  ctx.moveTo(40, 8);
+  ctx.lineTo(70, 32);
+  ctx.lineTo(40, 72);
+  ctx.lineTo(10, 32);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#1a4a8a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Facets
+  ctx.strokeStyle = '#1a4a8a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(10, 32); ctx.lineTo(70, 32); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(25, 17); ctx.lineTo(40, 72); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(55, 17); ctx.lineTo(40, 72); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(25, 8); ctx.lineTo(25, 32); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(55, 8); ctx.lineTo(55, 32); ctx.stroke();
+  // Sparkle highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(25, 12); ctx.lineTo(40, 8); ctx.lineTo(40, 30); ctx.lineTo(25, 32); ctx.closePath();
+  ctx.fill();
+  // Tiny glints
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(48, 24, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(35, 50, 1.5, 0, Math.PI*2); ctx.fill();
+}
+
+function triggerDiamondCookieEffect() {
+  const roll = Math.random();
+  if (roll < 0.4) {
+    // Crystal Frenzy: 15× CPS for 90s
+    frenzyMult = 15;
+    frenzyTime = 90;
+    bigToast('💎 CRYSTAL FRENZY! 15× CPS for 90s', 'good', 4000);
+  } else if (roll < 0.7) {
+    // Diamond Click Frenzy: 2222× clicks for 19s
+    clickFrenzyMult = 2222;
+    clickFrenzyTime = 19;
+    bigToast('💎 DIAMOND CLICK FRENZY! 2222× clicks for 19s', 'good', 4000);
+  } else if (roll < 0.9) {
+    // Mega Lucky: 1 hour of CPS instantly
+    const gain = Math.max(1e6, totalCps() * 3600);
+    save.cookies += gain;
+    save.totalCookies += gain;
+    bigToast('💎 MEGA LUCKY! +' + fmt(gain) + ' cookies', 'good', 4000);
+  } else {
+    // Building blessing: +1 of every owned building
+    let added = 0;
+    for (const p of PRODUCERS) {
+      if (save.producers[p.id] > 0) { save.producers[p.id]++; added++; }
+    }
+    bigToast(`💎 BLESSING! +1 to ${added} buildings`, 'good', 4000);
+    rebuildAll();
+  }
+}
+
 // ---------- Aliens (after 10 Worlds) ----------
 // ---------- Gold Bars (upgrade-driven) ----------
 const goldBars = [];
@@ -1633,6 +1820,8 @@ let autoClickTimer = 1;
 let singularityTimer = 2.5;
 // God Cookie building (100+) triggers a forced golden cookie spawn every 80s
 let divineSpawnTimer = 80;
+// Free Diamond Cookie spawn timer (upgrade-driven)
+let diamondCookieTimer = 300;
 
 // ---------- Starfield ----------
 const starCv = document.getElementById('starfield');
@@ -1679,11 +1868,566 @@ function hexToRgb(hex) {
   return { r:(v>>16)&255, g:(v>>8)&255, b:v&255 };
 }
 
+// ---------- BOSS FIGHT ENGINE ----------
+const bossCv = document.getElementById('bossCv');
+const bossCtx = bossCv.getContext('2d');
+let bossFight = null;
+const keysDown = {};
+window.addEventListener('keydown', e => {
+  if (bossFight && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','x','X'].includes(e.key)) e.preventDefault();
+  keysDown[e.key] = true;
+});
+window.addEventListener('keyup', e => { keysDown[e.key] = false; });
+window.addEventListener('resize', () => { if (bossFight) resizeBossCanvas(); });
+
+function resizeBossCanvas() {
+  bossCv.width = window.innerWidth;
+  bossCv.height = window.innerHeight;
+}
+
+const BOSS_DEFS = {
+  robot: {
+    name: 'ULTIMATE ROBOT BOSS',
+    bg: '#04060f',
+    starColor: '#fff',
+    hp: 240, reward: 5e10,
+    intro: 'INITIATING COMBAT', mainColor: '#6ad8ff'
+  },
+  milk: {
+    name: 'MILK BOSS',
+    bg: '#10040a',
+    starColor: '#ffaaaa',
+    hp: 500, reward: 5e11,
+    intro: 'THE MILK STIRS', mainColor: '#ff5a72'
+  }
+};
+
+function startBossFight(id) {
+  if (bossFight) return;
+  const def = BOSS_DEFS[id];
+  if (!def) return;
+  resizeBossCanvas();
+  bossFight = {
+    id, def,
+    t: 0,
+    bannerT: 1.4,
+    player: {
+      x: bossCv.width / 2,
+      y: bossCv.height - 140,
+      vx: 0, vy: 0,
+      hp: 5, maxHp: 5,
+      iframe: 0,
+      shootCd: 0,
+      dashCd: 0,
+      dashT: 0
+    },
+    pBullets: [],
+    eBullets: [],
+    particles: [],
+    boss: {
+      x: bossCv.width / 2,
+      y: 220,
+      hp: def.hp,
+      maxHp: def.hp,
+      phase: 0,
+      attackT: 0,
+      sub: 0
+    },
+    shake: 0,
+    ended: false
+  };
+  const ov = document.getElementById('bossOverlay');
+  ov.classList.add('show');
+  document.getElementById('bossName').textContent = def.name;
+  // Show intro banner
+  let banner = document.querySelector('.boss-banner');
+  if (banner) banner.remove();
+  banner = document.createElement('div');
+  banner.className = 'boss-banner';
+  banner.textContent = def.intro;
+  ov.appendChild(banner);
+  setTimeout(() => banner.remove(), 1400);
+  bigToast(`⚔️ BOSS FIGHT: ${def.name}`, 'danger', 3000);
+}
+
+function endBossFight(won) {
+  if (!bossFight || bossFight.ended) {
+    document.getElementById('bossOverlay').classList.remove('show');
+    bossFight = null;
+    return;
+  }
+  bossFight.ended = true;
+  const def = bossFight.def;
+  if (won) {
+    save.cookies += def.reward;
+    save.totalCookies += def.reward;
+    if (!save.bossesCleared) save.bossesCleared = [];
+    if (!save.bossesCleared.includes(bossFight.id)) save.bossesCleared.push(bossFight.id);
+    bigToast(`🏆 ${def.name} DEFEATED! +${fmt(def.reward)} cookies`, 'good', 5000);
+  } else {
+    bigToast('💀 RETREATED — talk to a Universe to retry', 'danger', 3500);
+  }
+  setTimeout(() => {
+    document.getElementById('bossOverlay').classList.remove('show');
+    bossFight = null;
+    rebuildAll();
+  }, 600);
+}
+
+function bossFightTick(dt) {
+  if (!bossFight || bossFight.ended) return;
+  const b = bossFight;
+  b.t += dt;
+  if (b.bannerT > 0) { b.bannerT -= dt; }
+
+  // ----- Player input + movement -----
+  const p = b.player;
+  const speed = 360;
+  let mx = 0, my = 0;
+  if (keysDown['ArrowLeft']  || keysDown['a'] || keysDown['A']) mx -= 1;
+  if (keysDown['ArrowRight'] || keysDown['d'] || keysDown['D']) mx += 1;
+  if (keysDown['ArrowUp']    || keysDown['w'] || keysDown['W']) my -= 1;
+  if (keysDown['ArrowDown']  || keysDown['s'] || keysDown['S']) my += 1;
+  const len = Math.hypot(mx, my) || 1;
+  let s = speed;
+  // Dash
+  p.dashCd -= dt;
+  if ((keysDown['x'] || keysDown['X']) && p.dashCd <= 0 && (mx || my)) {
+    p.dashT = 0.18;
+    p.dashCd = 1.0;
+    p.iframe = Math.max(p.iframe, 0.25);
+  }
+  if (p.dashT > 0) { s *= 3; p.dashT -= dt; }
+  p.x += (mx / len) * s * dt;
+  p.y += (my / len) * s * dt;
+  p.x = Math.max(20, Math.min(bossCv.width - 20, p.x));
+  p.y = Math.max(20, Math.min(bossCv.height - 20, p.y));
+  p.iframe -= dt;
+  // Shoot
+  p.shootCd -= dt;
+  if ((keysDown[' '] || keysDown['z'] || keysDown['Z']) && p.shootCd <= 0) {
+    b.pBullets.push({ x: p.x - 8, y: p.y - 14, vy: -780 });
+    b.pBullets.push({ x: p.x + 8, y: p.y - 14, vy: -780 });
+    p.shootCd = 0.16;
+  }
+
+  // ----- Player bullets -----
+  for (let i = b.pBullets.length - 1; i >= 0; i--) {
+    const bu = b.pBullets[i];
+    bu.y += bu.vy * dt;
+    if (bu.y < -30) { b.pBullets.splice(i, 1); continue; }
+    // Hit boss
+    if (Math.hypot(bu.x - b.boss.x, bu.y - b.boss.y) < 90) {
+      b.pBullets.splice(i, 1);
+      b.boss.hp -= 2;
+      spawnHitParticles(b, bu.x, bu.y, '#ffd86a');
+      if (b.boss.hp <= 0) {
+        b.boss.hp = 0;
+        spawnHitParticles(b, b.boss.x, b.boss.y, '#fff', 60);
+        b.shake = 1.2;
+        setTimeout(() => endBossFight(true), 1100);
+        return;
+      }
+    }
+  }
+
+  // ----- Boss AI -----
+  bossAiTick(b, dt);
+
+  // ----- Enemy bullets -----
+  for (let i = b.eBullets.length - 1; i >= 0; i--) {
+    const eb = b.eBullets[i];
+    eb.x += eb.vx * dt;
+    eb.y += eb.vy * dt;
+    eb.life -= dt;
+    if (eb.life <= 0 || eb.x < -60 || eb.x > bossCv.width + 60 || eb.y < -60 || eb.y > bossCv.height + 60) {
+      b.eBullets.splice(i, 1);
+      continue;
+    }
+    if (p.iframe <= 0 && Math.hypot(eb.x - p.x, eb.y - p.y) < (eb.r + 14)) {
+      p.hp--;
+      p.iframe = 1.4;
+      b.shake = 0.5;
+      spawnHitParticles(b, p.x, p.y, '#ff5a72', 14);
+      b.eBullets.splice(i, 1);
+      if (p.hp <= 0) {
+        setTimeout(() => endBossFight(false), 900);
+        return;
+      }
+    }
+  }
+
+  // ----- Particles -----
+  for (let i = b.particles.length - 1; i >= 0; i--) {
+    const pa = b.particles[i];
+    pa.x += pa.vx * dt;
+    pa.y += pa.vy * dt;
+    pa.vy += 300 * dt;
+    pa.life -= dt;
+    if (pa.life <= 0) b.particles.splice(i, 1);
+  }
+  b.shake = Math.max(0, b.shake - dt);
+
+  drawBossFight();
+  document.getElementById('bossHpFill').style.width = (b.boss.hp / b.boss.maxHp * 100) + '%';
+}
+
+function spawnHitParticles(b, x, y, color, n = 6) {
+  for (let i = 0; i < n; i++) {
+    b.particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 380,
+      vy: (Math.random() - 0.8) * 380,
+      life: 0.5 + Math.random() * 0.4,
+      r: 2 + Math.random() * 3,
+      color
+    });
+  }
+}
+
+function bossAiTick(b, dt) {
+  const boss = b.boss;
+  boss.attackT += dt;
+  // Move boss in a horizontal slow wave
+  const cx = bossCv.width / 2 + Math.sin(b.t * 0.5) * (bossCv.width * 0.28);
+  boss.x += (cx - boss.x) * Math.min(1, dt * 1.2);
+  const targetY = 200 + Math.sin(b.t * 0.7) * 30;
+  boss.y += (targetY - boss.y) * Math.min(1, dt * 1.2);
+  // Phase based on HP
+  const hpFrac = boss.hp / boss.maxHp;
+  boss.phase = hpFrac < 0.33 ? 2 : hpFrac < 0.66 ? 1 : 0;
+  // Pattern dispatcher
+  if (b.id === 'robot') bossPatternRobot(b);
+  else bossPatternMilk(b);
+}
+
+function bossPatternRobot(b) {
+  const boss = b.boss, p = b.player;
+  if (boss.phase === 0) {
+    // Homing missile every 1.2s
+    if (boss.attackT > 1.2) {
+      boss.attackT = 0;
+      const ang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(ang)*230, vy: Math.sin(ang)*230, life: 6, color: '#ff5a72', r: 10 });
+    }
+  } else if (boss.phase === 1) {
+    // Laser fan every 1.4s
+    if (boss.attackT > 1.4) {
+      boss.attackT = 0;
+      for (let i = -5; i <= 5; i++) {
+        const ang = Math.PI/2 + i * 0.18;
+        b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(ang)*320, vy: Math.sin(ang)*320, life: 4, color: '#ff8a3a', r: 7 });
+      }
+      // plus aimed shot
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(aang)*460, vy: Math.sin(aang)*460, life: 3, color: '#ff5a72', r: 9 });
+    }
+  } else {
+    // Rapid stream every 0.22s
+    if (boss.attackT > 0.22) {
+      boss.attackT = 0;
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x) + (Math.random()-0.5) * 0.45;
+      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(aang)*440, vy: Math.sin(aang)*440, life: 3, color: '#ff5a72', r: 6 });
+      // ring burst every 8 shots
+      boss.sub = (boss.sub || 0) + 1;
+      if (boss.sub % 8 === 0) {
+        for (let i = 0; i < 16; i++) {
+          const ang = (i / 16) * Math.PI * 2 + b.t * 0.5;
+          b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*220, vy: Math.sin(ang)*220, life: 4, color: '#ffd86a', r: 6 });
+        }
+      }
+    }
+  }
+}
+
+function bossPatternMilk(b) {
+  const boss = b.boss, p = b.player;
+  if (boss.phase === 0) {
+    // Tentacle splash: ring burst every 1.6s
+    if (boss.attackT > 1.6) {
+      boss.attackT = 0;
+      for (let i = 0; i < 14; i++) {
+        const ang = (i / 14) * Math.PI * 2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*180, vy: Math.sin(ang)*180, life: 5, color: '#fff', r: 8 });
+      }
+    }
+  } else if (boss.phase === 1) {
+    // Aimed waves + side spread
+    if (boss.attackT > 0.85) {
+      boss.attackT = 0;
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      for (let i = -3; i <= 3; i++) {
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(aang + i*0.13)*270, vy: Math.sin(aang + i*0.13)*270, life: 4, color: '#fff', r: 7 });
+      }
+    }
+  } else {
+    // Multi-eye laser swirl
+    if (boss.attackT > 0.35) {
+      boss.attackT = 0;
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + b.t * 1.2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*360, vy: Math.sin(ang)*360, life: 3, color: '#ff5a72', r: 6 });
+      }
+    }
+  }
+}
+
+function drawBossFight() {
+  const b = bossFight;
+  const ctx = bossCtx;
+  const W = bossCv.width, H = bossCv.height;
+  // Background
+  ctx.fillStyle = b.def.bg;
+  ctx.fillRect(0, 0, W, H);
+  // Shake offset
+  const sx = b.shake > 0 ? (Math.random()-0.5) * 16 : 0;
+  const sy = b.shake > 0 ? (Math.random()-0.5) * 16 : 0;
+  ctx.save();
+  ctx.translate(sx, sy);
+  // Stars background
+  for (let i = 0; i < 80; i++) {
+    const x = (i * 73 + b.t * (10 + (i%5))) % W;
+    const y = ((i * 41) % H + b.t * 15) % H;
+    const alpha = 0.3 + Math.abs(Math.sin(b.t + i)) * 0.5;
+    ctx.fillStyle = b.def.starColor;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  // Draw boss
+  if (b.id === 'robot') drawRobotBoss(b);
+  else drawMilkBossBig(b);
+  // Player bullets
+  for (const bu of b.pBullets) {
+    const g = ctx.createRadialGradient(bu.x, bu.y, 1, bu.x, bu.y, 9);
+    g.addColorStop(0, '#fff');
+    g.addColorStop(1, '#ffd86a');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(bu.x, bu.y, 6, 0, Math.PI*2); ctx.fill();
+  }
+  // Enemy bullets (glowing)
+  for (const eb of b.eBullets) {
+    const g = ctx.createRadialGradient(eb.x, eb.y, 1, eb.x, eb.y, eb.r + 4);
+    g.addColorStop(0, '#fff');
+    g.addColorStop(0.5, eb.color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.r + 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = eb.color;
+    ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.r, 0, Math.PI*2); ctx.fill();
+  }
+  // Player (cookie)
+  drawBossPlayer(b);
+  // Particles
+  for (const pa of b.particles) {
+    ctx.fillStyle = pa.color;
+    ctx.globalAlpha = Math.max(0, pa.life * 2);
+    ctx.beginPath(); ctx.arc(pa.x, pa.y, pa.r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // HP cookies bottom
+  const p = b.player;
+  for (let i = 0; i < p.maxHp; i++) {
+    const cx = 24 + i * 28;
+    const cy = bossCv.height - 28;
+    ctx.fillStyle = i < p.hp ? '#ffd86a' : '#3a2a14';
+    ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#5a3a14';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+function drawRobotBoss(b) {
+  const ctx = bossCtx;
+  const boss = b.boss;
+  const t = b.t;
+  ctx.save();
+  ctx.translate(boss.x, boss.y);
+  // Glow
+  const glow = ctx.createRadialGradient(0, 0, 30, 0, 0, 220);
+  glow.addColorStop(0, 'rgba(106,216,255,0.25)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(0, 0, 220, 0, Math.PI*2); ctx.fill();
+  // Body
+  const bg = ctx.createLinearGradient(0, -80, 0, 100);
+  bg.addColorStop(0, '#cfd8e8');
+  bg.addColorStop(1, '#3a4a6a');
+  ctx.fillStyle = bg;
+  ctx.fillRect(-80, -40, 160, 140);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-80, -40, 160, 140);
+  // Panel lines
+  ctx.strokeStyle = '#1a2a4a';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(-80, -40 + i * 28);
+    ctx.lineTo(80, -40 + i * 28);
+    ctx.stroke();
+  }
+  // Head
+  ctx.fillStyle = '#aa6a3a';
+  ctx.fillRect(-66, -140, 132, 100);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-66, -140, 132, 100);
+  // Eyes glowing
+  const eyeR = 100 + 100 * Math.sin(t * 4);
+  const eyeG = 50 + 50 * Math.cos(t * 3);
+  ctx.fillStyle = `rgba(255,${eyeR},${eyeG},1)`;
+  ctx.shadowColor = '#ff5a3a';
+  ctx.shadowBlur = 20;
+  ctx.fillRect(-48, -106, 32, 22);
+  ctx.fillRect(16, -106, 32, 22);
+  ctx.shadowBlur = 0;
+  // Mouth grille
+  ctx.fillStyle = '#000';
+  for (let i = -3; i <= 3; i++) {
+    ctx.fillRect(i * 8 - 2, -64, 4, 12);
+  }
+  // Antenna
+  ctx.strokeStyle = '#ffd86a';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -140); ctx.lineTo(Math.sin(t * 3) * 8, -180); ctx.stroke();
+  ctx.fillStyle = '#ff5a72';
+  ctx.beginPath(); ctx.arc(Math.sin(t * 3) * 8, -184, 10, 0, Math.PI*2); ctx.fill();
+  // Arms (swinging)
+  const armSwing = Math.sin(t * 2.4) * 8;
+  ctx.fillStyle = '#6ad8ff';
+  ctx.fillRect(-140, -10 + armSwing, 50, 90);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-140, -10 + armSwing, 50, 90);
+  ctx.fillRect(90, -10 - armSwing, 50, 90);
+  ctx.strokeRect(90, -10 - armSwing, 50, 90);
+  // Hands
+  ctx.fillStyle = '#aa6a3a';
+  ctx.beginPath(); ctx.arc(-115, 90 + armSwing, 16, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(115, 90 - armSwing, 16, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // Chest core (glowing)
+  const core = ctx.createRadialGradient(0, 30, 4, 0, 30, 44);
+  core.addColorStop(0, '#fff');
+  core.addColorStop(0.5, '#ffd86a');
+  core.addColorStop(1, '#aa7a1a');
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(0, 30, 38, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawMilkBossBig(b) {
+  const ctx = bossCtx;
+  const boss = b.boss;
+  const t = b.t;
+  ctx.save();
+  ctx.translate(boss.x, boss.y);
+  // Dark glow
+  const glow = ctx.createRadialGradient(0, 0, 40, 0, 0, 260);
+  glow.addColorStop(0, 'rgba(255,40,40,0.3)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(0, 0, 260, 0, Math.PI*2); ctx.fill();
+  // Tentacles
+  ctx.strokeStyle = '#3a0610';
+  ctx.lineWidth = 18;
+  ctx.lineCap = 'round';
+  for (let i = -4; i <= 4; i++) {
+    if (i === 0) continue;
+    const tx = i * 50;
+    const sway = Math.sin(t * 1.3 + i) * 30;
+    ctx.beginPath();
+    ctx.moveTo(tx, 80);
+    ctx.quadraticCurveTo(tx + sway, 160, tx + sway * 1.6, 240 + Math.abs(i) * 20);
+    ctx.stroke();
+  }
+  // Body
+  ctx.fillStyle = '#1a0408';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 130, 110, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#5a1010';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // Eyes (many)
+  const eyes = [[-60, -30], [60, -30], [-30, 10], [30, 10], [0, -55], [-80, 15], [80, 15]];
+  const pulse = 0.55 + Math.abs(Math.sin(t * 3)) * 0.45;
+  ctx.shadowColor = '#ff3030';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = `rgba(255,40,40,${pulse})`;
+  for (const [ex, ey] of eyes) {
+    ctx.beginPath(); ctx.arc(ex, ey, 16, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff';
+  for (const [ex, ey] of eyes) {
+    const lookX = Math.cos(t * 1.4) * 4;
+    const lookY = Math.sin(t * 1.4) * 4;
+    ctx.beginPath(); ctx.arc(ex + lookX, ey + lookY, 5, 0, Math.PI*2); ctx.fill();
+  }
+  // Mouth fangs
+  ctx.fillStyle = '#fff';
+  for (let i = -4; i <= 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 17, 60);
+    ctx.lineTo(i * 17 - 7, 82);
+    ctx.lineTo(i * 17 + 7, 82);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Milk drips
+  ctx.fillStyle = '#fff';
+  for (let i = 0; i < 6; i++) {
+    const dx = (i - 2.5) * 28;
+    const dy = 92 + Math.sin(t * 2 + i) * 6;
+    ctx.beginPath();
+    ctx.ellipse(dx, dy, 6, 12, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBossPlayer(b) {
+  const ctx = bossCtx;
+  const p = b.player;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  if (p.iframe > 0 && Math.floor(p.iframe * 14) % 2 === 0) ctx.globalAlpha = 0.4;
+  // Trail when dashing
+  if (p.dashT > 0) {
+    ctx.fillStyle = 'rgba(255,216,106,0.4)';
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.fill();
+  }
+  // Cookie body
+  const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, 18);
+  g.addColorStop(0, '#e6b266');
+  g.addColorStop(1, '#6a3a14');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#5a3a14';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  for (const [cx, cy] of [[-5,-4],[6,-2],[2,6],[-4,4],[5,5]]) {
+    ctx.fillStyle = '#3a1a06';
+    ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 // ---------- Main loop ----------
 let lastTime = performance.now();
 function loop(now) {
   const dt = Math.min(0.1, (now - lastTime) / 1000);
   lastTime = now;
+  // Boss fight pauses the regular game loop visuals after this point
+  if (bossFight) {
+    bossFightTick(dt);
+    requestAnimationFrame(loop);
+    return;
+  }
   // Tick CPS
   let cps = totalCps();
   // Frenzy
@@ -1757,17 +2501,41 @@ function loop(now) {
     }
   }
 
-  // Cookie Singularity (m399): periodically auto-collects oldest gold bar or god cookie
+  // Cookie Singularity (m399): periodically auto-collects oldest diamond cookie, gold bar, or god cookie
   if (save.milestoneRewards.m399) {
     singularityTimer -= dt;
     if (singularityTimer <= 0) {
       singularityTimer = 2.5;
-      const gc = godCookies.find(x => !x.clicked);
-      if (gc) gc.el.click();
+      const dc = diamondCookies.find(x => !x.clicked);
+      if (dc) dc.el.click();
       else {
-        const gb = goldBars.find(x => !x.clicked);
-        if (gb) gb.el.click();
+        const gc = godCookies.find(x => !x.clicked);
+        if (gc) gc.el.click();
+        else {
+          const gb = goldBars.find(x => !x.clicked);
+          if (gb) gb.el.click();
+        }
       }
+    }
+  }
+
+  // Free Diamond Cookies (upgrade-driven)
+  for (const dc of diamondCookies) {
+    dc.x += dc.vx * dt;
+    dc.y += dc.vy * dt;
+    dc.life -= dt;
+    dc.el.style.left = dc.x + 'px';
+    dc.el.style.top = dc.y + 'px';
+    if (dc.life <= 0 || dc.x < -200 || dc.x > window.innerWidth + 200) {
+      dc.el.remove();
+      const i = diamondCookies.indexOf(dc); if (i >= 0) diamondCookies.splice(i, 1);
+    }
+  }
+  if (save.upgrades.diamondFreebies) {
+    diamondCookieTimer -= dt;
+    if (diamondCookieTimer <= 0) {
+      spawnDiamondCookie();
+      diamondCookieTimer = save.diamondInterval;
     }
   }
 
