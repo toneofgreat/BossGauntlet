@@ -127,6 +127,10 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 .alien{position:absolute;width:54px;height:38px;cursor:pointer;pointer-events:auto;z-index:55;
        filter:drop-shadow(0 0 14px #6fffc0)}
 
+.gold-bar{position:absolute;width:84px;height:50px;cursor:pointer;pointer-events:auto;z-index:62;
+          filter:drop-shadow(0 0 18px #ffd86a)}
+.gold-bar:hover{transform:scale(1.1)}
+
 #toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);
        background:#000d;border:2px solid #ffd86a;color:#ffd86a;padding:10px 22px;border-radius:30px;
        font-weight:bold;letter-spacing:2px;opacity:0;transition:opacity 0.25s;z-index:200;
@@ -269,7 +273,30 @@ const UPGRADES = [
   { id:'universal',      name:'Universal Upgrade',   icon:'🌟', desc:'Universes produce 3× as many cookies.',
     cost: 1e11,     req:{ producer:'universe',count:50 }, target:'universe', mult:3 },
   { id:'ultimateRobot',  name:'Ultimate Robot Boss', icon:'🤖', desc:'ALL robots 10×, ALL production 2×. The final upgrade.',
-    cost: 1e15,     req:{ producer:'universe',count:350}, special:'ultimate' }
+    cost: 1e15,     req:{ producer:'universe',count:350}, special:'ultimate' },
+
+  // -- Alien & Gold Bar abilities --
+  { id:'alienRepel', name:'Alien Repellent', icon:'🛸', color:'#6fffc0',
+    desc:'Aliens will never spawn again. Existing aliens flee.',
+    cost: 5e6, req:{ producer:'world', count:10 }, special:'alienRepel' },
+  { id:'goldBars', name:'Gold Bar Spawner', icon:'🏆', color:'#ffd86a',
+    desc:'A gold bar drifts across the screen every 10s. Click it for 1M cookies.',
+    cost: 15e6, req:{ producer:'world', count:10 }, special:'goldBars' },
+  { id:'goldBars5s', name:'Faster Gold Bars · 5s', icon:'⚡', color:'#ffd86a',
+    desc:'Gold bars now spawn every 5 seconds.',
+    cost: 100e6, req:{ upgrade:'goldBars' }, special:'goldBarsSpeed', interval:5 },
+  { id:'goldBars4s', name:'Faster Gold Bars · 4s', icon:'⚡', color:'#ffd86a',
+    desc:'Gold bars now spawn every 4 seconds.',
+    cost: 1e9,   req:{ upgrade:'goldBars5s' }, special:'goldBarsSpeed', interval:4 },
+  { id:'goldBars3s', name:'Faster Gold Bars · 3s', icon:'⚡', color:'#ffd86a',
+    desc:'Gold bars now spawn every 3 seconds.',
+    cost: 10e9,  req:{ upgrade:'goldBars4s' }, special:'goldBarsSpeed', interval:3 },
+  { id:'goldBars2s', name:'Faster Gold Bars · 2s', icon:'⚡', color:'#ffd86a',
+    desc:'Gold bars now spawn every 2 seconds.',
+    cost: 100e9, req:{ upgrade:'goldBars3s' }, special:'goldBarsSpeed', interval:2 },
+  { id:'goldBars1s', name:'Faster Gold Bars · 1s', icon:'⚡', color:'#ffd86a',
+    desc:'Gold bars now spawn every 1 second.',
+    cost: 1e12,  req:{ upgrade:'goldBars2s' }, special:'goldBarsSpeed', interval:1 }
 ];
 
 // Procedural tier ladder: each building gets a 2× upgrade at every milestone.
@@ -289,12 +316,14 @@ for (const p of PRODUCERS) {
     });
   });
 }
-// Sort by building order, then by milestone count, so the grid groups tidily.
+// Sort by building order, then by milestone count. Upgrades that
+// chain off other upgrades (no producer req) go to the end, preserved
+// in declaration order so the gold-bar speed chain stays sequential.
 UPGRADES.sort((a, b) => {
-  const pa = PRODUCERS.findIndex(x => x.id === a.req.producer);
-  const pb = PRODUCERS.findIndex(x => x.id === b.req.producer);
+  const pa = a.req.producer ? PRODUCERS.findIndex(x => x.id === a.req.producer) : 999;
+  const pb = b.req.producer ? PRODUCERS.findIndex(x => x.id === b.req.producer) : 999;
   if (pa !== pb) return pa - pb;
-  return a.req.count - b.req.count;
+  return (a.req.count || 0) - (b.req.count || 0);
 });
 
 // ---------- Save ----------
@@ -307,6 +336,7 @@ function defaultSave() {
     producers: Object.fromEntries(PRODUCERS.map(p => [p.id, 0])),
     upgrades: {},
     godSpawnMult: 1,           // multiplied by 1.1 per godSpawn upgrade buy (only once available)
+    goldBarInterval: 10,       // seconds between gold bar spawns (reduced by upgrades)
     lastTickAt: Date.now()
   };
 }
@@ -397,17 +427,39 @@ function buyProducer(id) {
   rebuildAll();
 }
 
+// ---------- Requirement helpers ----------
+function isReqMet(u) {
+  if (u.req.producer && save.producers[u.req.producer] < u.req.count) return false;
+  if (u.req.upgrade && !save.upgrades[u.req.upgrade]) return false;
+  return true;
+}
+function isReqVisible(u) {
+  if (u.req.producer && save.producers[u.req.producer] < Math.floor(u.req.count * 0.5)) return false;
+  if (u.req.upgrade && !save.upgrades[u.req.upgrade]) return false;
+  return true;
+}
+
 // ---------- Upgrade buying ----------
 function buyUpgrade(id) {
   const u = UPGRADES.find(x => x.id === id);
   if (!u || save.upgrades[id]) return;
-  const owned = save.producers[u.req.producer];
-  if (owned < u.req.count) return;
+  if (!isReqMet(u)) return;
   if (save.cookies < u.cost) return;
   save.cookies -= u.cost;
   save.upgrades[id] = true;
   if (u.special === 'godSpawn') save.godSpawnMult *= 1.1;
-  if (u.special === 'ultimate') {
+  if (u.special === 'alienRepel') {
+    for (const a of aliens) a.el.remove();
+    aliens.length = 0;
+    toast('👽 ALIENS REPELLED', 'good');
+  } else if (u.special === 'goldBars') {
+    goldBarTimer = save.goldBarInterval;
+    toast('🏆 GOLD BARS UNLOCKED', 'good');
+  } else if (u.special === 'goldBarsSpeed') {
+    save.goldBarInterval = u.interval;
+    goldBarTimer = Math.min(goldBarTimer, save.goldBarInterval);
+    toast(`⚡ Gold bars every ${u.interval}s`, 'good');
+  } else if (u.special === 'ultimate') {
     bigToast('🤖 ULTIMATE ROBOT BOSS UNLOCKED 🤖', 'good', 3500);
     spawnUltimateRobot();
   } else {
@@ -452,26 +504,34 @@ function rebuildUpgrades() {
   grid.innerHTML = '';
   for (const u of UPGRADES) {
     const owned = !!save.upgrades[u.id];
-    const reqMet = save.producers[u.req.producer] >= u.req.count;
+    const reqMet = isReqMet(u);
     const canAfford = save.cookies >= u.cost;
     const available = !owned && reqMet && canAfford;
-    const visible = owned || save.producers[u.req.producer] >= Math.floor(u.req.count * 0.5);
+    const visible = owned || isReqVisible(u);
     if (!visible) continue;
     const el = document.createElement('div');
     el.className = 'upgrade-card';
     if (owned) el.classList.add('owned');
     else if (available) el.classList.add('available');
     else el.classList.add('locked');
-    const producer = PRODUCERS.find(x => x.id === u.req.producer);
+    const producer = u.req.producer ? PRODUCERS.find(x => x.id === u.req.producer) : null;
+    const color = u.color || (producer && producer.color) || '#ffd86a';
+    let reqLine = '';
+    if (!owned && !reqMet) {
+      if (u.req.producer) {
+        reqLine = `<div class="req">need ${u.req.count} ${producer.name}s (have ${save.producers[u.req.producer]})</div>`;
+      } else if (u.req.upgrade) {
+        const prereq = UPGRADES.find(x => x.id === u.req.upgrade);
+        reqLine = `<div class="req">need: ${prereq ? prereq.name : u.req.upgrade}</div>`;
+      }
+    }
     el.innerHTML = `
-      <div class="ic" style="color:${producer.color}">${u.icon}</div>
+      <div class="ic" style="color:${color}">${u.icon}</div>
       <div class="meta">
         <div class="name">${u.name}</div>
         <div class="desc">${u.desc}</div>
         <div class="price">${owned ? 'OWNED' : fmt(u.cost) + ' cookies'}</div>
-        ${owned ? '' :
-          (reqMet ? '' : `<div class="req">need ${u.req.count} ${producer.name}s (have ${save.producers[u.req.producer]})</div>`)
-        }
+        ${reqLine}
       </div>
     `;
     if (available) el.onclick = () => buyUpgrade(u.id);
@@ -776,6 +836,102 @@ function triggerGodCookieEffect() {
 }
 
 // ---------- Aliens (after 10 Worlds) ----------
+// ---------- Gold Bars (upgrade-driven) ----------
+const goldBars = [];
+let goldBarTimer = 0;
+
+function spawnGoldBar() {
+  const el = document.createElement('div');
+  el.className = 'gold-bar';
+  const startX = Math.random() < 0.5 ? -100 : window.innerWidth + 100;
+  const startY = 80 + Math.random() * (window.innerHeight - 200);
+  el.style.left = startX + 'px';
+  el.style.top = startY + 'px';
+  el.innerHTML = '<canvas width="84" height="50"></canvas>';
+  document.getElementById('fxLayer').appendChild(el);
+  drawGoldBarCanvas(el.querySelector('canvas'));
+  const gb = {
+    el, x: startX, y: startY,
+    vx: (startX < 0 ? 1 : -1) * (90 + Math.random() * 60),
+    vy: (Math.random() - 0.5) * 24,
+    life: 13.0,
+    clicked: false
+  };
+  el.onclick = () => {
+    if (gb.clicked) return;
+    gb.clicked = true;
+    save.cookies += 1e6;
+    save.totalCookies += 1e6;
+    spawnPopText('+1.00M', gb.x + 42, gb.y + 25);
+    toast('+1,000,000 cookies', 'good');
+    el.remove();
+    const i = goldBars.indexOf(gb); if (i >= 0) goldBars.splice(i, 1);
+    rebuildStats();
+  };
+  goldBars.push(gb);
+}
+
+function drawGoldBarCanvas(c) {
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 84, 50);
+  // Glow
+  const g = ctx.createRadialGradient(42, 25, 6, 42, 25, 42);
+  g.addColorStop(0, 'rgba(255,220,80,0.7)');
+  g.addColorStop(1, 'rgba(255,180,40,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 84, 50);
+  // Bar shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(12, 41);
+  ctx.lineTo(72, 41);
+  ctx.lineTo(68, 14);
+  ctx.lineTo(16, 14);
+  ctx.closePath();
+  ctx.fill();
+  // Front face (trapezoid)
+  const grd = ctx.createLinearGradient(0, 10, 0, 42);
+  grd.addColorStop(0, '#fff8c0');
+  grd.addColorStop(0.4, '#ffd86a');
+  grd.addColorStop(0.9, '#aa7a1a');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.moveTo(10, 40);
+  ctx.lineTo(70, 40);
+  ctx.lineTo(64, 12);
+  ctx.lineTo(16, 12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#5a3a14';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Top face
+  const topGrd = ctx.createLinearGradient(0, 6, 0, 16);
+  topGrd.addColorStop(0, '#fff8d0');
+  topGrd.addColorStop(1, '#ffd86a');
+  ctx.fillStyle = topGrd;
+  ctx.beginPath();
+  ctx.moveTo(16, 12);
+  ctx.lineTo(64, 12);
+  ctx.lineTo(70, 8);
+  ctx.lineTo(10, 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#aa7a1a';
+  ctx.stroke();
+  // Engraved label
+  ctx.fillStyle = '#5a3a14';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('$1M', 40, 27);
+  // Glints
+  ctx.fillStyle = 'rgba(255,255,200,0.85)';
+  ctx.beginPath(); ctx.arc(22, 14, 1.8, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(58, 16, 1.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(48, 34, 1, 0, Math.PI*2); ctx.fill();
+}
+
 const aliens = [];
 let alienTimer = 5;
 
@@ -957,15 +1113,35 @@ function loop(now) {
     godSpawnTimer = rand(60, 240);
   }
 
-  // Aliens: only after 10 worlds
-  if (save.producers.world >= 10) {
+  // Gold bars (upgrade-driven): move existing, despawn when off-screen / expired
+  for (const gb of goldBars) {
+    gb.x += gb.vx * dt;
+    gb.y += gb.vy * dt;
+    gb.life -= dt;
+    gb.el.style.left = gb.x + 'px';
+    gb.el.style.top = gb.y + 'px';
+    if (gb.life <= 0 || gb.x < -200 || gb.x > window.innerWidth + 200) {
+      gb.el.remove();
+      const i = goldBars.indexOf(gb); if (i >= 0) goldBars.splice(i, 1);
+    }
+  }
+  if (save.upgrades.goldBars) {
+    goldBarTimer -= dt;
+    if (goldBarTimer <= 0) {
+      spawnGoldBar();
+      goldBarTimer = save.goldBarInterval;
+    }
+  }
+
+  // Aliens: only after 10 worlds AND only if not repelled
+  if (save.producers.world >= 10 && !save.upgrades.alienRepel) {
     alienTimer -= dt;
     if (alienTimer <= 0 && aliens.length < 20) {
       spawnAlien();
       alienTimer = 5;
     }
   } else {
-    // Remove all aliens if we somehow lost worlds (unlikely)
+    // Remove all aliens if we lost worlds OR bought the repellent
     while (aliens.length) { aliens[0].el.remove(); aliens.shift(); }
     alienTimer = 5;
   }
@@ -1119,7 +1295,7 @@ function refreshAffordability() {
     i++;
   }
   // Updates upgrades visibility (any new ones reached requirement)
-  const visibleNow = UPGRADES.filter(u => save.upgrades[u.id] || save.producers[u.req.producer] >= Math.floor(u.req.count * 0.5)).length;
+  const visibleNow = UPGRADES.filter(u => save.upgrades[u.id] || isReqVisible(u)).length;
   if (visibleNow !== _lastUpgradeVisibleCount) {
     rebuildUpgrades();
     _lastUpgradeVisibleCount = visibleNow;
@@ -1129,10 +1305,10 @@ function refreshAffordability() {
   const upgradeEls = document.querySelectorAll('.upgrade-card');
   let ui = 0;
   for (const u of UPGRADES) {
-    if (!(save.upgrades[u.id] || save.producers[u.req.producer] >= Math.floor(u.req.count * 0.5))) continue;
+    if (!(save.upgrades[u.id] || isReqVisible(u))) continue;
     const el = upgradeEls[ui]; if (!el) { ui++; continue; }
     const owned = !!save.upgrades[u.id];
-    const reqMet = save.producers[u.req.producer] >= u.req.count;
+    const reqMet = isReqMet(u);
     const canAfford = save.cookies >= u.cost;
     const available = !owned && reqMet && canAfford;
     el.className = 'upgrade-card' + (owned ? ' owned' : available ? ' available' : ' locked');
