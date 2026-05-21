@@ -29,9 +29,12 @@ canvas{display:block;cursor:crosshair;touch-action:none}
 .value{font-size:14px;font-weight:bold;color:#fff;letter-spacing:1px}
 .boss-name{font-size:24px;letter-spacing:8px;font-weight:bold;color:#ff5a72;
            text-shadow:0 0 14px #ff5a72,0 0 28px #ff3052;margin-bottom:8px}
-.boss-hp-bar{display:inline-block;width:600px;max-width:80vw;height:14px;background:#1a0610;
-             border:2px solid #ff5a72;border-radius:7px;overflow:hidden;box-shadow:0 0 12px #ff5a72}
-.boss-hp-fill{height:100%;background:linear-gradient(90deg,#ff3052,#ff8a3a,#ffd86a);transition:width 0.3s;width:100%}
+.survive-row{display:inline-flex;align-items:center;gap:10px}
+.survive-label{font-size:11px;letter-spacing:3px;color:#6fffc0;text-shadow:0 0 8px #6fffc0;font-weight:bold}
+.survive-time{font-size:18px;font-weight:bold;color:#6fffc0;text-shadow:0 0 8px #6fffc0;font-variant-numeric:tabular-nums;letter-spacing:2px}
+.boss-hp-bar{display:inline-block;width:520px;max-width:70vw;height:14px;background:#0a1a14;
+             border:2px solid #6fffc0;border-radius:7px;overflow:hidden;box-shadow:0 0 12px #6fffc0;vertical-align:middle}
+.boss-hp-fill{height:100%;background:linear-gradient(90deg,#1a8a5a,#6fffc0,#aaffd0);transition:width 0.3s;width:0%}
 .wave-tag{display:inline-block;font-size:11px;padding:3px 10px;border-radius:12px;
           background:#0a0a14;border:1px solid #6fffc0;color:#6fffc0;margin-left:8px;
           text-shadow:0 0 6px #6fffc0;letter-spacing:2px}
@@ -131,9 +134,8 @@ canvas{display:block;cursor:crosshair;touch-action:none}
                 transform:scale(0.92);box-shadow:0 0 24px #ff5a72}
 .act-btn.gun{border-color:#ffd86a;box-shadow:0 0 14px #ffd86aaa;color:#ffd86a}
 .act-btn.gun:active{background:radial-gradient(circle at 35% 30%,#ffd86a,#aa7a1a);color:#000}
-.act-btn.sword{border-color:#6fffc0;box-shadow:0 0 14px #6fffc0aa;color:#6fffc0;grid-column:1/3;width:170px}
-.act-btn.sword:active{background:radial-gradient(circle at 35% 30%,#6fffc0,#1a8a5a);color:#000}
-.act-btn.dash{border-color:#aa6aff;box-shadow:0 0 14px #aa6affaa;color:#aa6aff;font-size:22px}
+.act-btn.dash{border-color:#aa6aff;box-shadow:0 0 16px #aa6affcc;color:#aa6aff;font-size:14px;
+              width:110px;height:110px;border-radius:50%;font-weight:bold;letter-spacing:2px}
 .act-btn.dash:active{background:radial-gradient(circle at 35% 30%,#aa6aff,#5a1a8a);color:#fff}
 
 /* Mobile: scale title down so it fits small screens */
@@ -187,8 +189,8 @@ canvas{display:block;cursor:crosshair;touch-action:none}
     <div class="boss-chip">👟 SHOE</div>
   </div>
   <div class="controls">
-    <b>ARROWS</b> move &nbsp;·&nbsp; <b>SPACE</b> gun &nbsp;·&nbsp; <b>X</b> sword<br>
-    Sword is short range but powerful. Gun is fast but weak.
+    <b>ARROWS</b> move &nbsp;·&nbsp; <b>SHIFT</b> dash<br>
+    No weapons. Just survive each boss until the timer runs out.
   </div>
 </div>
 
@@ -200,7 +202,11 @@ canvas{display:block;cursor:crosshair;touch-action:none}
   </div>
   <div class="hud-mid">
     <div class="boss-name" id="bossName">BOSS</div>
-    <div class="boss-hp-bar"><div class="boss-hp-fill" id="bossHpFill"></div></div>
+    <div class="survive-row">
+      <span class="survive-label">SURVIVE</span>
+      <div class="boss-hp-bar"><div class="boss-hp-fill" id="bossHpFill"></div></div>
+      <span class="survive-time" id="surviveTime">0:00</span>
+    </div>
     <div id="waveTag" style="display:none" class="wave-tag">WAVE 1</div>
   </div>
   <div class="hud-right">
@@ -227,9 +233,7 @@ canvas{display:block;cursor:crosshair;touch-action:none}
 <div id="touch">
   <div id="joystick" class="joy"><div id="joyNub" class="joy-nub"></div></div>
   <div class="act-btns">
-    <button id="btnGun"   class="act-btn gun">FIRE</button>
-    <button id="btnDash"  class="act-btn dash">⚡</button>
-    <button id="btnSword" class="act-btn sword">SWORD</button>
+    <button id="btnDash"  class="act-btn dash">⚡ DASH</button>
   </div>
 </div>
 
@@ -316,8 +320,6 @@ function setupTouchControls() {
     btn.addEventListener('mouseup',   e => { e.preventDefault(); keys[key] = false; });
     btn.addEventListener('mouseleave', e => { keys[key] = false; });
   }
-  bindBtn('btnGun',   ' ');
-  bindBtn('btnSword', 'x');
   bindBtn('btnDash',  'Shift');
 }
 
@@ -665,9 +667,9 @@ function makeBoss(id) {
 function makeDemon() {
   return {
     id: 'demon', name: 'DEMON LORD', icon: '😈',
-    intro: 'A demon claws its way up from the underworld. Four brutal attacks. Don\'t hesitate.',
+    intro: 'A demon claws its way up from the underworld. Four brutal attacks. Survive 60 seconds.',
     x: W * 0.5, y: 180, vx: 0, vy: 0,
-    hp: 500, maxHp: 500,
+    survive: 60, elapsed: 0,
     color: '#ff3a3a',
     attackT: 0, attackT2: 0,
     chargingAt: null,
@@ -681,9 +683,9 @@ function tickDemon(b, dt) {
   b.attackT += dt;
   b.attackT2 += dt;
   const p = game.player;
-  const hpFrac = b.hp / b.maxHp;
+  const phaseFrac = b.elapsed / b.survive;  // 0 → 1 over the fight
   // Attack picker (rotates between 4 attacks)
-  const attackInterval = hpFrac < 0.5 ? 2.6 : 3.2;
+  const attackInterval = phaseFrac > 0.5 ? 2.6 : 3.2;
   if (b.attackT > attackInterval) {
     b.attackT = 0;
     const choice = Math.floor(Math.random() * 4);
@@ -838,7 +840,7 @@ function makeTrollface() {
   return {
     id: 'trollface', name: 'TROLLFACE', icon: '🃏',
     intro: 'The eternal troll. 15 attacks. Reverses your controls, flips the screen, fake bullets, clones — anything goes. Survive ~10 minutes of trolling.',
-    x: W * 0.5, y: 200, hp: 1300, maxHp: 1300,
+    x: W * 0.5, y: 200, survive: 120, elapsed: 0,
     color: '#a23',
     attackT: 0, attackT2: 0,
     attackQueue: [],
@@ -1082,8 +1084,8 @@ function drawTrollSprite(x, y, sc) {
 function makeCoffee() {
   return {
     id: 'coffee', name: 'CURSED LATTE', icon: '☕',
-    intro: 'A cup of coffee, cursed and very awake. 3 OP abilities plus sugar cubes and creamer drops swarming at the same time.',
-    x: W * 0.5, y: 200, hp: 900, maxHp: 900,
+    intro: 'A cup of coffee, cursed and very awake. 3 OP abilities plus sugar cubes and creamer drops swarming at the same time. Survive 90 seconds.',
+    x: W * 0.5, y: 200, survive: 90, elapsed: 0,
     attackT: 0, attackT2: 0, spawnT: 0,
     color: '#6a3a14'
   };
@@ -1243,8 +1245,8 @@ function drawCoffee(b) {
 function makeTV() {
   return {
     id: 'tv', name: 'STATIC TV', icon: '📺',
-    intro: 'A TV that fights back. 5 nearly-impossible attacks. Every so often the fight pauses for a puzzle or math problem — get it wrong and lose HP.',
-    x: W * 0.5, y: 220, hp: 2000, maxHp: 2000,
+    intro: 'A TV that fights back. 5 nearly-impossible attacks. Every so often the fight pauses for a puzzle or math problem — get it wrong and lose HP. Survive 3 minutes.',
+    x: W * 0.5, y: 220, survive: 180, elapsed: 0,
     attackT: 0, attackT2: 0, pauseT: 35,  // pause once or twice per fight
     channel: 0
   };
@@ -1413,8 +1415,8 @@ function drawTV(b) {
 function makeShoe() {
   return {
     id: 'shoe', name: 'CURSED SNEAKER', icon: '👟',
-    intro: 'A possessed sneaker. 4 abilities, plus three waves of zombies and a Zomboss before it ends. Bring a sword.',
-    x: W * 0.5, y: 220, hp: 2400, maxHp: 2400,
+    intro: 'A possessed sneaker. 4 abilities, plus four waves of zombies including a Zomboss. Survive 3 minutes.',
+    x: W * 0.5, y: 220, survive: 180, elapsed: 0,
     attackT: 0, attackT2: 0, waveT: 6,
     color: '#cfd8e8'
   };
@@ -1434,9 +1436,9 @@ function tickShoe(b, dt) {
     else if (choice === 2) shoeLaceWhip(b);
     else shoeSoleSlam(b);
   }
-  // Wave management
-  b.waveT -= dt;
-  if (b.waveT <= 0 && game.enemies.length === 0 && game.wave < 4) {
+  // Wave management — time-based since enemies can't be killed
+  const waveSchedule = [8, 55, 105, 145];  // seconds into the fight
+  while (game.wave < waveSchedule.length && b.elapsed >= waveSchedule[game.wave]) {
     spawnNextWave();
   }
 }
@@ -1604,15 +1606,12 @@ function tickEnemies(dt) {
       game.shake = 0.4;
       spawnParticles(p.x, p.y, '#ff5a72', 12);
     }
-    // Death
-    if (e.hp <= 0) {
-      spawnParticles(e.x, e.y, e.color, 14);
+    // Survival-mode despawn: enemies wander off after their lifetime
+    const lifetime = e.type === 'zomboss' ? 60 : 25;
+    if (e.t > lifetime) {
+      spawnParticles(e.x, e.y, e.color, 6);
       game.enemies.splice(i, 1);
     }
-  }
-  // If all enemies cleared, restart wave timer
-  if (game.boss && game.boss.id === 'shoe' && game.enemies.length === 0 && game.wave > 0 && game.wave < 4) {
-    if (game.boss.waveT > 100) game.boss.waveT = 3;
   }
 }
 
@@ -1789,6 +1788,9 @@ function drawShoe(b) {
 
 function bossTick(dt) {
   if (!game.boss) return;
+  const b = game.boss;
+  // Survival timer ticks up; when it reaches `survive`, the boss is "defeated"
+  b.elapsed = (b.elapsed || 0) + dt;
   if (game.boss.id === 'demon')     tickDemon(game.boss, dt);
   if (game.boss.id === 'trollface') tickTroll(game.boss, dt);
   if (game.boss.id === 'coffee')    tickCoffee(game.boss, dt);
@@ -1797,6 +1799,11 @@ function bossTick(dt) {
   // Manual boss velocity (used for demon charge)
   game.boss.x += (game.boss.vx || 0) * dt;
   game.boss.y += (game.boss.vy || 0) * dt;
+  // Survived the full duration → boss defeated
+  if (b.elapsed >= b.survive) {
+    game.boss = null;
+    bossDefeated();
+  }
 }
 
 function drawBoss() {
@@ -1813,9 +1820,6 @@ function tickPlayer(dt) {
   const p = game.player;
   if (!p) return;
   p.iframe -= dt;
-  p.shootCd -= dt;
-  p.swordCd -= dt;
-  p.swordT -= dt;
   p.dashCd -= dt;
   p.dashT -= dt;
   p.reversed = Math.max(0, p.reversed - dt);
@@ -1836,39 +1840,7 @@ function tickPlayer(dt) {
   p.x = clamp(p.x, 20, W - 20);
   p.y = clamp(p.y, 20, H - 20);
   if (mx || my) p.facing = Math.atan2(my, mx);
-  // Gun
-  if (keys[' '] && p.shootCd <= 0) {
-    p.shootCd = 0.18;
-    const ang = p.facing || -Math.PI/2;
-    game.pBullets.push({ x: p.x, y: p.y, vx: Math.cos(ang) * 760, vy: Math.sin(ang) * 760, life: 1.5, r: 5 });
-  }
-  // Sword (hits in 80-radius arc in facing direction)
-  if ((keys['x'] || keys['X']) && p.swordCd <= 0) {
-    p.swordCd = 0.55;
-    p.swordT = 0.18;
-    p.swordDir *= -1;
-    // Damage boss if in range
-    if (game.boss && dist(p, game.boss) < 110) {
-      damageBoss(8);
-      spawnParticles(p.x + Math.cos(p.facing||0) * 60, p.y + Math.sin(p.facing||0) * 60, '#ffd86a', 10);
-    }
-    // Damage enemies in range
-    for (const e of game.enemies) {
-      if (dist(p, e) < 60 + e.r) {
-        e.hp -= 4;
-        e.hitFlash = 0.15;
-        spawnParticles(e.x, e.y, '#ffd86a', 6);
-      }
-    }
-    // Sword can break bullets within range
-    for (let i = game.eBullets.length - 1; i >= 0; i--) {
-      const bu = game.eBullets[i];
-      if (!bu.big && dist(p, bu) < 60) {
-        spawnParticles(bu.x, bu.y, bu.color, 4);
-        game.eBullets.splice(i, 1);
-      }
-    }
-  }
+  // Dash (only weapon-equivalent: brief i-frames + speed burst)
   if (keys['Shift'] && p.dashCd <= 0) {
     p.dashCd = 1.4;
     p.dashT = 0.16;
@@ -1879,49 +1851,8 @@ function tickPlayer(dt) {
   }
 }
 
-function damageBoss(amount) {
-  const b = game.boss;
-  if (!b) return;
-  b.hp -= amount;
-  if (b.hp <= 0) {
-    b.hp = 0;
-    bossDefeated();
-    game.boss = null;
-    return;
-  }
-  document.getElementById('bossHpFill').style.width = (b.hp / b.maxHp * 100) + '%';
-}
-
 function tickBullets(dt) {
   const p = game.player;
-  // Player bullets
-  for (let i = game.pBullets.length - 1; i >= 0; i--) {
-    const bu = game.pBullets[i];
-    bu.x += bu.vx * dt; bu.y += bu.vy * dt;
-    bu.life -= dt;
-    if (bu.life <= 0 || bu.x < -50 || bu.x > W + 50 || bu.y < -50 || bu.y > H + 50) {
-      game.pBullets.splice(i, 1); continue;
-    }
-    // Boss hit
-    if (game.boss && dist(bu, game.boss) < (game.boss.id === 'tv' ? 130 : 90)) {
-      damageBoss(2);
-      spawnParticles(bu.x, bu.y, '#ffd86a', 4);
-      game.pBullets.splice(i, 1);
-      continue;
-    }
-    // Enemy hit
-    let hit = false;
-    for (const e of game.enemies) {
-      if (dist(bu, e) < e.r + 4) {
-        e.hp -= 1;
-        e.hitFlash = 0.12;
-        spawnParticles(bu.x, bu.y, e.color, 4);
-        hit = true;
-        break;
-      }
-    }
-    if (hit) game.pBullets.splice(i, 1);
-  }
   // Enemy bullets
   for (let i = game.eBullets.length - 1; i >= 0; i--) {
     const bu = game.eBullets[i];
@@ -1996,13 +1927,7 @@ function drawAll() {
   drawBoss();
   // Enemies
   for (const e of game.enemies) drawEnemy(e);
-  // Player bullets
-  for (const bu of game.pBullets) {
-    const g = ctx.createRadialGradient(bu.x, bu.y, 1, bu.x, bu.y, 8);
-    g.addColorStop(0, '#fff'); g.addColorStop(1, '#ffd86a');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(bu.x, bu.y, 5, 0, Math.PI*2); ctx.fill();
-  }
+  // (no player bullets in survival mode)
   // Enemy bullets (fake ones flicker)
   for (const bu of game.eBullets) {
     let alpha = 1;
@@ -2044,9 +1969,15 @@ function drawAll() {
   ctx.restore();
   // HUD HP
   updateHpPips();
-  // Boss HP fill
+  // Survival bar + countdown
   if (game.boss) {
-    document.getElementById('bossHpFill').style.width = (game.boss.hp / game.boss.maxHp * 100) + '%';
+    const b = game.boss;
+    const frac = clamp(b.elapsed / b.survive, 0, 1);
+    document.getElementById('bossHpFill').style.width = (frac * 100) + '%';
+    const left = Math.max(0, Math.ceil(b.survive - b.elapsed));
+    const mm = Math.floor(left / 60);
+    const ss = String(left % 60).padStart(2, '0');
+    document.getElementById('surviveTime').textContent = mm + ':' + ss;
   }
 }
 
@@ -2079,35 +2010,11 @@ function drawPlayer() {
   ctx.fillStyle = '#000';
   ctx.beginPath(); ctx.arc(-3, -6, 1.5, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(3, -6, 1.5, 0, Math.PI*2); ctx.fill();
-  // Gun / sword indicator
-  if (p.facing != null) {
-    const ang = p.facing;
-    // Gun barrel
-    ctx.save();
-    ctx.rotate(ang);
-    ctx.fillStyle = '#333';
-    ctx.fillRect(8, -2, 14, 4);
-    ctx.fillStyle = '#888';
-    ctx.fillRect(20, -3, 4, 6);
-    ctx.restore();
-  }
-  // Sword swing arc
-  if (p.swordT > 0) {
-    const ang = p.facing || 0;
-    const swingProg = 1 - p.swordT / 0.18;
-    const arcStart = ang - 1.4 + swingProg * 2.4 * p.swordDir * -1;
-    const arcEnd = ang + 1.4 + swingProg * 2.4 * p.swordDir * -1;
-    ctx.strokeStyle = `rgba(255,216,106,${p.swordT * 4})`;
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(0, 0, 56, arcStart, arcEnd);
-    ctx.stroke();
-    // Inner glow
-    ctx.strokeStyle = `rgba(255,255,255,${p.swordT * 5})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, 56, arcStart, arcEnd);
-    ctx.stroke();
+  // Dash trail
+  if (p.dashT > 0) {
+    ctx.strokeStyle = `rgba(170,106,255,${p.dashT * 4})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI*2); ctx.stroke();
   }
   ctx.restore();
 }
