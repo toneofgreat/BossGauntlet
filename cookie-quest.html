@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cookie Quest · Platyfy</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;font-family:'Trebuchet MS','Segoe UI',sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:#06070d;color:#f3e6c4;user-select:none}
+
+body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh}
+
+/* Universal scrollbars */
+::-webkit-scrollbar{width:10px}
+::-webkit-scrollbar-track{background:#000}
+::-webkit-scrollbar-thumb{background:#aa6a3a;border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:#ffd86a}
+
+/* ---------- LEFT: cookie panel ---------- */
+.col-left{
+  background:radial-gradient(ellipse at center,#3a1f0a 0%,#1a0a05 60%,#000 100%);
+  position:relative;display:flex;flex-direction:column;align-items:center;padding:14px 12px;
+  border-right:2px solid #aa6a3a;box-shadow:inset -10px 0 30px #00000099
+}
+.stats{width:100%;text-align:center;margin-bottom:8px}
+.cookie-count{font-size:36px;font-weight:bold;letter-spacing:1px;color:#ffd86a;
+              text-shadow:0 0 18px #ffd86a,0 0 36px #ff8a3a;line-height:1.1}
+.cookie-count small{font-size:13px;color:#cfa97a;display:block;letter-spacing:2px;margin-top:2px}
+.cps{font-size:14px;color:#ffc888;letter-spacing:1px;margin-top:4px}
+
+.cookie-zone{flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
+#cookieCv{cursor:pointer;width:260px;height:260px}
+.alien-hint{position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#6fffc0;font-size:11px;letter-spacing:1px;opacity:0.8}
+
+.left-foot{width:100%;display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid #aa6a3a44}
+.foot-btn{background:linear-gradient(180deg,#aa6a3a,#5a3a1a);border:0;color:#fff;padding:8px;
+          font-weight:bold;letter-spacing:1px;border-radius:6px;cursor:pointer;font-size:12px;
+          box-shadow:0 0 10px #aa6a3a44}
+.foot-btn:hover{background:linear-gradient(180deg,#ffa66a,#aa6a3a);box-shadow:0 0 14px #ffa66a}
+.foot-btn.danger{background:linear-gradient(180deg,#ff5a3a,#aa1a1a)}
+.foot-btn.danger:hover{background:linear-gradient(180deg,#ff8a6a,#ff3a1a)}
+
+/* ---------- MIDDLE: upgrades ---------- */
+.col-mid{
+  background:linear-gradient(180deg,#0a0510,#15050f);
+  overflow-y:auto;padding:18px;
+}
+.section-title{font-size:14px;letter-spacing:6px;color:#ffd86a;text-shadow:0 0 14px #ffd86a;
+               border-bottom:1px solid #ffd86a44;padding-bottom:8px;margin-bottom:14px;text-transform:uppercase}
+.upgrades-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:18px}
+.upgrade-card{background:#1a0a14;border:2px solid #4a2a3a;border-radius:8px;padding:10px;
+              display:flex;gap:10px;cursor:not-allowed;opacity:0.5;transition:all 0.15s;position:relative}
+.upgrade-card.available{border-color:#ffd86a;opacity:1;cursor:pointer;
+                        box-shadow:0 0 14px #ffd86a44}
+.upgrade-card.available:hover{transform:translateY(-2px);box-shadow:0 0 22px #ffd86a;background:#2a1a24}
+.upgrade-card.owned{border-color:#6fffc0;background:#0a1a14;opacity:1;cursor:default;
+                    box-shadow:0 0 14px #6fffc044}
+.upgrade-card .ic{font-size:32px;flex-shrink:0;filter:drop-shadow(0 0 8px currentColor);width:48px;height:48px;
+                  display:flex;align-items:center;justify-content:center}
+.upgrade-card .meta{flex:1;min-width:0}
+.upgrade-card .name{font-size:13px;font-weight:bold;color:#fff;letter-spacing:1px}
+.upgrade-card .desc{font-size:11px;color:#cfa97a;margin-top:3px;line-height:1.4}
+.upgrade-card .price{font-size:12px;color:#ffd86a;margin-top:5px;font-weight:bold}
+.upgrade-card.owned .price{color:#6fffc0}
+.upgrade-card.locked .price{color:#888}
+.upgrade-card .req{font-size:10px;color:#ff8a8a;margin-top:2px}
+
+.events-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;min-height:30px}
+.event-pill{background:#2a1a08;border:2px solid #ffd86a;color:#ffd86a;padding:4px 10px;border-radius:20px;
+            font-size:11px;letter-spacing:1px;font-weight:bold;box-shadow:0 0 10px #ffd86a44}
+.event-pill.danger{background:#2a0810;border-color:#ff5a72;color:#ff5a72;box-shadow:0 0 10px #ff5a7244}
+.event-pill.good{background:#08210a;border-color:#6fffc0;color:#6fffc0;box-shadow:0 0 10px #6fffc044}
+
+/* ---------- RIGHT: producers ---------- */
+.col-right{
+  background:linear-gradient(180deg,#15050a,#1a0a05);
+  overflow-y:auto;padding:0;
+  border-left:2px solid #aa6a3a;box-shadow:inset 10px 0 30px #00000099
+}
+.producer{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid #aa6a3a33;
+          cursor:not-allowed;opacity:0.5;transition:all 0.1s;background:#0a0408;position:relative;overflow:hidden}
+.producer.affordable{opacity:1;cursor:pointer;background:#1a0a08}
+.producer.affordable:hover{background:#2a1a08;box-shadow:inset 0 0 30px #ffd86a33}
+.producer.locked{opacity:0.25}
+.producer .pic{width:60px;height:60px;background:radial-gradient(ellipse at center,#3a1a0a,#0a0408);
+               display:flex;align-items:center;justify-content:center;font-size:36px;
+               border:2px solid #aa6a3a;border-radius:8px;flex-shrink:0;
+               filter:drop-shadow(0 0 6px currentColor)}
+.producer.affordable .pic{border-color:#ffd86a;box-shadow:0 0 14px #ffd86a44}
+.producer .meta{flex:1;min-width:0}
+.producer .name{font-size:14px;font-weight:bold;color:#fff;letter-spacing:1px}
+.producer .price{font-size:13px;color:#ffd86a;font-weight:bold;margin-top:2px}
+.producer.affordable .price{text-shadow:0 0 8px #ffd86a}
+.producer .info{font-size:10px;color:#cfa97a;margin-top:3px;line-height:1.4}
+.producer .count{font-size:42px;font-weight:bold;color:#ffd86a44;position:absolute;right:14px;
+                 letter-spacing:-2px;pointer-events:none;text-shadow:0 0 8px #ffd86a}
+
+/* ---------- floating things ---------- */
+#fxLayer{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+.click-pop{position:absolute;color:#ffd86a;font-weight:bold;font-size:18px;
+           text-shadow:0 0 8px #ff8a3a;pointer-events:none;letter-spacing:1px;
+           animation:pop 1.2s ease-out forwards}
+@keyframes pop{from{transform:translate(-50%,-50%);opacity:1}
+               to{transform:translate(-50%,-130%);opacity:0}}
+
+.god-cookie{position:absolute;width:64px;height:64px;cursor:pointer;pointer-events:auto;z-index:60;
+            filter:drop-shadow(0 0 20px #ffd86a)}
+
+.alien{position:absolute;width:54px;height:38px;cursor:pointer;pointer-events:auto;z-index:55;
+       filter:drop-shadow(0 0 14px #6fffc0)}
+
+#toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);
+       background:#000d;border:2px solid #ffd86a;color:#ffd86a;padding:10px 22px;border-radius:30px;
+       font-weight:bold;letter-spacing:2px;opacity:0;transition:opacity 0.25s;z-index:200;
+       box-shadow:0 0 30px #ffd86a;font-size:13px;pointer-events:none}
+#toast.show{opacity:1}
+#toast.danger{border-color:#ff5a72;color:#ff5a72;box-shadow:0 0 30px #ff5a72}
+#toast.good{border-color:#6fffc0;color:#6fffc0;box-shadow:0 0 30px #6fffc0}
+
+#starfield{position:fixed;inset:0;pointer-events:none;z-index:0}
+.col-left,.col-mid,.col-right{position:relative;z-index:1}
+
+@keyframes shake-cookie{0%,100%{transform:scale(1)}25%{transform:scale(0.92) rotate(-2deg)}75%{transform:scale(0.94) rotate(2deg)}}
+#cookieCv.click-anim{animation:shake-cookie 0.15s}
+
+.title-strip{position:fixed;top:0;left:50%;transform:translateX(-50%);background:#0006;
+             padding:6px 22px;border-radius:0 0 14px 14px;color:#ffd86a;letter-spacing:6px;
+             font-weight:bold;font-size:13px;z-index:100;border-bottom:2px solid #ffd86a;
+             border-left:2px solid #ffd86a;border-right:2px solid #ffd86a;
+             box-shadow:0 0 20px #ffd86a55}
+</style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<div class="title-strip">COOKIE QUEST</div>
+
+<!-- LEFT: Cookie + stats -->
+<div class="col-left">
+  <div class="stats">
+    <div class="cookie-count"><span id="cookieNum">0</span><small>cookies</small></div>
+    <div class="cps">per second: <span id="cpsNum">0</span></div>
+    <div class="cps" style="font-size:11px;color:#aa6a3a;margin-top:2px">click: <span id="clickNum">1</span></div>
+  </div>
+
+  <div class="cookie-zone">
+    <canvas id="cookieCv" width="260" height="260"></canvas>
+    <div class="alien-hint" id="alienHint" style="display:none">Click aliens to repel them!</div>
+  </div>
+
+  <div class="left-foot">
+    <button class="foot-btn" onclick="saveGameManual()">SAVE</button>
+    <button class="foot-btn danger" onclick="resetSave()">RESET</button>
+  </div>
+</div>
+
+<!-- MIDDLE: Upgrades -->
+<div class="col-mid">
+  <div class="section-title">Status</div>
+  <div class="events-strip" id="eventsStrip">
+    <span class="event-pill" id="statBldgs">0 buildings</span>
+    <span class="event-pill" id="statClicks">0 clicks</span>
+    <span class="event-pill" id="statMult">1.00× mult</span>
+  </div>
+
+  <div class="section-title">Upgrades</div>
+  <div class="upgrades-grid" id="upgradesGrid"></div>
+
+  <div class="section-title">How to play</div>
+  <div style="font-size:12px;color:#cfa97a;line-height:1.7;letter-spacing:0.5px">
+    Click the giant cookie to earn cookies. Use cookies to buy buildings on the right — they auto-produce cookies.
+    Reach milestones to unlock upgrades shown above. Golden God Cookies appear randomly — click them for big bonuses.
+    After 10 Worlds, ALIENS will start arriving every 5 seconds — each alien reduces your multiplier. Click aliens to repel them.
+    The Ultimate Robot Boss unlocks at 350 Universes.
+  </div>
+</div>
+
+<!-- RIGHT: Buildings -->
+<div class="col-right">
+  <div style="padding:14px;font-size:14px;letter-spacing:6px;color:#ffd86a;text-shadow:0 0 14px #ffd86a;
+              border-bottom:1px solid #ffd86a44;text-transform:uppercase">Buildings</div>
+  <div id="producersList"></div>
+</div>
+
+<div id="fxLayer"></div>
+<div id="toast"></div>
+
+<script>
+// =====================================================================
+// COOKIE QUEST
+// Cookie-clicker style. Click cookie → buy buildings → unlock upgrades.
+// =====================================================================
+
+// ---------- Constants: producers ----------
+const PRODUCERS = [
+  { id:'cursor',   name:'Cursor',        icon:'👆', baseCost: 15,         baseCps: 0.1,    color:'#cfd8e8' },
+  { id:'robot',    name:'Robot',         icon:'🤖', baseCost: 100,        baseCps: 1,      color:'#6ad8ff' },
+  { id:'piano',    name:'Piano',         icon:'🎹', baseCost: 1100,       baseCps: 8,      color:'#e6c4ff' },
+  { id:'home',     name:'Home',          icon:'🏠', baseCost: 12000,      baseCps: 47,     color:'#ffaa6a' },
+  { id:'company',  name:'Company',       icon:'🏢', baseCost: 130000,     baseCps: 260,    color:'#6fffc0' },
+  { id:'world',    name:'World',         icon:'🌍', baseCost: 1.4e6,      baseCps: 1400,   color:'#5fff5f' },
+  { id:'galaxy',   name:'Galaxy',        icon:'🌌', baseCost: 2e7,        baseCps: 7800,   color:'#b95fff' },
+  { id:'universe', name:'Universe',      icon:'🌠', baseCost: 3.3e8,      baseCps: 44000,  color:'#ffd86a' }
+];
+
+// ---------- Constants: upgrades ----------
+// req: number of that producer needed to unlock
+// target/mult: apply multiplier to a specific producer
+// special handles the rest
+const UPGRADES = [
+  // Cursor track
+  { id:'cursorMult',     name:'Cursor Multiplier',   icon:'✨', desc:'Cursors produce 2× as many cookies.',
+    cost: 1000,     req:{ producer:'cursor', count:50  }, target:'cursor', mult:2 },
+  { id:'godSpawn',       name:'God Cookie Frenzy',   icon:'⚡', desc:'God Cookies spawn 1.1× faster.',
+    cost: 50000,    req:{ producer:'cursor', count:100 }, special:'godSpawn' },
+  { id:'cursorMan',      name:'Cursor Man',          icon:'🦸', desc:'Cursors produce 5× as many cookies.',
+    cost: 1.5e6,    req:{ producer:'cursor', count:240 }, target:'cursor', mult:5 },
+  // Robot track
+  { id:'rTech',          name:'r/tech Multiplier',   icon:'📡', desc:'Robots produce 2× as many cookies.',
+    cost: 5000,     req:{ producer:'robot',  count:15  }, target:'robot', mult:2 },
+  { id:'robotExe',       name:'robot.exe',           icon:'💾', desc:'Robots produce 3× as many cookies.',
+    cost: 250000,   req:{ producer:'robot',  count:75  }, target:'robot', mult:3 },
+  { id:'happybot',       name:'Happybot',            icon:'😀', desc:'Robots produce 5× as many cookies.',
+    cost: 1e7,      req:{ producer:'robot',  count:185 }, target:'robot', mult:5 },
+  // Piano track
+  { id:'music',          name:'Music Multiplier',    icon:'🎼', desc:'Pianos produce 2× as many cookies.',
+    cost: 100000,   req:{ producer:'piano',  count:40  }, target:'piano', mult:2 },
+  { id:'robotReactor',   name:'Robot Reactor Mult',  icon:'⚛️', desc:'Pianos produce 5× as many cookies.',
+    cost: 1e7,      req:{ producer:'piano',  count:200 }, target:'piano', mult:5 },
+  // Home track
+  { id:'fancy',          name:'Fancy Multiplier',    icon:'🛋️', desc:'Homes produce 2× as many cookies.',
+    cost: 200000,   req:{ producer:'home',   count:10  }, target:'home', mult:2 },
+  { id:'rich',           name:'Rich Multiplier',     icon:'💎', desc:'Homes produce 5× as many cookies.',
+    cost: 5e7,      req:{ producer:'home',   count:100 }, target:'home', mult:5 },
+  // Company track
+  { id:'learning',       name:'Learning Multiplier', icon:'📚', desc:'Companies produce 2× as many cookies.',
+    cost: 5e6,      req:{ producer:'company',count:35  }, target:'company', mult:2 },
+  { id:'investment',     name:'Investment',          icon:'📈', desc:'Companies produce 5× as many cookies.',
+    cost: 5e9,      req:{ producer:'company',count:375 }, target:'company', mult:5 },
+  // World / Galaxy / Universe
+  { id:'king',           name:'King Upgrade',        icon:'👑', desc:'Worlds produce 3× as many cookies.',
+    cost: 1e8,      req:{ producer:'world',  count:50  }, target:'world', mult:3 },
+  { id:'emperor',        name:'Emperor Upgrade',     icon:'🛡️', desc:'Galaxies produce 3× as many cookies.',
+    cost: 5e9,      req:{ producer:'galaxy', count:50  }, target:'galaxy', mult:3 },
+  { id:'universal',      name:'Universal Upgrade',   icon:'🌟', desc:'Universes produce 3× as many cookies.',
+    cost: 1e11,     req:{ producer:'universe',count:50 }, target:'universe', mult:3 },
+  { id:'ultimateRobot',  name:'Ultimate Robot Boss', icon:'🤖', desc:'ALL robots 10×, ALL production 2×. The final upgrade.',
+    cost: 1e15,     req:{ producer:'universe',count:350}, special:'ultimate' }
+];
+
+// ---------- Save ----------
+const SAVE_KEY = 'cookieQuestSave_v1';
+function defaultSave() {
+  return {
+    cookies: 0,
+    totalCookies: 0,
+    clicks: 0,
+    producers: Object.fromEntries(PRODUCERS.map(p => [p.id, 0])),
+    upgrades: {},
+    godSpawnMult: 1,           // multiplied by 1.1 per godSpawn upgrade buy (only once available)
+    lastTickAt: Date.now()
+  };
+}
+let save = loadSave();
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    return Object.assign(defaultSave(), JSON.parse(raw));
+  } catch { return defaultSave(); }
+}
+function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
+function saveGameManual() { saveGame(); toast('SAVED', 'good'); }
+function resetSave() {
+  if (!confirm('Erase ALL progress?')) return;
+  save = defaultSave();
+  saveGame();
+  toast('SAVE WIPED', 'danger');
+  rebuildAll();
+}
+
+// ---------- Helpers ----------
+function fmt(n) {
+  if (n < 0) return '-' + fmt(-n);
+  if (n < 1) return n.toFixed(2);
+  if (n < 1000) return Math.floor(n).toString();
+  const suffixes = ['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc','UDc','DDc'];
+  let i = 0;
+  while (n >= 1000 && i < suffixes.length - 1) { n /= 1000; i++; }
+  return n.toFixed(2) + suffixes[i];
+}
+function toast(msg, kind = '', ms = 1500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + kind;
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.className = '', ms);
+}
+function producerCost(p) {
+  const owned = save.producers[p.id];
+  return Math.ceil(p.baseCost * Math.pow(1.15, owned));
+}
+function producerCps(p) {
+  let cps = p.baseCps;
+  for (const u of UPGRADES) {
+    if (save.upgrades[u.id] && u.target === p.id) cps *= u.mult;
+  }
+  // Ultimate robot boss boosts all robots 10×
+  if (save.upgrades.ultimateRobot && p.id === 'robot') cps *= 10;
+  return cps;
+}
+function globalMult() {
+  let m = 1;
+  // Aliens reduce multiplier
+  m *= Math.max(0.1, 1 - aliens.length * 0.05);
+  // Ultimate robot boss: 2× to everything
+  if (save.upgrades.ultimateRobot) m *= 2;
+  return m;
+}
+function totalCps() {
+  let sum = 0;
+  for (const p of PRODUCERS) sum += producerCps(p) * save.producers[p.id];
+  sum *= globalMult();
+  return sum;
+}
+function clickValue() {
+  // Each cursor adds 0.1 to click value (basic flavor)
+  let base = 1;
+  base += save.producers.cursor * 0.1;
+  // Multipliers on cursor apply to click value too
+  for (const u of UPGRADES) {
+    if (save.upgrades[u.id] && u.target === 'cursor') base *= u.mult;
+  }
+  if (save.upgrades.ultimateRobot) base *= 2;
+  // Frenzy multipliers
+  base *= clickFrenzyMult;
+  return base;
+}
+
+// ---------- Producer buying ----------
+function buyProducer(id) {
+  const p = PRODUCERS.find(x => x.id === id);
+  const cost = producerCost(p);
+  if (save.cookies < cost) return;
+  save.cookies -= cost;
+  save.producers[id]++;
+  saveGame();
+  rebuildAll();
+}
+
+// ---------- Upgrade buying ----------
+function buyUpgrade(id) {
+  const u = UPGRADES.find(x => x.id === id);
+  if (!u || save.upgrades[id]) return;
+  const owned = save.producers[u.req.producer];
+  if (owned < u.req.count) return;
+  if (save.cookies < u.cost) return;
+  save.cookies -= u.cost;
+  save.upgrades[id] = true;
+  if (u.special === 'godSpawn') save.godSpawnMult *= 1.1;
+  if (u.special === 'ultimate') {
+    bigToast('🤖 ULTIMATE ROBOT BOSS UNLOCKED 🤖', 'good', 3500);
+    spawnUltimateRobot();
+  } else {
+    toast('UPGRADE: ' + u.name, 'good');
+  }
+  saveGame();
+  rebuildAll();
+}
+
+// ---------- Build / update UI ----------
+function rebuildProducers() {
+  const list = document.getElementById('producersList');
+  list.innerHTML = '';
+  // Show producer only if you have at least 1 of the previous (or it's the first)
+  for (let i = 0; i < PRODUCERS.length; i++) {
+    const p = PRODUCERS[i];
+    const owned = save.producers[p.id];
+    const prevOwned = i === 0 ? Infinity : save.producers[PRODUCERS[i-1].id];
+    const cost = producerCost(p);
+    const visible = i === 0 || prevOwned > 0 || save.totalCookies > p.baseCost / 2;
+    if (!visible) continue;
+    const el = document.createElement('div');
+    el.className = 'producer';
+    const affordable = save.cookies >= cost;
+    if (affordable) el.classList.add('affordable');
+    el.innerHTML = `
+      <div class="pic" style="color:${p.color}">${p.icon}</div>
+      <div class="meta">
+        <div class="name">${p.name}</div>
+        <div class="price">${fmt(cost)} cookies</div>
+        <div class="info">${fmt(producerCps(p)*globalMult())} cps each</div>
+      </div>
+      <div class="count">${owned}</div>
+    `;
+    el.onclick = () => buyProducer(p.id);
+    list.appendChild(el);
+  }
+}
+
+function rebuildUpgrades() {
+  const grid = document.getElementById('upgradesGrid');
+  grid.innerHTML = '';
+  for (const u of UPGRADES) {
+    const owned = !!save.upgrades[u.id];
+    const reqMet = save.producers[u.req.producer] >= u.req.count;
+    const canAfford = save.cookies >= u.cost;
+    const available = !owned && reqMet && canAfford;
+    const visible = owned || save.producers[u.req.producer] >= Math.floor(u.req.count * 0.5);
+    if (!visible) continue;
+    const el = document.createElement('div');
+    el.className = 'upgrade-card';
+    if (owned) el.classList.add('owned');
+    else if (available) el.classList.add('available');
+    else el.classList.add('locked');
+    const producer = PRODUCERS.find(x => x.id === u.req.producer);
+    el.innerHTML = `
+      <div class="ic" style="color:${producer.color}">${u.icon}</div>
+      <div class="meta">
+        <div class="name">${u.name}</div>
+        <div class="desc">${u.desc}</div>
+        <div class="price">${owned ? 'OWNED' : fmt(u.cost) + ' cookies'}</div>
+        ${owned ? '' :
+          (reqMet ? '' : `<div class="req">need ${u.req.count} ${producer.name}s (have ${save.producers[u.req.producer]})</div>`)
+        }
+      </div>
+    `;
+    if (available) el.onclick = () => buyUpgrade(u.id);
+    grid.appendChild(el);
+  }
+}
+
+function rebuildStats() {
+  document.getElementById('cookieNum').textContent = fmt(save.cookies);
+  document.getElementById('cpsNum').textContent = fmt(totalCps());
+  document.getElementById('clickNum').textContent = fmt(clickValue());
+  const totalBldgs = Object.values(save.producers).reduce((a,b)=>a+b, 0);
+  document.getElementById('statBldgs').textContent = totalBldgs + ' buildings';
+  document.getElementById('statClicks').textContent = fmt(save.clicks) + ' clicks';
+  document.getElementById('statMult').textContent = globalMult().toFixed(2) + '× mult';
+  // Show alien hint if aliens active
+  document.getElementById('alienHint').style.display = aliens.length > 0 ? 'block' : 'none';
+}
+
+function rebuildAll() {
+  rebuildProducers();
+  rebuildUpgrades();
+  rebuildStats();
+}
+
+// ---------- Click handler ----------
+const cookieCv = document.getElementById('cookieCv');
+const ckctx = cookieCv.getContext('2d');
+let cookieT = 0;
+let cookieScale = 1;
+let lastClickX = window.innerWidth/2, lastClickY = window.innerHeight/2;
+
+cookieCv.addEventListener('click', e => {
+  const v = clickValue();
+  save.cookies += v;
+  save.totalCookies += v;
+  save.clicks++;
+  cookieScale = 0.9;
+  cookieCv.classList.remove('click-anim'); void cookieCv.offsetWidth; cookieCv.classList.add('click-anim');
+  lastClickX = e.clientX;
+  lastClickY = e.clientY;
+  spawnPopText('+' + fmt(v), e.clientX, e.clientY);
+  spawnCrumbs(e.clientX, e.clientY);
+  rebuildStats();
+});
+
+function spawnPopText(text, x, y) {
+  const el = document.createElement('div');
+  el.className = 'click-pop';
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.getElementById('fxLayer').appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+function spawnCrumbs(x, y) {
+  for (let i = 0; i < 6; i++) {
+    crumbs.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 320,
+      vy: -120 - Math.random() * 240,
+      life: 0.7 + Math.random() * 0.4,
+      r: 2 + Math.random() * 3,
+      color: Math.random() < 0.6 ? '#aa6a3a' : '#5a3a1a'
+    });
+  }
+}
+
+// ---------- Big cookie render ----------
+const crumbs = [];
+function drawCookie(dt) {
+  const W = cookieCv.width, H = cookieCv.height;
+  ckctx.clearRect(0, 0, W, H);
+  cookieT += dt;
+  cookieScale += (1 - cookieScale) * Math.min(1, dt * 8);
+  ckctx.save();
+  ckctx.translate(W/2, H/2);
+  // breathing pulse
+  const pulse = 1 + Math.sin(cookieT * 1.6) * 0.015;
+  ckctx.scale(cookieScale * pulse, cookieScale * pulse);
+  // glow
+  const glowR = 130 + Math.sin(cookieT * 2) * 10;
+  const g = ckctx.createRadialGradient(0, 0, 60, 0, 0, glowR);
+  g.addColorStop(0, 'rgba(255,180,80,0.35)');
+  g.addColorStop(1, 'rgba(255,140,40,0)');
+  ckctx.fillStyle = g;
+  ckctx.beginPath(); ckctx.arc(0, 0, glowR, 0, Math.PI*2); ckctx.fill();
+  // outer rim shadow
+  ckctx.fillStyle = '#3a1a0a';
+  ckctx.beginPath(); ckctx.arc(0, 4, 102, 0, Math.PI*2); ckctx.fill();
+  // body
+  const bg = ckctx.createRadialGradient(-32, -32, 8, 0, 0, 110);
+  bg.addColorStop(0, '#e6b266');
+  bg.addColorStop(0.5, '#c8893a');
+  bg.addColorStop(1, '#6a3a14');
+  ckctx.fillStyle = bg;
+  ckctx.beginPath(); ckctx.arc(0, 0, 100, 0, Math.PI*2); ckctx.fill();
+  // outer ring
+  ckctx.strokeStyle = '#5a3a14';
+  ckctx.lineWidth = 3;
+  ckctx.beginPath(); ckctx.arc(0, 0, 100, 0, Math.PI*2); ckctx.stroke();
+  // chocolate chips
+  const chips = [
+    [-38, -42], [22, -58], [54, -18], [-58, 8], [-12, 12],
+    [38, 32], [-30, 52], [12, 60], [-58, -22], [60, 50], [-48, 48], [48, -40]
+  ];
+  for (const [cx, cy] of chips) {
+    // shadow
+    ckctx.fillStyle = '#1a0a04';
+    ckctx.beginPath(); ckctx.arc(cx + 2, cy + 3, 10, 0, Math.PI*2); ckctx.fill();
+    // chip body
+    const cg = ckctx.createRadialGradient(cx - 3, cy - 3, 1, cx, cy, 10);
+    cg.addColorStop(0, '#9a5a2a');
+    cg.addColorStop(0.5, '#3a1a06');
+    cg.addColorStop(1, '#0a0402');
+    ckctx.fillStyle = cg;
+    ckctx.beginPath(); ckctx.arc(cx, cy, 10, 0, Math.PI*2); ckctx.fill();
+    // glint
+    ckctx.fillStyle = 'rgba(255,230,180,0.5)';
+    ckctx.beginPath(); ckctx.arc(cx - 4, cy - 4, 2, 0, Math.PI*2); ckctx.fill();
+  }
+  // tiny crumbs on cookie
+  for (let i = 0; i < 12; i++) {
+    const a = i * 0.523 + cookieT * 0.05;
+    const r = 30 + (i % 4) * 18;
+    ckctx.fillStyle = 'rgba(80,40,10,0.4)';
+    ckctx.beginPath();
+    ckctx.arc(Math.cos(a) * r, Math.sin(a) * r, 1.5, 0, Math.PI*2);
+    ckctx.fill();
+  }
+  // top highlight
+  ckctx.fillStyle = 'rgba(255,230,180,0.25)';
+  ckctx.beginPath(); ckctx.ellipse(-25, -45, 30, 12, -0.4, 0, Math.PI*2); ckctx.fill();
+  ckctx.restore();
+}
+
+// ---------- Crumbs canvas (drawn over fx layer using inline canvas) ----------
+// Crumbs are drawn on cookie canvas during the loop, no separate canvas
+
+// ---------- God cookies ----------
+const godCookies = [];
+let godSpawnTimer = rand(60, 300); // seconds until first
+function spawnGodCookie() {
+  const el = document.createElement('div');
+  el.className = 'god-cookie';
+  const startX = Math.random() < 0.5 ? -80 : window.innerWidth + 80;
+  const startY = 80 + Math.random() * (window.innerHeight - 160);
+  el.style.left = startX + 'px';
+  el.style.top = startY + 'px';
+  el.innerHTML = '<canvas width="64" height="64"></canvas>';
+  document.getElementById('fxLayer').appendChild(el);
+  const c = el.querySelector('canvas');
+  drawGoldCookieCanvas(c);
+  const gc = {
+    el, x: startX, y: startY,
+    vx: (startX < 0 ? 1 : -1) * (60 + Math.random() * 40),
+    vy: (Math.random() - 0.5) * 30,
+    life: 13.0,
+    clicked: false
+  };
+  el.onclick = () => {
+    if (gc.clicked) return;
+    gc.clicked = true;
+    triggerGodCookieEffect();
+    el.remove();
+    const i = godCookies.indexOf(gc); if (i >= 0) godCookies.splice(i, 1);
+  };
+  godCookies.push(gc);
+}
+
+function drawGoldCookieCanvas(c) {
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,64,64);
+  // glow
+  const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 30);
+  g.addColorStop(0, 'rgba(255,255,180,0.8)');
+  g.addColorStop(1, 'rgba(255,180,80,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(32,32,30,0,Math.PI*2); ctx.fill();
+  // body
+  const bg = ctx.createRadialGradient(22, 22, 4, 32, 32, 26);
+  bg.addColorStop(0, '#fff8c0');
+  bg.addColorStop(0.5, '#ffd86a');
+  bg.addColorStop(1, '#aa7a1a');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.arc(32,32,24,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#8a5a1a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // chips
+  for (const [x,y] of [[20,20],[40,18],[18,42],[42,42]]) {
+    ctx.fillStyle = '#5a3a1a';
+    ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function triggerGodCookieEffect() {
+  const roll = Math.random();
+  if (roll < 0.4) {
+    // Frenzy: 7× CPS for 1 minute
+    frenzyMult = 7;
+    frenzyTime = 60;
+    bigToast('🍪 FRENZY! 7× CPS for 60s', 'good', 3000);
+  } else if (roll < 0.7) {
+    // Click Frenzy
+    clickFrenzyMult = 777;
+    clickFrenzyTime = 13;
+    bigToast('🍪 CLICK FRENZY! 777× clicks for 13s', 'good', 3000);
+  } else {
+    // Lucky: instant cookies = 15 minutes of CPS
+    const gain = Math.max(13, totalCps() * 60 * 15);
+    save.cookies += gain;
+    save.totalCookies += gain;
+    bigToast('🍪 LUCKY! +' + fmt(gain) + ' cookies', 'good', 3000);
+  }
+}
+
+// ---------- Aliens (after 10 Worlds) ----------
+const aliens = [];
+let alienTimer = 5;
+
+function spawnAlien() {
+  const el = document.createElement('div');
+  el.className = 'alien';
+  const startX = Math.random() < 0.5 ? -60 : window.innerWidth + 60;
+  const startY = 80 + Math.random() * (window.innerHeight - 200);
+  el.style.left = startX + 'px';
+  el.style.top = startY + 'px';
+  el.innerHTML = '<canvas width="54" height="38"></canvas>';
+  document.getElementById('fxLayer').appendChild(el);
+  drawAlienCanvas(el.querySelector('canvas'));
+  const a = {
+    el, x: startX, y: startY,
+    tx: window.innerWidth * 0.2 + Math.random() * window.innerWidth * 0.6,
+    ty: window.innerHeight * 0.2 + Math.random() * window.innerHeight * 0.4,
+    t: 0
+  };
+  el.onclick = () => {
+    el.remove();
+    const i = aliens.indexOf(a); if (i >= 0) aliens.splice(i, 1);
+    save.cookies += Math.max(20, totalCps() * 10);
+    toast('+' + fmt(Math.max(20, totalCps() * 10)) + ' cookies', 'good');
+    rebuildStats();
+  };
+  aliens.push(a);
+}
+
+function drawAlienCanvas(c) {
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,54,38);
+  // beam
+  ctx.fillStyle = 'rgba(111,255,192,0.25)';
+  ctx.beginPath();
+  ctx.moveTo(20, 22);
+  ctx.lineTo(34, 22);
+  ctx.lineTo(40, 38);
+  ctx.lineTo(14, 38);
+  ctx.closePath(); ctx.fill();
+  // dome
+  const dg = ctx.createRadialGradient(20, 12, 2, 27, 16, 14);
+  dg.addColorStop(0, 'rgba(180,255,220,0.95)');
+  dg.addColorStop(1, 'rgba(80,180,140,0.6)');
+  ctx.fillStyle = dg;
+  ctx.beginPath(); ctx.ellipse(27, 14, 14, 8, 0, Math.PI, 2*Math.PI); ctx.fill();
+  ctx.strokeStyle = '#6fffc0';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // body / saucer
+  const sg = ctx.createLinearGradient(0, 18, 0, 28);
+  sg.addColorStop(0, '#a8a8a8');
+  sg.addColorStop(1, '#3a3a3a');
+  ctx.fillStyle = sg;
+  ctx.beginPath();
+  ctx.ellipse(27, 22, 25, 6, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // little lights
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = i%2 ? '#ff5a72' : '#6fffc0';
+    ctx.beginPath(); ctx.arc(10 + i*8, 24, 1.5, 0, Math.PI*2); ctx.fill();
+  }
+  // alien eyes in dome
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(24, 14, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(30, 14, 1.5, 0, Math.PI*2); ctx.fill();
+}
+
+// ---------- Ultimate robot effect ----------
+let ultimateRobot = null;
+function spawnUltimateRobot() {
+  ultimateRobot = { x: window.innerWidth - 200, y: 100, t: 0 };
+}
+
+// ---------- Big toast ----------
+function bigToast(msg, kind = '', ms = 3000) {
+  toast(msg, kind, ms);
+}
+
+// ---------- Frenzy state ----------
+let frenzyMult = 1, frenzyTime = 0;
+let clickFrenzyMult = 1, clickFrenzyTime = 0;
+
+// ---------- Starfield ----------
+const starCv = document.getElementById('starfield');
+const starCtx = starCv.getContext('2d');
+let stars = [];
+function resizeStars() {
+  starCv.width = window.innerWidth;
+  starCv.height = window.innerHeight;
+  stars = [];
+  const num = Math.floor((starCv.width * starCv.height) / 4500);
+  for (let i = 0; i < num; i++) {
+    stars.push({
+      x: Math.random() * starCv.width,
+      y: Math.random() * starCv.height,
+      r: Math.random() * 1.6,
+      tw: Math.random() * Math.PI * 2,
+      vy: 0.06 + Math.random() * 0.08
+    });
+  }
+}
+window.addEventListener('resize', resizeStars);
+resizeStars();
+function drawStarfield(dt) {
+  starCtx.fillStyle = 'rgba(6,7,13,0.4)';
+  starCtx.fillRect(0,0,starCv.width,starCv.height);
+  const t = performance.now() / 1000;
+  // Cosmic intensity ramps up with universe count
+  const uni = save.producers.universe;
+  const colors = uni > 0
+    ? ['#fff','#ffd86a','#b95fff','#6ad8ff']
+    : ['#fff','#cfd8e8','#aa9ac8','#7a8aaa'];
+  for (const s of stars) {
+    s.tw += dt * 1.4;
+    s.y += s.vy * (1 + uni * 0.02);
+    if (s.y > starCv.height) { s.y = 0; s.x = Math.random() * starCv.width; }
+    const a = 0.4 + 0.5 * Math.abs(Math.sin(s.tw + s.x * 0.01));
+    const rgb = hexToRgb(colors[(s.x|0) % colors.length]);
+    starCtx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${a*0.8})`;
+    starCtx.fillRect(s.x, s.y, s.r * 2, s.r * 2);
+  }
+}
+function hexToRgb(hex) {
+  const v = parseInt(hex.replace('#',''), 16);
+  return { r:(v>>16)&255, g:(v>>8)&255, b:v&255 };
+}
+
+// ---------- Main loop ----------
+let lastTime = performance.now();
+function loop(now) {
+  const dt = Math.min(0.1, (now - lastTime) / 1000);
+  lastTime = now;
+  // Tick CPS
+  let cps = totalCps();
+  // Frenzy
+  if (frenzyTime > 0) { cps *= frenzyMult; frenzyTime -= dt; if (frenzyTime <= 0) { frenzyMult = 1; frenzyTime = 0; } }
+  if (clickFrenzyTime > 0) { clickFrenzyTime -= dt; if (clickFrenzyTime <= 0) { clickFrenzyMult = 1; clickFrenzyTime = 0; } }
+  save.cookies += cps * dt;
+  save.totalCookies += cps * dt;
+
+  // Stats refresh ~10/s
+  if ((now - lastStatsTick) > 100) {
+    rebuildStats();
+    // Refresh button affordability on producers/upgrades
+    refreshAffordability();
+    lastStatsTick = now;
+  }
+
+  // Cookie canvas
+  drawCookie(dt);
+
+  // Crumbs (overlay on cookie canvas)
+  drawCrumbs(dt);
+
+  // Starfield
+  drawStarfield(dt);
+
+  // God cookies move
+  for (const gc of godCookies) {
+    gc.x += gc.vx * dt;
+    gc.y += gc.vy * dt;
+    gc.life -= dt;
+    gc.el.style.left = gc.x + 'px';
+    gc.el.style.top = gc.y + 'px';
+    if (gc.life <= 0 || gc.x < -200 || gc.x > window.innerWidth + 200) {
+      gc.el.remove();
+      const i = godCookies.indexOf(gc); if (i >= 0) godCookies.splice(i, 1);
+    }
+  }
+
+  // God cookie spawn timer
+  godSpawnTimer -= dt * save.godSpawnMult;
+  if (godSpawnTimer <= 0) {
+    spawnGodCookie();
+    godSpawnTimer = rand(60, 240);
+  }
+
+  // Aliens: only after 10 worlds
+  if (save.producers.world >= 10) {
+    alienTimer -= dt;
+    if (alienTimer <= 0 && aliens.length < 20) {
+      spawnAlien();
+      alienTimer = 5;
+    }
+  } else {
+    // Remove all aliens if we somehow lost worlds (unlikely)
+    while (aliens.length) { aliens[0].el.remove(); aliens.shift(); }
+    alienTimer = 5;
+  }
+  // Update alien positions (drift toward cookie zone)
+  const cookieRect = cookieCv.getBoundingClientRect();
+  const cookieCx = cookieRect.left + cookieRect.width/2;
+  const cookieCy = cookieRect.top + cookieRect.height/2;
+  for (const a of aliens) {
+    a.t += dt;
+    const tx = cookieCx + Math.cos(a.t * 0.8) * 200 + Math.sin(a.t * 0.4) * 40;
+    const ty = cookieCy + Math.sin(a.t * 0.7) * 130 - 20;
+    a.x += (tx - a.x) * Math.min(1, dt * 0.6);
+    a.y += (ty - a.y) * Math.min(1, dt * 0.6);
+    a.el.style.left = (a.x - 27) + 'px';
+    a.el.style.top = (a.y - 19) + 'px';
+  }
+
+  // Ultimate robot anim
+  if (ultimateRobot) drawUltimateRobot(dt);
+
+  // Autosave every 10 seconds
+  if (now - lastAutoSave > 10000) {
+    saveGame();
+    lastAutoSave = now;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function drawCrumbs(dt) {
+  // Draw crumbs on top of cookie canvas
+  for (const c of crumbs) {
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.vy += 600 * dt;
+    c.life -= dt;
+  }
+  // remove dead
+  for (let i = crumbs.length - 1; i >= 0; i--) {
+    if (crumbs[i].life <= 0) crumbs.splice(i, 1);
+  }
+  // draw on fx layer canvas? Crumbs are in screen coords, we'd need a canvas overlay.
+  // Instead overlay them inline on the fx layer using DOM-positioned divs? Heavy.
+  // Easier: draw on the cookie canvas (local coords).
+  if (crumbs.length === 0) return;
+  const rect = cookieCv.getBoundingClientRect();
+  ckctx.save();
+  for (const c of crumbs) {
+    const lx = c.x - rect.left;
+    const ly = c.y - rect.top;
+    if (lx < -10 || ly < -10 || lx > cookieCv.width + 10 || ly > cookieCv.height + 100) continue;
+    ckctx.globalAlpha = Math.max(0, Math.min(1, c.life * 1.5));
+    ckctx.fillStyle = c.color;
+    ckctx.beginPath();
+    ckctx.arc(lx, ly, c.r, 0, Math.PI*2);
+    ckctx.fill();
+  }
+  ckctx.globalAlpha = 1;
+  ckctx.restore();
+}
+
+function drawUltimateRobot(dt) {
+  ultimateRobot.t += dt;
+  // Floats in upper-right
+  const x = window.innerWidth - 220;
+  const y = 80 + Math.sin(ultimateRobot.t * 0.8) * 18;
+  let el = document.getElementById('ultimateRobotEl');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ultimateRobotEl';
+    el.style.cssText = 'position:fixed;width:200px;height:240px;z-index:30;pointer-events:none;filter:drop-shadow(0 0 20px #6ad8ff)';
+    el.innerHTML = '<canvas width="200" height="240"></canvas>';
+    document.body.appendChild(el);
+  }
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  const c = el.querySelector('canvas');
+  const cx = c.getContext('2d');
+  cx.clearRect(0,0,200,240);
+  const t = ultimateRobot.t;
+  // Body
+  const bg = cx.createLinearGradient(0,30,0,180);
+  bg.addColorStop(0, '#cfd8e8');
+  bg.addColorStop(1, '#3a4a6a');
+  cx.fillStyle = bg;
+  cx.fillRect(50, 50, 100, 120);
+  cx.strokeStyle = '#fff';
+  cx.lineWidth = 3;
+  cx.strokeRect(50, 50, 100, 120);
+  // Head
+  cx.fillStyle = '#aa6a3a';
+  cx.fillRect(60, 10, 80, 50);
+  cx.strokeRect(60, 10, 80, 50);
+  // Eyes glowing
+  const eyeC = `rgba(255,${100 + 100*Math.sin(t*4)},${50 + 50*Math.cos(t*3)},1)`;
+  cx.fillStyle = eyeC;
+  cx.fillRect(72, 28, 16, 14);
+  cx.fillRect(112, 28, 16, 14);
+  // Antenna
+  cx.strokeStyle = '#ffd86a';
+  cx.lineWidth = 3;
+  cx.beginPath();
+  cx.moveTo(100, 10); cx.lineTo(100, -10 + Math.sin(t*3)*2); cx.stroke();
+  cx.fillStyle = '#ff5a72';
+  cx.beginPath(); cx.arc(100, -12, 5, 0, Math.PI*2); cx.fill();
+  // Arms
+  cx.fillStyle = '#6ad8ff';
+  cx.fillRect(20, 70, 30, 60);
+  cx.strokeRect(20, 70, 30, 60);
+  cx.fillRect(150, 70, 30, 60);
+  cx.strokeRect(150, 70, 30, 60);
+  // Legs
+  cx.fillStyle = '#3a4a6a';
+  cx.fillRect(65, 170, 25, 60);
+  cx.strokeRect(65, 170, 25, 60);
+  cx.fillRect(110, 170, 25, 60);
+  cx.strokeRect(110, 170, 25, 60);
+  // Chest core
+  const core = cx.createRadialGradient(100, 110, 4, 100, 110, 24);
+  core.addColorStop(0, '#fff');
+  core.addColorStop(0.5, '#ffd86a');
+  core.addColorStop(1, '#aa7a1a');
+  cx.fillStyle = core;
+  cx.beginPath(); cx.arc(100, 110, 22, 0, Math.PI*2); cx.fill();
+  // Label
+  cx.fillStyle = '#000';
+  cx.font = 'bold 16px monospace';
+  cx.textAlign = 'center';
+  cx.fillText('ULT', 100, 116);
+}
+
+let lastStatsTick = 0;
+let lastAutoSave = performance.now();
+
+function refreshAffordability() {
+  // Update producer affordability classes without full rebuild
+  const producerEls = document.querySelectorAll('.producer');
+  let i = 0;
+  for (const p of PRODUCERS) {
+    const owned = save.producers[p.id];
+    const prevOwned = PRODUCERS.indexOf(p) === 0 ? Infinity : save.producers[PRODUCERS[PRODUCERS.indexOf(p)-1].id];
+    const visible = PRODUCERS.indexOf(p) === 0 || prevOwned > 0 || save.totalCookies > p.baseCost / 2;
+    if (!visible) continue;
+    const el = producerEls[i]; if (!el) { i++; continue; }
+    const cost = producerCost(p);
+    const affordable = save.cookies >= cost;
+    el.classList.toggle('affordable', affordable);
+    el.querySelector('.count').textContent = owned;
+    el.querySelector('.price').textContent = fmt(cost) + ' cookies';
+    el.querySelector('.info').textContent = fmt(producerCps(p)*globalMult()) + ' cps each';
+    i++;
+  }
+  // Updates upgrades visibility (any new ones reached requirement)
+  const visibleNow = UPGRADES.filter(u => save.upgrades[u.id] || save.producers[u.req.producer] >= Math.floor(u.req.count * 0.5)).length;
+  if (visibleNow !== _lastUpgradeVisibleCount) {
+    rebuildUpgrades();
+    _lastUpgradeVisibleCount = visibleNow;
+    return;
+  }
+  // Otherwise just toggle availability classes
+  const upgradeEls = document.querySelectorAll('.upgrade-card');
+  let ui = 0;
+  for (const u of UPGRADES) {
+    if (!(save.upgrades[u.id] || save.producers[u.req.producer] >= Math.floor(u.req.count * 0.5))) continue;
+    const el = upgradeEls[ui]; if (!el) { ui++; continue; }
+    const owned = !!save.upgrades[u.id];
+    const reqMet = save.producers[u.req.producer] >= u.req.count;
+    const canAfford = save.cookies >= u.cost;
+    const available = !owned && reqMet && canAfford;
+    el.className = 'upgrade-card' + (owned ? ' owned' : available ? ' available' : ' locked');
+    if (available) el.onclick = () => buyUpgrade(u.id);
+    else if (!owned) el.onclick = null;
+    ui++;
+  }
+}
+let _lastUpgradeVisibleCount = -1;
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+
+// ---------- Offline progress ----------
+(function processOffline(){
+  const elapsed = (Date.now() - (save.lastTickAt || Date.now())) / 1000;
+  save.lastTickAt = Date.now();
+  if (elapsed > 30 && totalCps() > 0) {
+    // Cap at 4 hours of offline at 50% rate
+    const cap = Math.min(elapsed, 4 * 3600) * 0.5;
+    const gained = totalCps() * cap;
+    save.cookies += gained;
+    save.totalCookies += gained;
+    setTimeout(() => bigToast('🍪 OFFLINE: +' + fmt(gained) + ' cookies', 'good', 4000), 600);
+  }
+})();
+setInterval(() => { save.lastTickAt = Date.now(); }, 5000);
+
+// ---------- Boot ----------
+rebuildAll();
+if (save.upgrades.ultimateRobot) spawnUltimateRobot();
+requestAnimationFrame(loop);
+
+// Save on close
+window.addEventListener('beforeunload', () => { save.lastTickAt = Date.now(); saveGame(); });
+</script>
+</body>
+</html>

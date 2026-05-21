@@ -69,6 +69,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Square Quest card */
 .bg-sq{background:linear-gradient(135deg,#0d0420,#1a0a3a,#3a1a5a)}
 .bg-sq canvas{width:100%;height:100%}
+/* Cookie Quest card */
+.bg-ck{background:radial-gradient(ellipse at center,#3a1f0a 0%,#1a0a05 60%,#000 100%)}
+.bg-ck canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -202,6 +205,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>SQUARE QUEST</h2>
       <p>2D platformer. 23 levels of spikes, doors, and bosses — Noob, Pro, Master, Legend, Hacker, God, and Demon. Buy a titanic blaster, candle grenade, cat armor, and minivan power in the admin shop. Win gold from the God boss to unlock the golden shop.</p>
       <span class="tag" style="background:#2a0a4a;color:#ffd86a">PLATFORMER · 23 LEVELS</span>
+    </div>
+  </a>
+  <a href="cookie-quest.html" class="card">
+    <div class="card-img bg-ck"><canvas id="c16"></canvas></div>
+    <div class="card-body">
+      <h2>COOKIE QUEST</h2>
+      <p>Cookie-clicker style idle game. Click the giant cookie, buy cursors → robots → pianos → homes → companies → worlds → galaxies → universes. Unlock the Cursor Man, Happybot, King, Emperor, Universal, and Ultimate Robot Boss upgrades. Watch out — after 10 Worlds, ALIENS arrive every 5 seconds and steal your multiplier.</p>
+      <span class="tag" style="background:#3a1f0a;color:#ffd86a">IDLE · CLICKER</span>
     </div>
   </a>
 </div>
@@ -840,6 +851,97 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.font=`bold ${Math.floor(w*0.07)}px Courier New`;
     ctx.fillStyle='rgba(106,216,255,0.9)';ctx.textAlign='center';
     ctx.fillText('HYDROGEN',w/2,h*0.18);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Cookie Quest preview: giant chocolate-chip cookie + floating golden cookies + alien ----
+(function(){
+  const c=document.getElementById('c16'),ctx=c.getContext('2d');
+  if(!c)return;
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  // Floating gold cookies
+  const golds=[];for(let i=0;i<4;i++)golds.push({x:rand(),y:rand(),vx:(rand()-.5)*0.0025,vy:(rand()-.5)*0.0015,s:6+rand()*5});
+  // Stars
+  const stars=[];for(let i=0;i<35;i++)stars.push({x:rand(),y:rand(),s:0.5+rand()*1.5,tw:rand()*PI*2});
+  function draw(){
+    t+=0.025;
+    ctx.fillStyle='rgba(13,7,3,0.25)';ctx.fillRect(0,0,w,h);
+    // Stars
+    for(const st of stars){
+      st.tw+=0.04;
+      const a=0.3+0.5*Math.abs(sin(st.tw));
+      ctx.fillStyle=`rgba(255,220,160,${a*0.4})`;
+      ctx.fillRect(st.x*w,st.y*h,st.s,st.s);
+    }
+    // Big cookie in center
+    const cx=w/2, cy=h*0.55;
+    const r=Math.min(w,h)*0.32;
+    // Glow
+    const gg=ctx.createRadialGradient(cx,cy,r*0.4,cx,cy,r*1.5);
+    gg.addColorStop(0,'rgba(255,180,80,0.35)');
+    gg.addColorStop(1,'rgba(255,140,40,0)');
+    ctx.fillStyle=gg;
+    ctx.beginPath();ctx.arc(cx,cy,r*1.5,0,PI*2);ctx.fill();
+    // Body
+    const pulse=1+sin(t*1.6)*0.02;
+    const rr=r*pulse;
+    const bg=ctx.createRadialGradient(cx-rr*0.3,cy-rr*0.3,rr*0.1,cx,cy,rr);
+    bg.addColorStop(0,'#e6b266');
+    bg.addColorStop(0.5,'#c8893a');
+    bg.addColorStop(1,'#6a3a14');
+    ctx.fillStyle=bg;
+    ctx.beginPath();ctx.arc(cx,cy,rr,0,PI*2);ctx.fill();
+    ctx.strokeStyle='#5a3a14';ctx.lineWidth=2;ctx.stroke();
+    // Chips
+    const chips=[[-0.38,-0.42],[0.22,-0.58],[0.54,-0.18],[-0.58,0.08],[-0.12,0.12],[0.38,0.32],[-0.30,0.52],[0.12,0.60],[-0.48,0.48]];
+    for(const [px,py] of chips){
+      const x=cx+px*rr*0.95, y=cy+py*rr*0.95;
+      ctx.fillStyle='#1a0a04';
+      ctx.beginPath();ctx.arc(x+1,y+2,rr*0.10,0,PI*2);ctx.fill();
+      const cg=ctx.createRadialGradient(x-1,y-1,1,x,y,rr*0.10);
+      cg.addColorStop(0,'#9a5a2a');cg.addColorStop(0.5,'#3a1a06');cg.addColorStop(1,'#0a0402');
+      ctx.fillStyle=cg;
+      ctx.beginPath();ctx.arc(x,y,rr*0.10,0,PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,230,180,0.5)';
+      ctx.beginPath();ctx.arc(x-rr*0.04,y-rr*0.04,rr*0.02,0,PI*2);ctx.fill();
+    }
+    // Floating gold cookies
+    for(const g of golds){
+      g.x+=g.vx;g.y+=g.vy;
+      if(g.x<-0.1)g.x=1.1;if(g.x>1.1)g.x=-0.1;
+      if(g.y<-0.1)g.y=1.1;if(g.y>1.1)g.y=-0.1;
+      const gx=g.x*w, gy=g.y*h, gs=g.s+sin(t*2+g.x*10)*1;
+      // Glow
+      const ggg=ctx.createRadialGradient(gx,gy,1,gx,gy,gs*2);
+      ggg.addColorStop(0,'rgba(255,255,180,0.7)');
+      ggg.addColorStop(1,'rgba(255,180,80,0)');
+      ctx.fillStyle=ggg;
+      ctx.beginPath();ctx.arc(gx,gy,gs*2,0,PI*2);ctx.fill();
+      const bgg=ctx.createRadialGradient(gx-2,gy-2,1,gx,gy,gs);
+      bgg.addColorStop(0,'#fff8c0');bgg.addColorStop(0.5,'#ffd86a');bgg.addColorStop(1,'#aa7a1a');
+      ctx.fillStyle=bgg;
+      ctx.beginPath();ctx.arc(gx,gy,gs,0,PI*2);ctx.fill();
+    }
+    // Alien overhead
+    const ax=cx+cos(t*0.8)*r*1.4, ay=h*0.22+sin(t*0.6)*8;
+    ctx.fillStyle='rgba(111,255,192,0.2)';
+    ctx.beginPath();ctx.moveTo(ax-6,ay+4);ctx.lineTo(ax+6,ay+4);ctx.lineTo(ax+10,ay+18);ctx.lineTo(ax-10,ay+18);ctx.closePath();ctx.fill();
+    const sg=ctx.createLinearGradient(0,ay-3,0,ay+5);
+    sg.addColorStop(0,'#a8a8a8');sg.addColorStop(1,'#3a3a3a');
+    ctx.fillStyle=sg;
+    ctx.beginPath();ctx.ellipse(ax,ay+1,11,3,0,0,PI*2);ctx.fill();
+    const dg=ctx.createRadialGradient(ax-2,ay-3,1,ax,ay-1,7);
+    dg.addColorStop(0,'rgba(180,255,220,0.95)');dg.addColorStop(1,'rgba(80,180,140,0.6)');
+    ctx.fillStyle=dg;
+    ctx.beginPath();ctx.ellipse(ax,ay-2,7,4,0,PI,2*PI);ctx.fill();
+    // Title
+    ctx.font=`bold ${Math.floor(w*0.08)}px Courier New`;
+    ctx.fillStyle='rgba(255,216,106,0.92)';ctx.textAlign='center';
+    ctx.fillText('COOKIE',w/2,h*0.18);
     requestAnimationFrame(draw);
   }
   draw();
