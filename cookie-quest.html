@@ -272,6 +272,31 @@ const UPGRADES = [
     cost: 1e15,     req:{ producer:'universe',count:350}, special:'ultimate' }
 ];
 
+// Procedural tier ladder: each building gets a 2× upgrade at every milestone.
+const TIER_MILESTONES = [5, 15, 25, 50, 75, 100, 150, 200, 250];
+const ROMAN = ['I','II','III','IV','V','VI','VII','VIII','IX'];
+for (const p of PRODUCERS) {
+  TIER_MILESTONES.forEach((m, i) => {
+    UPGRADES.push({
+      id: `${p.id}_t${m}`,
+      name: `${p.name} Boost ${ROMAN[i]}`,
+      icon: p.icon,
+      desc: `${p.name}s produce 2× as many cookies.`,
+      cost: Math.ceil(p.baseCost * m * m),
+      req: { producer: p.id, count: m },
+      target: p.id,
+      mult: 2
+    });
+  });
+}
+// Sort by building order, then by milestone count, so the grid groups tidily.
+UPGRADES.sort((a, b) => {
+  const pa = PRODUCERS.findIndex(x => x.id === a.req.producer);
+  const pb = PRODUCERS.findIndex(x => x.id === b.req.producer);
+  if (pa !== pb) return pa - pb;
+  return a.req.count - b.req.count;
+});
+
 // ---------- Save ----------
 const SAVE_KEY = 'cookieQuestSave_v1';
 function defaultSave() {
