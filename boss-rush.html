@@ -749,11 +749,12 @@ function demonCharge(b) {
 
 function demonSummon(b) {
   for (let i = 0; i < 3; i++) {
-    game.enemies.push({
-      type: 'imp', x: b.x + (i - 1) * 40, y: b.y + 50,
-      vx: 0, vy: 0, hp: 4, maxHp: 4, r: 14, color: '#ff3a3a',
-      shootCd: rand(0.5, 1.5), t: 0
+    const e = mkEnemy('imp', b.x + (i - 1) * 40, b.y + 50, {
+      color: '#ff3a3a',   // demon's imps are red, not the shoe's purple-red
+      hp: 4, maxHp: 4,
+      r: 14,
     });
+    if (e) game.enemies.push(e);
   }
   bigToast('IMPS SUMMONED', 1200);
 }
@@ -1160,21 +1161,11 @@ function coffeeCaffeineRush(b) {
 function coffeeSpawnEnemies() {
   // Spawn 2 sugar + 1 creamer
   for (let i = 0; i < 2; i++) {
-    game.enemies.push({
-      type: 'sugar',
-      x: rand(40, W - 40), y: -30,
-      vx: 0, vy: rand(80, 130),
-      hp: 2, maxHp: 2, r: 12,
-      color: '#fff', shootCd: rand(1, 2), t: 0
-    });
+    const e = mkEnemy('sugar', rand(40, W - 40), -30);
+    if (e) game.enemies.push(e);
   }
-  game.enemies.push({
-    type: 'creamer',
-    x: rand(40, W - 40), y: -40,
-    vx: 0, vy: rand(50, 80),
-    hp: 4, maxHp: 4, r: 16,
-    color: '#cfa97a', shootCd: rand(0.6, 1.4), t: 0
-  });
+  const e = mkEnemy('creamer', rand(40, W - 40), -40);
+  if (e) game.enemies.push(e);
 }
 
 function drawCoffee(b) {
@@ -1560,17 +1551,29 @@ const ENEMY_DEFS = {
   imp:        { hp:3,  r:10, color:'#aa3030', speed:140, damage:1, shootCd:1.4 },
   yeti:       { hp:35, r:24, color:'#cfe8ff', speed:70,  damage:2, shootCd:2 },
   zomboss:    { hp:120, r:50, color:'#4a2a3a',speed:35,  damage:3, shootCd:1.2 },
+  sugar:      { hp:2,  r:12, color:'#fff',    speed:140, damage:1, shootCd:0 },
+  creamer:    { hp:4,  r:16, color:'#cfa97a', speed:90,  damage:1, shootCd:0 },
 };
 
-function spawnZombie(type) {
+// Helper: always populate every required field from ENEMY_DEFS so movement/damage never break
+function mkEnemy(type, x, y, overrides = {}) {
   const def = ENEMY_DEFS[type];
+  if (!def) { console.warn('Unknown enemy type:', type); return null; }
+  return Object.assign({
+    type, x, y,
+    vx: 0, vy: 0,
+    hp: def.hp, maxHp: def.hp,
+    r: def.r, color: def.color,
+    speed: def.speed, damage: def.damage,
+    shootCd: def.shootCd ? rand(0.4, def.shootCd) : 0,
+    t: 0, hitFlash: 0,
+  }, overrides);
+}
+
+function spawnZombie(type) {
   const side = Math.random() < 0.5;
-  game.enemies.push({
-    type, x: side ? -40 : W + 40, y: rand(60, H * 0.7),
-    vx: 0, vy: 0, hp: def.hp, maxHp: def.hp, r: def.r, color: def.color,
-    speed: def.speed, damage: def.damage, shootCd: def.shootCd ? rand(0.5, def.shootCd) : 0,
-    t: 0, hitFlash: 0
-  });
+  const e = mkEnemy(type, side ? -40 : W + 40, rand(60, H * 0.7));
+  if (e) game.enemies.push(e);
 }
 
 function tickEnemies(dt) {
@@ -1584,10 +1587,11 @@ function tickEnemies(dt) {
     e.x += Math.cos(ang) * e.speed * dt;
     e.y += Math.sin(ang) * e.speed * dt;
     // Shooting (some types)
-    if (ENEMY_DEFS[e.type].shootCd > 0) {
+    const def = ENEMY_DEFS[e.type];
+    if (def && def.shootCd > 0) {
       e.shootCd -= dt;
       if (e.shootCd <= 0) {
-        e.shootCd = ENEMY_DEFS[e.type].shootCd;
+        e.shootCd = def.shootCd;
         const ang2 = Math.atan2(p.y - e.y, p.x - e.x);
         eb(e.x, e.y, Math.cos(ang2) * 300, Math.sin(ang2) * 300,
            { color: e.color, r: 6 });
@@ -2130,16 +2134,21 @@ function loop(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   game.t += dt;
-  if (game.state === STATE.FIGHT) {
-    tickPlayer(dt);
-    bossTick(dt);
-    tickEnemies(dt);
-    tickBullets(dt);
-    tickParticles(dt);
-  } else if (game.state === STATE.INTRO || game.state === STATE.INTERLUDE) {
-    tickParticles(dt);
+  try {
+    if (game.state === STATE.FIGHT) {
+      tickPlayer(dt);
+      bossTick(dt);
+      tickEnemies(dt);
+      tickBullets(dt);
+      tickParticles(dt);
+    } else if (game.state === STATE.INTRO || game.state === STATE.INTERLUDE) {
+      tickParticles(dt);
+    }
+    drawAll();
+  } catch (err) {
+    // Never let one bad frame kill the animation chain
+    console.error('Frame error:', err);
   }
-  drawAll();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
