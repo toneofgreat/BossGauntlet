@@ -121,9 +121,12 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 /* ---------- RIGHT: producers ---------- */
 .col-right{
   background:linear-gradient(180deg,#15050a,#1a0a05);
-  overflow-y:auto;padding:0;
+  height:100vh;max-height:100vh;overflow-y:auto;overflow-x:hidden;padding:0;
   border-left:2px solid #aa6a3a;box-shadow:inset 10px 0 30px #00000099
 }
+.col-right-head{position:sticky;top:0;background:#15050a;z-index:5;
+  padding:14px;font-size:14px;letter-spacing:6px;color:#ffd86a;text-shadow:0 0 14px #ffd86a;
+  border-bottom:1px solid #ffd86a44;text-transform:uppercase}
 .producer{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid #aa6a3a33;
           cursor:not-allowed;opacity:0.5;transition:all 0.1s;background:#0a0408;position:relative;overflow:hidden}
 .producer.affordable{opacity:1;cursor:pointer;background:#1a0a08}
@@ -179,6 +182,66 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
              font-weight:bold;font-size:13px;z-index:100;border-bottom:2px solid #ffd86a;
              border-left:2px solid #ffd86a;border-right:2px solid #ffd86a;
              box-shadow:0 0 20px #ffd86a55}
+
+/* Player name */
+.player-name-wrap{text-align:center;margin-bottom:6px}
+.player-name{display:inline-block;font-size:13px;color:#cfa97a;letter-spacing:2px;cursor:pointer;
+             padding:2px 10px;border-bottom:1px dashed #aa6a3a66;transition:all 0.15s;font-weight:bold}
+.player-name:hover{color:#ffd86a;border-color:#ffd86a;text-shadow:0 0 8px #ffd86a}
+.player-name::before{content:'✎ ';font-size:9px;opacity:0.6}
+
+/* Building SVG icons inside workshop rows */
+.bldg-row .b-svg{width:22px;height:22px;display:inline-block;
+                 filter:drop-shadow(0 0 4px var(--c,#ffd86a));
+                 animation:bldgBob 2.2s ease-in-out infinite;flex-shrink:0}
+.bldg-row .b-svg:nth-child(2n){animation-delay:0.2s}
+.bldg-row .b-svg:nth-child(3n){animation-delay:0.5s}
+.bldg-row .b-svg:nth-child(5n){animation-delay:0.9s}
+.bldg-row .b-svg:nth-child(7n){animation-delay:1.4s}
+.bldg-row .bldg-spark{color:var(--c,#ffd86a);font-size:13px;opacity:0.7;flex-shrink:0;
+                      animation:sparkPulse 2.6s ease-in-out infinite;text-shadow:0 0 6px var(--c,#ffd86a)}
+@keyframes sparkPulse{0%,100%{opacity:0.3;transform:scale(0.85)}50%{opacity:1;transform:scale(1.1)}}
+.bldg-row::after{content:'';position:absolute;left:0;right:0;top:0;bottom:0;
+                 background:linear-gradient(90deg,transparent 0%,var(--c,#ffd86a)11 40%,transparent 100%);
+                 pointer-events:none}
+
+/* Producer cards use SVG art instead of emoji */
+.producer .pic .b-svg{width:46px;height:46px}
+
+/* Modal (Index) */
+.modal-bg{position:fixed;inset:0;background:#000c;backdrop-filter:blur(4px);z-index:300;
+          display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal-box{background:linear-gradient(180deg,#1a0a14,#0a0408);border:2px solid #ffd86a;border-radius:12px;
+           width:100%;max-width:780px;max-height:90vh;display:flex;flex-direction:column;
+           box-shadow:0 0 40px #ffd86a66}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;
+            border-bottom:1px solid #ffd86a44;color:#ffd86a;letter-spacing:4px;font-weight:bold;font-size:14px;
+            text-shadow:0 0 8px #ffd86a}
+.modal-close{background:none;border:0;color:#ffd86a;font-size:28px;cursor:pointer;font-family:inherit;
+             line-height:1;padding:0 8px}
+.modal-close:hover{color:#ff5a72;text-shadow:0 0 10px #ff5a72}
+.modal-body{flex:1;overflow-y:auto;padding:14px 18px}
+.idx-section-title{font-size:13px;color:#ffd86a;letter-spacing:3px;margin:14px 0 8px;
+                   border-bottom:1px solid #ffd86a44;padding-bottom:4px;font-weight:bold}
+.idx-section-title:first-child{margin-top:0}
+.idx-card{display:flex;gap:14px;padding:12px;border-radius:8px;margin-bottom:10px;
+          background:#0a0408;border:1px solid #aa6a3a44;border-left:3px solid var(--c,#ffd86a)}
+.idx-art{width:64px;height:64px;background:radial-gradient(ellipse at center,#3a1a0a,#0a0408);
+         border:2px solid var(--c,#ffd86a);border-radius:8px;display:flex;align-items:center;
+         justify-content:center;flex-shrink:0;box-shadow:0 0 12px var(--c,#ffd86a)44}
+.idx-art .b-svg{width:48px;height:48px}
+.idx-meta{flex:1;min-width:0}
+.idx-name{font-size:14px;font-weight:bold;color:var(--c,#ffd86a);letter-spacing:1px;
+          text-shadow:0 0 8px var(--c,#ffd86a)}
+.idx-lore{font-size:11px;color:#cfa97a;margin:4px 0;line-height:1.5;font-style:italic}
+.idx-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:11px;color:#fff;margin-top:6px}
+.idx-stat-label{color:#aa6a3a}
+.idx-stat-val{color:#ffd86a;font-weight:bold}
+.idx-chiplist{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.idx-chip{font-size:11px;padding:6px 8px;border-radius:4px;letter-spacing:0.3px}
+.idx-chip.owned{background:#0a1a14;border:1px solid #6fffc044;color:#6fffc0}
+.idx-chip.locked{background:#1a0a14;border:1px solid #4a2a3a;color:#aa6a3a}
 </style>
 </head>
 <body>
@@ -190,6 +253,7 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 <!-- LEFT: Cookie + stats -->
 <div class="col-left">
   <div class="stats">
+    <div class="player-name-wrap"><span class="player-name" id="playerName" onclick="promptName()">Bob</span></div>
     <div class="cookie-count"><span id="cookieNum">0</span><small>cookies</small></div>
     <div class="cps">per second: <span id="cpsNum">0</span></div>
     <div class="cps" style="font-size:11px;color:#aa6a3a;margin-top:2px">click: <span id="clickNum">1</span></div>
@@ -202,6 +266,7 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
   </div>
 
   <div class="left-foot">
+    <button class="foot-btn" onclick="openIndex()">INDEX</button>
     <button class="foot-btn" onclick="saveGameManual()">SAVE</button>
     <button class="foot-btn danger" onclick="resetSave()">RESET</button>
   </div>
@@ -244,13 +309,23 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 
 <!-- RIGHT: Buildings -->
 <div class="col-right">
-  <div style="padding:14px;font-size:14px;letter-spacing:6px;color:#ffd86a;text-shadow:0 0 14px #ffd86a;
-              border-bottom:1px solid #ffd86a44;text-transform:uppercase">Buildings</div>
+  <div class="col-right-head">Buildings</div>
   <div id="producersList"></div>
 </div>
 
 <div id="fxLayer"></div>
 <div id="toast"></div>
+
+<!-- Index modal -->
+<div id="indexModal" class="modal-bg" onclick="if(event.target===this)closeIndex()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span>★ COOKIE INDEX ★</span>
+      <button class="modal-close" onclick="closeIndex()">×</button>
+    </div>
+    <div class="modal-body" id="indexBody"></div>
+  </div>
+</div>
 
 <script>
 // =====================================================================
@@ -270,6 +345,112 @@ const PRODUCERS = [
   { id:'universe',     name:'Universe',      icon:'🌠', baseCost: 3.3e8,      baseCps: 44000,   color:'#ffd86a' },
   { id:'divineCookie', name:'God Cookie',    icon:'✨', baseCost: 5.5e9,      baseCps: 260000,  color:'#fff6c0' }
 ];
+
+// ---------- SVG building art (replaces emoji in workshop / index) ----------
+const BUILDING_SVG = {
+  cursor: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 3 L9 19 L11 13 L17 11 Z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/>
+  </svg>`,
+  robot: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <line x1="12" y1="6" x2="12" y2="3" stroke="#cfd8e8" stroke-width="1.2"/>
+    <circle cx="12" cy="2.5" r="1" fill="#ff5a72"/>
+    <rect x="6" y="6" width="12" height="10" rx="1.5" fill="#6ad8ff" stroke="#0a4060" stroke-width="1"/>
+    <rect x="8" y="9" width="2.5" height="2" rx="0.5" fill="#fff"/>
+    <rect x="13.5" y="9" width="2.5" height="2" rx="0.5" fill="#fff"/>
+    <rect x="10" y="13" width="4" height="1" fill="#0a4060"/>
+    <rect x="5" y="9" width="1" height="5" fill="#3a4a6a"/>
+    <rect x="18" y="9" width="1" height="5" fill="#3a4a6a"/>
+    <rect x="7" y="16" width="3" height="5" fill="#3a4a6a"/>
+    <rect x="14" y="16" width="3" height="5" fill="#3a4a6a"/>
+  </svg>`,
+  piano: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="20" height="4" fill="#5a3a1a"/>
+    <rect x="2" y="8" width="20" height="12" fill="#fff" stroke="#000" stroke-width="1"/>
+    <line x1="6" y1="8" x2="6" y2="20" stroke="#000"/>
+    <line x1="10" y1="8" x2="10" y2="20" stroke="#000"/>
+    <line x1="14" y1="8" x2="14" y2="20" stroke="#000"/>
+    <line x1="18" y1="8" x2="18" y2="20" stroke="#000"/>
+    <rect x="4.5" y="8" width="3" height="7" fill="#000"/>
+    <rect x="8.5" y="8" width="3" height="7" fill="#000"/>
+    <rect x="14.5" y="8" width="3" height="7" fill="#000"/>
+    <rect x="18.5" y="8" width="3" height="7" fill="#000"/>
+  </svg>`,
+  home: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="12,2 2,12 4,12 4,22 20,22 20,12 22,12" fill="#ffaa6a" stroke="#5a2a0a" stroke-width="1" stroke-linejoin="round"/>
+    <rect x="10" y="14" width="4" height="8" fill="#5a2a0a"/>
+    <rect x="6" y="13" width="3" height="3" fill="#cfe8ff" stroke="#5a2a0a" stroke-width="0.6"/>
+    <rect x="15" y="13" width="3" height="3" fill="#cfe8ff" stroke="#5a2a0a" stroke-width="0.6"/>
+    <rect x="15" y="3" width="2.5" height="3" fill="#aa6a3a"/>
+  </svg>`,
+  company: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="3" width="18" height="20" fill="#6fffc0" stroke="#0a402a" stroke-width="1"/>
+    <rect x="5" y="5" width="3" height="3" fill="#0a402a"/>
+    <rect x="10.5" y="5" width="3" height="3" fill="#0a402a"/>
+    <rect x="16" y="5" width="3" height="3" fill="#0a402a"/>
+    <rect x="5" y="10" width="3" height="3" fill="#0a402a"/>
+    <rect x="10.5" y="10" width="3" height="3" fill="#ffd86a"/>
+    <rect x="16" y="10" width="3" height="3" fill="#0a402a"/>
+    <rect x="5" y="15" width="3" height="3" fill="#0a402a"/>
+    <rect x="10.5" y="15" width="3" height="3" fill="#0a402a"/>
+    <rect x="16" y="15" width="3" height="3" fill="#0a402a"/>
+    <rect x="10" y="20" width="4" height="3" fill="#1a0a08"/>
+  </svg>`,
+  world: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="9.5" fill="#3a8aff" stroke="#1a4a8a" stroke-width="1"/>
+    <path d="M4 10 Q9 7 14 10 Q17 13 13 16 Q8 15 5 12 Z" fill="#5fff5f" stroke="#1a6a1a" stroke-width="0.4"/>
+    <path d="M16 5 Q19 7 18 11 Q17 13 19 14" fill="#5fff5f" stroke="#1a6a1a" stroke-width="0.4"/>
+    <ellipse cx="12" cy="12" rx="9.5" ry="3.5" fill="none" stroke="#1a4a8a" stroke-width="0.5" opacity="0.6"/>
+  </svg>`,
+  galaxy: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="gxc"><stop offset="0%" stop-color="#fff"/><stop offset="60%" stop-color="#b95fff"/><stop offset="100%" stop-color="#1a0a2a" stop-opacity="0.6"/></radialGradient>
+    </defs>
+    <circle cx="12" cy="12" r="10" fill="url(#gxc)" opacity="0.7"/>
+    <path d="M12 12 Q4 6 6 18" stroke="#fff" stroke-width="1.4" fill="none" opacity="0.8"/>
+    <path d="M12 12 Q20 18 18 6" stroke="#fff" stroke-width="1.4" fill="none" opacity="0.8"/>
+    <circle cx="12" cy="12" r="2.5" fill="#fff"/>
+    <circle cx="5" cy="6" r="0.6" fill="#fff"/>
+    <circle cx="19" cy="20" r="0.6" fill="#fff"/>
+  </svg>`,
+  universe: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="uvc"><stop offset="0%" stop-color="#ffd86a"/><stop offset="50%" stop-color="#5a1a8a"/><stop offset="100%" stop-color="#0a020f"/></radialGradient>
+    </defs>
+    <circle cx="12" cy="12" r="10.5" fill="url(#uvc)"/>
+    <circle cx="6" cy="7" r="1" fill="#fff"/>
+    <circle cx="17" cy="5" r="1.5" fill="#fff"/>
+    <circle cx="19" cy="14" r="1" fill="#fff"/>
+    <circle cx="8" cy="17" r="1.3" fill="#fff"/>
+    <circle cx="14" cy="10" r="0.8" fill="#ffd86a"/>
+    <circle cx="5" cy="13" r="0.7" fill="#b95fff"/>
+    <circle cx="13" cy="18" r="0.9" fill="#6ad8ff"/>
+  </svg>`,
+  divineCookie: `<svg viewBox="0 0 24 24" class="b-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="dvc"><stop offset="0%" stop-color="#fff8c0"/><stop offset="60%" stop-color="#ffd86a"/><stop offset="100%" stop-color="#aa7a1a"/></radialGradient>
+    </defs>
+    <ellipse cx="12" cy="4.5" rx="6" ry="1.4" fill="none" stroke="#ffd86a" stroke-width="0.9"/>
+    <circle cx="12" cy="13" r="9" fill="url(#dvc)" stroke="#5a3a14" stroke-width="0.8"/>
+    <circle cx="9" cy="11" r="1.6" fill="#3a1a06"/>
+    <circle cx="14.5" cy="10" r="1.3" fill="#3a1a06"/>
+    <circle cx="11" cy="15.5" r="1.3" fill="#3a1a06"/>
+    <circle cx="15" cy="14.5" r="1" fill="#3a1a06"/>
+    <circle cx="8" cy="15" r="0.6" fill="#fff" opacity="0.7"/>
+  </svg>`
+};
+function bSvg(id) { return BUILDING_SVG[id] || ''; }
+
+const BUILDING_LORE = {
+  cursor:       'Clicks the cookie automatically — your most loyal helper. Each cursor also boosts every manual click.',
+  robot:        'Mechanical hands that never tire, powered entirely by cookie dust.',
+  piano:        'Cookies appear with each note. A symphony bakes mountains.',
+  home:         'A whole household devoted to baking — grandma is in charge.',
+  company:      'Cookies mass-produced at industrial scale, packaged in shiny boxes.',
+  world:        'An entire planet has been re-purposed to bake cookies.',
+  galaxy:       'Trillions of cookie planets sprawled across a billion stars.',
+  universe:     'Infinite cookies end to end, with milk filling the space between.',
+  divineCookie: 'A self-baking cookie touched by divinity. It bakes more of itself.'
+};
 
 // ---------- Constants: upgrades ----------
 // req: number of that producer needed to unlock
@@ -393,6 +574,7 @@ const REBIRTH_TIERS = [
 const SAVE_KEY = 'cookieQuestSave_v1';
 function defaultSave() {
   return {
+    name: 'Bob',
     cookies: 0,
     totalCookies: 0,
     clicks: 0,
@@ -543,6 +725,103 @@ function applyMilestone(threshold, r) {
   }
 }
 
+// ---------- Player name + cheat code ----------
+const CHEAT_NAME = 'Orangecatmylesays10425';
+function promptName() {
+  const cur = save.name || 'Bob';
+  const next = prompt('Enter your baker name:', cur);
+  if (next === null) return;
+  const trimmed = next.trim();
+  if (!trimmed) return;
+  setName(trimmed);
+}
+function setName(n) {
+  save.name = n;
+  const el = document.getElementById('playerName');
+  if (el) el.textContent = n;
+  if (n === CHEAT_NAME) applyCheat();
+  saveGame();
+  rebuildAll();
+}
+function applyCheat() {
+  let granted = 0;
+  for (const u of UPGRADES) {
+    if (save.upgrades[u.id]) continue;
+    save.upgrades[u.id] = true;
+    granted++;
+    if (u.special === 'godSpawn') save.godSpawnMult *= 1.1;
+    else if (u.special === 'alienRepel') { while (aliens.length) { aliens[0].el.remove(); aliens.shift(); } }
+    else if (u.special === 'goldBars') goldBarTimer = save.goldBarInterval;
+    else if (u.special === 'goldBarsSpeed') save.goldBarInterval = u.interval;
+    else if (u.special === 'ultimate') spawnUltimateRobot();
+  }
+  bigToast(`🎁 CHEAT MODE: ${granted} upgrades unlocked`, 'good', 4000);
+}
+
+// ---------- Index modal ----------
+function openIndex() { rebuildIndex(); document.getElementById('indexModal').classList.add('show'); }
+function closeIndex() { document.getElementById('indexModal').classList.remove('show'); }
+function rebuildIndex() {
+  const body = document.getElementById('indexBody');
+  if (!body) return;
+  const total = totalCps();
+  let html = '';
+  // Header info
+  html += `<div style="margin-bottom:14px;padding:10px;background:#1a0a14;border:1px solid #ffd86a44;border-radius:8px;
+    font-size:12px;color:#ffd86a;letter-spacing:1.5px;line-height:1.7">
+    BAKER: <b style="color:#fff">${save.name || 'Bob'}</b> ·
+    Rebirth Level <b style="color:#d99aff">${save.rebirthLevel}</b> ·
+    <b style="color:#6fffc0">${rebirthMultiplier()}×</b> permanent multiplier ·
+    Total cookies baked: <b style="color:#fff">${fmt(save.totalCookies)}</b>
+  </div>`;
+  // Buildings
+  html += '<div class="idx-section-title">BUILDINGS</div>';
+  for (const p of PRODUCERS) {
+    const owned = save.producers[p.id];
+    const cpsEach = producerCps(p) * globalMult();
+    const contrib = cpsEach * owned;
+    const pct = total > 0 ? (contrib / total * 100).toFixed(1) : '0.0';
+    const cost = producerCost(p);
+    html += `<div class="idx-card" style="--c:${p.color}">
+      <div class="idx-art" style="--c:${p.color}">${bSvg(p.id) || p.icon}</div>
+      <div class="idx-meta">
+        <div class="idx-name">${p.name}</div>
+        <div class="idx-lore">${BUILDING_LORE[p.id] || ''}</div>
+        <div class="idx-stats">
+          <div><span class="idx-stat-label">Owned:</span> <span class="idx-stat-val">${owned}</span></div>
+          <div><span class="idx-stat-label">Next cost:</span> <span class="idx-stat-val">${fmt(cost)}</span></div>
+          <div><span class="idx-stat-label">CPS each:</span> <span class="idx-stat-val">${fmt(cpsEach)}</span></div>
+          <div><span class="idx-stat-label">Contributes:</span> <span class="idx-stat-val">${fmt(contrib)} (${pct}%)</span></div>
+        </div>
+      </div>
+    </div>`;
+  }
+  // Upgrades owned
+  const ownedUpgrades = UPGRADES.filter(u => save.upgrades[u.id]);
+  html += `<div class="idx-section-title">OWNED UPGRADES (${ownedUpgrades.length} / ${UPGRADES.length})</div>`;
+  if (ownedUpgrades.length === 0) {
+    html += '<div style="color:#cfa97a;font-style:italic;font-size:12px;padding:6px">None yet — buy upgrades in the middle column.</div>';
+  } else {
+    html += '<div class="idx-chiplist">';
+    for (const u of ownedUpgrades) {
+      html += `<div class="idx-chip owned">${u.icon} ${u.name}</div>`;
+    }
+    html += '</div>';
+  }
+  // Milestones
+  html += '<div class="idx-section-title">MILESTONE REWARDS</div>';
+  html += '<div class="idx-chiplist">';
+  for (const threshold of Object.keys(MILESTONE_REWARDS).map(Number).sort((a,b)=>a-b)) {
+    const r = MILESTONE_REWARDS[threshold];
+    const got = !!save.milestoneRewards[r.id];
+    html += `<div class="idx-chip ${got?'owned':'locked'}" title="${r.desc}">
+      ${r.icon} ${threshold} — ${r.name}${got?' ✓':''}
+    </div>`;
+  }
+  html += '</div>';
+  body.innerHTML = html;
+}
+
 function rebirthGame() {
   const next = REBIRTH_TIERS[save.rebirthLevel];
   if (!next) { toast('MAX REBIRTH REACHED', 'good'); return; }
@@ -626,7 +905,7 @@ function rebuildProducers() {
     const affordable = save.cookies >= cost;
     if (affordable) el.classList.add('affordable');
     el.innerHTML = `
-      <div class="pic" style="color:${p.color}">${p.icon}</div>
+      <div class="pic" style="color:${p.color}">${bSvg(p.id) || p.icon}</div>
       <div class="meta">
         <div class="name">${p.name}</div>
         <div class="price">${fmt(cost)} cookies</div>
@@ -642,22 +921,21 @@ function rebuildProducers() {
 function rebuildUpgrades() {
   const grid = document.getElementById('upgradesGrid');
   grid.innerHTML = '';
+  let shown = 0;
   for (const u of UPGRADES) {
     const owned = !!save.upgrades[u.id];
+    if (owned) continue; // bought upgrades vanish — see them in the Index
     const reqMet = isReqMet(u);
     const canAfford = save.cookies >= u.cost;
-    const available = !owned && reqMet && canAfford;
-    const visible = owned || isReqVisible(u);
-    if (!visible) continue;
+    const available = reqMet && canAfford;
+    if (!isReqVisible(u)) continue;
+    shown++;
     const el = document.createElement('div');
-    el.className = 'upgrade-card';
-    if (owned) el.classList.add('owned');
-    else if (available) el.classList.add('available');
-    else el.classList.add('locked');
+    el.className = 'upgrade-card' + (available ? ' available' : ' locked');
     const producer = u.req.producer ? PRODUCERS.find(x => x.id === u.req.producer) : null;
     const color = u.color || (producer && producer.color) || '#ffd86a';
     let reqLine = '';
-    if (!owned && !reqMet) {
+    if (!reqMet) {
       if (u.req.producer) {
         reqLine = `<div class="req">need ${u.req.count} ${producer.name}s (have ${save.producers[u.req.producer]})</div>`;
       } else if (u.req.upgrade) {
@@ -670,12 +948,15 @@ function rebuildUpgrades() {
       <div class="meta">
         <div class="name">${u.name}</div>
         <div class="desc">${u.desc}</div>
-        <div class="price">${owned ? 'OWNED' : fmt(u.cost) + ' cookies'}</div>
+        <div class="price">${fmt(u.cost)} cookies</div>
         ${reqLine}
       </div>
     `;
     if (available) el.onclick = () => buyUpgrade(u.id);
     grid.appendChild(el);
+  }
+  if (shown === 0) {
+    grid.innerHTML = '<div class="bldg-empty">No upgrades available right now — buy more buildings or open the INDEX to see what you own.</div>';
   }
 }
 
@@ -700,14 +981,16 @@ function rebuildBuildingsView() {
     return;
   }
   view.innerHTML = '';
+  const SPARKS = ['✦', '✧', '✺', '✶', '✷', '✸'];
   for (const p of visibleRows) {
     const owned = save.producers[p.id];
-    const visualMax = 22;
+    const visualMax = 16;
     const shown = Math.min(owned, visualMax);
     const overflow = owned - shown;
-    let iconsHtml = '';
-    for (let i = 0; i < shown; i++) iconsHtml += `<span class="b-icon">${p.icon}</span>`;
-    if (overflow > 0) iconsHtml += `<span class="row-overflow">+${overflow} more</span>`;
+    let iconsHtml = `<span class="bldg-spark">${SPARKS[0]}</span>`;
+    for (let i = 0; i < shown; i++) iconsHtml += bSvg(p.id);
+    if (overflow > 0) iconsHtml += `<span class="row-overflow">+${overflow}</span>`;
+    iconsHtml += `<span class="bldg-spark">${SPARKS[1]}</span>`;
     const row = document.createElement('div');
     row.className = 'bldg-row';
     row.style.setProperty('--c', p.color);
@@ -721,12 +1004,15 @@ function rebuildBuildingsView() {
 }
 
 function rebuildAll() {
+  const nameEl = document.getElementById('playerName');
+  if (nameEl) nameEl.textContent = save.name || 'Bob';
   rebuildProducers();
   rebuildBuildingsView();
   rebuildMilestones();
   rebuildRebirth();
   rebuildUpgrades();
   rebuildStats();
+  if (document.getElementById('indexModal').classList.contains('show')) rebuildIndex();
 }
 
 function rebuildMilestones() {
@@ -1672,25 +1958,26 @@ function refreshAffordability() {
     i++;
   }
   // Updates upgrades visibility (any new ones reached requirement)
-  const visibleNow = UPGRADES.filter(u => save.upgrades[u.id] || isReqVisible(u)).length;
+  // Bought upgrades vanish, so only count unowned + visible.
+  const visibleNow = UPGRADES.filter(u => !save.upgrades[u.id] && isReqVisible(u)).length;
   if (visibleNow !== _lastUpgradeVisibleCount) {
     rebuildUpgrades();
     _lastUpgradeVisibleCount = visibleNow;
     return;
   }
-  // Otherwise just toggle availability classes
+  // Otherwise just toggle availability classes (skip owned)
   const upgradeEls = document.querySelectorAll('.upgrade-card');
   let ui = 0;
   for (const u of UPGRADES) {
-    if (!(save.upgrades[u.id] || isReqVisible(u))) continue;
+    if (save.upgrades[u.id]) continue;
+    if (!isReqVisible(u)) continue;
     const el = upgradeEls[ui]; if (!el) { ui++; continue; }
-    const owned = !!save.upgrades[u.id];
     const reqMet = isReqMet(u);
     const canAfford = save.cookies >= u.cost;
-    const available = !owned && reqMet && canAfford;
-    el.className = 'upgrade-card' + (owned ? ' owned' : available ? ' available' : ' locked');
+    const available = reqMet && canAfford;
+    el.className = 'upgrade-card' + (available ? ' available' : ' locked');
     if (available) el.onclick = () => buyUpgrade(u.id);
-    else if (!owned) el.onclick = null;
+    else el.onclick = null;
     ui++;
   }
   // Rebirth button: toggle ready state as cookies accumulate from CPS
