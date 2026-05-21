@@ -65,6 +65,24 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 .upgrade-card.locked .price{color:#888}
 .upgrade-card .req{font-size:10px;color:#ff8a8a;margin-top:2px}
 
+.buildings-view{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
+.bldg-empty{font-size:12px;color:#5a3a1a;font-style:italic;padding:8px 4px;letter-spacing:1px}
+.bldg-row{background:linear-gradient(180deg,#1a0a14 0%,#0a0410 100%);border:1px solid #4a2a3a;border-radius:6px;
+          padding:6px 10px;min-height:42px;display:flex;align-items:center;gap:8px;overflow:hidden;position:relative}
+.bldg-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,#ffd86a);box-shadow:0 0 10px var(--c,#ffd86a)}
+.bldg-row .row-label{font-size:10px;color:var(--c,#ffd86a);letter-spacing:1.5px;width:78px;flex-shrink:0;font-weight:bold;text-transform:uppercase}
+.bldg-row .row-icons{flex:1;display:flex;align-items:center;flex-wrap:nowrap;gap:1px;overflow:hidden;min-height:24px;white-space:nowrap}
+.bldg-row .row-count{font-size:14px;color:#fff;font-weight:bold;min-width:36px;text-align:right;flex-shrink:0;
+                     text-shadow:0 0 8px var(--c,#ffd86a)}
+.bldg-row .b-icon{font-size:18px;line-height:1;filter:drop-shadow(0 0 4px var(--c,#ffd86a));
+                  animation:bldgBob 2.2s ease-in-out infinite;display:inline-block}
+.bldg-row .b-icon:nth-child(2n){animation-delay:0.2s}
+.bldg-row .b-icon:nth-child(3n){animation-delay:0.5s}
+.bldg-row .b-icon:nth-child(5n){animation-delay:0.9s}
+.bldg-row .b-icon:nth-child(7n){animation-delay:1.4s}
+.bldg-row .row-overflow{font-size:11px;color:#aa6a3a;margin-left:6px;font-style:italic}
+@keyframes bldgBob{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-3px) rotate(2deg)}}
+
 .events-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;min-height:30px}
 .event-pill{background:#2a1a08;border:2px solid #ffd86a;color:#ffd86a;padding:4px 10px;border-radius:20px;
             font-size:11px;letter-spacing:1px;font-weight:bold;box-shadow:0 0 10px #ffd86a44}
@@ -162,6 +180,11 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
     <span class="event-pill" id="statBldgs">0 buildings</span>
     <span class="event-pill" id="statClicks">0 clicks</span>
     <span class="event-pill" id="statMult">1.00× mult</span>
+  </div>
+
+  <div class="section-title">Workshop</div>
+  <div class="buildings-view" id="buildingsView">
+    <div class="bldg-empty">Buy buildings on the right — they'll show up here.</div>
   </div>
 
   <div class="section-title">Upgrades</div>
@@ -443,8 +466,38 @@ function rebuildStats() {
   document.getElementById('alienHint').style.display = aliens.length > 0 ? 'block' : 'none';
 }
 
+function rebuildBuildingsView() {
+  const view = document.getElementById('buildingsView');
+  // Skip cursor (rendered around the cookie) and any building with 0 owned.
+  const visibleRows = PRODUCERS.filter(p => p.id !== 'cursor' && save.producers[p.id] > 0);
+  if (visibleRows.length === 0) {
+    view.innerHTML = '<div class="bldg-empty">Buy buildings on the right — they\'ll show up here.</div>';
+    return;
+  }
+  view.innerHTML = '';
+  for (const p of visibleRows) {
+    const owned = save.producers[p.id];
+    const visualMax = 22;
+    const shown = Math.min(owned, visualMax);
+    const overflow = owned - shown;
+    let iconsHtml = '';
+    for (let i = 0; i < shown; i++) iconsHtml += `<span class="b-icon">${p.icon}</span>`;
+    if (overflow > 0) iconsHtml += `<span class="row-overflow">+${overflow} more</span>`;
+    const row = document.createElement('div');
+    row.className = 'bldg-row';
+    row.style.setProperty('--c', p.color);
+    row.innerHTML = `
+      <div class="row-label">${p.name}s</div>
+      <div class="row-icons">${iconsHtml}</div>
+      <div class="row-count">${owned}</div>
+    `;
+    view.appendChild(row);
+  }
+}
+
 function rebuildAll() {
   rebuildProducers();
+  rebuildBuildingsView();
   rebuildUpgrades();
   rebuildStats();
 }
@@ -558,6 +611,61 @@ function drawCookie(dt) {
   // top highlight
   ckctx.fillStyle = 'rgba(255,230,180,0.25)';
   ckctx.beginPath(); ckctx.ellipse(-25, -45, 30, 12, -0.4, 0, Math.PI*2); ckctx.fill();
+  ckctx.restore();
+  // Cursors orbiting around the cookie (outside the pulse transform)
+  drawCursorsOrbit();
+}
+
+function drawCursorsOrbit() {
+  const count = save.producers.cursor;
+  if (count <= 0) return;
+  const W = cookieCv.width, H = cookieCv.height;
+  ckctx.save();
+  ckctx.translate(W/2, H/2);
+  const visualCount = Math.min(count, 48);
+  const baseR = 120;
+  const baseAng = cookieT * 0.35;
+  for (let i = 0; i < visualCount; i++) {
+    const a = (i / visualCount) * Math.PI * 2 + baseAng;
+    const cx = Math.cos(a) * baseR;
+    const cy = Math.sin(a) * baseR;
+    // Each cursor "clicks" the cookie at its own beat
+    const clickT = (cookieT * 2.6 + i * 0.7) % 1;
+    const stab = clickT < 0.15 ? (1 - clickT/0.15) * 8 : 0;  // jab inward then retract
+    const rx = cx - Math.cos(a) * stab;
+    const ry = cy - Math.sin(a) * stab;
+    ckctx.save();
+    ckctx.translate(rx, ry);
+    ckctx.rotate(a + Math.PI/2);  // point cursor tip toward cookie centre
+    // shadow
+    ckctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ckctx.beginPath();
+    ckctx.moveTo(1, -7);
+    ckctx.lineTo(6, 5);
+    ckctx.lineTo(1, 3);
+    ckctx.lineTo(-4, 5);
+    ckctx.closePath();
+    ckctx.fill();
+    // cursor body
+    ckctx.fillStyle = '#fff';
+    ckctx.strokeStyle = '#000';
+    ckctx.lineWidth = 1.2;
+    ckctx.beginPath();
+    ckctx.moveTo(0, -8);
+    ckctx.lineTo(5, 4);
+    ckctx.lineTo(0, 2);
+    ckctx.lineTo(-5, 4);
+    ckctx.closePath();
+    ckctx.fill();
+    ckctx.stroke();
+    ckctx.restore();
+  }
+  if (count > visualCount) {
+    ckctx.fillStyle = '#fff';
+    ckctx.font = 'bold 11px monospace';
+    ckctx.textAlign = 'center';
+    ckctx.fillText(`+${count - visualCount}`, 0, -baseR - 8);
+  }
   ckctx.restore();
 }
 
