@@ -667,7 +667,7 @@ function makeDemon() {
     id: 'demon', name: 'DEMON LORD', icon: '😈',
     intro: 'A demon claws its way up from the underworld. Four brutal attacks. Don\'t hesitate.',
     x: W * 0.5, y: 180, vx: 0, vy: 0,
-    hp: 700, maxHp: 700,
+    hp: 500, maxHp: 500,
     color: '#ff3a3a',
     attackT: 0, attackT2: 0,
     chargingAt: null,
@@ -838,7 +838,7 @@ function makeTrollface() {
   return {
     id: 'trollface', name: 'TROLLFACE', icon: '🃏',
     intro: 'The eternal troll. 15 attacks. Reverses your controls, flips the screen, fake bullets, clones — anything goes. Survive ~10 minutes of trolling.',
-    x: W * 0.5, y: 200, hp: 2200, maxHp: 2200,
+    x: W * 0.5, y: 200, hp: 1300, maxHp: 1300,
     color: '#a23',
     attackT: 0, attackT2: 0,
     attackQueue: [],
@@ -1083,7 +1083,7 @@ function makeCoffee() {
   return {
     id: 'coffee', name: 'CURSED LATTE', icon: '☕',
     intro: 'A cup of coffee, cursed and very awake. 3 OP abilities plus sugar cubes and creamer drops swarming at the same time.',
-    x: W * 0.5, y: 200, hp: 1400, maxHp: 1400,
+    x: W * 0.5, y: 200, hp: 900, maxHp: 900,
     attackT: 0, attackT2: 0, spawnT: 0,
     color: '#6a3a14'
   };
@@ -1244,8 +1244,8 @@ function makeTV() {
   return {
     id: 'tv', name: 'STATIC TV', icon: '📺',
     intro: 'A TV that fights back. 5 nearly-impossible attacks. Every so often the fight pauses for a puzzle or math problem — get it wrong and lose HP.',
-    x: W * 0.5, y: 220, hp: 2400, maxHp: 2400,
-    attackT: 0, attackT2: 0, pauseT: 15,  // pause every ~15s
+    x: W * 0.5, y: 220, hp: 1200, maxHp: 1200,
+    attackT: 0, attackT2: 0, pauseT: 35,  // pause once or twice per fight
     channel: 0
   };
 }
@@ -1272,7 +1272,7 @@ function tickTV(b, dt) {
   }
   // Puzzle/math pause
   if (b.pauseT <= 0) {
-    b.pauseT = 22;
+    b.pauseT = 45;
     if (Math.random() < 0.5) {
       const a = Math.floor(rand(20, 99));
       const c = Math.floor(rand(20, 99));
@@ -1414,8 +1414,8 @@ function makeShoe() {
   return {
     id: 'shoe', name: 'CURSED SNEAKER', icon: '👟',
     intro: 'A possessed sneaker. 4 abilities, plus three waves of zombies and a Zomboss before it ends. Bring a sword.',
-    x: W * 0.5, y: 220, hp: 2800, maxHp: 2800,
-    attackT: 0, attackT2: 0, waveT: 8,
+    x: W * 0.5, y: 220, hp: 1400, maxHp: 1400,
+    attackT: 0, attackT2: 0, waveT: 6,
     color: '#cfd8e8'
   };
 }
