@@ -28,9 +28,10 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 .cookie-count small{font-size:13px;color:#cfa97a;display:block;letter-spacing:2px;margin-top:2px}
 .cps{font-size:14px;color:#ffc888;letter-spacing:1px;margin-top:4px}
 
-.cookie-zone{flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
-#cookieCv{cursor:pointer;width:260px;height:260px}
-.alien-hint{position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#6fffc0;font-size:11px;letter-spacing:1px;opacity:0.8}
+.cookie-zone{flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+#milkCv{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+#cookieCv{cursor:pointer;width:260px;height:260px;position:relative;z-index:2}
+.alien-hint{position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#6fffc0;font-size:11px;letter-spacing:1px;opacity:0.8;z-index:3}
 
 .left-foot{width:100%;display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid #aa6a3a44}
 .foot-btn{background:linear-gradient(180deg,#aa6a3a,#5a3a1a);border:0;color:#fff;padding:8px;
@@ -64,6 +65,34 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
 .upgrade-card.owned .price{color:#6fffc0}
 .upgrade-card.locked .price{color:#888}
 .upgrade-card .req{font-size:10px;color:#ff8a8a;margin-top:2px}
+
+/* Milestone cards */
+.milestones-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:18px}
+.milestone-card{background:#1a0a14;border:2px solid #4a2a3a;border-radius:8px;padding:8px;
+                display:flex;gap:8px;opacity:0.55;transition:all 0.15s}
+.milestone-card.owned{border-color:#6fffc0;background:#0a1a14;opacity:1;box-shadow:0 0 14px #6fffc044}
+.milestone-card .ms-ic{font-size:26px;flex-shrink:0;width:36px;display:flex;align-items:center;justify-content:center;
+                       filter:drop-shadow(0 0 6px currentColor)}
+.milestone-card.owned .ms-ic{color:#6fffc0}
+.milestone-card .ms-meta{flex:1;min-width:0}
+.milestone-card .ms-name{font-size:12px;font-weight:bold;color:#fff;letter-spacing:1px}
+.milestone-card .ms-desc{font-size:10px;color:#cfa97a;margin-top:2px;line-height:1.4}
+.milestone-card .ms-req{font-size:10px;color:#ff8a8a;margin-top:3px;font-weight:bold;letter-spacing:0.5px}
+.milestone-card.owned .ms-req{color:#6fffc0}
+
+/* Rebirth panel */
+.rebirth-panel{margin-bottom:18px;display:flex;flex-direction:column;gap:8px}
+.rebirth-current{font-size:13px;color:#ffd86a;letter-spacing:1px;text-shadow:0 0 8px #ffd86a55;
+                 padding:6px 10px;border:1px solid #ffd86a44;border-radius:6px;background:#1a0a14}
+.rebirth-btn{width:100%;background:linear-gradient(180deg,#aa4aff,#5a1a8a);border:2px solid #d99aff;
+             color:#fff;padding:12px;font-weight:bold;font-family:inherit;letter-spacing:1.5px;border-radius:8px;
+             cursor:not-allowed;font-size:13px;opacity:0.45;box-shadow:0 0 14px #aa4aff44;text-align:center;
+             line-height:1.5}
+.rebirth-btn.ready{opacity:1;cursor:pointer;box-shadow:0 0 24px #d99aff}
+.rebirth-btn.ready:hover{background:linear-gradient(180deg,#d99aff,#aa4aff);transform:translateY(-2px)}
+.rebirth-btn small{font-size:11px;color:#ffd86a;font-weight:normal;letter-spacing:1px}
+.rebirth-max{font-size:13px;color:#6fffc0;letter-spacing:1px;text-align:center;padding:10px;
+             border:2px solid #6fffc0;border-radius:8px;text-shadow:0 0 8px #6fffc0;background:#0a1a14}
 
 .buildings-view{display:flex;flex-direction:column;gap:6px;margin-bottom:18px}
 .bldg-empty{font-size:12px;color:#5a3a1a;font-style:italic;padding:8px 4px;letter-spacing:1px}
@@ -167,6 +196,7 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
   </div>
 
   <div class="cookie-zone">
+    <canvas id="milkCv"></canvas>
     <canvas id="cookieCv" width="260" height="260"></canvas>
     <div class="alien-hint" id="alienHint" style="display:none">Click aliens to repel them!</div>
   </div>
@@ -191,6 +221,12 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
     <div class="bldg-empty">Buy buildings on the right — they'll show up here.</div>
   </div>
 
+  <div class="section-title">Rebirth</div>
+  <div id="rebirthPanel" class="rebirth-panel"></div>
+
+  <div class="section-title">Milestone Rewards</div>
+  <div class="milestones-grid" id="milestonesGrid"></div>
+
   <div class="section-title">Upgrades</div>
   <div class="upgrades-grid" id="upgradesGrid"></div>
 
@@ -198,7 +234,10 @@ body{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:100vh
   <div style="font-size:12px;color:#cfa97a;line-height:1.7;letter-spacing:0.5px">
     Click the giant cookie to earn cookies. Use cookies to buy buildings on the right — they auto-produce cookies.
     Reach milestones to unlock upgrades shown above. Golden God Cookies appear randomly — click them for big bonuses.
-    After 10 Worlds, ALIENS will start arriving every 5 seconds — each alien reduces your multiplier. Click aliens to repel them.
+    Owning 7, 19, 57, 75, 135, 140, 145, 175, or 399 of ANY building unlocks a flat Milestone Reward (not a multiplier).
+    Every 30 cursors adds a new orbiting ring around the cookie. After 1 Universe a milk pool rises — at 10 it turns chocolate, at 100 it turns strawberry, and at 1000 a Milk Boss emerges.
+    Once you have 100 God Cookies (the final building) a golden cookie spawns every 80s. Earn enough cookies to REBIRTH for a permanent 15× → 135× multiplier (six tiers).
+    After 10 Worlds, ALIENS will start arriving — each alien reduces your multiplier. Click aliens to repel them.
     The Ultimate Robot Boss unlocks at 350 Universes.
   </div>
 </div>
@@ -228,7 +267,8 @@ const PRODUCERS = [
   { id:'company',  name:'Company',       icon:'🏢', baseCost: 130000,     baseCps: 260,    color:'#6fffc0' },
   { id:'world',    name:'World',         icon:'🌍', baseCost: 1.4e6,      baseCps: 1400,   color:'#5fff5f' },
   { id:'galaxy',   name:'Galaxy',        icon:'🌌', baseCost: 2e7,        baseCps: 7800,   color:'#b95fff' },
-  { id:'universe', name:'Universe',      icon:'🌠', baseCost: 3.3e8,      baseCps: 44000,  color:'#ffd86a' }
+  { id:'universe',     name:'Universe',      icon:'🌠', baseCost: 3.3e8,      baseCps: 44000,   color:'#ffd86a' },
+  { id:'divineCookie', name:'God Cookie',    icon:'✨', baseCost: 5.5e9,      baseCps: 260000,  color:'#fff6c0' }
 ];
 
 // ---------- Constants: upgrades ----------
@@ -326,6 +366,29 @@ UPGRADES.sort((a, b) => {
   return (a.req.count || 0) - (b.req.count || 0);
 });
 
+// ---------- Milestone rewards (any-building thresholds, flat / non-multiplier) ----------
+const MILESTONE_REWARDS = {
+  7:   { id:'m7',   name:'Lucky Seven',        icon:'🍀', desc:'+7 flat cookies on every click.' },
+  19:  { id:'m19',  name:'Time Skip',          icon:'⏩', desc:'Instantly grants 19 minutes of CPS.' },
+  57:  { id:'m57',  name:'Heinz Recipe',       icon:'🥫', desc:'+57 flat cookies per second.' },
+  75:  { id:'m75',  name:'Bulk Discount',      icon:'🏷️', desc:'Every building costs 5% less.' },
+  135: { id:'m135', name:'Auto-Clicker',       icon:'🤖', desc:'Auto-clicks the giant cookie once every second.' },
+  140: { id:'m140', name:'Cookie Storm',       icon:'⛈️', desc:'Instantly summons 5 Golden God Cookies.' },
+  145: { id:'m145', name:'Gold Magnet',        icon:'🧲', desc:'Gold bars pay +5M cookies extra.' },
+  175: { id:'m175', name:'Frenzy Forever',     icon:'🔥', desc:'Frenzy and Click Frenzy durations are 50% longer.' },
+  399: { id:'m399', name:'Cookie Singularity', icon:'✨', desc:'A friendly cookie auto-collects gold bars and god cookies.' }
+};
+
+// ---------- Rebirth tiers ----------
+const REBIRTH_TIERS = [
+  { cost: 100e6,  mult: 15  },
+  { cost: 500e6,  mult: 30  },
+  { cost: 2.5e9,  mult: 45  },
+  { cost: 10e9,   mult: 60  },
+  { cost: 75e9,   mult: 90  },
+  { cost: 500e9,  mult: 135 }
+];
+
 // ---------- Save ----------
 const SAVE_KEY = 'cookieQuestSave_v1';
 function defaultSave() {
@@ -335,6 +398,8 @@ function defaultSave() {
     clicks: 0,
     producers: Object.fromEntries(PRODUCERS.map(p => [p.id, 0])),
     upgrades: {},
+    milestoneRewards: {},      // any-building threshold rewards
+    rebirthLevel: 0,           // 0..REBIRTH_TIERS.length
     godSpawnMult: 1,           // multiplied by 1.1 per godSpawn upgrade buy (only once available)
     goldBarInterval: 10,       // seconds between gold bar spawns (reduced by upgrades)
     lastTickAt: Date.now()
@@ -345,7 +410,11 @@ function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return defaultSave();
-    return Object.assign(defaultSave(), JSON.parse(raw));
+    const merged = Object.assign(defaultSave(), JSON.parse(raw));
+    // Add producer slots that didn't exist in older saves
+    for (const p of PRODUCERS) if (!(p.id in merged.producers)) merged.producers[p.id] = 0;
+    if (!merged.milestoneRewards) merged.milestoneRewards = {};
+    return merged;
   } catch { return defaultSave(); }
 }
 function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch {} }
@@ -377,7 +446,9 @@ function toast(msg, kind = '', ms = 1500) {
 }
 function producerCost(p) {
   const owned = save.producers[p.id];
-  return Math.ceil(p.baseCost * Math.pow(1.15, owned));
+  let c = p.baseCost * Math.pow(1.15, owned);
+  if (save.milestoneRewards.m75) c *= 0.95;
+  return Math.ceil(c);
 }
 function producerCps(p) {
   let cps = p.baseCps;
@@ -388,18 +459,25 @@ function producerCps(p) {
   if (save.upgrades.ultimateRobot && p.id === 'robot') cps *= 10;
   return cps;
 }
+function rebirthMultiplier() {
+  const tier = REBIRTH_TIERS[save.rebirthLevel - 1];
+  return tier ? tier.mult : 1;
+}
 function globalMult() {
   let m = 1;
   // Aliens reduce multiplier
   m *= Math.max(0.1, 1 - aliens.length * 0.05);
   // Ultimate robot boss: 2× to everything
   if (save.upgrades.ultimateRobot) m *= 2;
+  m *= rebirthMultiplier();
   return m;
 }
 function totalCps() {
   let sum = 0;
   for (const p of PRODUCERS) sum += producerCps(p) * save.producers[p.id];
   sum *= globalMult();
+  // Heinz Recipe: flat +57 CPS after all multipliers
+  if (save.milestoneRewards.m57) sum += 57;
   return sum;
 }
 function clickValue() {
@@ -413,6 +491,10 @@ function clickValue() {
   if (save.upgrades.ultimateRobot) base *= 2;
   // Frenzy multipliers
   base *= clickFrenzyMult;
+  // Rebirth multiplier applies to clicks too
+  base *= rebirthMultiplier();
+  // Lucky Seven: flat +7 after all multipliers
+  if (save.milestoneRewards.m7) base += 7;
   return base;
 }
 
@@ -423,8 +505,66 @@ function buyProducer(id) {
   if (save.cookies < cost) return;
   save.cookies -= cost;
   save.producers[id]++;
+  // Universe milk tier crossings
+  if (id === 'universe') {
+    const n = save.producers.universe;
+    if (n === 1)    bigToast('🥛 MILK RISES BENEATH THE COOKIE', 'good', 2500);
+    if (n === 10)   bigToast('🍫 MILK TURNS CHOCOLATE', 'good', 2500);
+    if (n === 100)  bigToast('🍓 MILK TURNS STRAWBERRY', 'good', 2500);
+    if (n === 1000) bigToast('👁️ THE MILK BOSS EMERGES', 'danger', 4500);
+  }
+  checkMilestones();
   saveGame();
   rebuildAll();
+}
+
+function checkMilestones() {
+  for (const p of PRODUCERS) {
+    const owned = save.producers[p.id];
+    for (const thresholdStr of Object.keys(MILESTONE_REWARDS)) {
+      const threshold = +thresholdStr;
+      const r = MILESTONE_REWARDS[threshold];
+      if (owned >= threshold && !save.milestoneRewards[r.id]) {
+        save.milestoneRewards[r.id] = true;
+        applyMilestone(threshold, r);
+      }
+    }
+  }
+}
+
+function applyMilestone(threshold, r) {
+  bigToast(`${r.icon} MILESTONE: ${r.name}!`, 'good', 3500);
+  if (threshold === 19) {
+    const gain = Math.max(19 * 60, totalCps() * 60 * 19);
+    save.cookies += gain;
+    save.totalCookies += gain;
+  } else if (threshold === 140) {
+    for (let i = 0; i < 5; i++) setTimeout(() => spawnGodCookie(), i * 250);
+  }
+}
+
+function rebirthGame() {
+  const next = REBIRTH_TIERS[save.rebirthLevel];
+  if (!next) { toast('MAX REBIRTH REACHED', 'good'); return; }
+  if (save.cookies < next.cost) { toast(`Need ${fmt(next.cost)} cookies`, 'danger'); return; }
+  if (!confirm(`Spend ${fmt(next.cost)} cookies to REBIRTH for permanent ${next.mult}× multiplier?\n\nThis resets cookies, buildings, and upgrades. Milestone rewards and rebirth level are kept.`)) return;
+  save.rebirthLevel++;
+  save.cookies = 0;
+  save.totalCookies = 0;
+  save.clicks = 0;
+  save.producers = Object.fromEntries(PRODUCERS.map(p => [p.id, 0]));
+  save.upgrades = {};
+  save.godSpawnMult = 1;
+  save.goldBarInterval = 10;
+  frenzyMult = 1; frenzyTime = 0;
+  clickFrenzyMult = 1; clickFrenzyTime = 0;
+  while (aliens.length) { aliens[0].el.remove(); aliens.shift(); }
+  while (godCookies.length) { godCookies[0].el.remove(); godCookies.shift(); }
+  while (goldBars.length) { goldBars[0].el.remove(); goldBars.shift(); }
+  const r = document.getElementById('ultimateRobotEl'); if (r) r.remove(); ultimateRobot = null;
+  saveGame();
+  rebuildAll();
+  bigToast(`🌟 REBIRTH ${save.rebirthLevel}: ${next.mult}× PERMANENT MULTIPLIER!`, 'good', 4500);
 }
 
 // ---------- Requirement helpers ----------
@@ -583,8 +723,59 @@ function rebuildBuildingsView() {
 function rebuildAll() {
   rebuildProducers();
   rebuildBuildingsView();
+  rebuildMilestones();
+  rebuildRebirth();
   rebuildUpgrades();
   rebuildStats();
+}
+
+function rebuildMilestones() {
+  const grid = document.getElementById('milestonesGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const best = Math.max(...PRODUCERS.map(p => save.producers[p.id]), 0);
+  const thresholds = Object.keys(MILESTONE_REWARDS).map(Number).sort((a, b) => a - b);
+  let shown = 0;
+  for (const threshold of thresholds) {
+    const r = MILESTONE_REWARDS[threshold];
+    const owned = !!save.milestoneRewards[r.id];
+    const visible = owned || best >= Math.floor(threshold * 0.5);
+    if (!visible) continue;
+    shown++;
+    const el = document.createElement('div');
+    el.className = 'milestone-card' + (owned ? ' owned' : ' locked');
+    el.innerHTML = `
+      <div class="ms-ic">${r.icon}</div>
+      <div class="ms-meta">
+        <div class="ms-name">${r.name}</div>
+        <div class="ms-desc">${r.desc}</div>
+        <div class="ms-req">${owned ? 'EARNED' : `Own ${threshold} of any building (best: ${best})`}</div>
+      </div>
+    `;
+    grid.appendChild(el);
+  }
+  if (shown === 0) {
+    grid.innerHTML = '<div class="bldg-empty">Reach 7 of any building to earn your first milestone.</div>';
+  }
+}
+
+function rebuildRebirth() {
+  const panel = document.getElementById('rebirthPanel');
+  if (!panel) return;
+  const lvl = save.rebirthLevel;
+  const next = REBIRTH_TIERS[lvl];
+  const curMult = rebirthMultiplier();
+  let html = `<div class="rebirth-current">Rebirth Level ${lvl} · ${curMult}× permanent multiplier</div>`;
+  if (next) {
+    const ready = save.cookies >= next.cost;
+    html += `<button class="rebirth-btn${ready ? ' ready' : ''}" ${ready ? 'onclick="rebirthGame()"' : 'disabled'}>
+              REBIRTH → ${next.mult}× MULTIPLIER<br>
+              <small>${fmt(next.cost)} cookies</small>
+            </button>`;
+  } else {
+    html += `<div class="rebirth-max">MAX REBIRTH REACHED · ${curMult}× FOREVER</div>`;
+  }
+  panel.innerHTML = html;
 }
 
 // ---------- Click handler ----------
@@ -631,6 +822,131 @@ function spawnCrumbs(x, y) {
   }
 }
 
+// ---------- Milk pool (Universe-driven) ----------
+const milkCv = document.getElementById('milkCv');
+const milkCtx = milkCv.getContext('2d');
+function resizeMilk() {
+  const r = milkCv.parentElement.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0) return;
+  milkCv.width = Math.floor(r.width);
+  milkCv.height = Math.floor(r.height);
+}
+window.addEventListener('resize', resizeMilk);
+
+function milkColor(u) {
+  const WHITE = [240, 240, 220];
+  const BROWN = [110, 70, 30];
+  const RED   = [170, 30, 30];
+  if (u < 1) return null;
+  if (u < 10) {
+    const t = (u - 1) / 9;
+    return [WHITE[0]*(1-t)+BROWN[0]*t, WHITE[1]*(1-t)+BROWN[1]*t, WHITE[2]*(1-t)+BROWN[2]*t].map(Math.round);
+  }
+  if (u < 100) {
+    const t = (u - 10) / 90;
+    return [BROWN[0]*(1-t)+RED[0]*t, BROWN[1]*(1-t)+RED[1]*t, BROWN[2]*(1-t)+RED[2]*t].map(Math.round);
+  }
+  return RED;
+}
+
+function drawMilk(dt) {
+  const universes = save.producers.universe;
+  if (milkCv.width === 0) resizeMilk();
+  const W = milkCv.width, H = milkCv.height;
+  milkCtx.clearRect(0, 0, W, H);
+  if (universes < 1) return;
+  const col = milkColor(universes);
+  if (!col) return;
+  // Surface sits just below the cookie. cookieCv is centered in the cookie-zone (260x260).
+  const cookieRect = cookieCv.getBoundingClientRect();
+  const colRect = milkCv.getBoundingClientRect();
+  const surfaceY = Math.max(0, (cookieRect.bottom - colRect.top) + 4);
+  const t = cookieT;
+  const wave = (x) => Math.sin(x * 0.045 + t * 1.4) * 4 + Math.sin(x * 0.11 + t * 0.7) * 2;
+  // Liquid body
+  milkCtx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+  milkCtx.beginPath();
+  milkCtx.moveTo(0, H);
+  milkCtx.lineTo(0, surfaceY + wave(0));
+  for (let x = 0; x <= W; x += 4) milkCtx.lineTo(x, surfaceY + wave(x));
+  milkCtx.lineTo(W, H);
+  milkCtx.closePath();
+  milkCtx.fill();
+  // Surface highlight
+  const hl = [Math.min(255, col[0] + 40), Math.min(255, col[1] + 40), Math.min(255, col[2] + 40)];
+  milkCtx.strokeStyle = `rgba(${hl[0]},${hl[1]},${hl[2]},0.7)`;
+  milkCtx.lineWidth = 2;
+  milkCtx.beginPath();
+  for (let x = 0; x <= W; x += 4) {
+    const y = surfaceY + wave(x);
+    if (x === 0) milkCtx.moveTo(x, y); else milkCtx.lineTo(x, y);
+  }
+  milkCtx.stroke();
+  // Bubbles
+  for (let i = 0; i < 8; i++) {
+    const bx = ((i * 41 + (t * 18) | 0) % W + W) % W;
+    const by = surfaceY + 20 + ((i * 73 + (t * 26) | 0) % (H - surfaceY - 20));
+    const br = 1.5 + (i % 3);
+    milkCtx.fillStyle = `rgba(${hl[0]},${hl[1]},${hl[2]},0.35)`;
+    milkCtx.beginPath(); milkCtx.arc(bx, by, br, 0, Math.PI * 2); milkCtx.fill();
+  }
+  if (universes >= 1000) drawMilkBoss(t, surfaceY);
+}
+
+function drawMilkBoss(t, surfaceY) {
+  const W = milkCv.width;
+  const cx = W * 0.5;
+  const bob = Math.sin(t * 0.9) * 10;
+  const headY = surfaceY - 40 - bob;
+  // Tentacles around the cookie zone
+  milkCtx.strokeStyle = '#0a0204';
+  milkCtx.lineWidth = 7;
+  for (let i = -3; i <= 3; i++) {
+    if (i === 0) continue;
+    const tx = cx + i * 32;
+    const sway = Math.sin(t * 1.2 + i) * 10;
+    milkCtx.beginPath();
+    milkCtx.moveTo(tx, surfaceY + 6);
+    milkCtx.quadraticCurveTo(tx + sway, surfaceY - 18, tx + sway * 1.4, surfaceY - 36 - Math.abs(i) * 3);
+    milkCtx.stroke();
+  }
+  // Boss head
+  milkCtx.fillStyle = '#1a0408';
+  milkCtx.beginPath();
+  milkCtx.ellipse(cx, headY + 40, 58, 50, 0, 0, Math.PI * 2);
+  milkCtx.fill();
+  milkCtx.strokeStyle = '#5a1010';
+  milkCtx.lineWidth = 2;
+  milkCtx.stroke();
+  // Glowing eyes
+  const pulse = 0.55 + Math.abs(Math.sin(t * 3)) * 0.45;
+  milkCtx.fillStyle = `rgba(255,40,40,${pulse})`;
+  milkCtx.beginPath();
+  milkCtx.arc(cx - 18, headY + 34, 9, 0, Math.PI * 2);
+  milkCtx.arc(cx + 18, headY + 34, 9, 0, Math.PI * 2);
+  milkCtx.fill();
+  milkCtx.fillStyle = '#fff';
+  milkCtx.beginPath();
+  milkCtx.arc(cx - 18, headY + 34, 2.5, 0, Math.PI * 2);
+  milkCtx.arc(cx + 18, headY + 34, 2.5, 0, Math.PI * 2);
+  milkCtx.fill();
+  // Fangs
+  milkCtx.fillStyle = '#fff';
+  for (let i = -2; i <= 2; i++) {
+    milkCtx.beginPath();
+    milkCtx.moveTo(cx + i * 9, headY + 56);
+    milkCtx.lineTo(cx + i * 9 - 3, headY + 64);
+    milkCtx.lineTo(cx + i * 9 + 3, headY + 64);
+    milkCtx.closePath();
+    milkCtx.fill();
+  }
+  // Label
+  milkCtx.fillStyle = '#ff5a72';
+  milkCtx.font = 'bold 11px monospace';
+  milkCtx.textAlign = 'center';
+  milkCtx.fillText('MILK BOSS', cx, headY - 10);
+}
+
 // ---------- Big cookie render ----------
 const crumbs = [];
 function drawCookie(dt) {
@@ -642,7 +958,10 @@ function drawCookie(dt) {
   ckctx.translate(W/2, H/2);
   // breathing pulse
   const pulse = 1 + Math.sin(cookieT * 1.6) * 0.015;
-  ckctx.scale(cookieScale * pulse, cookieScale * pulse);
+  // Cursor layers cause a slight zoom-out of the whole scene
+  const cursorLayers = Math.min(10, Math.max(1, Math.ceil(save.producers.cursor / 30)));
+  const layerZoom = 1 / (1 + (cursorLayers - 1) * 0.07);
+  ckctx.scale(cookieScale * pulse * layerZoom, cookieScale * pulse * layerZoom);
   // glow
   const glowR = 130 + Math.sin(cookieT * 2) * 10;
   const g = ckctx.createRadialGradient(0, 0, 60, 0, 0, glowR);
@@ -707,49 +1026,60 @@ function drawCursorsOrbit() {
   const W = cookieCv.width, H = cookieCv.height;
   ckctx.save();
   ckctx.translate(W/2, H/2);
-  const visualCount = Math.min(count, 48);
-  const baseR = 120;
-  const baseAng = cookieT * 0.35;
-  for (let i = 0; i < visualCount; i++) {
-    const a = (i / visualCount) * Math.PI * 2 + baseAng;
-    const cx = Math.cos(a) * baseR;
-    const cy = Math.sin(a) * baseR;
-    // Each cursor "clicks" the cookie at its own beat
-    const clickT = (cookieT * 2.6 + i * 0.7) % 1;
-    const stab = clickT < 0.15 ? (1 - clickT/0.15) * 8 : 0;  // jab inward then retract
-    const rx = cx - Math.cos(a) * stab;
-    const ry = cy - Math.sin(a) * stab;
-    ckctx.save();
-    ckctx.translate(rx, ry);
-    ckctx.rotate(a + Math.PI/2);  // point cursor tip toward cookie centre
-    // shadow
-    ckctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ckctx.beginPath();
-    ckctx.moveTo(1, -7);
-    ckctx.lineTo(6, 5);
-    ckctx.lineTo(1, 3);
-    ckctx.lineTo(-4, 5);
-    ckctx.closePath();
-    ckctx.fill();
-    // cursor body
-    ckctx.fillStyle = '#fff';
-    ckctx.strokeStyle = '#000';
-    ckctx.lineWidth = 1.2;
-    ckctx.beginPath();
-    ckctx.moveTo(0, -8);
-    ckctx.lineTo(5, 4);
-    ckctx.lineTo(0, 2);
-    ckctx.lineTo(-5, 4);
-    ckctx.closePath();
-    ckctx.fill();
-    ckctx.stroke();
-    ckctx.restore();
+
+  // Every 30 cursors → a new ring. Each new ring zooms the orbit out slightly.
+  const layerCap = 10;
+  const layers = Math.min(layerCap, Math.ceil(count / 30));
+  const layerZoom = 1 / (1 + (layers - 1) * 0.07);
+  ckctx.scale(layerZoom, layerZoom);
+
+  const PER_LAYER = 30;
+  let remaining = count;
+  let layersDrawn = 0;
+  for (let layer = 0; layer < layers; layer++) {
+    const inLayer = Math.min(PER_LAYER, remaining);
+    remaining -= inLayer;
+    if (inLayer <= 0) break;
+    layersDrawn++;
+    const r = 120 + layer * 22;
+    const dir = layer % 2 === 0 ? 1 : -1;
+    const baseAng = cookieT * (0.34 - layer * 0.025) * dir + layer * 0.7;
+    for (let i = 0; i < inLayer; i++) {
+      // Pack every ring as a full 30-slot circle so partial rings still look balanced
+      const a = (i / PER_LAYER) * Math.PI * 2 + baseAng;
+      const cx = Math.cos(a) * r;
+      const cy = Math.sin(a) * r;
+      const clickT = (cookieT * 2.6 + i * 0.7 + layer * 0.35) % 1;
+      const stab = clickT < 0.15 ? (1 - clickT/0.15) * 8 : 0;
+      const rx = cx - Math.cos(a) * stab;
+      const ry = cy - Math.sin(a) * stab;
+      ckctx.save();
+      ckctx.translate(rx, ry);
+      ckctx.rotate(a + Math.PI/2);
+      ckctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ckctx.beginPath();
+      ckctx.moveTo(1, -7); ckctx.lineTo(6, 5);
+      ckctx.lineTo(1, 3); ckctx.lineTo(-4, 5);
+      ckctx.closePath();
+      ckctx.fill();
+      ckctx.fillStyle = '#fff';
+      ckctx.strokeStyle = '#000';
+      ckctx.lineWidth = 1.2;
+      ckctx.beginPath();
+      ckctx.moveTo(0, -8); ckctx.lineTo(5, 4);
+      ckctx.lineTo(0, 2); ckctx.lineTo(-5, 4);
+      ckctx.closePath();
+      ckctx.fill();
+      ckctx.stroke();
+      ckctx.restore();
+    }
   }
-  if (count > visualCount) {
+  const shown = layersDrawn * PER_LAYER;
+  if (count > shown) {
     ckctx.fillStyle = '#fff';
     ckctx.font = 'bold 11px monospace';
     ckctx.textAlign = 'center';
-    ckctx.fillText(`+${count - visualCount}`, 0, -baseR - 8);
+    ckctx.fillText(`+${count - shown}`, 0, -(120 + (layersDrawn - 1) * 22) - 12);
   }
   ckctx.restore();
 }
@@ -816,16 +1146,17 @@ function drawGoldCookieCanvas(c) {
 
 function triggerGodCookieEffect() {
   const roll = Math.random();
+  const lengthMult = save.milestoneRewards.m175 ? 1.5 : 1;
   if (roll < 0.4) {
-    // Frenzy: 7× CPS for 1 minute
+    // Frenzy: 7× CPS for 1 minute (longer with Frenzy Forever)
     frenzyMult = 7;
-    frenzyTime = 60;
-    bigToast('🍪 FRENZY! 7× CPS for 60s', 'good', 3000);
+    frenzyTime = 60 * lengthMult;
+    bigToast(`🍪 FRENZY! 7× CPS for ${Math.round(frenzyTime)}s`, 'good', 3000);
   } else if (roll < 0.7) {
     // Click Frenzy
     clickFrenzyMult = 777;
-    clickFrenzyTime = 13;
-    bigToast('🍪 CLICK FRENZY! 777× clicks for 13s', 'good', 3000);
+    clickFrenzyTime = 13 * lengthMult;
+    bigToast(`🍪 CLICK FRENZY! 777× clicks for ${Math.round(clickFrenzyTime)}s`, 'good', 3000);
   } else {
     // Lucky: instant cookies = 15 minutes of CPS
     const gain = Math.max(13, totalCps() * 60 * 15);
@@ -860,10 +1191,11 @@ function spawnGoldBar() {
   el.onclick = () => {
     if (gb.clicked) return;
     gb.clicked = true;
-    save.cookies += 1e6;
-    save.totalCookies += 1e6;
-    spawnPopText('+1.00M', gb.x + 42, gb.y + 25);
-    toast('+1,000,000 cookies', 'good');
+    const value = save.milestoneRewards.m145 ? 6e6 : 1e6;
+    save.cookies += value;
+    save.totalCookies += value;
+    spawnPopText('+' + fmt(value), gb.x + 42, gb.y + 25);
+    toast('+' + fmt(value) + ' cookies', 'good');
     el.remove();
     const i = goldBars.indexOf(gb); if (i >= 0) goldBars.splice(i, 1);
     rebuildStats();
@@ -1017,6 +1349,11 @@ function bigToast(msg, kind = '', ms = 3000) {
 // ---------- Frenzy state ----------
 let frenzyMult = 1, frenzyTime = 0;
 let clickFrenzyMult = 1, clickFrenzyTime = 0;
+// Auto-clicker (m135) + Singularity (m399) tick timers
+let autoClickTimer = 1;
+let singularityTimer = 2.5;
+// God Cookie building (100+) triggers a forced golden cookie spawn every 80s
+let divineSpawnTimer = 80;
 
 // ---------- Starfield ----------
 const starCv = document.getElementById('starfield');
@@ -1084,6 +1421,9 @@ function loop(now) {
     lastStatsTick = now;
   }
 
+  // Milk pool (behind cookie)
+  drawMilk(dt);
+
   // Cookie canvas
   drawCookie(dt);
 
@@ -1111,6 +1451,43 @@ function loop(now) {
   if (godSpawnTimer <= 0) {
     spawnGodCookie();
     godSpawnTimer = rand(60, 240);
+  }
+
+  // God Cookie building: 100+ owned spawns a guaranteed golden cookie every 80s
+  if (save.producers.divineCookie >= 100) {
+    divineSpawnTimer -= dt;
+    if (divineSpawnTimer <= 0) {
+      spawnGodCookie();
+      divineSpawnTimer = 80;
+    }
+  } else {
+    divineSpawnTimer = 80;
+  }
+
+  // Auto-clicker milestone (m135): one click per second
+  if (save.milestoneRewards.m135) {
+    autoClickTimer -= dt;
+    if (autoClickTimer <= 0) {
+      autoClickTimer = 1;
+      const v = clickValue();
+      save.cookies += v;
+      save.totalCookies += v;
+      save.clicks++;
+    }
+  }
+
+  // Cookie Singularity (m399): periodically auto-collects oldest gold bar or god cookie
+  if (save.milestoneRewards.m399) {
+    singularityTimer -= dt;
+    if (singularityTimer <= 0) {
+      singularityTimer = 2.5;
+      const gc = godCookies.find(x => !x.clicked);
+      if (gc) gc.el.click();
+      else {
+        const gb = goldBars.find(x => !x.clicked);
+        if (gb) gb.el.click();
+      }
+    }
   }
 
   // Gold bars (upgrade-driven): move existing, despawn when off-screen / expired
@@ -1337,7 +1714,19 @@ function rand(a, b) { return a + Math.random() * (b - a); }
 setInterval(() => { save.lastTickAt = Date.now(); }, 5000);
 
 // ---------- Boot ----------
+// Silent backfill: grant any milestone rewards already earned by existing saves
+for (const p of PRODUCERS) {
+  const owned = save.producers[p.id];
+  for (const thresholdStr of Object.keys(MILESTONE_REWARDS)) {
+    const threshold = +thresholdStr;
+    const r = MILESTONE_REWARDS[threshold];
+    if (owned >= threshold && !save.milestoneRewards[r.id]) {
+      save.milestoneRewards[r.id] = true;
+    }
+  }
+}
 rebuildAll();
+resizeMilk();
 if (save.upgrades.ultimateRobot) spawnUltimateRobot();
 requestAnimationFrame(loop);
 
