@@ -1890,14 +1890,14 @@ const BOSS_DEFS = {
     name: 'ULTIMATE ROBOT BOSS',
     bg: '#04060f',
     starColor: '#fff',
-    hp: 240, reward: 5e10,
+    hp: 1800, reward: 5e10,
     intro: 'INITIATING COMBAT', mainColor: '#6ad8ff'
   },
   milk: {
     name: 'MILK BOSS',
     bg: '#10040a',
     starColor: '#ffaaaa',
-    hp: 500, reward: 5e11,
+    hp: 3200, reward: 5e11,
     intro: 'THE MILK STIRS', mainColor: '#ff5a72'
   }
 };
@@ -1994,8 +1994,8 @@ function bossFightTick(dt) {
   p.dashCd -= dt;
   if ((keysDown['x'] || keysDown['X']) && p.dashCd <= 0 && (mx || my)) {
     p.dashT = 0.18;
-    p.dashCd = 1.0;
-    p.iframe = Math.max(p.iframe, 0.25);
+    p.dashCd = 1.4;
+    p.iframe = Math.max(p.iframe, 0.22);
   }
   if (p.dashT > 0) { s *= 3; p.dashT -= dt; }
   p.x += (mx / len) * s * dt;
@@ -2046,7 +2046,7 @@ function bossFightTick(dt) {
     }
     if (p.iframe <= 0 && Math.hypot(eb.x - p.x, eb.y - p.y) < (eb.r + 14)) {
       p.hp--;
-      p.iframe = 1.4;
+      p.iframe = 0.9;
       b.shake = 0.5;
       spawnHitParticles(b, p.x, p.y, '#ff5a72', 14);
       b.eBullets.splice(i, 1);
@@ -2088,11 +2088,13 @@ function spawnHitParticles(b, x, y, color, n = 6) {
 function bossAiTick(b, dt) {
   const boss = b.boss;
   boss.attackT += dt;
-  // Move boss in a horizontal slow wave
-  const cx = bossCv.width / 2 + Math.sin(b.t * 0.5) * (bossCv.width * 0.28);
-  boss.x += (cx - boss.x) * Math.min(1, dt * 1.2);
-  const targetY = 200 + Math.sin(b.t * 0.7) * 30;
-  boss.y += (targetY - boss.y) * Math.min(1, dt * 1.2);
+  boss.attackT2 = (boss.attackT2 || 0) + dt;
+  boss.attackT3 = (boss.attackT3 || 0) + dt;
+  // Move boss in a horizontal slow wave (boss now also dives toward player occasionally)
+  const cx = bossCv.width / 2 + Math.sin(b.t * 0.6) * (bossCv.width * 0.32);
+  boss.x += (cx - boss.x) * Math.min(1, dt * 1.5);
+  const targetY = 200 + Math.sin(b.t * 0.85) * 50;
+  boss.y += (targetY - boss.y) * Math.min(1, dt * 1.4);
   // Phase based on HP
   const hpFrac = boss.hp / boss.maxHp;
   boss.phase = hpFrac < 0.33 ? 2 : hpFrac < 0.66 ? 1 : 0;
@@ -2103,38 +2105,79 @@ function bossAiTick(b, dt) {
 
 function bossPatternRobot(b) {
   const boss = b.boss, p = b.player;
+  // -- Phase 0: homing missiles + slow spiral --
   if (boss.phase === 0) {
-    // Homing missile every 1.2s
-    if (boss.attackT > 1.2) {
+    if (boss.attackT > 0.55) {
       boss.attackT = 0;
       const ang = Math.atan2(p.y - boss.y, p.x - boss.x);
-      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(ang)*230, vy: Math.sin(ang)*230, life: 6, color: '#ff5a72', r: 10 });
-    }
-  } else if (boss.phase === 1) {
-    // Laser fan every 1.4s
-    if (boss.attackT > 1.4) {
-      boss.attackT = 0;
-      for (let i = -5; i <= 5; i++) {
-        const ang = Math.PI/2 + i * 0.18;
-        b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(ang)*320, vy: Math.sin(ang)*320, life: 4, color: '#ff8a3a', r: 7 });
+      // triple homing
+      for (let i = -1; i <= 1; i++) {
+        b.eBullets.push({ x: boss.x + i*30, y: boss.y + 60, vx: Math.cos(ang + i*0.15)*300, vy: Math.sin(ang + i*0.15)*300, life: 5, color: '#ff5a72', r: 9 });
       }
-      // plus aimed shot
-      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
-      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(aang)*460, vy: Math.sin(aang)*460, life: 3, color: '#ff5a72', r: 9 });
     }
-  } else {
-    // Rapid stream every 0.22s
-    if (boss.attackT > 0.22) {
+    // Spiral stream every 0.12s
+    if (boss.attackT2 > 0.12) {
+      boss.attackT2 = 0;
+      const ang = b.t * 4.2;
+      for (let i = 0; i < 2; i++) {
+        const a = ang + i * Math.PI;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(a)*260, vy: Math.sin(a)*260, life: 6, color: '#6ad8ff', r: 5 });
+      }
+    }
+  // -- Phase 1: laser fan + aimed snipe + spiral --
+  } else if (boss.phase === 1) {
+    if (boss.attackT > 0.7) {
       boss.attackT = 0;
-      const aang = Math.atan2(p.y - boss.y, p.x - boss.x) + (Math.random()-0.5) * 0.45;
-      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(aang)*440, vy: Math.sin(aang)*440, life: 3, color: '#ff5a72', r: 6 });
-      // ring burst every 8 shots
-      boss.sub = (boss.sub || 0) + 1;
-      if (boss.sub % 8 === 0) {
-        for (let i = 0; i < 16; i++) {
-          const ang = (i / 16) * Math.PI * 2 + b.t * 0.5;
-          b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*220, vy: Math.sin(ang)*220, life: 4, color: '#ffd86a', r: 6 });
-        }
+      for (let i = -7; i <= 7; i++) {
+        const ang = Math.PI/2 + i * 0.13;
+        b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(ang)*380, vy: Math.sin(ang)*380, life: 4, color: '#ff8a3a', r: 7 });
+      }
+      // aimed snipe (fast)
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      for (let i = -1; i <= 1; i++) {
+        b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(aang)*560 + i*60, vy: Math.sin(aang)*560, life: 3, color: '#ff5a72', r: 9 });
+      }
+    }
+    // Continuous spiral
+    if (boss.attackT2 > 0.08) {
+      boss.attackT2 = 0;
+      const a = b.t * 6;
+      for (let i = 0; i < 3; i++) {
+        const ang = a + i * (Math.PI * 2 / 3);
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*300, vy: Math.sin(ang)*300, life: 5, color: '#6ad8ff', r: 5 });
+      }
+    }
+    // Ring burst every 2.4s
+    if (boss.attackT3 > 2.4) {
+      boss.attackT3 = 0;
+      for (let i = 0; i < 24; i++) {
+        const ang = (i / 24) * Math.PI * 2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*230, vy: Math.sin(ang)*230, life: 5, color: '#ffd86a', r: 6 });
+      }
+    }
+  // -- Phase 2 (ENRAGE): everything at once --
+  } else {
+    // Aimed rapid stream
+    if (boss.attackT > 0.1) {
+      boss.attackT = 0;
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x) + (Math.random()-0.5) * 0.35;
+      b.eBullets.push({ x: boss.x, y: boss.y + 60, vx: Math.cos(aang)*520, vy: Math.sin(aang)*520, life: 3, color: '#ff5a72', r: 6 });
+    }
+    // Double spiral
+    if (boss.attackT2 > 0.06) {
+      boss.attackT2 = 0;
+      const a = b.t * 7;
+      for (let i = 0; i < 4; i++) {
+        const ang = a + i * Math.PI/2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*340, vy: Math.sin(ang)*340, life: 5, color: '#6ad8ff', r: 5 });
+      }
+    }
+    // Ring burst every 1.5s
+    if (boss.attackT3 > 1.5) {
+      boss.attackT3 = 0;
+      for (let i = 0; i < 28; i++) {
+        const ang = (i / 28) * Math.PI * 2 + Math.random() * 0.2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*280, vy: Math.sin(ang)*280, life: 5, color: '#ffd86a', r: 6 });
       }
     }
   }
@@ -2142,31 +2185,64 @@ function bossPatternRobot(b) {
 
 function bossPatternMilk(b) {
   const boss = b.boss, p = b.player;
+  // -- Phase 0: dense ring bursts + aimed stream --
   if (boss.phase === 0) {
-    // Tentacle splash: ring burst every 1.6s
-    if (boss.attackT > 1.6) {
-      boss.attackT = 0;
-      for (let i = 0; i < 14; i++) {
-        const ang = (i / 14) * Math.PI * 2;
-        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*180, vy: Math.sin(ang)*180, life: 5, color: '#fff', r: 8 });
-      }
-    }
-  } else if (boss.phase === 1) {
-    // Aimed waves + side spread
     if (boss.attackT > 0.85) {
       boss.attackT = 0;
-      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
-      for (let i = -3; i <= 3; i++) {
-        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(aang + i*0.13)*270, vy: Math.sin(aang + i*0.13)*270, life: 4, color: '#fff', r: 7 });
+      for (let i = 0; i < 22; i++) {
+        const ang = (i / 22) * Math.PI * 2 + Math.random() * 0.2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*240, vy: Math.sin(ang)*240, life: 5, color: '#fff', r: 8 });
       }
     }
-  } else {
-    // Multi-eye laser swirl
-    if (boss.attackT > 0.35) {
+    if (boss.attackT2 > 0.18) {
+      boss.attackT2 = 0;
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(aang)*420, vy: Math.sin(aang)*420, life: 4, color: '#ff5a72', r: 7 });
+    }
+  // -- Phase 1: aimed spread waves + drifting clusters --
+  } else if (boss.phase === 1) {
+    if (boss.attackT > 0.5) {
       boss.attackT = 0;
-      for (let i = 0; i < 8; i++) {
-        const ang = (i / 8) * Math.PI * 2 + b.t * 1.2;
-        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*360, vy: Math.sin(ang)*360, life: 3, color: '#ff5a72', r: 6 });
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      for (let i = -5; i <= 5; i++) {
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(aang + i*0.1)*320, vy: Math.sin(aang + i*0.1)*320, life: 4, color: '#fff', r: 7 });
+      }
+    }
+    // Drifting cluster
+    if (boss.attackT2 > 1.1) {
+      boss.attackT2 = 0;
+      for (let i = 0; i < 18; i++) {
+        const ang = (i / 18) * Math.PI * 2 + b.t;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*180, vy: Math.sin(ang)*180, life: 6, color: '#ff5a72', r: 6 });
+      }
+    }
+    // Rapid snipe
+    if (boss.attackT3 > 0.16) {
+      boss.attackT3 = 0;
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x) + (Math.random()-0.5) * 0.2;
+      b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(aang)*500, vy: Math.sin(aang)*500, life: 3, color: '#ff5a72', r: 6 });
+    }
+  // -- Phase 2 (ENRAGE): swirling laser barrage + dense everywhere --
+  } else {
+    if (boss.attackT > 0.18) {
+      boss.attackT = 0;
+      for (let i = 0; i < 14; i++) {
+        const ang = (i / 14) * Math.PI * 2 + b.t * 1.4;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*380, vy: Math.sin(ang)*380, life: 3, color: '#ff5a72', r: 6 });
+      }
+    }
+    if (boss.attackT2 > 0.45) {
+      boss.attackT2 = 0;
+      const aang = Math.atan2(p.y - boss.y, p.x - boss.x);
+      for (let i = -4; i <= 4; i++) {
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(aang + i*0.08)*520, vy: Math.sin(aang + i*0.08)*520, life: 3, color: '#fff', r: 7 });
+      }
+    }
+    if (boss.attackT3 > 1.2) {
+      boss.attackT3 = 0;
+      for (let i = 0; i < 36; i++) {
+        const ang = (i / 36) * Math.PI * 2;
+        b.eBullets.push({ x: boss.x, y: boss.y, vx: Math.cos(ang)*220, vy: Math.sin(ang)*220, life: 5, color: '#fff', r: 7 });
       }
     }
   }
