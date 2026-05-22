@@ -77,15 +77,24 @@ canvas{display:block;cursor:crosshair;touch-action:none}
 #title h1 span:nth-child(3n){animation-delay:0.3s}
 @keyframes titleBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 #title .subtitle{color:#cfa97a;font-size:14px;letter-spacing:6px;margin-bottom:38px}
-#title button{background:linear-gradient(180deg,#ff5a72,#aa1a1a);color:#fff;border:3px solid #ff8a8a;
-              padding:16px 48px;border-radius:10px;font-weight:bold;letter-spacing:6px;cursor:pointer;
-              font-family:inherit;font-size:18px;box-shadow:0 0 24px #ff5a72}
-#title button:hover{background:linear-gradient(180deg,#ff8a8a,#ff3a3a);transform:translateY(-3px) scale(1.05)}
+#title .level-display{font-size:18px;letter-spacing:8px;color:#6fffc0;text-shadow:0 0 14px #6fffc0;margin-bottom:24px;font-weight:bold}
+#title .level-display span{color:#ffd86a;font-size:24px}
 #title .controls{margin-top:30px;color:#888;font-size:12px;letter-spacing:3px;line-height:1.8}
 #title .controls b{color:#ffd86a}
-#title .bosses{margin-top:24px;display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:680px}
-#title .boss-chip{background:#0a0a14;border:2px solid #ff5a72;border-radius:8px;padding:10px 16px;
-                  color:#fff;font-size:13px;letter-spacing:2px;text-shadow:0 0 6px #ff5a72}
+#title .bosses{margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+               gap:14px;max-width:760px;width:100%;padding:0 20px}
+#title .boss-card{background:linear-gradient(180deg,#1a0a14,#0a0408);border:3px solid #ff5a72;border-radius:10px;
+                  padding:16px 14px;color:#fff;font-size:13px;letter-spacing:2px;cursor:pointer;
+                  text-shadow:0 0 6px #ff5a72;transition:all 0.15s;position:relative;
+                  display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit;font-weight:bold}
+#title .boss-card:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 0 20px #ff5a72;
+                        background:linear-gradient(180deg,#2a1424,#1a0810)}
+#title .boss-card .bc-icon{font-size:36px;line-height:1}
+#title .boss-card .bc-time{font-size:10px;color:#cfa97a;letter-spacing:1px;font-weight:normal}
+#title .boss-card.beaten{border-color:#6fffc0;box-shadow:0 0 16px #6fffc0aa}
+#title .boss-card.beaten:hover{box-shadow:0 0 24px #6fffc0}
+#title .boss-card .bc-check{position:absolute;top:6px;right:8px;color:#6fffc0;font-size:18px;font-weight:bold;
+                            text-shadow:0 0 10px #6fffc0}
 
 /* Toasts and announcements */
 #bigToast{position:fixed;top:30%;left:50%;transform:translate(-50%,-50%);
@@ -180,17 +189,12 @@ canvas{display:block;cursor:crosshair;touch-action:none}
 <div id="title">
   <h1><span>B</span><span>O</span><span>S</span><span>S</span>&nbsp;<span>R</span><span>U</span><span>S</span><span>H</span></h1>
   <div class="subtitle">SURVIVE FIVE BOSSES</div>
-  <button onclick="startGame()">BEGIN</button>
-  <div class="bosses">
-    <div class="boss-chip">😈 DEMON</div>
-    <div class="boss-chip">🃏 TROLLFACE</div>
-    <div class="boss-chip">☕ COFFEE</div>
-    <div class="boss-chip">📺 TV</div>
-    <div class="boss-chip">👟 SHOE</div>
-  </div>
+  <div class="level-display">LEVEL <span id="lvlNum">0</span> / 5</div>
+  <div class="bosses" id="bossButtons"></div>
   <div class="controls">
     <b>ARROWS</b> move &nbsp;·&nbsp; <b>SHIFT</b> dash<br>
-    No weapons. Just survive each boss until the timer runs out.
+    No weapons. Just survive each boss until the timer runs out.<br>
+    Pick any boss. Beat all five to unlock the final sequence.
   </div>
 </div>
 
@@ -345,6 +349,27 @@ const game = {
 };
 
 const BOSSES = ['demon', 'trollface', 'coffee', 'tv', 'shoe'];
+const BOSS_META = {
+  demon:     { icon:'😈', name:'DEMON LORD',     time:'60s'  },
+  trollface: { icon:'🃏', name:'TROLLFACE',      time:'2 min' },
+  coffee:    { icon:'☕', name:'CURSED LATTE',   time:'90s'  },
+  tv:        { icon:'📺', name:'STATIC TV',      time:'3 min' },
+  shoe:      { icon:'👟', name:'CURSED SNEAKER', time:'3 min' }
+};
+
+// ---- progress save ----
+const SAVE_KEY = 'bossRushSave_v1';
+let progress = loadProgress();
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return { defeated: [], finalDone: false };
+    return Object.assign({ defeated: [], finalDone: false }, JSON.parse(raw));
+  } catch { return { defeated: [], finalDone: false }; }
+}
+function saveProgress() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch {}
+}
 
 // ---------- player ----------
 function makePlayer() {
@@ -423,15 +448,45 @@ function closeModal() {
   document.getElementById('modal').classList.remove('show');
 }
 
-// ---------- start the game ----------
-function startGame() {
-  document.getElementById('title').style.display = 'none';
-  document.getElementById('hud').style.display = 'flex';
-  game.bossIndex = 0;
-  startBoss(0);
+// ---------- menu / boss selection ----------
+function renderMenu() {
+  document.getElementById('lvlNum').textContent = progress.defeated.length;
+  const wrap = document.getElementById('bossButtons');
+  wrap.innerHTML = '';
+  for (let i = 0; i < BOSSES.length; i++) {
+    const id = BOSSES[i];
+    const meta = BOSS_META[id];
+    const beaten = progress.defeated.includes(id);
+    const btn = document.createElement('button');
+    btn.className = 'boss-card' + (beaten ? ' beaten' : '');
+    btn.innerHTML = `
+      ${beaten ? '<span class="bc-check">✓</span>' : ''}
+      <div class="bc-icon">${meta.icon}</div>
+      <div>${i + 1}. ${meta.name}</div>
+      <div class="bc-time">SURVIVE ${meta.time}</div>
+    `;
+    btn.onclick = () => startBoss(i);
+    wrap.appendChild(btn);
+  }
+}
+
+function backToMenu() {
+  closeModal();
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('title').style.display = 'flex';
+  game.state = STATE.TITLE;
+  game.boss = null;
+  game.enemies = [];
+  game.eBullets = [];
+  game.particles = [];
+  game.wave = 0;
+  document.getElementById('waveTag').style.display = 'none';
+  renderMenu();
 }
 
 function startBoss(idx) {
+  document.getElementById('title').style.display = 'none';
+  document.getElementById('hud').style.display = 'flex';
   game.bossIndex = idx;
   game.boss = makeBoss(BOSSES[idx]);
   game.player = makePlayer();
@@ -445,7 +500,7 @@ function startBoss(idx) {
   game.t = 0;
   game.state = STATE.INTRO;
   document.getElementById('bossName').textContent = game.boss.name;
-  document.getElementById('bossHpFill').style.width = '100%';
+  document.getElementById('bossHpFill').style.width = '0%';
   document.getElementById('bossIdx').textContent = (idx + 1) + ' / 5';
   document.getElementById('waveTag').style.display = 'none';
   showBossIntro();
@@ -466,16 +521,24 @@ function closeModalAndFight() {
   game.t = 0;
 }
 
-// ---------- victory between bosses ----------
+// ---------- victory ----------
 function bossDefeated() {
-  bigToast('★ BOSS DEFEATED ★', 2200);
+  const id = BOSSES[game.bossIndex];
+  const wasNew = !progress.defeated.includes(id);
+  if (wasNew) {
+    progress.defeated.push(id);
+    saveProgress();
+    bigToast('★ LEVEL UP — ' + progress.defeated.length + ' / 5 ★', 2400);
+  } else {
+    bigToast('★ BOSS DEFEATED ★', 2000);
+  }
   game.state = STATE.INTERLUDE;
   setTimeout(() => {
-    if (game.bossIndex >= BOSSES.length - 1) {
-      // Final boss done — go to final sequence (puzzles, math, fake win)
+    // If you've now beaten all five and haven't seen the final sequence, run it once
+    if (progress.defeated.length === BOSSES.length && !progress.finalDone) {
       finalSequence();
     } else {
-      startBoss(game.bossIndex + 1);
+      backToMenu();
     }
   }, 2400);
 }
@@ -487,8 +550,8 @@ function playerDied() {
   showModal(`
     <div class="modal-title">YOU DIED</div>
     <div class="modal-body">Boss ${idx + 1} (${bossName}) defeated you.</div>
-    <button class="modal-btn" onclick="retryBoss()">RETRY BOSS ${idx + 1}</button>
-    <button class="modal-btn" onclick="location.reload()" style="background:linear-gradient(180deg,#666,#222);border-color:#888;box-shadow:0 0 10px #888">RESTART RUN</button>
+    <button class="modal-btn" onclick="retryBoss()">RETRY</button>
+    <button class="modal-btn good" onclick="backToMenu()">BACK TO MENU</button>
   `);
 }
 
@@ -546,6 +609,8 @@ function fakeWinClicked() {
   }, 1700);
 }
 function realWinScreen() {
+  progress.finalDone = true;
+  saveProgress();
   showModal(`
     <div class="modal-title" style="color:#6fffc0;text-shadow:0 0 20px #6fffc0">★ ACTUAL WIN ★</div>
     <div class="modal-body">
@@ -553,7 +618,8 @@ function realWinScreen() {
       You have defeated Boss Rush.<br>
       Thanks for playing.
     </div>
-    <button class="modal-btn good" onclick="location.href='index.html'">BACK TO PLATYFY</button>
+    <button class="modal-btn good" onclick="backToMenu()">BACK TO MENU</button>
+    <button class="modal-btn" onclick="location.href='index.html'" style="background:linear-gradient(180deg,#666,#222);border-color:#888;box-shadow:0 0 10px #888">BACK TO PLATYFY</button>
   `);
 }
 
@@ -2043,6 +2109,9 @@ function updateHpPips() {
     row.children[i].classList.toggle('full', i < p.hp);
   }
 }
+
+// Boot: render menu on the title screen using saved progress
+renderMenu();
 
 let lastT = performance.now();
 function loop(now) {
