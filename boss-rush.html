@@ -69,7 +69,8 @@ canvas{display:block;cursor:crosshair;touch-action:none}
 
 /* Title screen */
 #title{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;
-       justify-content:center;background:radial-gradient(ellipse at center,#1a0010 0%,#000 80%);text-align:center}
+       justify-content:flex-start;background:radial-gradient(ellipse at center,#1a0010 0%,#000 80%);
+       text-align:center;overflow-y:auto;padding:32px 12px 60px}
 #title h1{font-size:64px;letter-spacing:14px;color:#ff5a72;
           text-shadow:0 0 24px #ff5a72,0 0 48px #aa1a1a;margin-bottom:18px;font-weight:bold}
 #title h1 span{display:inline-block;animation:titleBob 2s ease-in-out infinite}
@@ -77,8 +78,10 @@ canvas{display:block;cursor:crosshair;touch-action:none}
 #title h1 span:nth-child(3n){animation-delay:0.3s}
 @keyframes titleBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 #title .subtitle{color:#cfa97a;font-size:14px;letter-spacing:6px;margin-bottom:38px}
-#title .level-display{font-size:18px;letter-spacing:8px;color:#6fffc0;text-shadow:0 0 14px #6fffc0;margin-bottom:24px;font-weight:bold}
-#title .level-display span{color:#ffd86a;font-size:24px}
+#title .level-display{font-size:22px;letter-spacing:8px;color:#6fffc0;text-shadow:0 0 14px #6fffc0;margin-bottom:8px;font-weight:bold;
+                      padding:8px 22px;border:2px solid #6fffc0;border-radius:10px;background:#0a1a14;box-shadow:0 0 18px #6fffc0aa}
+#title .level-display span{color:#ffd86a;font-size:28px;text-shadow:0 0 14px #ffd86a}
+#title .pick-label{font-size:13px;letter-spacing:6px;color:#cfa97a;margin:18px 0 8px;text-transform:uppercase}
 #title .controls{margin-top:30px;color:#888;font-size:12px;letter-spacing:3px;line-height:1.8}
 #title .controls b{color:#ffd86a}
 #title .bosses{margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
@@ -190,11 +193,12 @@ canvas{display:block;cursor:crosshair;touch-action:none}
   <h1><span>B</span><span>O</span><span>S</span><span>S</span>&nbsp;<span>R</span><span>U</span><span>S</span><span>H</span></h1>
   <div class="subtitle">SURVIVE FIVE BOSSES</div>
   <div class="level-display">LEVEL <span id="lvlNum">0</span> / 5</div>
+  <div class="pick-label">▼ PICK ANY BOSS ▼</div>
   <div class="bosses" id="bossButtons"></div>
   <div class="controls">
     <b>ARROWS</b> move &nbsp;·&nbsp; <b>SHIFT</b> dash<br>
     No weapons. Just survive each boss until the timer runs out.<br>
-    Pick any boss. Beat all five to unlock the final sequence.
+    Each unique boss beaten = +1 LEVEL. Beat all five to unlock the final sequence.
   </div>
 </div>
 
