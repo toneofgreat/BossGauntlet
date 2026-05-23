@@ -644,25 +644,42 @@ function updatePlatformerStage(stage, isWater) {
     if (!e.alive) continue;
     if (e.kind === 'eraser') {
       e.anim++;
-      e.x += e.vx;
-      // simple ground patrol: if no ground in front, flip
-      let hasGroundAhead = false;
-      const probeX = e.x + (e.vx < 0 ? -2 : e.w + 2);
-      const probeY = e.y + e.h + 4;
-      for (const s of stage.solids) {
-        if (s.kind === 'ground' || s.kind === 'plat') {
-          if (probeX >= s.x && probeX <= s.x + s.w && probeY >= s.y && probeY <= s.y + s.h) hasGroundAhead = true;
-        }
+      // chase: accelerate toward player when within range
+      const dx = player.x - e.x;
+      const inRange = Math.abs(dx) < 700;
+      const speed = 1.7 * difficulty;
+      if (inRange) {
+        const target = Math.sign(dx) * speed;
+        e.vx += (target - e.vx) * 0.18;
+      } else {
+        e.vx *= 0.9;
       }
-      if (!hasGroundAhead) e.vx = -e.vx;
-      // wall bump
+      // gravity (so they can fall off platforms when chasing)
+      e.vy = (e.vy || 0) + GRAV;
+      if (e.vy > MAX_FALL) e.vy = MAX_FALL;
+      // horizontal then vertical collision
+      e.x += e.vx;
       for (const s of stage.solids) {
         if (s.kind === 'spike') continue;
-        if (aabb(e, s) && (e.y + e.h > s.y + 4)) {
-          if (e.vx > 0) { e.x = s.x - e.w; e.vx = -Math.abs(e.vx); }
-          else { e.x = s.x + s.w; e.vx = Math.abs(e.vx); }
+        if (aabb(e, s)) {
+          if (e.vx > 0) { e.x = s.x - e.w; e.vx = 0; }
+          else if (e.vx < 0) { e.x = s.x + s.w; e.vx = 0; }
         }
       }
+      e.y += e.vy;
+      e.onGround = false;
+      for (const s of stage.solids) {
+        if (s.kind === 'spike') continue;
+        if (aabb(e, s)) {
+          if (e.vy > 0) { e.y = s.y - e.h; e.vy = 0; e.onGround = true; }
+          else if (e.vy < 0) { e.y = s.y + s.h; e.vy = 0; }
+        }
+      }
+      // small hop if blocked by wall and player roughly at same height
+      if (e.onGround && e.vx === 0 && inRange && Math.abs(player.y - e.y) < 80) {
+        e.vy = -8;
+      }
+      if (e.y > H + 200) e.alive = false;
     } else if (e.kind === 'spinner') {
       e.angle += 0.18 * difficulty;
       e.phase += 0.04;
