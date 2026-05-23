@@ -159,6 +159,7 @@ function dist(ax, ay, bx, by) { const dx = bx - ax, dy = by - ay; return Math.sq
 // ---- persistence ----
 let difficulty = parseFloat(localStorage.getItem('sbb_diff') || '1');
 let wins = parseInt(localStorage.getItem('sbb_wins') || '0', 10);
+let lives = 3;
 
 // =============================================================
 //  PLAYER
