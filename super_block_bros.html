@@ -2,33 +2,87 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>SUPER BLOCK BROS.</title>
 <style>
   html, body {
     margin: 0; padding: 0; background: #111; color: #fff;
     font-family: 'Courier New', monospace;
     overflow: hidden; height: 100%;
+    touch-action: none;
   }
   #wrap {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; height: 100vh; gap: 6px;
   }
-  #hud { font-size: 13px; opacity: 0.7; }
+  #hud { font-size: 13px; opacity: 0.7; text-align: center; padding: 0 8px; }
   canvas {
     background: #5C94FC;
     image-rendering: pixelated;
     border: 4px solid #222;
     box-shadow: 0 0 40px #000;
     display: block;
+    max-width: 100vw;
+    max-height: calc(100vh - 60px);
+    height: auto;
   }
   #vol { font-size: 11px; opacity: 0.5; }
+  /* Touch controls — visible on touch devices */
+  #touch {
+    position: fixed;
+    inset: 0 0 0 0;
+    pointer-events: none;
+    display: none;
+    z-index: 100;
+  }
+  #touch .row {
+    position: absolute;
+    bottom: 16px;
+    display: flex;
+    gap: 14px;
+    pointer-events: auto;
+  }
+  #touch .row.left  { left: 16px; }
+  #touch .row.right { right: 16px; }
+  #touch button {
+    width: 64px; height: 64px;
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.55);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 24px;
+    font-family: monospace;
+    font-weight: bold;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  #touch button.big { width: 78px; height: 78px; font-size: 28px; }
+  #touch button:active, #touch button.held { background: rgba(255,200,80,0.7); border-color: #fff; }
+  @media (pointer: coarse), (max-width: 700px) {
+    #touch { display: block; }
+    #hud { font-size: 11px; }
+  }
 </style>
 </head>
 <body>
 <div id="wrap">
-  <div id="hud">SUPER BLOCK BROS. &nbsp;|&nbsp; ARROW/WASD: Move &nbsp; SPACE/UP: Jump &nbsp; X: Throw Splash Potion &nbsp; R: Restart Stage</div>
+  <div id="hud">SUPER BLOCK BROS. &nbsp;|&nbsp; ARROW/WASD: Move &nbsp; SPACE/UP: Jump &nbsp; X: Throw Splash Potion &nbsp; R: Restart Stage &nbsp;|&nbsp; Touch: on-screen buttons</div>
   <canvas id="cv" width="960" height="600"></canvas>
-  <div id="vol">click canvas to start music · M: mute · the song loops</div>
+  <div id="vol">tap canvas / press any key to start music · M: mute · the song loops</div>
+</div>
+<div id="touch">
+  <div class="row left">
+    <button data-key="arrowleft">◀</button>
+    <button data-key="arrowright">▶</button>
+  </div>
+  <div class="row right">
+    <button data-key="x">X</button>
+    <button data-key=" " class="big">▲</button>
+  </div>
 </div>
 <audio id="music" src="arcade_jazz.wav" loop></audio>
 <script>
@@ -57,6 +111,35 @@ addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 cv.addEventListener('click', () => {
   music.play().catch(()=>{});
   if (scene === 'title') startScene('stage1');
+});
+// Touch: also start game on canvas tap (some browsers don't fire click on tap reliably)
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  music.play().catch(()=>{});
+  if (scene === 'title') startScene('stage1');
+}, { passive: false });
+// On-screen control buttons
+document.querySelectorAll('#touch button').forEach(btn => {
+  const key = btn.dataset.key;
+  const down = e => {
+    e.preventDefault();
+    if (!keys[key]) justPressed[key] = true;
+    keys[key] = true;
+    btn.classList.add('held');
+    if (music.paused) music.play().catch(()=>{});
+    if (scene === 'title') startScene('stage1');
+  };
+  const up = e => {
+    e.preventDefault();
+    keys[key] = false;
+    btn.classList.remove('held');
+  };
+  btn.addEventListener('touchstart', down, { passive: false });
+  btn.addEventListener('touchend',   up,   { passive: false });
+  btn.addEventListener('touchcancel',up,   { passive: false });
+  btn.addEventListener('mousedown',  down);
+  btn.addEventListener('mouseup',    up);
+  btn.addEventListener('mouseleave', up);
 });
 addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 'm') music.muted = !music.muted;
