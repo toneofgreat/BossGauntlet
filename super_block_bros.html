@@ -160,6 +160,10 @@ function dist(ax, ay, bx, by) { const dx = bx - ax, dy = by - ay; return Math.sq
 let difficulty = parseFloat(localStorage.getItem('sbb_diff') || '1');
 let wins = parseInt(localStorage.getItem('sbb_wins') || '0', 10);
 let lives = 3;
+// stage-3 checkpoint: the part you most recently reached. Death sends
+// you here instead of always back to the Marker.
+let lastCheckpoint = 'marker';
+const STAGE3 = ['marker','markerSon','pirates','princess','rocket','math','landing','parents'];
 
 // =============================================================
 //  PLAYER
@@ -906,17 +910,15 @@ function damagePlayer(force = false) {
   setTimeout(() => {
     if (lives <= 0) {
       lives = 3;
-      // hard restart from current scene's spawn
-      if (['marker','markerSon','pirates','princess','rocket','math','landing','parents'].includes(scene)) {
-        startScene('marker');
+      if (STAGE3.includes(scene)) {
+        startScene(lastCheckpoint);
       } else {
-        // respawn from last checkpoint
         const stage = scenes[scene].state;
         resetPlayer(stage.lastCheck.x, stage.lastCheck.y - PSIZE);
       }
     } else {
-      if (['marker','markerSon','pirates','princess','rocket','math','landing','parents'].includes(scene)) {
-        startScene('marker');
+      if (STAGE3.includes(scene)) {
+        startScene(lastCheckpoint);
       } else {
         const stage = scenes[scene].state;
         resetPlayer(stage.lastCheck.x, stage.lastCheck.y);
@@ -2146,12 +2148,20 @@ function startScene(name) {
   projectiles.length = 0;
   fxText.length = 0;
   particles.length = 0;
+  // Each stage-3 part sets the checkpoint so death sends you back to
+  // THIS part, not all the way to the Marker.
+  if (STAGE3.includes(name)) {
+    const wasNew = (lastCheckpoint !== name);
+    lastCheckpoint = name;
+    if (wasNew) fxText.push({ x: W/2 - 80, y: H/2 - 80, t: 120, msg: 'CHECKPOINT!' });
+  }
   // place player based on scene
   if (name === 'stage1') {
     const s = scenes[name].state;
     resetPlayer(s.spawn.x, s.spawn.y);
     player.potions = 0;
     lives = 3;
+    lastCheckpoint = 'marker'; // fresh playthrough resets the stage-3 checkpoint
   } else if (name === 'stage2') {
     const s = scenes[name].state;
     resetPlayer(s.spawn.x, s.spawn.y);
@@ -2183,8 +2193,8 @@ function restartCurrent() {
   if (['stage1','stage2'].includes(scene)) {
     const s = scenes[scene].state;
     resetPlayer(s.lastCheck.x, s.lastCheck.y);
-  } else if (['marker','markerSon','pirates','princess','rocket','math','landing','parents'].includes(scene)) {
-    startScene('marker');
+  } else if (STAGE3.includes(scene)) {
+    startScene(lastCheckpoint);
   } else {
     startScene('title');
   }
