@@ -2049,7 +2049,10 @@ function drawWin() {
 function makeTitle() { return { t: 0 }; }
 function updateTitle() {
   scenes.title.state.t++;
-  if (justPressed[' '] || justPressed['enter']) startScene('stage1');
+  // start on ANY input — so users pressing arrows / wasd / tapping pads don't get stuck
+  for (const k in justPressed) {
+    if (justPressed[k]) { startScene('stage1'); break; }
+  }
 }
 function drawTitle() {
   const st = scenes.title.state;
@@ -2064,11 +2067,21 @@ function drawTitle() {
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 16px monospace';
   ctx.fillText('it\'s like mario but you\'re a block and the bosses get worse', W/2 - 280, 280);
-  // press start
+  // press start — any input starts now
   if (Math.floor(st.t / 30) % 2 === 0) {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 22px monospace';
-    ctx.fillText('CLICK CANVAS or PRESS SPACE to START', W/2 - 290, 380);
+    ctx.fillText('PRESS ANY KEY / TAP ANY BUTTON to START', W/2 - 320, 380);
   }
+  // input indicator (on title too, so user can verify input works)
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(20, 40, 220, 28);
+  ctx.font = 'bold 16px monospace';
+  ctx.fillStyle = (keys['arrowleft']  || keys['a']) ? '#ffcc00' : '#555'; ctx.fillText('◀', 32, 60);
+  ctx.fillStyle = (keys['arrowright'] || keys['d']) ? '#ffcc00' : '#555'; ctx.fillText('▶', 60, 60);
+  ctx.fillStyle = (keys[' '] || keys['arrowup'] || keys['w']) ? '#ffcc00' : '#555'; ctx.fillText('▲', 90, 60);
+  ctx.fillStyle = keys['x'] ? '#ffcc00' : '#555'; ctx.fillText('X', 120, 60);
+  ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+  ctx.fillText('LIGHTS UP WHEN INPUT WORKS', 145, 58);
   // controls
   ctx.fillStyle = '#fff'; ctx.font = '14px monospace';
   ctx.fillText('Arrow keys / WASD  - move + jump', 100, 440);
@@ -2093,6 +2106,16 @@ function drawHUD() {
   ctx.fillText('LIVES:   ' + lives, W - 210, 60);
   ctx.fillText('POTIONS: ' + player.potions, W - 210, 80);
   ctx.fillText('DIFF:    ' + difficulty.toFixed(1) + 'x', W - 210, 100);
+  // input indicator — top-left, so the user can see if input is reaching the game
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(20, 40, 180, 28);
+  ctx.font = 'bold 16px monospace';
+  ctx.fillStyle = (keys['arrowleft']  || keys['a']) ? '#ffcc00' : '#555'; ctx.fillText('◀', 32, 60);
+  ctx.fillStyle = (keys['arrowright'] || keys['d']) ? '#ffcc00' : '#555'; ctx.fillText('▶', 60, 60);
+  ctx.fillStyle = (keys[' '] || keys['arrowup'] || keys['w']) ? '#ffcc00' : '#555'; ctx.fillText('▲', 90, 60);
+  ctx.fillStyle = keys['x'] ? '#ffcc00' : '#555'; ctx.fillText('X', 120, 60);
+  ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+  ctx.fillText('INPUT', 150, 58);
 }
 
 // =============================================================
