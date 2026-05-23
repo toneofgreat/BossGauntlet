@@ -27,12 +27,12 @@
     height: auto;
   }
   #vol { font-size: 11px; opacity: 0.5; }
-  /* Touch controls — visible on touch devices */
+  /* Touch controls — always visible (works on touch AND mouse) */
   #touch {
     position: fixed;
     inset: 0 0 0 0;
     pointer-events: none;
-    display: none;
+    display: block;
     z-index: 100;
   }
   #touch .row {
@@ -62,10 +62,13 @@
   }
   #touch button.big { width: 78px; height: 78px; font-size: 28px; }
   #touch button:active, #touch button.held { background: rgba(255,200,80,0.7); border-color: #fff; }
-  @media (pointer: coarse), (max-width: 700px) {
-    #touch { display: block; }
+  @media (max-width: 700px) {
     #hud { font-size: 11px; }
+    #touch button { width: 56px; height: 56px; font-size: 22px; }
+    #touch button.big { width: 70px; height: 70px; font-size: 26px; }
   }
+  /* Hide buttons when explicitly opted-out via .nopads on body */
+  body.nopads #touch { display: none; }
 </style>
 </head>
 <body>
@@ -84,7 +87,7 @@
     <button data-key=" " class="big">▲</button>
   </div>
 </div>
-<audio id="music" src="arcade_jazz.wav" loop></audio>
+<audio id="music" src="arcade_jazz.wav" loop preload="none"></audio>
 <script>
 'use strict';
 // =============================================================
