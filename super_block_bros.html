@@ -964,8 +964,8 @@ function updateMarker() {
     b.t++;
     b.cd--;
     if (b.cd <= 0) {
-      // weighted: 1/5 hop, 2/5 inkRain, 2/5 dash
-      b.mode = ['inkRain', 'dash', 'inkRain', 'dash', 'hop'][Math.floor(Math.random() * 5)];
+      // no hop — just inkRain or dash
+      b.mode = ['inkRain', 'dash'][Math.floor(Math.random() * 2)];
       b.cd = 120 - Math.floor(difficulty * 20);
       if (b.mode === 'hop') b.vy = -16;
       if (b.mode === 'dash') b.vx = (player.x > b.x ? 7 : -7);
@@ -1163,8 +1163,8 @@ function updateMarkerSon() {
     b.t++;
     b.cd--;
     if (b.cd <= 0) {
-      // weighted: 1/5 hop, 2/5 inkRain, 2/5 dash (was 2/4 hop)
-      b.mode = ['inkRain', 'dash', 'inkRain', 'dash', 'hop'][Math.floor(Math.random() * 5)];
+      // no hop — just inkRain or dash
+      b.mode = ['inkRain', 'dash'][Math.floor(Math.random() * 2)];
       b.cd = 90 - Math.floor(difficulty * 20);
       if (b.mode === 'hop') b.vy = -18;
       if (b.mode === 'dash') b.vx = (player.x > b.x ? 9 : -9);
