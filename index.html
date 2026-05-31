@@ -78,6 +78,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Super Block Bros card */
 .bg-sbb{background:linear-gradient(135deg,#3a7fff 0%,#7fb4ff 60%,#ffd9a8 100%)}
 .bg-sbb canvas{width:100%;height:100%}
+/* Spider vs Superman card */
+.bg-svs{background:linear-gradient(135deg,#1a0020 0%,#3a0a14 50%,#0a1a4a 100%)}
+.bg-svs canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -227,6 +230,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>BOSS RUSH</h2>
       <p>Sword + gun bullet-hell against five hand-drawn bosses. Demon Lord with hellfire pillars, Trollface with 15 troll attacks (fake bullets, reversed controls, screen flip), Cursed Latte spawning sugar &amp; creamer enemies, Static TV that pauses for puzzles and math problems, and a Cursed Sneaker with four waves of zombies ending in a Zomboss. Watch out for the final troll ending.</p>
       <span class="tag" style="background:#3a0a14;color:#ff5a72">ARROW KEYS · SPACE · X</span>
+    </div>
+  </a>
+  <a href="spider-vs-superman.html" class="card">
+    <div class="card-img bg-svs"><canvas id="c19"></canvas></div>
+    <div class="card-body">
+      <h2>SPIDER-MAN VS SUPERMAN</h2>
+      <p>3D fighting game. Pick a side, then pick a difficulty — EASY or HARD. Spider-Man brings web attacks and Spider Sense (see the AI's next move 2 seconds early). Superman flies, fires laser eyes, and goes Super Strength mode. Each side has multiple levels that strip abilities away to ramp the challenge. PC + mobile controls.</p>
+      <span class="tag" style="background:#3a0a14;color:#ffd84d">3D · FIGHTER · EASY/HARD AI</span>
     </div>
   </a>
   <a href="super_block_bros.html" class="card">
@@ -1229,6 +1240,98 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.fillStyle='#cc1111';ctx.fillRect(sx,sy,16,12);
     ctx.fillStyle='#dd2222';ctx.beginPath();ctx.moveTo(sx,sy+12);ctx.lineTo(sx+16,sy+12);ctx.lineTo(sx+8,sy+20);ctx.closePath();ctx.fill();
     ctx.fillStyle='#fff';ctx.fillRect(sx+3,sy+3,2,2);ctx.fillRect(sx+11,sy+3,2,2);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Spider-Man vs Superman preview: red web-slinger vs blue caped flier ----
+(function(){
+  const c=document.getElementById('c19'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  // City silhouette
+  const buildings=[];for(let i=0;i<10;i++)buildings.push({x:i*0.11,h:0.3+rand()*0.4,w:0.08+rand()*0.04});
+  // Web particles
+  const webs=[];
+  function draw(){
+    t+=0.025;
+    // Sky gradient
+    const grad=ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,'#1a0030');grad.addColorStop(0.5,'#2a0a3a');grad.addColorStop(1,'#0a0a2a');
+    ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
+    // Stars
+    for(let i=0;i<25;i++){ctx.fillStyle=`rgba(255,255,255,${0.3+sin(t+i)*0.3})`;ctx.fillRect((i*37%w),(i*23%h*0.6),1.5,1.5);}
+    // City
+    ctx.fillStyle='#0a0a18';
+    for(const b of buildings){
+      const bx=b.x*w,bh=b.h*h,bw=b.w*w;
+      ctx.fillRect(bx,h-bh,bw,bh);
+      // windows
+      ctx.fillStyle='#ffd84d';
+      for(let wy=h-bh+6;wy<h-6;wy+=8){
+        for(let wx=bx+3;wx<bx+bw-3;wx+=6){
+          if((wx*wy+t*100|0)%7<3) ctx.fillRect(wx,wy,2,2);
+        }
+      }
+      ctx.fillStyle='#0a0a18';
+    }
+    // Spider-Man bottom-left, swinging on a web
+    const sxBase=w*0.22,syBase=h*0.55;
+    const sw=sin(t*2)*30,sy=syBase+cos(t*2)*10;
+    const sx=sxBase+sw;
+    // Web line
+    ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(w*0.18,0);ctx.stroke();
+    // Spider body
+    ctx.fillStyle='#c4262c';ctx.fillRect(sx-7,sy-10,14,18);
+    ctx.fillStyle='#1a3aa0';ctx.fillRect(sx-7,sy+8,14,8);
+    // Head
+    ctx.fillStyle='#c4262c';ctx.fillRect(sx-6,sy-16,12,8);
+    // Eyes
+    ctx.fillStyle='#fff';ctx.fillRect(sx-5,sy-14,4,2);ctx.fillRect(sx+1,sy-14,4,2);
+    // Stripes (small black lines)
+    ctx.fillStyle='#000';ctx.fillRect(sx-7,sy-4,14,1);ctx.fillRect(sx-7,sy+2,14,1);
+    // Spawn web shot occasionally
+    if(t%2.5<0.05) webs.push({x:sx,y:sy,vx:6+rand()*2,vy:-1+rand()*0.6,life:30});
+    // Update web shots
+    for(let i=webs.length-1;i>=0;i--){
+      const wb=webs[i];wb.x+=wb.vx;wb.y+=wb.vy;wb.life--;
+      ctx.fillStyle='rgba(255,255,255,0.85)';ctx.fillRect(wb.x,wb.y,3,3);
+      if(wb.life<=0||wb.x>w) webs.splice(i,1);
+    }
+    // Superman top-right, hovering with cape flapping
+    const mx=w*0.78,my=h*0.32+sin(t*1.6)*8;
+    // Cape (red wavy)
+    ctx.fillStyle='#b22020';
+    ctx.beginPath();ctx.moveTo(mx-6,my-2);
+    ctx.lineTo(mx-12+sin(t*4)*3,my+18);
+    ctx.lineTo(mx+12+cos(t*4)*3,my+18);
+    ctx.lineTo(mx+6,my-2);ctx.closePath();ctx.fill();
+    // Body
+    ctx.fillStyle='#1a3aa6';ctx.fillRect(mx-8,my-4,16,16);
+    // S shield (yellow)
+    ctx.fillStyle='#f2cc1f';ctx.fillRect(mx-4,my-1,8,8);
+    ctx.fillStyle='#b22020';ctx.font='bold 9px Arial Black';ctx.textAlign='center';ctx.fillText('S',mx,my+6);
+    // Head (skin)
+    ctx.fillStyle='#efcaa0';ctx.fillRect(mx-6,my-12,12,8);
+    // Hair
+    ctx.fillStyle='#18182a';ctx.fillRect(mx-6,my-13,12,3);
+    // Eyes — laser shot flicker
+    if((t*0.7)%3<0.4){
+      ctx.strokeStyle='#ff3020';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(mx-3,my-8);ctx.lineTo(mx-25-sin(t*8)*10,my+5);
+      ctx.moveTo(mx+3,my-8);ctx.lineTo(mx+25-sin(t*8)*10,my+5);ctx.stroke();
+    } else {
+      ctx.fillStyle='#222244';ctx.fillRect(mx-3,my-9,2,2);ctx.fillRect(mx+1,my-9,2,2);
+    }
+    // VS text in middle
+    if(sin(t*0.8)>0.5){
+      ctx.font='bold 18px "Bebas Neue", Arial';ctx.fillStyle='#ffd84d';ctx.textAlign='center';
+      ctx.fillText('VS',w/2,h/2);
+    }
     requestAnimationFrame(draw);
   }
   draw();

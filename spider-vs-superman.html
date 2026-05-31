@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>SPIDER-MAN VS SUPERMAN — 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#04040a;font-family:'Rajdhani',sans-serif;color:#e6e6f5;touch-action:none}
+canvas#game{display:block;position:fixed;inset:0;z-index:0}
+
+.scr{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#0a0a1a 0%,#02020a 80%);transition:opacity .25s}
+.scr.off{opacity:0;pointer-events:none}
+.title{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,7vw,72px);letter-spacing:6px;line-height:1;text-align:center;margin-bottom:6px}
+.title .vs{color:#ffd84d;margin:0 14px}
+.title .spider{color:#e22e2e;text-shadow:0 0 24px rgba(226,46,46,.5)}
+.title .super{color:#3a5dd9;text-shadow:0 0 24px rgba(58,93,217,.6)}
+.subtitle{font-size:13px;letter-spacing:6px;text-transform:uppercase;color:#5a5a78;margin-bottom:42px}
+
+.menu-card{display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(20,20,40,.85),rgba(10,10,25,.92));border:2px solid rgba(255,255,255,.07);padding:28px 40px;margin:10px;cursor:pointer;transition:all .22s;min-width:280px;clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+.menu-card:hover{transform:translateY(-3px) scale(1.02);border-color:rgba(255,255,255,.25)}
+.menu-card .lbl{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:5px;margin-bottom:6px}
+.menu-card .desc{font-size:12px;color:#9090b0;text-align:center;max-width:300px;line-height:1.6;letter-spacing:.5px}
+.menu-card.easy{border-color:#3fa05a}.menu-card.easy .lbl{color:#6cd98a;text-shadow:0 0 16px rgba(108,217,138,.4)}
+.menu-card.hard{border-color:#c92a2a}.menu-card.hard .lbl{color:#ff5050;text-shadow:0 0 18px rgba(255,80,80,.5)}
+.menu-card.spider{border-color:#e22e2e}.menu-card.spider .lbl{color:#ff6464;text-shadow:0 0 18px rgba(255,80,80,.4)}
+.menu-card.super{border-color:#3a5dd9}.menu-card.super .lbl{color:#ffd84d;text-shadow:0 0 18px rgba(255,216,77,.4)}
+.menu-card.level{border-color:#5a5acf;min-width:380px}
+.menu-card.level .lbl{color:#bfc4ff;font-size:24px}
+.menu-card.level .desc{color:#7a7aa0}
+.menu-card.level.locked{opacity:.4;cursor:not-allowed}
+.menu-cards{display:flex;flex-wrap:wrap;justify-content:center;align-items:stretch;max-width:920px}
+.menu-cards.col{flex-direction:column}
+
+.back-btn{position:fixed;left:18px;bottom:18px;background:rgba(30,30,50,.85);border:1px solid rgba(255,255,255,.15);color:#aaa;padding:10px 22px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;cursor:pointer;font-size:14px;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);z-index:60}
+.back-btn:hover{color:#fff;background:rgba(50,50,80,.9)}
+
+.diff-pill{position:fixed;top:10px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:4px;padding:6px 18px;background:rgba(10,10,25,.85);border:1px solid rgba(255,255,255,.1);clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);z-index:40}
+.diff-pill.easy{color:#6cd98a;border-color:rgba(108,217,138,.5)}
+.diff-pill.hard{color:#ff5050;border-color:rgba(255,80,80,.5)}
+
+/* ── HUD ── */
+#hud{position:fixed;inset:0;z-index:30;pointer-events:none}
+#hud.off{display:none}
+.hp-bar{position:absolute;top:18px;width:32vw;max-width:380px;height:34px;background:rgba(10,10,20,.7);border:1px solid rgba(255,255,255,.1);overflow:hidden}
+.hp-bar.left{left:18px;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 100%,0 100%)}
+.hp-bar.right{right:18px;clip-path:polygon(14px 0,100% 0,100% 100%,0 100%)}
+.hp-fill{position:absolute;top:0;bottom:0;transition:width .2s}
+.hp-bar.left .hp-fill{left:0;background:linear-gradient(90deg,#36c860,#76ff8c)}
+.hp-bar.right .hp-fill{right:0;background:linear-gradient(270deg,#ff3a4d,#ff8888)}
+.hp-label{position:absolute;inset:0;display:flex;align-items:center;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;font-size:14px;color:#fff;text-shadow:0 0 6px rgba(0,0,0,.8)}
+.hp-bar.left .hp-label{padding-left:14px;justify-content:flex-start}
+.hp-bar.right .hp-label{padding-right:14px;justify-content:flex-end}
+
+#timer{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:5px;color:#ffd84d;text-shadow:0 0 18px rgba(255,216,77,.4)}
+#sub-info{position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:4px;color:#7a7aa0;text-transform:uppercase}
+
+#ability-bar{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:12px;pointer-events:auto}
+.abty{width:78px;height:78px;background:linear-gradient(180deg,rgba(40,40,70,.9),rgba(15,15,30,.95));border:2px solid rgba(255,255,255,.15);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;position:relative;color:#fff;font-family:'Bebas Neue',sans-serif;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);user-select:none}
+.abty:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.4)}
+.abty:active{transform:translateY(-1px)}
+.abty.cd{opacity:.5;cursor:not-allowed}
+.abty .nm{font-size:13px;letter-spacing:2px;margin-top:2px}
+.abty .hk{font-size:10px;color:#888;letter-spacing:1px}
+.abty .cdt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-family:'Bebas Neue',sans-serif;color:#ffd84d;background:rgba(0,0,0,.55);opacity:0;pointer-events:none}
+.abty.cd .cdt{opacity:1}
+.abty.melee{border-color:#888}
+.abty.web{border-color:#d22a2a}
+.abty.sense{border-color:#ffd84d}
+.abty.fly{border-color:#3a5dd9}
+.abty.fly.active{background:linear-gradient(180deg,#3a5dd9,#1a2a80);border-color:#88aaff}
+.abty.laser{border-color:#ff5050}
+.abty.strength{border-color:#ff8c00}
+.abty.strength.active{background:linear-gradient(180deg,#ff8c00,#8a4400)}
+
+#sense-overlay{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(255,216,77,0) 30%,rgba(255,216,77,.18) 100%);box-shadow:inset 0 0 80px rgba(255,150,0,.35);pointer-events:none;opacity:0;transition:opacity .2s}
+#sense-overlay.on{opacity:1;animation:pulseSense 1s ease-in-out infinite}
+@keyframes pulseSense{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3)}}
+#sense-banner{position:absolute;top:120px;left:50%;transform:translateX(-50%);background:rgba(20,15,0,.85);border:2px solid #ffd84d;padding:12px 26px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;color:#ffd84d;font-size:18px;text-shadow:0 0 10px rgba(255,216,77,.6);opacity:0;transition:opacity .2s}
+#sense-banner.on{opacity:1}
+#sense-banner .when{font-size:11px;color:#fff7d0;letter-spacing:2px;margin-top:4px}
+
+#hit-flash{position:absolute;inset:0;background:#ff0;opacity:0;pointer-events:none}
+
+#menu-btn{position:absolute;top:60px;right:18px;background:rgba(120,30,30,.85);color:#fff;border:1px solid rgba(255,255,255,.2);padding:6px 14px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:12px;cursor:pointer;pointer-events:auto;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+
+/* Mobile joystick + touch buttons */
+#joy{position:absolute;left:24px;bottom:24px;width:140px;height:140px;background:radial-gradient(circle at center,rgba(40,40,70,.5),rgba(20,20,40,.7));border:2px solid rgba(255,255,255,.15);border-radius:50%;pointer-events:auto;display:none}
+#joy-nub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:54px;height:54px;background:rgba(180,180,220,.7);border:2px solid rgba(255,255,255,.4);border-radius:50%;pointer-events:none}
+#jump-btn{position:absolute;right:24px;bottom:120px;width:80px;height:80px;background:rgba(50,80,160,.7);border:2px solid rgba(255,255,255,.2);border-radius:50%;color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:14px;cursor:pointer;pointer-events:auto;display:none}
+body.mobile #joy,body.mobile #jump-btn{display:flex;align-items:center;justify-content:center}
+
+/* End screen */
+.end-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(70px,15vw,140px);letter-spacing:14px;margin-bottom:8px;line-height:.9}
+.end-title.win{color:#ffd84d;text-shadow:0 0 32px rgba(255,216,77,.6)}
+.end-title.lose{color:#ff3a4d;text-shadow:0 0 32px rgba(255,80,80,.6)}
+.end-sub{color:#9090b0;letter-spacing:4px;font-size:14px;margin-bottom:32px}
+
+/* Boot/transition */
+#boot{position:fixed;inset:0;z-index:90;background:#000;display:flex;align-items:center;justify-content:center;transition:opacity .6s}
+#boot.off{opacity:0;pointer-events:none}
+#boot .b-title{font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:8px;color:#ffd84d;text-shadow:0 0 24px rgba(255,216,77,.5)}
+
+/* PC controls hint */
+.hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;color:#5a5a78;letter-spacing:3px;z-index:35;text-transform:uppercase;pointer-events:none}
+body.mobile .hint{display:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="boot"><div class="b-title">LOADING…</div></div>
+
+<!-- Screen: Difficulty -->
+<div class="scr" id="screen-difficulty">
+  <div class="title"><span class="spider">SPIDER-MAN</span><span class="vs">VS</span><span class="super">SUPERMAN</span></div>
+  <div class="subtitle">Select Difficulty</div>
+  <div class="menu-cards col">
+    <div class="menu-card easy" data-act="diff-easy">
+      <div class="lbl">EASY MODE</div>
+      <div class="desc">Forgiving AI. Slow reactions, sloppy aim, easy on you.</div>
+    </div>
+    <div class="menu-card hard" data-act="diff-hard">
+      <div class="lbl">HARD MODE</div>
+      <div class="desc">Absolute limit. Pinpoint accuracy, ability spam, the AI will not lose easily.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Screen: Hero -->
+<div class="scr off" id="screen-hero">
+  <div class="title">CHOOSE YOUR HERO</div>
+  <div class="subtitle">Pick a side</div>
+  <div class="menu-cards">
+    <div class="menu-card spider" data-act="hero-spider">
+      <div class="lbl">SPIDER-MAN</div>
+      <div class="desc">Web Attack · Spider Sense · Fast melee · Lower HP, higher agility</div>
+    </div>
+    <div class="menu-card super" data-act="hero-super">
+      <div class="lbl">SUPERMAN</div>
+      <div class="desc">Flight · Laser Eyes · Super Strength · High HP, raw power</div>
+    </div>
+  </div>
+  <button class="back-btn" data-act="back-diff">‹ Back</button>
+</div>
+
+<!-- Screen: Level -->
+<div class="scr off" id="screen-level">
+  <div class="title" id="level-title">SELECT LEVEL</div>
+  <div class="subtitle" id="level-sub">Pick a level</div>
+  <div class="menu-cards col" id="level-cards"></div>
+  <button class="back-btn" data-act="back-hero">‹ Back</button>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="off">
+  <div class="hp-bar left">
+    <div class="hp-fill" id="hp-player" style="width:100%"></div>
+    <div class="hp-label" id="hp-player-lbl">YOU 200 / 200</div>
+  </div>
+  <div class="hp-bar right">
+    <div class="hp-fill" id="hp-enemy" style="width:100%"></div>
+    <div class="hp-label" id="hp-enemy-lbl">ENEMY 300 / 300</div>
+  </div>
+  <div id="timer">2:00</div>
+  <div id="sub-info">LEVEL 1</div>
+  <button id="menu-btn" data-act="quit">MENU</button>
+  <div id="ability-bar"></div>
+  <div id="sense-overlay"></div>
+  <div id="sense-banner">SPIDER SENSE<div class="when">—</div></div>
+  <div id="hit-flash"></div>
+  <div id="joy"><div id="joy-nub"></div></div>
+  <button id="jump-btn">JUMP</button>
+</div>
+<div class="hint">WASD = Move · MOUSE = Look · F = Punch · Q/E = Abilities · G = Fly · SPACE = Jump/Ascend</div>
+
+<!-- End screen -->
+<div class="scr off" id="screen-end">
+  <div class="end-title win" id="end-title">VICTORY</div>
+  <div class="end-sub" id="end-sub">You saved the city</div>
+  <div class="menu-cards">
+    <div class="menu-card" style="border-color:#3fa05a;min-width:240px" data-act="rematch">
+      <div class="lbl" style="color:#6cd98a">REMATCH</div>
+    </div>
+    <div class="menu-card" style="border-color:#5a5acf;min-width:240px" data-act="back-main">
+      <div class="lbl" style="color:#bfc4ff">MAIN MENU</div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* =============================================================
+   CONFIG
+   ============================================================= */
+const CONFIG = {
+  match: { duration: 120, arena: 60 },
+  spider: {
+    maxHp: 200, walk: 9, run: 14, jump: 14,
+    bodyRed:   0xc4262c,
+    accentBlu: 0x1a3aa0,
+    stripeBlk: 0x06060a,
+    eyeWhite:  0xf2f4ff,
+    melee: { dmg: 9, range: 3.5, cd: 0.55, wind: 0.12 },
+    abilities: {
+      web:   { dmg: 38, range: 30, speed: 55, slow: 0.45, slowTime: 1.4, cd: 1.6, wind: 0.16 },
+      sense: { dur: 2.0, cd: 12.0, boost: 1.4 }
+    }
+  },
+  super: {
+    maxHp: 300, walk: 10, run: 16, jump: 16,
+    bodyBlu:   0x1a3aa6,
+    cape:      0xb22020,
+    boots:     0xb22020,
+    skin:      0xefcaa0,
+    hair:      0x18182a,
+    logoYellow:0xf2cc1f,
+    logoRed:   0xb22020,
+    melee: { dmg: 14, range: 4.0, cd: 0.5, wind: 0.10 },
+    abilities: {
+      fly:       { speed: 24, ascend: 14, cd: 0 },
+      laser:     { dmg: 12, tick: 0.18, dur: 1.2, range: 50, cd: 6.0, wind: 0.18 },
+      strength:  { mult: 2.4, dur: 5.0, cd: 14.0, knock: 22 }
+    }
+  },
+  ai: {
+    easy: { react: 0.85, jitter: 6.0, abilityRate: 0.25, dodge: 0.10, aggro: 2.2, speedMul: 0.7, label:'EASY' },
+    hard: { react: 0.10, jitter: 0.4, abilityRate: 0.92, dodge: 0.80, aggro: 0.40, speedMul: 1.0, label:'HARD' }
+  },
+  levels: {
+    spider: [
+      { id:'s1', title:'LEVEL 1 — WEB-SLINGER',     desc:'Full kit: Web + Spider Sense',  loadout:{ web:true, sense:true } },
+      { id:'s2', title:'LEVEL 2 — NO SPIDER SENSE', desc:'Web only. No foresight.',       loadout:{ web:true, sense:false } }
+    ],
+    super: [
+      { id:'m1', title:'LEVEL 1 — MAN OF STEEL',      desc:'Full kit: Fly + Laser + Strength', loadout:{ fly:true, laser:true, strength:true } },
+      { id:'m2', title:'LEVEL 2 — NO SUPER STRENGTH', desc:'Fly + Laser only',                 loadout:{ fly:true, laser:true, strength:false } },
+      { id:'m3', title:'LEVEL 3 — GROUNDED',          desc:'Laser only. No flight.',           loadout:{ fly:false, laser:true, strength:false } }
+    ]
+  }
+};
+
+/* =============================================================
+   STATE
+   ============================================================= */
+const STATE = {
+  screen: 'difficulty',
+  difficulty: null,        // 'easy' | 'hard'
+  hero: null,              // 'spider' | 'super'
+  levelId: null,
+  loadout: {},
+  playing: false,
+  matchTime: 0,
+  cooldowns: { melee:0, web:0, sense:0, fly:0, laser:0, strength:0 },
+  effects: { sense: 0, strength: 0, flying: false, slow: 0 },
+  hp: { player:0, playerMax:0, enemy:0, enemyMax:0 },
+  aiIntent: null,          // { action, fireAt }
+  victor: null,
+  shake: 0,
+  mobile: ('ontouchstart' in window) && !window.matchMedia('(pointer:fine)').matches
+};
+if (STATE.mobile) document.body.classList.add('mobile');
+
+/* =============================================================
+   THREE.JS SETUP
+   ============================================================= */
+const canvas = document.getElementById('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d1a);
+scene.fog = new THREE.Fog(0x0a0d1a, 50, 140);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 400);
+camera.position.set(0, 8, 18);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const ambient = new THREE.AmbientLight(0x6a7090, 0.65);
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffeecc, 0.9);
+sun.position.set(30, 50, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -40;
+sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40;
+sun.shadow.camera.bottom = -40;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x88aaff, 0.35);
+fill.position.set(-20, 30, -10);
+scene.add(fill);
+
+/* =============================================================
+   ARENA
+   ============================================================= */
+const arena = new THREE.Group();
+scene.add(arena);
+
+(function buildArena(){
+  // Ground.
+  const ground = new THREE.Mesh(
+    new THREE.BoxGeometry(CONFIG.match.arena, 1, CONFIG.match.arena),
+    new THREE.MeshStandardMaterial({ color: 0x2a2e4a, roughness: 0.9 })
+  );
+  ground.position.y = -0.5;
+  ground.receiveShadow = true;
+  arena.add(ground);
+
+  // Skybox-ish walls.
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x1a1d33, roughness: 1.0 });
+  const wallGeo = new THREE.BoxGeometry(CONFIG.match.arena, 18, 1);
+  for (let i = 0; i < 4; i++){
+    const w = new THREE.Mesh(wallGeo, wallMat);
+    w.position.y = 8;
+    if (i === 0){ w.position.z = -CONFIG.match.arena/2; }
+    if (i === 1){ w.position.z = CONFIG.match.arena/2; }
+    if (i === 2){ w.position.x = -CONFIG.match.arena/2; w.rotation.y = Math.PI/2; }
+    if (i === 3){ w.position.x = CONFIG.match.arena/2; w.rotation.y = Math.PI/2; }
+    arena.add(w);
+  }
+
+  // Cityscape pillars in the distance.
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x424258, roughness: 0.8 });
+  for (let i = 0; i < 16; i++){
+    const h = 10 + Math.random()*22;
+    const p = new THREE.Mesh(new THREE.BoxGeometry(3, h, 3), pillarMat);
+    const angle = (i/16)*Math.PI*2;
+    const r = CONFIG.match.arena/2 + 6 + Math.random()*8;
+    p.position.set(Math.cos(angle)*r, h/2 - 0.5, Math.sin(angle)*r);
+    arena.add(p);
+    // window glows
+    const winGeo = new THREE.PlaneGeometry(0.5, 0.5);
+    const winMat = new THREE.MeshBasicMaterial({ color: 0xffd84d });
+    for (let j = 0; j < 4; j++){
+      const win = new THREE.Mesh(winGeo, winMat);
+      win.position.set(p.position.x, 2 + j*3, p.position.z + 1.51);
+      arena.add(win);
+    }
+  }
+
+  // Floor markings.
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(8, 8.4, 64),
+    new THREE.MeshBasicMaterial({ color: 0xffd84d, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI/2;
+  ring.position.y = 0.02;
+  arena.add(ring);
+})();
+
+/* =============================================================
+   CHARACTER BUILDER
+   Builds an articulated humanoid as nested Groups so we can
+   animate by rotating part groups (idle, walk, attack, fly, etc).
+   ============================================================= */
+function makeBox(w, h, d, color, opts){
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color, roughness: opts?.rough ?? 0.7, metalness: opts?.metal ?? 0.05, emissive: opts?.emissive ?? 0x000000, emissiveIntensity: opts?.eInt ?? 1 })
+  );
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+function buildSpiderMan(){
+  const cfg = CONFIG.spider;
+  const root = new THREE.Group(); root.name = 'spider';
+
+  // Body.
+  const torso = makeBox(1.2, 1.6, 0.7, cfg.bodyRed);
+  torso.position.y = 2.0;
+  root.add(torso);
+
+  const lowerTorso = makeBox(1.1, 0.6, 0.65, cfg.accentBlu);
+  lowerTorso.position.y = 0.95;
+  root.add(lowerTorso);
+
+  const head = makeBox(0.7, 0.75, 0.7, cfg.bodyRed);
+  head.position.y = 3.1;
+  root.add(head);
+
+  // Eyes (white, emissive).
+  const eyeMat = new THREE.MeshStandardMaterial({ color: cfg.eyeWhite, emissive: cfg.eyeWhite, emissiveIntensity: 0.8 });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.04), eyeMat);
+  eyeL.position.set(-0.18, 3.15, 0.36); root.add(eyeL);
+  const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.04), eyeMat);
+  eyeR.position.set(0.18, 3.15, 0.36); root.add(eyeR);
+
+  // Arms (Groups so we can rotate at shoulder).
+  function makeArm(side){
+    const shoulder = new THREE.Group();
+    shoulder.position.set(side * 0.85, 2.6, 0);
+    const upper = makeBox(0.4, 1.0, 0.4, cfg.bodyRed);
+    upper.position.y = -0.5;
+    shoulder.add(upper);
+    const elbow = new THREE.Group();
+    elbow.position.y = -1.0;
+    shoulder.add(elbow);
+    const lower = makeBox(0.36, 0.9, 0.36, cfg.accentBlu);
+    lower.position.y = -0.45;
+    elbow.add(lower);
+    const hand = makeBox(0.42, 0.3, 0.42, cfg.bodyRed);
+    hand.position.y = -1.05;
+    elbow.add(hand);
+    return shoulder;
+  }
+  const armL = makeArm(-1); armL.name = 'armL'; root.add(armL);
+  const armR = makeArm( 1); armR.name = 'armR'; root.add(armR);
+
+  // Legs.
+  function makeLeg(side){
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.3, 0.65, 0);
+    const upper = makeBox(0.45, 1.1, 0.45, cfg.bodyRed);
+    upper.position.y = -0.55;
+    hip.add(upper);
+    const knee = new THREE.Group();
+    knee.position.y = -1.1;
+    hip.add(knee);
+    const lower = makeBox(0.42, 1.0, 0.42, cfg.accentBlu);
+    lower.position.y = -0.5;
+    knee.add(lower);
+    const foot = makeBox(0.45, 0.25, 0.6, cfg.accentBlu);
+    foot.position.set(0, -1.0, 0.1);
+    knee.add(foot);
+    return hip;
+  }
+  const legL = makeLeg(-1); legL.name = 'legL'; root.add(legL);
+  const legR = makeLeg( 1); legR.name = 'legR'; root.add(legR);
+
+  // Black "web" stripes around limbs (decorative).
+  const stripeMat = new THREE.MeshStandardMaterial({ color: cfg.stripeBlk, roughness: 0.7 });
+  function addStripes(target, count, hRange){
+    for (let i = 1; i <= count; i++){
+      const ring = new THREE.Mesh(
+        new THREE.BoxGeometry(target.geometry.parameters.width * 1.04, 0.04, target.geometry.parameters.depth * 1.04),
+        stripeMat
+      );
+      ring.position.y = hRange[0] + (hRange[1]-hRange[0]) * (i/(count+1));
+      target.add(ring);
+    }
+  }
+  addStripes(torso, 5, [-0.7, 0.7]);
+  // Find upper arms and legs and stripe them.
+  root.traverse(c => {
+    if (c.isMesh && c.material && c.material.color){
+      if (c.material.color.getHex() === cfg.bodyRed && c.geometry && c.geometry.parameters && c.geometry.parameters.height >= 0.9){
+        addStripes(c, 3, [-c.geometry.parameters.height/2 + 0.1, c.geometry.parameters.height/2 - 0.1]);
+      }
+    }
+  });
+
+  // Tag refs for animation.
+  root.userData.parts = { head, torso, lowerTorso, eyeL, eyeR, armL, armR, legL, legR };
+  return root;
+}
+
+function buildSuperman(){
+  const cfg = CONFIG.super;
+  const root = new THREE.Group(); root.name = 'super';
+
+  const torso = makeBox(1.3, 1.6, 0.75, cfg.bodyBlu);
+  torso.position.y = 2.0;
+  root.add(torso);
+  const lowerTorso = makeBox(1.15, 0.6, 0.7, cfg.bodyBlu);
+  lowerTorso.position.y = 0.95;
+  root.add(lowerTorso);
+
+  // Red belt.
+  const belt = makeBox(1.18, 0.18, 0.72, cfg.cape);
+  belt.position.y = 1.25;
+  root.add(belt);
+
+  // Head/face.
+  const head = makeBox(0.7, 0.75, 0.7, cfg.skin);
+  head.position.y = 3.1;
+  root.add(head);
+  // Hair slab.
+  const hair = makeBox(0.72, 0.3, 0.55, cfg.hair);
+  hair.position.set(0, 3.45, -0.05);
+  root.add(hair);
+  // Eyes (skin-toned face → small dark dots).
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x222244 });
+  const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), eyeMat);
+  eyeL.position.set(-0.16, 3.18, 0.36); root.add(eyeL);
+  const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), eyeMat);
+  eyeR.position.set(0.16, 3.18, 0.36); root.add(eyeR);
+
+  // Chest emblem: yellow shield with red S.
+  const shield = makeBox(0.65, 0.7, 0.05, cfg.logoYellow, { emissive: cfg.logoYellow, eInt: 0.25 });
+  shield.position.set(0, 2.15, 0.39);
+  root.add(shield);
+  // "S" as a CanvasTexture on a plane.
+  const sCanvas = document.createElement('canvas');
+  sCanvas.width = 128; sCanvas.height = 128;
+  const sCtx = sCanvas.getContext('2d');
+  sCtx.fillStyle = '#f2cc1f'; sCtx.fillRect(0,0,128,128);
+  sCtx.font = 'bold 96px "Bebas Neue", Arial Black';
+  sCtx.fillStyle = '#b22020';
+  sCtx.strokeStyle = '#000';
+  sCtx.lineWidth = 4;
+  sCtx.textAlign = 'center'; sCtx.textBaseline = 'middle';
+  sCtx.strokeText('S', 64, 70);
+  sCtx.fillText('S', 64, 70);
+  const sTex = new THREE.CanvasTexture(sCanvas);
+  const sPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.55, 0.6),
+    new THREE.MeshBasicMaterial({ map: sTex, transparent: true })
+  );
+  sPlane.position.set(0, 2.15, 0.42);
+  root.add(sPlane);
+
+  function makeArm(side){
+    const shoulder = new THREE.Group();
+    shoulder.position.set(side * 0.9, 2.6, 0);
+    const upper = makeBox(0.42, 1.0, 0.42, cfg.bodyBlu);
+    upper.position.y = -0.5; shoulder.add(upper);
+    const elbow = new THREE.Group();
+    elbow.position.y = -1.0; shoulder.add(elbow);
+    const lower = makeBox(0.4, 0.9, 0.4, cfg.bodyBlu);
+    lower.position.y = -0.45; elbow.add(lower);
+    const hand = makeBox(0.46, 0.32, 0.46, cfg.skin);
+    hand.position.y = -1.05; elbow.add(hand);
+    return shoulder;
+  }
+  const armL = makeArm(-1); armL.name = 'armL'; root.add(armL);
+  const armR = makeArm( 1); armR.name = 'armR'; root.add(armR);
+
+  function makeLeg(side){
+    const hip = new THREE.Group();
+    hip.position.set(side * 0.32, 0.65, 0);
+    const upper = makeBox(0.48, 1.1, 0.48, cfg.bodyBlu);
+    upper.position.y = -0.55; hip.add(upper);
+    const knee = new THREE.Group();
+    knee.position.y = -1.1; hip.add(knee);
+    const lower = makeBox(0.45, 1.0, 0.45, cfg.bodyBlu);
+    lower.position.y = -0.5; knee.add(lower);
+    const boot = makeBox(0.5, 0.32, 0.66, cfg.boots);
+    boot.position.set(0, -1.05, 0.08); knee.add(boot);
+    return hip;
+  }
+  const legL = makeLeg(-1); legL.name = 'legL'; root.add(legL);
+  const legR = makeLeg( 1); legR.name = 'legR'; root.add(legR);
+
+  // Cape — flat plane behind upper torso, slightly tilted.
+  const capeGeo = new THREE.PlaneGeometry(1.6, 2.6, 2, 8);
+  const capeMat = new THREE.MeshStandardMaterial({ color: cfg.cape, side: THREE.DoubleSide, roughness: 0.85 });
+  const cape = new THREE.Mesh(capeGeo, capeMat);
+  cape.position.set(0, 1.7, -0.42);
+  cape.rotation.x = 0.18;
+  cape.castShadow = true;
+  root.add(cape);
+
+  root.userData.parts = { head, torso, lowerTorso, eyeL, eyeR, armL, armR, legL, legR, cape, hands: [armL, armR] };
+  return root;
+}
+
+/* =============================================================
+   FIGHTER WRAPPER
+   ============================================================= */
+class Fighter {
+  constructor(hero, isAI){
+    this.hero = hero; // 'spider' | 'super'
+    this.cfg = (hero === 'spider') ? CONFIG.spider : CONFIG.super;
+    this.mesh = (hero === 'spider') ? buildSpiderMan() : buildSuperman();
+    this.isAI = !!isAI;
+    this.hp = this.cfg.maxHp;
+    this.maxHp = this.cfg.maxHp;
+    this.pos = new THREE.Vector3();
+    this.vel = new THREE.Vector3();
+    this.facing = 0;          // yaw radians
+    this.grounded = true;
+    this.state = 'idle';      // idle | walk | run | jump | fall | punch | web | laser | fly | strength | hit | dead
+    this.stateTime = 0;
+    this.animTime = 0;
+    this.flashTime = 0;
+    this.strengthUntil = 0;
+    this.flying = false;
+    this.slowUntil = 0;
+    this.slowMul = 1;
+    this.lastHitDir = new THREE.Vector3();
+  }
+  get speedMul(){
+    let s = 1;
+    if (performance.now()*0.001 < this.slowUntil) s *= this.slowMul;
+    if (this.hero === 'spider' && STATE.effects.sense > 0 && !this.isAI) s *= CONFIG.spider.abilities.sense.boost;
+    return s;
+  }
+  takeDamage(dmg, dir){
+    if (this.hp <= 0) return;
+    this.hp = Math.max(0, this.hp - dmg);
+    this.flashTime = 0.18;
+    if (dir){ this.lastHitDir.copy(dir); }
+    this.setState('hit', 0.18);
+    if (!this.isAI) STATE.shake = Math.max(STATE.shake, dmg * 0.04);
+    if (this.hp <= 0){ this.state = 'dead'; }
+  }
+  setState(s, hold){
+    if (this.state === 'dead') return;
+    this.state = s;
+    this.stateTime = hold || 0;
+  }
+  applyFlash(){
+    const parts = this.mesh.userData.parts;
+    const tint = this.flashTime > 0;
+    [parts.torso, parts.head, parts.lowerTorso].forEach(m => {
+      if (!m || !m.material) return;
+      m.material.emissive.setHex(tint ? 0xff2020 : 0x000000);
+      m.material.emissiveIntensity = tint ? 0.7 : 0;
+    });
+  }
+  update(dt){
+    if (this.hp <= 0){
+      // Death pose.
+      this.mesh.rotation.z = Math.min(this.mesh.rotation.z + dt * 3, Math.PI/2);
+      this.mesh.position.y = Math.max(0, this.mesh.position.y - dt * 6);
+      return;
+    }
+    this.stateTime = Math.max(0, this.stateTime - dt);
+    this.animTime += dt;
+    this.flashTime = Math.max(0, this.flashTime - dt);
+    this.applyFlash();
+
+    // Gravity + jump for non-flying.
+    if (!this.flying){
+      this.vel.y -= 36 * dt;
+      const proposed = this.mesh.position.y + this.vel.y * dt;
+      if (proposed <= 0){
+        this.mesh.position.y = 0;
+        this.vel.y = 0;
+        this.grounded = true;
+      } else {
+        this.mesh.position.y = proposed;
+        this.grounded = false;
+      }
+    } else {
+      // Flying — gentle damping.
+      this.mesh.position.y = Math.max(1.2, this.mesh.position.y);
+    }
+
+    this.mesh.rotation.y = this.facing;
+
+    // Animation per state.
+    this._animate(dt);
+  }
+  _animate(dt){
+    const p = this.mesh.userData.parts;
+    const t = this.animTime;
+    // Reset some defaults.
+    const lerp = (a,b,k) => a + (b-a)*Math.min(1, k);
+
+    if (this.state === 'idle' || (this.state === 'hit' && this.stateTime > 0.1)){
+      const sway = Math.sin(t*2) * 0.05;
+      p.armL.rotation.x = lerp(p.armL.rotation.x, sway, 0.2);
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -sway, 0.2);
+      p.armL.rotation.z = lerp(p.armL.rotation.z, 0.08, 0.2);
+      p.armR.rotation.z = lerp(p.armR.rotation.z, -0.08, 0.2);
+      p.legL.rotation.x = lerp(p.legL.rotation.x, 0, 0.2);
+      p.legR.rotation.x = lerp(p.legR.rotation.x, 0, 0.2);
+      this.mesh.position.y += Math.sin(t*2) * 0.005;
+      this.mesh.rotation.x = lerp(this.mesh.rotation.x, 0, 0.2);
+    } else if (this.state === 'walk' || this.state === 'run'){
+      const speed = (this.state === 'run') ? 10 : 7;
+      const amp = (this.state === 'run') ? 0.9 : 0.55;
+      p.legL.rotation.x = Math.sin(t*speed) * amp;
+      p.legR.rotation.x = -Math.sin(t*speed) * amp;
+      p.armL.rotation.x = -Math.sin(t*speed) * amp * 0.6;
+      p.armR.rotation.x = Math.sin(t*speed) * amp * 0.6;
+      this.mesh.rotation.x = lerp(this.mesh.rotation.x, 0, 0.2);
+    } else if (this.state === 'jump' || (!this.grounded && !this.flying)){
+      p.legL.rotation.x = lerp(p.legL.rotation.x, -0.3, 0.2);
+      p.legR.rotation.x = lerp(p.legR.rotation.x,  0.3, 0.2);
+      p.armL.rotation.x = lerp(p.armL.rotation.x, -1.2, 0.2);
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -1.2, 0.2);
+    } else if (this.state === 'fall'){
+      p.legL.rotation.x = lerp(p.legL.rotation.x,  0.6, 0.2);
+      p.legR.rotation.x = lerp(p.legR.rotation.x, -0.6, 0.2);
+      p.armL.rotation.x = lerp(p.armL.rotation.x, -2.2, 0.2);
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -2.2, 0.2);
+      p.armL.rotation.z = lerp(p.armL.rotation.z, -0.4, 0.2);
+      p.armR.rotation.z = lerp(p.armR.rotation.z,  0.4, 0.2);
+    } else if (this.state === 'punch'){
+      // Right arm thrust forward.
+      const k = 1 - this.stateTime / 0.25;
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -Math.PI/1.6, k);
+      p.armR.rotation.z = lerp(p.armR.rotation.z, -0.2, k);
+      p.armL.rotation.x = lerp(p.armL.rotation.x,  0.3, 0.3);
+    } else if (this.state === 'web'){
+      // Spider-Man pose: right arm forward, fingers splayed (visual).
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -1.6, 0.35);
+      p.armR.rotation.z = lerp(p.armR.rotation.z, -0.4, 0.3);
+      p.armL.rotation.x = lerp(p.armL.rotation.x, -0.6, 0.3);
+    } else if (this.state === 'laser'){
+      // Superman pose: head/torso lean forward, eyes glow.
+      this.mesh.rotation.x = lerp(this.mesh.rotation.x, 0.15, 0.3);
+      if (p.eyeL && p.eyeL.material) {
+        p.eyeL.material.color.setHex(0xff3030);
+        p.eyeR.material.color.setHex(0xff3030);
+      }
+    } else if (this.state === 'fly'){
+      // Body horizontal, arms forward.
+      this.mesh.rotation.x = lerp(this.mesh.rotation.x, 0.45, 0.2);
+      p.armL.rotation.x = lerp(p.armL.rotation.x, -2.6, 0.25);
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -2.6, 0.25);
+      p.legL.rotation.x = lerp(p.legL.rotation.x, 0.25, 0.25);
+      p.legR.rotation.x = lerp(p.legR.rotation.x, -0.25, 0.25);
+      if (p.cape){
+        p.cape.rotation.x = 0.25 + Math.sin(t*4)*0.15;
+      }
+    } else if (this.state === 'strength'){
+      // Pose: arms flexed.
+      p.armL.rotation.x = lerp(p.armL.rotation.x, -0.4, 0.2);
+      p.armR.rotation.x = lerp(p.armR.rotation.x, -0.4, 0.2);
+      p.armL.rotation.z = lerp(p.armL.rotation.z, -0.6, 0.2);
+      p.armR.rotation.z = lerp(p.armR.rotation.z,  0.6, 0.2);
+    }
+
+    // Reset eyes when not lasering (Superman).
+    if (this.hero === 'super' && this.state !== 'laser' && p.eyeL && p.eyeL.material){
+      p.eyeL.material.color.setHex(0x222244);
+      p.eyeR.material.color.setHex(0x222244);
+    }
+
+    // Cape sway (Superman always).
+    if (this.hero === 'super' && p.cape && this.state !== 'fly'){
+      p.cape.rotation.x = 0.18 + Math.sin(t*3)*0.06;
+    }
+  }
+}
+
+/* =============================================================
+   PROJECTILES & EFFECTS
+   ============================================================= */
+const projectiles = []; // { mesh, vel, life, source, onHit }
+const beams = [];       // { mesh, source, target, until, nextTick }
+const particles = [];   // { mesh, vel, life, max }
+
+function spawnWeb(source, target){
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 12, 8),
+    new THREE.MeshStandardMaterial({ color: 0xf0f0ff, emissive: 0xaaaaff, emissiveIntensity: 0.3 })
+  );
+  const start = source.mesh.position.clone().add(new THREE.Vector3(0, 2.5, 0));
+  head.position.copy(start);
+  scene.add(head);
+
+  const dir = target.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0)).sub(start).normalize();
+  const speed = CONFIG.spider.abilities.web.speed;
+  // Inject AI jitter if source is AI.
+  if (source.isAI && STATE.difficulty){
+    const j = CONFIG.ai[STATE.difficulty].jitter;
+    dir.x += (Math.random()-0.5) * j * 0.05;
+    dir.z += (Math.random()-0.5) * j * 0.05;
+    dir.normalize();
+  }
+
+  projectiles.push({
+    mesh: head,
+    vel: dir.multiplyScalar(speed),
+    life: 2.0,
+    source,
+    target,
+    kind: 'web'
+  });
+}
+
+function spawnLaser(source, target){
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.18, 1, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.85 })
+  );
+  scene.add(beam);
+  beams.push({
+    mesh: beam,
+    source, target,
+    until: performance.now()*0.001 + CONFIG.super.abilities.laser.dur,
+    nextTick: performance.now()*0.001 + 0.1
+  });
+}
+
+function spawnHitParticles(at, color){
+  for (let i = 0; i < 10; i++){
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.18, 0.18),
+      new THREE.MeshBasicMaterial({ color })
+    );
+    m.position.copy(at);
+    scene.add(m);
+    particles.push({
+      mesh: m,
+      vel: new THREE.Vector3((Math.random()-0.5)*8, Math.random()*6 + 2, (Math.random()-0.5)*8),
+      life: 0.5, max: 0.5
+    });
+  }
+}
+
+function updateProjectiles(dt){
+  for (let i = projectiles.length - 1; i >= 0; i--){
+    const p = projectiles[i];
+    p.life -= dt;
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.vel.y -= 6 * dt; // light gravity
+    // Hit detection.
+    const tp = p.target.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+    if (p.mesh.position.distanceTo(tp) < 1.6 && p.target.hp > 0){
+      const dmg = CONFIG.spider.abilities.web.dmg;
+      p.target.takeDamage(dmg, p.vel.clone().normalize());
+      // Slow target.
+      const now = performance.now()*0.001;
+      p.target.slowMul = CONFIG.spider.abilities.web.slow;
+      p.target.slowUntil = now + CONFIG.spider.abilities.web.slowTime;
+      spawnHitParticles(p.mesh.position.clone(), 0xffffff);
+      scene.remove(p.mesh);
+      projectiles.splice(i, 1);
+      continue;
+    }
+    if (p.life <= 0 || p.mesh.position.y < -2){
+      scene.remove(p.mesh);
+      projectiles.splice(i, 1);
+    }
+  }
+}
+
+function updateBeams(dt){
+  const now = performance.now()*0.001;
+  for (let i = beams.length - 1; i >= 0; i--){
+    const b = beams[i];
+    if (now > b.until || b.source.hp <= 0 || b.target.hp <= 0){
+      scene.remove(b.mesh);
+      beams.splice(i, 1);
+      continue;
+    }
+    const from = b.source.mesh.position.clone().add(new THREE.Vector3(0, 3.0, 0.4));
+    const to = b.target.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+    const mid = from.clone().lerp(to, 0.5);
+    const dist = from.distanceTo(to);
+    b.mesh.position.copy(mid);
+    b.mesh.scale.set(1, dist, 1);
+    b.mesh.lookAt(to);
+    b.mesh.rotateX(Math.PI/2);
+    // Tick damage.
+    if (now >= b.nextTick && dist <= CONFIG.super.abilities.laser.range){
+      b.nextTick = now + CONFIG.super.abilities.laser.tick;
+      b.target.takeDamage(CONFIG.super.abilities.laser.dmg, to.clone().sub(from).normalize());
+      spawnHitParticles(to.clone(), 0xff4030);
+    }
+  }
+}
+
+function updateParticles(dt){
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i];
+    p.life -= dt;
+    p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+    p.vel.y -= 12 * dt;
+    p.mesh.material.opacity = p.life / p.max;
+    if (p.life <= 0){
+      scene.remove(p.mesh);
+      particles.splice(i, 1);
+    }
+  }
+}
+
+/* =============================================================
+   ABILITIES
+   ============================================================= */
+function cooldownReady(key){
+  return (performance.now()*0.001) >= STATE.cooldowns[key];
+}
+function startCooldown(key, dur){
+  STATE.cooldowns[key] = performance.now()*0.001 + dur;
+}
+
+function tryMelee(source, target){
+  if (!cooldownReady('melee') && source === player) return false;
+  const cfg = source.cfg.melee;
+  const d = source.mesh.position.distanceTo(target.mesh.position);
+  if (d > cfg.range + 0.5) return false;
+  source.setState('punch', 0.25);
+  setTimeout(() => {
+    if (source.hp <= 0 || target.hp <= 0) return;
+    const dd = source.mesh.position.distanceTo(target.mesh.position);
+    if (dd <= cfg.range + 1.5){
+      let dmg = cfg.dmg;
+      const now = performance.now()*0.001;
+      if (source.hero === 'super' && now < source.strengthUntil){
+        dmg *= CONFIG.super.abilities.strength.mult;
+        // Knockback.
+        const dir = target.mesh.position.clone().sub(source.mesh.position).normalize();
+        target.mesh.position.x += dir.x * 3;
+        target.mesh.position.z += dir.z * 3;
+        target.vel.y = CONFIG.super.abilities.strength.knock * 0.4;
+      }
+      target.takeDamage(dmg, source.mesh.position.clone().sub(target.mesh.position).normalize());
+      spawnHitParticles(target.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 0xffaa44);
+    }
+  }, cfg.wind * 1000);
+  if (source === player) startCooldown('melee', cfg.cd);
+  return true;
+}
+
+function tryWeb(source, target){
+  if (source === player){
+    if (!STATE.loadout.web) return false;
+    if (!cooldownReady('web')) return false;
+  }
+  source.setState('web', 0.35);
+  setTimeout(() => {
+    if (source.hp > 0) spawnWeb(source, target);
+  }, CONFIG.spider.abilities.web.wind * 1000);
+  if (source === player) startCooldown('web', CONFIG.spider.abilities.web.cd);
+  return true;
+}
+
+function trySense(source){
+  if (source === player){
+    if (!STATE.loadout.sense) return false;
+    if (!cooldownReady('sense')) return false;
+  }
+  const cfg = CONFIG.spider.abilities.sense;
+  STATE.effects.sense = cfg.dur;
+  if (source === player) startCooldown('sense', cfg.cd);
+  return true;
+}
+
+function tryFlyToggle(source){
+  if (source === player){
+    if (!STATE.loadout.fly) return false;
+  }
+  source.flying = !source.flying;
+  if (source === player){
+    STATE.effects.flying = source.flying;
+    if (source.flying){ source.setState('fly', 0); source.vel.y = 0; }
+  }
+  return true;
+}
+
+function tryLaser(source, target){
+  if (source === player){
+    if (!STATE.loadout.laser) return false;
+    if (!cooldownReady('laser')) return false;
+  }
+  source.setState('laser', CONFIG.super.abilities.laser.dur);
+  setTimeout(() => {
+    if (source.hp > 0) spawnLaser(source, target);
+  }, CONFIG.super.abilities.laser.wind * 1000);
+  if (source === player) startCooldown('laser', CONFIG.super.abilities.laser.cd);
+  return true;
+}
+
+function tryStrength(source){
+  if (source === player){
+    if (!STATE.loadout.strength) return false;
+    if (!cooldownReady('strength')) return false;
+  }
+  source.strengthUntil = performance.now()*0.001 + CONFIG.super.abilities.strength.dur;
+  source.setState('strength', 0.4);
+  if (source === player){
+    STATE.effects.strength = CONFIG.super.abilities.strength.dur;
+    startCooldown('strength', CONFIG.super.abilities.strength.cd);
+  }
+  return true;
+}
+
+/* =============================================================
+   AI
+   ============================================================= */
+class AI {
+  constructor(rig, target){
+    this.rig = rig;
+    this.target = target;
+    this.profile = CONFIG.ai[STATE.difficulty];
+    this.intent = null;
+    this.lastAction = 0;
+    this.lastDodge = 0;
+  }
+  // Choose next action, then telegraph (for Spider Sense preview).
+  pick(){
+    const now = performance.now()*0.001;
+    if (now - this.lastAction < this.profile.aggro) return;
+    const d = this.rig.mesh.position.distanceTo(this.target.mesh.position);
+    const opts = ['Melee'];
+    if (this.rig.hero === 'spider'){
+      if (d > 4) opts.push('Web');
+      if (Math.random() < 0.25) opts.push('Sense');
+    } else {
+      if (d > 3) opts.push('Laser');
+      if (d < 12) opts.push('Strength');
+    }
+    if (Math.random() > this.profile.abilityRate && opts.length > 1){
+      this.intent = { action:'Melee', fireAt: now + this.profile.react };
+    } else {
+      const action = opts[Math.floor(Math.random()*opts.length)];
+      this.intent = { action, fireAt: now + this.profile.react };
+    }
+    STATE.aiIntent = this.intent;
+  }
+  execute(){
+    if (!this.intent) return;
+    const now = performance.now()*0.001;
+    if (now < this.intent.fireAt) return;
+    const action = this.intent.action;
+    this.intent = null;
+    STATE.aiIntent = null;
+    if (this.rig.hp <= 0 || this.target.hp <= 0) return;
+    this.lastAction = now;
+    switch (action){
+      case 'Melee':    tryMelee(this.rig, this.target); break;
+      case 'Web':      tryWeb(this.rig, this.target); break;
+      case 'Sense':    trySense(this.rig); break;
+      case 'Laser':    tryLaser(this.rig, this.target); break;
+      case 'Strength': tryStrength(this.rig); break;
+    }
+  }
+  move(dt){
+    if (this.rig.hp <= 0) return;
+    const r = this.rig, t = this.target;
+    const toT = t.mesh.position.clone().sub(r.mesh.position);
+    const flat = new THREE.Vector3(toT.x, 0, toT.z);
+    const dist = flat.length();
+    if (dist < 0.01) return;
+    flat.normalize();
+
+    const preferred = (r.hero === 'spider') ? 6 : 4.5;
+    let dir = new THREE.Vector3();
+    if (dist > preferred){
+      dir.copy(flat);
+      r.setState('run', 0);
+    } else if (dist < preferred - 1){
+      dir.copy(flat).negate();
+      r.setState('walk', 0);
+    } else {
+      r.setState('idle', 0);
+    }
+
+    // Dodge: hard AI strafes when player has wound up an attack.
+    const now = performance.now()*0.001;
+    if (now - this.lastDodge > 0.6 && Math.random() < this.profile.dodge * 0.05){
+      const strafe = new THREE.Vector3(-flat.z, 0, flat.x).multiplyScalar(Math.random() < 0.5 ? -1 : 1);
+      dir.add(strafe);
+      this.lastDodge = now;
+    }
+
+    if (dir.lengthSq() > 0.001){
+      dir.normalize();
+      const sp = r.cfg.walk * this.profile.speedMul * r.speedMul;
+      r.mesh.position.x += dir.x * sp * dt;
+      r.mesh.position.z += dir.z * sp * dt;
+    }
+    r.facing = Math.atan2(flat.x, flat.z);
+  }
+  update(dt){
+    this.move(dt);
+    if (!this.intent) this.pick();
+    else this.execute();
+  }
+}
+
+/* =============================================================
+   GAME LIFECYCLE
+   ============================================================= */
+let player = null;
+let enemy = null;
+let ai = null;
+let cameraAngle = { yaw: 0, pitch: 0.25 };
+let cameraDist = 9;
+
+function clearScene(){
+  if (player){ scene.remove(player.mesh); player = null; }
+  if (enemy){ scene.remove(enemy.mesh); enemy = null; }
+  for (const p of projectiles) scene.remove(p.mesh);
+  projectiles.length = 0;
+  for (const b of beams) scene.remove(b.mesh);
+  beams.length = 0;
+  for (const p of particles) scene.remove(p.mesh);
+  particles.length = 0;
+  ai = null;
+}
+
+function startMatch(){
+  clearScene();
+  const playerHero = STATE.hero;
+  const enemyHero  = (playerHero === 'spider') ? 'super' : 'spider';
+  player = new Fighter(playerHero, false);
+  enemy  = new Fighter(enemyHero, true);
+  player.mesh.position.set(0, 0, -8);
+  enemy.mesh.position.set(0, 0, 8);
+  player.facing = 0;
+  enemy.facing = Math.PI;
+  scene.add(player.mesh);
+  scene.add(enemy.mesh);
+  ai = new AI(enemy, player);
+
+  STATE.cooldowns = { melee:0, web:0, sense:0, fly:0, laser:0, strength:0 };
+  STATE.effects = { sense: 0, strength: 0, flying: false, slow: 0 };
+  STATE.hp = { player: player.hp, playerMax: player.maxHp, enemy: enemy.hp, enemyMax: enemy.maxHp };
+  STATE.matchTime = CONFIG.match.duration;
+  STATE.victor = null;
+  STATE.playing = true;
+
+  document.getElementById('hud').classList.remove('off');
+  buildAbilityBar();
+  setScreen(null);
+  // Set sub-info text.
+  const lvl = (CONFIG.levels[STATE.hero] || []).find(l => l.id === STATE.levelId);
+  document.getElementById('sub-info').textContent = (lvl?.title || '') + ' · ' + STATE.difficulty.toUpperCase();
+}
+
+function endMatch(victor){
+  STATE.playing = false;
+  STATE.victor = victor;
+  document.getElementById('hud').classList.add('off');
+  const t = document.getElementById('end-title');
+  const s = document.getElementById('end-sub');
+  if (victor === 'player'){
+    t.textContent = 'VICTORY';
+    t.className = 'end-title win';
+    s.textContent = (STATE.hero === 'spider') ? 'Spider-Man saves the city' : 'Superman triumphant';
+  } else {
+    t.textContent = 'DEFEAT';
+    t.className = 'end-title lose';
+    s.textContent = 'The villain wins this round';
+  }
+  setScreen('end');
+}
+
+function setScreen(name){
+  ['difficulty','hero','level','end'].forEach(s => {
+    document.getElementById('screen-'+s).classList.toggle('off', s !== name);
+  });
+  STATE.screen = name;
+  // Show/hide diff pill on hero+level screens.
+  let pill = document.getElementById('diff-pill');
+  if (!pill){
+    pill = document.createElement('div');
+    pill.id = 'diff-pill'; pill.className = 'diff-pill';
+    document.body.appendChild(pill);
+  }
+  if ((name === 'hero' || name === 'level') && STATE.difficulty){
+    pill.textContent = STATE.difficulty.toUpperCase() + ' MODE';
+    pill.className = 'diff-pill ' + STATE.difficulty;
+    pill.style.display = 'block';
+  } else {
+    pill.style.display = 'none';
+  }
+}
+
+/* =============================================================
+   HUD & MENUS
+   ============================================================= */
+function buildLevelList(){
+  const wrap = document.getElementById('level-cards');
+  wrap.innerHTML = '';
+  document.getElementById('level-title').textContent =
+    (STATE.hero === 'spider' ? 'SPIDER-MAN' : 'SUPERMAN') + ' — SELECT LEVEL';
+  document.getElementById('level-sub').textContent = 'Choose your scenario';
+  const levels = CONFIG.levels[STATE.hero] || [];
+  levels.forEach(lv => {
+    const card = document.createElement('div');
+    card.className = 'menu-card level';
+    card.dataset.act = 'lvl-' + lv.id;
+    card.innerHTML = `<div class="lbl">${lv.title}</div><div class="desc">${lv.desc}</div>`;
+    wrap.appendChild(card);
+  });
+}
+
+function buildAbilityBar(){
+  const bar = document.getElementById('ability-bar');
+  bar.innerHTML = '';
+  function add(key, name, hk, cls){
+    const b = document.createElement('div');
+    b.className = 'abty ' + cls;
+    b.dataset.ab = key;
+    b.innerHTML = `<div class="nm">${name}</div><div class="hk">[${hk}]</div><div class="cdt"></div>`;
+    bar.appendChild(b);
+  }
+  add('melee', 'PUNCH', 'F', 'melee');
+  if (STATE.hero === 'spider'){
+    if (STATE.loadout.web)   add('web',   'WEB',   'Q', 'web');
+    if (STATE.loadout.sense) add('sense', 'SENSE', 'E', 'sense');
+  } else {
+    if (STATE.loadout.fly)      add('fly',      'FLY',      'G', 'fly');
+    if (STATE.loadout.laser)    add('laser',    'LASER',    'Q', 'laser');
+    if (STATE.loadout.strength) add('strength', 'STRENGTH', 'E', 'strength');
+  }
+}
+
+function updateHUD(){
+  if (!STATE.playing) return;
+  // Health bars.
+  const pHp = document.getElementById('hp-player'), pLb = document.getElementById('hp-player-lbl');
+  const eHp = document.getElementById('hp-enemy'),  eLb = document.getElementById('hp-enemy-lbl');
+  pHp.style.width = (100 * player.hp / player.maxHp) + '%';
+  pLb.textContent = 'YOU ' + Math.ceil(player.hp) + ' / ' + player.maxHp;
+  eHp.style.width = (100 * enemy.hp / enemy.maxHp) + '%';
+  eLb.textContent = 'ENEMY ' + Math.ceil(enemy.hp) + ' / ' + enemy.maxHp;
+
+  // Timer.
+  const sec = Math.max(0, Math.ceil(STATE.matchTime));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  document.getElementById('timer').textContent = m + ':' + (s < 10 ? '0' + s : s);
+
+  // Ability cooldowns + active states.
+  const now = performance.now()*0.001;
+  document.querySelectorAll('.abty').forEach(b => {
+    const key = b.dataset.ab;
+    const cd = STATE.cooldowns[key];
+    const remain = cd - now;
+    if (remain > 0){
+      b.classList.add('cd');
+      b.querySelector('.cdt').textContent = remain.toFixed(1);
+    } else {
+      b.classList.remove('cd');
+      b.querySelector('.cdt').textContent = '';
+    }
+    if (key === 'fly') b.classList.toggle('active', STATE.effects.flying);
+    if (key === 'strength') b.classList.toggle('active', STATE.effects.strength > 0);
+  });
+
+  // Sense overlay + banner.
+  const so = document.getElementById('sense-overlay');
+  const sb = document.getElementById('sense-banner');
+  if (STATE.effects.sense > 0){
+    so.classList.add('on');
+    sb.classList.add('on');
+    const intent = STATE.aiIntent;
+    if (intent){
+      const t = Math.max(0, intent.fireAt - now);
+      sb.querySelector('.when').textContent = `${intent.action.toUpperCase()} — in ${t.toFixed(1)}s`;
+    } else {
+      sb.querySelector('.when').textContent = 'tracking…';
+    }
+  } else {
+    so.classList.remove('on');
+    sb.classList.remove('on');
+  }
+}
+
+/* =============================================================
+   INPUT
+   ============================================================= */
+const keys = {};
+const mouse = { down: false, x: 0, y: 0, dx: 0, dy: 0 };
+const touch = { joyId: null, joyOrigin: null, joyDir: { x: 0, y: 0 }, lookId: null, lookLast: null, lookDx: 0, lookDy: 0 };
+
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (!STATE.playing) return;
+  if (e.code === 'KeyF') tryMelee(player, enemy);
+  if (STATE.hero === 'spider'){
+    if (e.code === 'KeyQ') tryWeb(player, enemy);
+    if (e.code === 'KeyE') trySense(player);
+  } else {
+    if (e.code === 'KeyQ') tryLaser(player, enemy);
+    if (e.code === 'KeyE') tryStrength(player);
+    if (e.code === 'KeyG') tryFlyToggle(player);
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0){ mouse.down = true; mouse.x = e.clientX; mouse.y = e.clientY; }
+});
+window.addEventListener('mouseup', e => { mouse.down = false; });
+window.addEventListener('mousemove', e => {
+  if (!mouse.down) return;
+  mouse.dx += (e.clientX - mouse.x);
+  mouse.dy += (e.clientY - mouse.y);
+  mouse.x = e.clientX; mouse.y = e.clientY;
+});
+
+// Mobile joystick.
+const joy = document.getElementById('joy');
+const joyNub = document.getElementById('joy-nub');
+
+function joyStart(e){
+  const t = e.changedTouches[0];
+  touch.joyId = t.identifier;
+  const r = joy.getBoundingClientRect();
+  touch.joyOrigin = { x: r.left + r.width/2, y: r.top + r.height/2 };
+}
+function joyMove(e){
+  if (touch.joyId === null) return;
+  for (const tt of e.changedTouches){
+    if (tt.identifier !== touch.joyId) continue;
+    const dx = tt.clientX - touch.joyOrigin.x;
+    const dy = tt.clientY - touch.joyOrigin.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const max = 50;
+    const k = len > max ? max/len : 1;
+    const fx = dx * k, fy = dy * k;
+    joyNub.style.left = (50 + fx*0.7) + '%';
+    joyNub.style.top  = (50 + fy*0.7) + '%';
+    touch.joyDir.x = fx / max;
+    touch.joyDir.y = fy / max;
+  }
+}
+function joyEnd(e){
+  for (const tt of e.changedTouches){
+    if (tt.identifier === touch.joyId){
+      touch.joyId = null;
+      touch.joyDir.x = 0; touch.joyDir.y = 0;
+      joyNub.style.left = '50%';
+      joyNub.style.top = '50%';
+    }
+  }
+}
+joy.addEventListener('touchstart', e => { e.preventDefault(); joyStart(e); }, { passive: false });
+joy.addEventListener('touchmove',  e => { e.preventDefault(); joyMove(e); },  { passive: false });
+joy.addEventListener('touchend',   e => { e.preventDefault(); joyEnd(e); },   { passive: false });
+joy.addEventListener('touchcancel',e => { e.preventDefault(); joyEnd(e); },   { passive: false });
+
+document.getElementById('jump-btn').addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (STATE.hero === 'super' && STATE.effects.flying){
+    player.vel.y = CONFIG.super.abilities.fly.ascend;
+  } else if (player && player.grounded){
+    player.vel.y = player.cfg.jump;
+    player.setState('jump', 0.3);
+    player.grounded = false;
+  }
+});
+
+// Touch look (drag on right half).
+canvas.addEventListener('touchstart', e => {
+  for (const t of e.changedTouches){
+    if (t.clientX < window.innerWidth * 0.5) continue;
+    if (touch.lookId !== null) continue;
+    touch.lookId = t.identifier;
+    touch.lookLast = { x: t.clientX, y: t.clientY };
+    break;
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  for (const t of e.changedTouches){
+    if (t.identifier === touch.lookId){
+      touch.lookDx += (t.clientX - touch.lookLast.x);
+      touch.lookDy += (t.clientY - touch.lookLast.y);
+      touch.lookLast.x = t.clientX; touch.lookLast.y = t.clientY;
+    }
+  }
+}, { passive: true });
+canvas.addEventListener('touchend', e => {
+  for (const t of e.changedTouches){
+    if (t.identifier === touch.lookId){
+      touch.lookId = null; touch.lookLast = null;
+    }
+  }
+});
+
+// Ability button taps (mobile).
+document.getElementById('ability-bar').addEventListener('click', e => {
+  const b = e.target.closest('.abty');
+  if (!b || !STATE.playing) return;
+  const key = b.dataset.ab;
+  if (key === 'melee') tryMelee(player, enemy);
+  else if (key === 'web') tryWeb(player, enemy);
+  else if (key === 'sense') trySense(player);
+  else if (key === 'fly') tryFlyToggle(player);
+  else if (key === 'laser') tryLaser(player, enemy);
+  else if (key === 'strength') tryStrength(player);
+});
+
+/* =============================================================
+   PLAYER UPDATE
+   ============================================================= */
+function updatePlayer(dt){
+  if (!STATE.playing || !player || player.hp <= 0) return;
+
+  // Camera-relative movement.
+  let mx = 0, mz = 0;
+  if (keys['KeyW']) mz -= 1;
+  if (keys['KeyS']) mz += 1;
+  if (keys['KeyA']) mx -= 1;
+  if (keys['KeyD']) mx += 1;
+  if (touch.joyId !== null){
+    mx += touch.joyDir.x;
+    mz += touch.joyDir.y;
+  }
+
+  // Rotate move vector by camera yaw.
+  const yaw = cameraAngle.yaw;
+  const cx = mx * Math.cos(yaw) - mz * Math.sin(yaw);
+  const cz = mx * Math.sin(yaw) + mz * Math.cos(yaw);
+  const moving = (cx*cx + cz*cz) > 0.01;
+
+  const running = keys['ShiftLeft'] || keys['ShiftRight'];
+  const speed = (running ? player.cfg.run : player.cfg.walk) * player.speedMul;
+
+  if (player.flying){
+    // Fly free in 3D.
+    const flySpeed = CONFIG.super.abilities.fly.speed;
+    player.mesh.position.x += cx * flySpeed * dt;
+    player.mesh.position.z += cz * flySpeed * dt;
+    if (keys['Space']) player.mesh.position.y += CONFIG.super.abilities.fly.ascend * dt;
+    if (keys['ShiftLeft'] || keys['ShiftRight']) player.mesh.position.y -= CONFIG.super.abilities.fly.ascend * dt;
+    player.vel.set(0,0,0);
+    if (moving) player.setState('fly', 0); else player.setState('fly', 0);
+    if (moving) player.facing = Math.atan2(cx, cz);
+  } else {
+    if (moving){
+      player.mesh.position.x += cx * speed * dt;
+      player.mesh.position.z += cz * speed * dt;
+      player.facing = Math.atan2(cx, cz);
+      if (player.grounded) player.setState(running ? 'run' : 'walk', 0);
+    } else {
+      if (player.grounded && player.state !== 'punch' && player.state !== 'web' && player.state !== 'laser' && player.state !== 'strength' && player.state !== 'hit'){
+        player.setState('idle', 0);
+      }
+    }
+    if (!player.grounded && player.vel.y < -2){
+      player.setState('fall', 0);
+    }
+    if (keys['Space'] && player.grounded){
+      player.vel.y = player.cfg.jump;
+      player.setState('jump', 0.3);
+      player.grounded = false;
+    }
+  }
+
+  // Clamp to arena.
+  const half = CONFIG.match.arena/2 - 2;
+  player.mesh.position.x = Math.max(-half, Math.min(half, player.mesh.position.x));
+  player.mesh.position.z = Math.max(-half, Math.min(half, player.mesh.position.z));
+}
+
+/* =============================================================
+   CAMERA
+   ============================================================= */
+function updateCamera(dt){
+  if (!player) return;
+  // Apply input rotation.
+  cameraAngle.yaw   -= mouse.dx * 0.005;
+  cameraAngle.pitch -= mouse.dy * 0.004;
+  mouse.dx = 0; mouse.dy = 0;
+  cameraAngle.yaw   -= touch.lookDx * 0.006;
+  cameraAngle.pitch -= touch.lookDy * 0.005;
+  touch.lookDx = 0; touch.lookDy = 0;
+  cameraAngle.pitch = Math.max(-0.4, Math.min(0.9, cameraAngle.pitch));
+
+  const target = player.mesh.position.clone().add(new THREE.Vector3(0, 2.2, 0));
+  const ox = Math.sin(cameraAngle.yaw) * Math.cos(cameraAngle.pitch) * cameraDist;
+  const oy = Math.sin(cameraAngle.pitch) * cameraDist + 2.2;
+  const oz = Math.cos(cameraAngle.yaw) * Math.cos(cameraAngle.pitch) * cameraDist;
+
+  // Apply shake.
+  const sx = (Math.random()-0.5) * STATE.shake;
+  const sy = (Math.random()-0.5) * STATE.shake;
+  STATE.shake = Math.max(0, STATE.shake - dt * 5);
+
+  camera.position.lerp(new THREE.Vector3(target.x + ox + sx, target.y + oy + sy, target.z + oz), 0.18);
+  camera.lookAt(target);
+}
+
+/* =============================================================
+   MAIN LOOP
+   ============================================================= */
+let lastT = performance.now();
+function frame(){
+  const now = performance.now();
+  let dt = Math.min(0.05, (now - lastT) * 0.001);
+  lastT = now;
+
+  if (STATE.playing){
+    STATE.matchTime -= dt;
+    if (STATE.matchTime <= 0){
+      // Timer ends → higher HP wins.
+      endMatch(player.hp >= enemy.hp ? 'player' : 'ai');
+    }
+    if (STATE.effects.sense > 0){
+      STATE.effects.sense = Math.max(0, STATE.effects.sense - dt);
+    }
+    if (STATE.effects.strength > 0){
+      STATE.effects.strength = Math.max(0, STATE.effects.strength - dt);
+    }
+
+    updatePlayer(dt);
+    if (player) player.update(dt);
+    if (ai) ai.update(dt);
+    if (enemy) enemy.update(dt);
+    updateProjectiles(dt);
+    updateBeams(dt);
+    updateParticles(dt);
+
+    // Win/lose check.
+    if (player && player.hp <= 0){
+      setTimeout(() => { if (STATE.playing) endMatch('ai'); }, 800);
+      STATE.playing = false;
+    } else if (enemy && enemy.hp <= 0){
+      setTimeout(() => { if (STATE.victor === null) endMatch('player'); }, 800);
+      STATE.playing = false;
+    }
+    updateHUD();
+  } else {
+    // Idle camera spin on menu screens.
+    if (STATE.screen !== null){
+      cameraAngle.yaw += dt * 0.2;
+      const t = performance.now()*0.001;
+      const target = new THREE.Vector3(0, 2.2, 0);
+      camera.position.set(Math.sin(t*0.3)*16, 5 + Math.sin(t*0.5)*1.2, Math.cos(t*0.3)*16);
+      camera.lookAt(target);
+    }
+  }
+  updateCamera(dt);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+/* =============================================================
+   MENU WIRING
+   ============================================================= */
+document.body.addEventListener('click', e => {
+  const card = e.target.closest('[data-act]');
+  if (!card) return;
+  const act = card.dataset.act;
+  if (act === 'diff-easy'){ STATE.difficulty = 'easy'; setScreen('hero'); }
+  else if (act === 'diff-hard'){ STATE.difficulty = 'hard'; setScreen('hero'); }
+  else if (act === 'hero-spider'){ STATE.hero = 'spider'; buildLevelList(); setScreen('level'); }
+  else if (act === 'hero-super'){ STATE.hero = 'super'; buildLevelList(); setScreen('level'); }
+  else if (act === 'back-diff'){ setScreen('difficulty'); }
+  else if (act === 'back-hero'){ setScreen('hero'); }
+  else if (act === 'rematch'){ startMatch(); }
+  else if (act === 'back-main'){ setScreen('difficulty'); STATE.difficulty = null; STATE.hero = null; STATE.levelId = null; clearScene(); }
+  else if (act === 'quit'){ STATE.playing = false; clearScene(); setScreen('difficulty'); document.getElementById('hud').classList.add('off'); }
+  else if (act.startsWith('lvl-')){
+    const id = act.slice(4);
+    const lvl = CONFIG.levels[STATE.hero].find(l => l.id === id);
+    if (lvl){
+      STATE.levelId = id;
+      STATE.loadout = lvl.loadout;
+      startMatch();
+    }
+  }
+});
+
+/* =============================================================
+   BOOT
+   ============================================================= */
+setScreen('difficulty');
+setTimeout(() => document.getElementById('boot').classList.add('off'), 350);
+frame();
+</script>
+</body>
+</html>
