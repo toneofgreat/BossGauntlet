@@ -1452,6 +1452,7 @@ const Game = {
   invertedG: false,
   pressed: false,
   jumpEdge: false,
+  jumpBufferTime: 0,
   pressTime: 0,
   pendingDeath: false,
   deathT: 0,
@@ -1481,9 +1482,13 @@ const Game = {
     this.attempt = (this.best[(level.id || 'tower') + ':' + (sublevel || 0)] !== undefined ? this.attempt + 1 : 1);
     this.player = new Player(this.activeMode, level);
     if (this.activeMode === 'frog' && level && level.start) {
-      // Spawn on the level's designated start lilypad.
+      // Spawn directly on the start lilypad and lock to grounded so the first
+      // gravity tick can't slip past the landing window.
       this.player.x = level.start.x;
       this.player.y = level.start.y + 0.4;
+      this.player.vy = 0;
+      this.player.vx = 0;
+      this.player.grounded = true;
     } else {
       this.player.x = this.startX;
       this.player.y = (this.activeMode === 'wave') ? 5 : 0;
@@ -1506,6 +1511,7 @@ const Game = {
   update(dt) {
     if (this.scene !== 'playing') return;
     this.worldTime += dt;
+    if (this.jumpBufferTime > 0) this.jumpBufferTime = Math.max(0, this.jumpBufferTime - dt);
     if (this.startupTime > 0) {
       this.startupTime -= dt;
       this.jumpEdge = false;
@@ -1624,10 +1630,12 @@ class Player {
       this.grounded = false;
       this.rot += (this.gFlipped ? -1 : 1) * 5 * dt;
     }
-    // Jump on press while grounded
-    if (game.pressed && this.grounded) {
+    // Jump on press while grounded, OR if there's a recent buffered press (~150ms)
+    // so a slightly-early tap still fires the instant the cube touches down.
+    if (this.grounded && (game.pressed || game.jumpBufferTime > 0)) {
       this.vy = this.gFlipped ? -this.jumpVel : this.jumpVel;
       this.grounded = false;
+      game.jumpBufferTime = 0;
       FX.emitJumpDust(this.x, this.y);
       Audio.playSfx('jump');
     }
@@ -1677,7 +1685,7 @@ class Player {
           const ox = (o.t === 'moving-pad' && o.vx) ? o.x + (o.amp || 0) * Math.sin((o.freq || 1) * game.worldTime) : o.x;
           const padTop = oy + (o.h || 0.4);
           if (this.x + this.size/2 > ox - 0.05 && this.x - this.size/2 < ox + o.w &&
-              this.y <= padTop + 0.1 && this.y >= padTop - 0.3 && this.vy <= 0) {
+              this.y <= padTop + 0.25 && this.y >= padTop - 0.6 && this.vy <= 0) {
             this.y = padTop;
             this.vy = 0;
             this.vx = (o.t === 'sticky-pad') ? 0.6 : 0;
@@ -1731,9 +1739,11 @@ class Player {
       this.y = (game.ceilingY || 10) - this.size;
       this.vy = Math.min(0, this.vy);
     }
-    if (game.jumpEdge) {
+    // Tower: fresh tap = infinite-jump; also honor a buffered press on landing.
+    if (game.jumpEdge || (this.grounded && game.jumpBufferTime > 0)) {
       this.vy = this.jumpVel;
       this.grounded = false;
+      game.jumpBufferTime = 0;
       FX.emitJumpDust(this.x, this.y);
       Audio.playSfx('jump');
     }
@@ -2262,6 +2272,7 @@ function pressDown() {
   if (Audio.ctx && Audio.ctx.state === 'suspended') Audio.ctx.resume();
   Game.pressed = true;
   Game.jumpEdge = true; // consumed once by infinite-jump modes (tower)
+  Game.jumpBufferTime = 0.15; // press-and-land buffer for cube/tower
 }
 function pressUp() {
   Game.pressed = false;
