@@ -1447,9 +1447,11 @@ const Game = {
   endX: 0,
   scrollX: 0,
   worldTime: 0,
+  startupTime: 0,
   speedMul: 1,
   invertedG: false,
   pressed: false,
+  jumpEdge: false,
   pressTime: 0,
   pendingDeath: false,
   deathT: 0,
@@ -1473,6 +1475,7 @@ const Game = {
     this.startX = 4;
     this.scrollX = 0;
     this.worldTime = 0;
+    this.startupTime = 1.0;
     this.speedMul = 1;
     this.invertedG = false;
     this.attempt = (this.best[(level.id || 'tower') + ':' + (sublevel || 0)] !== undefined ? this.attempt + 1 : 1);
@@ -1497,10 +1500,17 @@ const Game = {
   update(dt) {
     if (this.scene !== 'playing') return;
     this.worldTime += dt;
+    if (this.startupTime > 0) {
+      this.startupTime -= dt;
+      this.jumpEdge = false;
+      if (Audio.ctx) Audio.scheduleAhead();
+      return;
+    }
     this.player.update(dt, this);
     if (this.player.dead) this.die();
     if (this.player.x >= this.endX - 1) this.win();
     if (Audio.ctx) Audio.scheduleAhead();
+    this.jumpEdge = false;
   },
 
   die() {
@@ -1698,7 +1708,8 @@ class Player {
     this.rot += this.vx * 0.5 * dt;
   }
   updateTower(dt, game) {
-    // Cube-like, but with ceiling
+    // Cube-like, but with ceiling AND infinite mid-air jumps.
+    // Each fresh tap triggers a jump regardless of grounded state.
     this.x += this.vx * game.speedMul * dt;
     this.vy -= this.grav * dt;
     this.y += this.vy * dt;
@@ -1713,7 +1724,7 @@ class Player {
       this.y = (game.ceilingY || 10) - this.size;
       this.vy = Math.min(0, this.vy);
     }
-    if (game.pressed && this.grounded) {
+    if (game.jumpEdge) {
       this.vy = this.jumpVel;
       this.grounded = false;
       FX.emitJumpDust(this.x, this.y);
@@ -2243,6 +2254,7 @@ function pressDown() {
   Audio.init();
   if (Audio.ctx && Audio.ctx.state === 'suspended') Audio.ctx.resume();
   Game.pressed = true;
+  Game.jumpEdge = true; // consumed once by infinite-jump modes (tower)
 }
 function pressUp() {
   Game.pressed = false;
