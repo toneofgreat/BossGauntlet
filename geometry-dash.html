@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>GEOMETRY DASH — ABYSSAL</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#04040a;font-family:'Rajdhani',sans-serif;color:#e6e6f5;touch-action:none}
+canvas#game{display:block;position:fixed;inset:0;z-index:0}
+
+/* Screens */
+.scr{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#0a0a1a 0%,#02020a 80%);transition:opacity .25s}
+.scr.off{opacity:0;pointer-events:none}
+.title{font-family:'Bebas Neue',sans-serif;font-size:clamp(50px,9vw,110px);letter-spacing:8px;text-align:center;line-height:.95;margin-bottom:8px;background:linear-gradient(180deg,#fff 0%,#ffd84d 50%,#ff5050 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 0 38px rgba(255,216,77,.35);filter:drop-shadow(0 4px 18px rgba(0,0,0,.7))}
+.subtitle{font-size:13px;letter-spacing:8px;text-transform:uppercase;color:#5a5a78;margin-bottom:40px}
+
+.cards{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;max-width:1000px;padding:20px}
+.cards.col{flex-direction:column;align-items:center}
+.card{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:linear-gradient(180deg,rgba(25,25,45,.92),rgba(8,8,20,.95));border:2px solid rgba(255,255,255,.08);padding:20px 26px;cursor:pointer;transition:all .18s;min-width:240px;max-width:280px;clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%);position:relative}
+.card:hover{transform:translateY(-4px) scale(1.03);border-color:rgba(255,255,255,.3);box-shadow:0 12px 40px -4px rgba(0,0,0,.5)}
+.card .lbl{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;margin-top:10px;text-align:center;color:#ffd84d}
+.card .desc{font-size:11.5px;color:#9090b0;text-align:center;max-width:240px;line-height:1.65;letter-spacing:.5px;margin-top:6px}
+.card canvas.face{width:78px;height:78px;display:block}
+.card .diff-tag{font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:3px;margin-top:8px;padding:3px 10px;background:rgba(255,255,255,.06);clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%)}
+
+.back-btn{position:fixed;left:18px;bottom:18px;background:rgba(30,30,50,.85);border:1px solid rgba(255,255,255,.15);color:#aaa;padding:11px 24px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;cursor:pointer;font-size:14px;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);z-index:60}
+.back-btn:hover{color:#fff;background:rgba(50,50,80,.9)}
+
+/* HUD */
+#hud{position:fixed;inset:0;z-index:30;pointer-events:none}
+#hud.off{display:none}
+#progress-wrap{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:min(56vw,640px);height:18px;background:rgba(10,10,20,.7);border:1px solid rgba(255,255,255,.15);clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);overflow:hidden}
+#progress{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#3fa05a,#76ff8c,#ffd84d);transition:width .15s}
+#progress-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:12px;color:#fff;text-shadow:0 0 4px #000}
+
+#attempt{position:absolute;top:40px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:4px;color:rgba(230,230,255,.7)}
+#level-name{position:absolute;top:62px;left:50%;transform:translateX(-50%);font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:6px;color:#ffd84d;text-shadow:0 0 12px rgba(255,216,77,.4)}
+
+#sub-info{position:absolute;top:90px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:5px;color:#7a7aa0;text-transform:uppercase}
+
+#menu-btn{position:absolute;top:14px;right:18px;background:rgba(120,30,30,.85);color:#fff;border:1px solid rgba(255,255,255,.2);padding:8px 16px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;font-size:13px;cursor:pointer;pointer-events:auto;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+
+#mute-btn{position:absolute;top:54px;right:18px;background:rgba(30,30,60,.85);color:#fff;border:1px solid rgba(255,255,255,.15);padding:6px 14px;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:11px;cursor:pointer;pointer-events:auto;clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%)}
+
+#tap-zone{position:absolute;inset:0;pointer-events:auto;z-index:5}
+
+/* Spike Tower sublevel HUD */
+#st-hud{position:absolute;top:14px;left:20px;font-family:'Bebas Neue',sans-serif;letter-spacing:3px;color:#ffd84d;font-size:14px;background:rgba(10,10,20,.7);padding:8px 14px;border:1px solid rgba(255,255,255,.15);clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+#st-hud .big{font-size:22px;color:#fff;letter-spacing:4px;display:block}
+
+/* End screen overlays */
+#death-screen,#win-screen{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(5,0,5,.92);transition:opacity .25s}
+#death-screen.off,#win-screen.off{opacity:0;pointer-events:none}
+.big-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(80px,15vw,180px);letter-spacing:18px;line-height:.9;text-align:center}
+.big-title.die{color:#ff3a4d;text-shadow:0 0 40px rgba(255,80,80,.7),0 0 80px rgba(255,80,80,.3)}
+.big-title.win{color:#ffd84d;text-shadow:0 0 40px rgba(255,216,77,.7),0 0 80px rgba(255,216,77,.3)}
+.big-sub{font-size:14px;letter-spacing:4px;color:#bbb;margin-top:8px;margin-bottom:32px}
+.end-row{display:flex;gap:14px}
+.end-btn{background:rgba(40,40,80,.85);border:2px solid rgba(255,255,255,.2);color:#fff;padding:14px 32px;font-family:'Bebas Neue',sans-serif;letter-spacing:4px;font-size:18px;cursor:pointer;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);transition:all .15s}
+.end-btn:hover{transform:translateY(-3px);background:rgba(60,60,120,.9);border-color:rgba(255,255,255,.4)}
+.end-btn.primary{background:rgba(60,140,80,.85);border-color:rgba(120,255,140,.4)}
+.end-btn.primary:hover{background:rgba(80,200,100,.95)}
+
+/* Hint */
+.hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;color:#5a5a78;letter-spacing:3px;z-index:35;text-transform:uppercase;pointer-events:none}
+
+/* Mode selector tile */
+.mode-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(25,25,55,.92),rgba(10,10,30,.95));border:2px solid;padding:30px 36px;cursor:pointer;transition:all .2s;min-width:200px;clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+.mode-tile:hover{transform:translateY(-4px) scale(1.05)}
+.mode-tile .icon{font-size:50px;margin-bottom:10px;filter:drop-shadow(0 0 16px currentColor)}
+.mode-tile .lbl{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:4px}
+.mode-tile .desc{font-size:11px;color:#aaa;letter-spacing:1px;margin-top:8px;text-align:center}
+.mode-tile.cube{border-color:#3a7fff;color:#3a7fff}
+.mode-tile.wave{border-color:#4fd1c5;color:#4fd1c5}
+.mode-tile.frog{border-color:#7ed957;color:#7ed957}
+.mode-tile.tower{border-color:#ff8c00;color:#ff8c00}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- Title -->
+<div class="scr" id="screen-title">
+  <div class="title">GEOMETRY<br>DASH</div>
+  <div class="subtitle">ABYSSAL EDITION</div>
+  <div class="cards" id="mode-grid">
+    <div class="mode-tile cube"   data-act="mode-cube">   <div class="icon">◆</div><div class="lbl">CUBE</div><div class="desc">9 levels · Easy → Impossible Demon</div></div>
+    <div class="mode-tile wave"   data-act="mode-wave">   <div class="icon">▲</div><div class="lbl">WAVE</div><div class="desc">7 levels · Thread the needle</div></div>
+    <div class="mode-tile frog"   data-act="mode-frog">   <div class="icon">●</div><div class="lbl">FROG</div><div class="desc">3 levels · Charge &amp; leap</div></div>
+    <div class="mode-tile tower"  data-act="mode-tower">  <div class="icon">▣</div><div class="lbl">SPIKE TOWER 100</div><div class="desc">100 sublevels of pain</div></div>
+  </div>
+  <div style="margin-top:30px;font-size:11px;letter-spacing:3px;color:#444">SPACE · CLICK · TAP TO JUMP</div>
+</div>
+
+<!-- Level select -->
+<div class="scr off" id="screen-level">
+  <div class="title" id="level-title-banner" style="font-size:clamp(36px,6vw,64px)">SELECT LEVEL</div>
+  <div class="subtitle" id="level-mode-banner">CUBE</div>
+  <div class="cards" id="level-grid"></div>
+  <button class="back-btn" data-act="back-title">‹ Back</button>
+</div>
+
+<!-- Spike Tower sublevel select -->
+<div class="scr off" id="screen-tower">
+  <div class="title" style="font-size:clamp(36px,6vw,64px)">SPIKE TOWER 100</div>
+  <div class="subtitle">Sublevel — Choose your starting point</div>
+  <div id="tower-grid" style="display:grid;grid-template-columns:repeat(10,1fr);gap:6px;padding:14px;max-width:760px"></div>
+  <button class="back-btn" data-act="back-title">‹ Back</button>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="off">
+  <div id="tap-zone"></div>
+  <div id="progress-wrap"><div id="progress"></div><div id="progress-text">0%</div></div>
+  <div id="attempt">ATTEMPT 1</div>
+  <div id="level-name">STEREO MADNESS</div>
+  <div id="sub-info">CUBE · EASY</div>
+  <div id="st-hud" style="display:none"><span id="st-level"></span><span class="big" id="st-progress">0%</span></div>
+  <button id="menu-btn" data-act="quit">MENU</button>
+  <button id="mute-btn" data-act="mute">♪ ON</button>
+</div>
+
+<!-- Death screen -->
+<div id="death-screen" class="off">
+  <div class="big-title die">DEAD</div>
+  <div class="big-sub" id="death-sub">ATTEMPT 1 · 0%</div>
+  <div class="end-row">
+    <button class="end-btn primary" data-act="retry">RETRY</button>
+    <button class="end-btn" data-act="quit">QUIT</button>
+  </div>
+</div>
+
+<!-- Win screen -->
+<div id="win-screen" class="off">
+  <div class="big-title win">COMPLETE</div>
+  <div class="big-sub" id="win-sub">Level conquered</div>
+  <div class="end-row">
+    <button class="end-btn primary" data-act="next">NEXT LEVEL</button>
+    <button class="end-btn" data-act="retry">REPLAY</button>
+    <button class="end-btn" data-act="quit">MENU</button>
+  </div>
+</div>
+
+<div class="hint">SPACE · CLICK · TAP</div>
+
+<script>
+'use strict';
+
+/* =============================================================
+   AGENT-PROVIDED DATA (injected below)
+   ============================================================= */
+const SPIKE_TOWER = {
+  id: 'spike-tower',
+  name: 'SPIKE TOWER 100',
+  totalSublevels: 100,
+  generate(n) {
+    const sublevel = Math.max(1, Math.min(100, Math.floor(n)));
+    const diff = (sublevel - 1) / 99;
+    const length = 40 + diff * 20;
+    const ceilingY = 10 - diff * 4;
+    const floorY = 0;
+    const spikeH = 1 + diff * 1.0;
+    const safePad = 4;
+    const usable = length - safePad * 2;
+    const slots = 10;
+    const baseSpacing = usable / slots;
+    const phase = (1 - diff) * (baseSpacing * 0.5);
+    const jitterAmp = (1 - diff) * (baseSpacing * 0.25);
+    const jitter = (i) => Math.sin(sublevel * 12.9898 + i * 78.233) * jitterAmp;
+    const obstacles = [];
+    for (let i = 0; i < slots; i++) {
+      const bx = safePad + baseSpacing * (i + 0.5) + jitter(i);
+      const bxClamped = Math.max(safePad, Math.min(length - safePad, bx));
+      obstacles.push({ t: 'spike-up', x: bxClamped, h: spikeH });
+      const tx = safePad + baseSpacing * (i + 0.5) + phase + jitter(i + 100);
+      const txClamped = Math.max(safePad, Math.min(length - safePad, tx));
+      obstacles.push({ t: 'spike-down', x: txClamped, y: ceilingY, h: spikeH });
+    }
+    if (sublevel >= 40) {
+      const blockCount = Math.min(3, Math.floor((sublevel - 40) / 20) + 1);
+      const blockW = 2;
+      const blockH = 0.6;
+      const midY = ceilingY / 2 - blockH / 2;
+      for (let i = 0; i < blockCount; i++) {
+        const slotIndex = Math.floor((slots / (blockCount + 1)) * (i + 1));
+        const bx = safePad + baseSpacing * (slotIndex + 0.0);
+        obstacles.push({ t: 'block', x: bx, y: midY, w: blockW, h: blockH });
+      }
+    }
+    obstacles.sort((a, b) => a.x - b.x);
+    return { obstacles, length, ceilingY, floorY };
+  }
+};
+const LEVELS_CUBE_STD = [
+  { id:'cube-easy', name:'STEREO MADNESS', difficulty:'easy', mode:'cube',
+    themeBgTop:'#3a7fff', themeBgBot:'#1a3a8f', themeGround:'#1a1a4a', themeAccent:'#ffd84d',
+    speed:8.6, gravity:28, jumpVel:14, length:220,
+    obstacles:[
+      {t:'spike',x:14,y:0,h:1},{t:'spike',x:20,y:0,h:1},{t:'block',x:25,y:0,w:2,h:1},
+      {t:'spike',x:30,y:0,h:1},{t:'spike',x:36,y:0,h:1},{t:'block',x:40,y:0,w:3,h:1},{t:'spike',x:44,y:0,h:1},
+      {t:'slope-up',x:50,y:0},{t:'slope-down',x:52,y:1},{t:'spike',x:58,y:0,h:1},{t:'ring',x:62,y:3},
+      {t:'spike',x:68,y:0,h:1},{t:'spike',x:69,y:0,h:1},{t:'block',x:74,y:0,w:2,h:1},{t:'spike',x:80,y:0,h:1},
+      {t:'block',x:88,y:0,w:2,h:1},{t:'block',x:90,y:1,w:2,h:1},{t:'block',x:92,y:2,w:2,h:1},
+      {t:'block',x:96,y:1,w:2,h:1},{t:'block',x:98,y:0,w:2,h:1},{t:'spike',x:102,y:0,h:1},
+      {t:'pad',x:108,y:0},{t:'ring',x:114,y:4},{t:'spike',x:120,y:0,h:1},
+      {t:'slope-up',x:128,y:0},{t:'slope-down',x:130,y:1},{t:'spike',x:134,y:0,h:1},{t:'spike',x:140,y:0,h:1},
+      {t:'block',x:148,y:0,w:3,h:1},{t:'spike',x:152,y:0,h:1},{t:'block',x:156,y:0,w:2,h:1},{t:'spike',x:160,y:0,h:1},
+      {t:'spike',x:168,y:0,h:1},{t:'spike',x:169,y:0,h:1},{t:'block',x:174,y:0,w:2,h:1},{t:'block',x:176,y:1,w:1,h:1},{t:'spike',x:180,y:0,h:1},
+      {t:'slope-up',x:188,y:0},{t:'slope-down',x:190,y:1},{t:'spike',x:194,y:0,h:1},{t:'pad',x:198,y:0},{t:'ring',x:202,y:4},{t:'spike',x:208,y:0,h:1}
+    ]},
+  { id:'cube-medium', name:'POLARGEIST', difficulty:'medium', mode:'cube',
+    themeBgTop:'#5b3aff', themeBgBot:'#2a1a6f', themeGround:'#1a0a3a', themeAccent:'#80ffea',
+    speed:9.4, gravity:30, jumpVel:14, length:260,
+    obstacles:[
+      {t:'spike',x:14,y:0,h:1},{t:'spike',x:18,y:0,h:1},{t:'block',x:22,y:0,w:2,h:1},{t:'spike',x:26,y:0,h:1},
+      {t:'spike',x:32,y:0,h:1},{t:'spike',x:33,y:0,h:1},{t:'slope-up',x:38,y:0},{t:'slope-down',x:40,y:1},{t:'spike',x:44,y:0,h:1},{t:'block',x:48,y:0,w:2,h:1},
+      {t:'block',x:54,y:0,w:2,h:1},{t:'block',x:56,y:1,w:2,h:1},{t:'spike',x:60,y:0,h:1},{t:'ring',x:64,y:3},{t:'spike',x:68,y:0,h:1},
+      {t:'portal',x:74,y:2,kind:'ship'},{t:'block',x:80,y:6,w:3,h:1},{t:'spike-down',x:82,y:9,h:1},{t:'spike',x:86,y:0,h:1},
+      {t:'spike',x:92,y:0,h:1},{t:'spike-down',x:96,y:9,h:1},{t:'block',x:100,y:5,w:2,h:1},{t:'spike',x:104,y:0,h:1},{t:'spike-down',x:108,y:9,h:1},
+      {t:'block',x:112,y:7,w:3,h:1},{t:'block',x:112,y:0,w:1,h:2},{t:'spike',x:118,y:0,h:1},{t:'spike-down',x:122,y:9,h:1},
+      {t:'portal',x:128,y:2,kind:'cube'},
+      {t:'spike',x:134,y:0,h:1},{t:'ring',x:138,y:4},{t:'ring',x:142,y:5},{t:'spike',x:146,y:0,h:1},{t:'block',x:150,y:0,w:2,h:1},
+      {t:'grav-portal',x:156,y:3},{t:'spike-down',x:162,y:9,h:1},{t:'spike-down',x:166,y:9,h:1},{t:'block',x:170,y:8,w:2,h:1},
+      {t:'spike-down',x:174,y:9,h:1},{t:'block',x:178,y:7,w:2,h:1},{t:'spike-down',x:182,y:9,h:1},
+      {t:'grav-portal',x:188,y:6},
+      {t:'spike',x:194,y:0,h:1},{t:'spike',x:195,y:0,h:1},{t:'block',x:200,y:0,w:3,h:1},{t:'spike',x:204,y:0,h:1},
+      {t:'pad',x:212,y:0},{t:'ring',x:218,y:5},{t:'spike',x:222,y:0,h:1},{t:'slope-up',x:226,y:0},{t:'slope-down',x:228,y:1},
+      {t:'portal',x:232,y:2,kind:'ship'},{t:'spike',x:236,y:0,h:1},{t:'spike-down',x:240,y:9,h:1},{t:'block',x:244,y:5,w:2,h:1},{t:'portal',x:248,y:2,kind:'cube'}
+    ]},
+  { id:'cube-harder', name:'THEORY OF EVERYTHING', difficulty:'harder', mode:'cube',
+    themeBgTop:'#1a1a1a', themeBgBot:'#0a0a0a', themeGround:'#2a2a2a', themeAccent:'#ff3838',
+    speed:10.4, gravity:32, jumpVel:14.5, length:320,
+    obstacles:[
+      {t:'spike',x:14,y:0,h:1},{t:'spike',x:17,y:0,h:1},{t:'spike',x:20,y:0,h:1},{t:'block',x:24,y:0,w:2,h:1},
+      {t:'block',x:28,y:0,w:2,h:1},{t:'block',x:30,y:1,w:2,h:1},{t:'spike',x:34,y:0,h:1},{t:'block',x:38,y:0,w:1,h:1},{t:'spike',x:41,y:0,h:1},
+      {t:'ring',x:46,y:3},{t:'ring',x:50,y:5},{t:'ring',x:54,y:4},{t:'spike',x:58,y:0,h:1},
+      {t:'portal',x:64,y:2,kind:'ship'},{t:'spike',x:68,y:0,h:1},{t:'spike-down',x:70,y:9,h:1},{t:'block',x:74,y:5,w:2,h:1},{t:'spike-down',x:78,y:9,h:1},{t:'portal',x:82,y:2,kind:'cube'},
+      {t:'spike',x:86,y:0,h:1},{t:'spike',x:87,y:0,h:1},{t:'spike',x:88,y:0,h:1},{t:'pad',x:92,y:0},{t:'ring',x:98,y:6},{t:'spike',x:102,y:0,h:1},
+      {t:'spike',x:108,y:0,h:1},{t:'block',x:108,y:2,w:2,h:1},{t:'spike',x:114,y:0,h:1},{t:'spike',x:115,y:0,h:1},{t:'block',x:120,y:0,w:2,h:1},
+      {t:'portal',x:126,y:2,kind:'ship'},{t:'spike',x:130,y:0,h:1},{t:'spike-down',x:132,y:9,h:1},{t:'block',x:134,y:6,w:1,h:1},{t:'block',x:134,y:0,w:1,h:3},{t:'spike-down',x:138,y:9,h:1},{t:'spike',x:140,y:0,h:1},{t:'portal',x:144,y:2,kind:'cube'},
+      {t:'spike',x:148,y:0,h:1},{t:'pad',x:152,y:0},{t:'ring',x:158,y:5},{t:'spike',x:162,y:0,h:1},{t:'spike',x:163,y:0,h:1},
+      {t:'grav-portal',x:168,y:3},{t:'spike-down',x:172,y:9,h:1},{t:'spike-down',x:174,y:9,h:1},{t:'block',x:178,y:8,w:2,h:1},{t:'spike-down',x:182,y:9,h:1},{t:'grav-portal',x:186,y:6},
+      {t:'spike',x:190,y:0,h:1},{t:'ring',x:192,y:3},{t:'spike',x:196,y:0,h:1},{t:'ring',x:198,y:4},{t:'spike',x:202,y:0,h:1},{t:'block',x:206,y:0,w:2,h:1},
+      {t:'portal',x:212,y:2,kind:'ship'},{t:'spike-down',x:216,y:9,h:1},{t:'spike',x:218,y:0,h:1},{t:'block',x:222,y:5,w:3,h:1},{t:'spike-down',x:226,y:9,h:1},{t:'spike',x:228,y:0,h:1},{t:'portal',x:232,y:2,kind:'cube'},
+      {t:'slope-up',x:236,y:0},{t:'slope-down',x:238,y:1},{t:'spike',x:242,y:0,h:1},{t:'spike',x:243,y:0,h:1},{t:'block',x:248,y:0,w:2,h:1},{t:'block',x:250,y:1,w:1,h:1},{t:'spike',x:254,y:0,h:1},
+      {t:'pad',x:258,y:0},{t:'ring',x:264,y:6},{t:'ring',x:268,y:5},{t:'spike',x:272,y:0,h:1},
+      {t:'portal',x:278,y:2,kind:'ship'},{t:'spike-down',x:282,y:9,h:1},{t:'spike',x:284,y:0,h:1},{t:'block',x:288,y:6,w:2,h:1},{t:'spike-down',x:292,y:9,h:1},{t:'portal',x:296,y:2,kind:'cube'},
+      {t:'spike',x:300,y:0,h:1},{t:'spike',x:304,y:0,h:1},{t:'spike',x:308,y:0,h:1},{t:'block',x:312,y:0,w:2,h:1}
+    ]},
+  { id:'cube-insane', name:'CLUTTERFUNK', difficulty:'insane', mode:'cube',
+    themeBgTop:'#ff2a6d', themeBgBot:'#3a0a3a', themeGround:'#0a0a1a', themeAccent:'#00f0ff',
+    speed:11.6, gravity:34, jumpVel:14.8, length:360,
+    obstacles:[
+      {t:'spike',x:12,y:0,h:1},{t:'spike',x:13,y:0,h:1},{t:'spike',x:16,y:0,h:1},{t:'spike',x:19,y:0,h:1},{t:'spike',x:22,y:0,h:1},{t:'block',x:25,y:0,w:1,h:1},
+      {t:'block',x:28,y:0,w:2,h:1},{t:'block',x:30,y:1,w:1,h:1},{t:'spike',x:33,y:0,h:1},{t:'spike',x:34,y:0,h:1},{t:'spike',x:35,y:0,h:1},{t:'block',x:38,y:0,w:2,h:1},{t:'spike',x:42,y:0,h:1},
+      {t:'portal',x:46,y:2,kind:'ship'},{t:'spike',x:50,y:0,h:1},{t:'spike-down',x:50,y:9,h:1},{t:'spike-down',x:53,y:9,h:1},{t:'spike',x:53,y:0,h:1},{t:'block',x:56,y:5,w:2,h:1},{t:'spike-down',x:59,y:9,h:1},
+      {t:'block',x:64,y:0,w:1,h:2},{t:'block',x:64,y:7,w:1,h:3},{t:'spike',x:68,y:0,h:1},{t:'spike-down',x:70,y:9,h:1},{t:'block',x:72,y:0,w:1,h:3},{t:'block',x:72,y:6,w:1,h:4},{t:'portal',x:76,y:2,kind:'cube'},
+      {t:'spike',x:80,y:0,h:1},{t:'spike',x:81,y:0,h:1},{t:'block',x:84,y:0,w:1,h:1},{t:'spike',x:86,y:0,h:1},{t:'spike',x:87,y:0,h:1},{t:'block',x:90,y:0,w:1,h:1},{t:'block',x:91,y:1,w:1,h:1},{t:'spike',x:94,y:0,h:1},
+      {t:'pad',x:98,y:0},{t:'ring',x:102,y:5},{t:'spike',x:104,y:0,h:1},{t:'ring',x:106,y:6},{t:'spike',x:108,y:0,h:1},{t:'spike',x:109,y:0,h:1},{t:'ring',x:112,y:4},
+      {t:'grav-portal',x:116,y:3},{t:'spike-down',x:120,y:9,h:1},{t:'spike-down',x:121,y:9,h:1},{t:'block',x:124,y:8,w:2,h:1},{t:'spike-down',x:128,y:9,h:1},{t:'spike-down',x:129,y:9,h:1},{t:'grav-portal',x:132,y:6},
+      {t:'spike',x:136,y:0,h:1},{t:'block',x:136,y:2,w:3,h:1},{t:'spike',x:140,y:0,h:1},{t:'spike',x:141,y:0,h:1},{t:'block',x:144,y:0,w:2,h:1},{t:'block',x:146,y:1,w:1,h:1},{t:'spike',x:149,y:0,h:1},
+      {t:'portal',x:154,y:2,kind:'ship'},{t:'spike-down',x:158,y:9,h:1},{t:'spike',x:158,y:0,h:1},{t:'block',x:161,y:5,w:2,h:1},{t:'spike-down',x:164,y:9,h:1},{t:'spike',x:166,y:0,h:1},{t:'spike-down',x:168,y:9,h:1},{t:'portal',x:170,y:2,kind:'cube'},
+      {t:'spike',x:174,y:0,h:1},{t:'spike',x:175,y:0,h:1},{t:'spike',x:176,y:0,h:1},{t:'slope-up',x:180,y:0},{t:'slope-down',x:182,y:1},{t:'spike',x:184,y:0,h:1},{t:'spike',x:185,y:0,h:1},{t:'block',x:188,y:0,w:2,h:1},{t:'spike',x:191,y:0,h:1},
+      {t:'ring',x:196,y:4},{t:'spike',x:198,y:0,h:1},{t:'ring',x:200,y:5},{t:'spike',x:202,y:0,h:1},{t:'ring',x:204,y:6},{t:'spike',x:206,y:0,h:1},{t:'ring',x:208,y:5},{t:'spike',x:210,y:0,h:1},
+      {t:'portal',x:216,y:2,kind:'ship'},{t:'spike-down',x:220,y:9,h:1},{t:'spike',x:222,y:0,h:1},{t:'portal',x:226,y:2,kind:'cube'},{t:'spike',x:228,y:0,h:1},{t:'spike',x:229,y:0,h:1},{t:'pad',x:231,y:0},
+      {t:'portal',x:236,y:2,kind:'ship'},{t:'spike',x:240,y:0,h:1},{t:'spike-down',x:240,y:9,h:1},{t:'block',x:244,y:5,w:2,h:1},{t:'spike-down',x:247,y:9,h:1},{t:'portal',x:250,y:2,kind:'cube'},
+      {t:'spike',x:256,y:0,h:1},{t:'spike',x:257,y:0,h:1},{t:'block',x:260,y:0,w:1,h:1},{t:'spike',x:262,y:0,h:1},{t:'spike',x:263,y:0,h:1},{t:'spike',x:264,y:0,h:1},{t:'block',x:267,y:0,w:2,h:1},{t:'block',x:269,y:1,w:1,h:1},{t:'spike',x:272,y:0,h:1},
+      {t:'grav-portal',x:276,y:3},{t:'spike-down',x:280,y:9,h:1},{t:'spike-down',x:281,y:9,h:1},{t:'block',x:284,y:8,w:1,h:1},{t:'spike-down',x:287,y:9,h:1},{t:'grav-portal',x:290,y:6},
+      {t:'spike',x:296,y:0,h:1},{t:'spike',x:297,y:0,h:1},{t:'pad',x:300,y:0},{t:'ring',x:304,y:6},{t:'spike',x:308,y:0,h:1},{t:'spike',x:309,y:0,h:1},
+      {t:'slope-up',x:316,y:0},{t:'slope-down',x:318,y:1},{t:'spike',x:322,y:0,h:1},{t:'spike',x:323,y:0,h:1},{t:'spike',x:326,y:0,h:1},{t:'block',x:330,y:0,w:3,h:1},
+      {t:'spike',x:338,y:0,h:1},{t:'spike',x:339,y:0,h:1},{t:'spike',x:340,y:0,h:1},{t:'pad',x:344,y:0},{t:'ring',x:348,y:6},{t:'spike',x:352,y:0,h:1}
+    ]}
+];
+const LEVELS_CUBE_DEMON = [
+  { id:'cube-easy-demon', name:'DEMON PARK', difficulty:'easy-demon', mode:'cube',
+    themeBgTop:'#2a0d3f', themeBgBot:'#0a0212', themeGround:'#3a0f2a', themeAccent:'#c8214d',
+    speed:9.4, gravity:28, jumpVel:14, length:320,
+    obstacles:[
+      {t:'spike',x:18,y:0,h:1},{t:'spike',x:22,y:0,h:1},{t:'block',x:28,y:0,w:4,h:1},{t:'spike',x:34,y:0,h:1},{t:'spike',x:36,y:0,h:1},{t:'block',x:40,y:0,w:2,h:2},{t:'spike',x:44,y:0,h:1},{t:'block',x:48,y:0,w:3,h:1},{t:'spike',x:52,y:0,h:1},
+      {t:'spike',x:58,y:0,h:1},{t:'spike',x:60,y:0,h:1},{t:'spike',x:64,y:0,h:1},{t:'spike',x:66,y:0,h:1},{t:'spike',x:70,y:0,h:1},{t:'spike',x:72,y:0,h:1},{t:'block',x:76,y:0,w:2,h:2},{t:'spike',x:80,y:0,h:1},{t:'block',x:84,y:0,w:2,h:3},{t:'spike',x:88,y:0,h:1},
+      {t:'slope-up',x:92,y:0},{t:'block',x:94,y:1,w:3,h:1},{t:'slope-down',x:98,y:0},{t:'spike',x:102,y:0,h:1},{t:'spike',x:104,y:0,h:1},{t:'slope-up',x:108,y:0},{t:'block',x:110,y:1,w:4,h:1},{t:'slope-down',x:115,y:0},{t:'spike',x:119,y:0,h:1},
+      {t:'ring',x:124,y:4},{t:'ring',x:130,y:5},{t:'spike',x:134,y:0,h:1},{t:'ring',x:138,y:4},{t:'spike',x:142,y:0,h:1},{t:'spike',x:144,y:0,h:1},{t:'pad',x:148,y:0},{t:'ring',x:154,y:6},{t:'block',x:158,y:0,w:2,h:2},{t:'spike',x:162,y:0,h:1},
+      {t:'portal',x:168,y:3,kind:'ship'},{t:'block',x:174,y:5,w:6,h:1},{t:'block',x:174,y:0,w:6,h:1},{t:'block',x:184,y:6,w:4,h:1},{t:'block',x:184,y:0,w:4,h:1},{t:'block',x:192,y:5,w:6,h:1},{t:'block',x:192,y:0,w:6,h:1},{t:'spike',x:200,y:0,h:1},{t:'block',x:204,y:6,w:4,h:1},{t:'portal',x:212,y:0,kind:'cube'},
+      {t:'spike',x:218,y:0,h:1},{t:'spike',x:220,y:0,h:1},{t:'spike',x:222,y:0,h:1},{t:'block',x:226,y:0,w:2,h:2},{t:'spike',x:230,y:0,h:1},{t:'spike',x:232,y:0,h:1},{t:'block',x:236,y:0,w:2,h:3},{t:'spike',x:240,y:0,h:1},{t:'spike',x:242,y:0,h:1},{t:'block',x:246,y:0,w:2,h:2},{t:'spike',x:250,y:0,h:1},
+      {t:'block',x:256,y:0,w:2,h:1},{t:'block',x:258,y:0,w:2,h:2},{t:'block',x:260,y:0,w:2,h:3},{t:'spike',x:264,y:3,h:1},{t:'block',x:266,y:0,w:2,h:3},{t:'block',x:268,y:0,w:2,h:2},{t:'block',x:270,y:0,w:2,h:1},
+      {t:'spike',x:276,y:0,h:1},{t:'spike',x:278,y:0,h:1},{t:'spike',x:280,y:0,h:1},{t:'pad',x:284,y:0},{t:'ring',x:290,y:6},{t:'spike',x:294,y:0,h:1},{t:'spike',x:296,y:0,h:1},{t:'block',x:300,y:0,w:2,h:2},{t:'spike',x:304,y:0,h:1},{t:'spike',x:306,y:0,h:1},{t:'spike',x:308,y:0,h:1},{t:'pad',x:312,y:0},{t:'ring',x:317,y:5}
+    ]},
+  { id:'cube-hard-demon', name:'CATACLYSM', difficulty:'hard-demon', mode:'cube',
+    themeBgTop:'#1a0608', themeBgBot:'#000000', themeGround:'#2a0a0a', themeAccent:'#ff3322',
+    speed:10.0, gravity:28, jumpVel:14, length:360,
+    obstacles:[
+      {t:'spike',x:14,y:0,h:1},{t:'spike',x:16,y:0,h:1},{t:'spike',x:18,y:0,h:1},{t:'block',x:22,y:0,w:2,h:2},{t:'spike',x:26,y:0,h:1},{t:'block',x:30,y:0,w:2,h:3},{t:'spike',x:34,y:0,h:1},{t:'spike',x:36,y:0,h:1},{t:'pad',x:40,y:0},{t:'ring',x:46,y:7},
+      {t:'portal',x:52,y:3,kind:'ship'},{t:'block',x:56,y:6,w:4,h:1},{t:'block',x:56,y:0,w:4,h:1},{t:'spike-down',x:62,y:7,h:1},{t:'spike',x:64,y:0,h:1},{t:'block',x:68,y:5,w:4,h:1},{t:'block',x:68,y:1,w:4,h:1},{t:'spike',x:74,y:0,h:1},{t:'portal',x:80,y:0,kind:'cube'},
+      {t:'ring',x:86,y:5},{t:'ring',x:91,y:6},{t:'ring',x:96,y:5},{t:'spike',x:99,y:0,h:1},{t:'ring',x:102,y:6},{t:'ring',x:107,y:7},{t:'spike',x:110,y:0,h:1},{t:'spike',x:112,y:0,h:1},
+      {t:'portal',x:116,y:3,kind:'ship'},{t:'block',x:120,y:5,w:6,h:1},{t:'block',x:120,y:0,w:6,h:1},{t:'spike',x:128,y:0,h:1},{t:'spike-down',x:130,y:7,h:1},{t:'block',x:134,y:6,w:4,h:1},{t:'block',x:134,y:0,w:4,h:1},{t:'block',x:140,y:5,w:4,h:1},{t:'block',x:140,y:1,w:4,h:1},{t:'portal',x:146,y:0,kind:'cube'},
+      {t:'block',x:152,y:0,w:2,h:1},{t:'spike',x:155,y:1,h:1},{t:'block',x:158,y:0,w:2,h:2},{t:'spike',x:161,y:2,h:1},{t:'block',x:164,y:0,w:2,h:3},{t:'spike',x:167,y:3,h:1},{t:'block',x:170,y:0,w:2,h:2},{t:'spike',x:173,y:2,h:1},{t:'block',x:176,y:0,w:2,h:1},
+      {t:'portal',x:182,y:3,kind:'ship'},{t:'block',x:186,y:6,w:5,h:1},{t:'block',x:186,y:0,w:5,h:1},{t:'grav-portal',x:193,y:3},{t:'block',x:196,y:7,w:5,h:1},{t:'block',x:196,y:1,w:5,h:1},{t:'spike-down',x:204,y:6,h:1},{t:'grav-portal',x:208,y:3},{t:'block',x:212,y:5,w:4,h:1},{t:'portal',x:220,y:0,kind:'cube'},
+      {t:'spike',x:226,y:0,h:1},{t:'spike',x:228,y:0,h:1},{t:'spike',x:230,y:0,h:1},{t:'spike',x:232,y:0,h:1},{t:'spike',x:234,y:0,h:1},{t:'spike',x:236,y:0,h:1},{t:'pad',x:240,y:0},{t:'ring',x:246,y:6},{t:'spike',x:250,y:0,h:1},{t:'spike',x:252,y:0,h:1},{t:'spike',x:254,y:0,h:1},
+      {t:'ring',x:258,y:4},{t:'ring',x:261,y:6},{t:'ring',x:264,y:5},{t:'ring',x:267,y:7},{t:'ring',x:270,y:5},{t:'spike',x:273,y:0,h:1},{t:'ring',x:276,y:6},{t:'spike',x:279,y:0,h:1},{t:'spike',x:281,y:0,h:1},
+      {t:'portal',x:286,y:3,kind:'ship'},{t:'block',x:290,y:5,w:4,h:1},{t:'block',x:290,y:1,w:4,h:1},{t:'spike',x:295,y:0,h:1},{t:'spike-down',x:297,y:7,h:1},{t:'block',x:300,y:6,w:4,h:1},{t:'block',x:300,y:0,w:4,h:1},{t:'block',x:306,y:5,w:4,h:1},{t:'block',x:306,y:1,w:4,h:1},{t:'portal',x:314,y:0,kind:'cube'},
+      {t:'spike',x:320,y:0,h:1},{t:'pad',x:324,y:0},{t:'ring',x:330,y:7},{t:'ring',x:334,y:6},{t:'spike',x:338,y:0,h:1},{t:'spike',x:340,y:0,h:1},{t:'block',x:344,y:0,w:2,h:2},{t:'spike',x:348,y:0,h:1},{t:'pad',x:352,y:0},{t:'ring',x:357,y:6}
+    ]},
+  { id:'cube-insane-demon', name:'BLOODBATH', difficulty:'insane-demon', mode:'cube',
+    themeBgTop:'#0a0000', themeBgBot:'#000000', themeGround:'#1f0202', themeAccent:'#7aff2e',
+    speed:10.4, gravity:28, jumpVel:14, length:380,
+    obstacles:[
+      {t:'spike',x:10,y:0,h:1},{t:'spike',x:12,y:0,h:1},{t:'spike',x:14,y:0,h:1},{t:'block',x:17,y:0,w:2,h:2},{t:'spike',x:21,y:0,h:1},{t:'spike',x:23,y:0,h:1},{t:'block',x:26,y:0,w:2,h:3},{t:'spike',x:30,y:0,h:1},{t:'pad',x:33,y:0},{t:'ring',x:38,y:6},{t:'spike',x:41,y:0,h:1},{t:'spike',x:43,y:0,h:1},
+      {t:'portal',x:48,y:3,kind:'ship'},{t:'spike-down',x:52,y:7,h:1},{t:'spike',x:54,y:0,h:1},{t:'spike-down',x:56,y:7,h:1},{t:'spike',x:58,y:0,h:1},{t:'spike-down',x:60,y:7,h:1},{t:'spike',x:62,y:0,h:1},{t:'block',x:65,y:5,w:4,h:1},{t:'block',x:65,y:1,w:4,h:1},{t:'spike-down',x:71,y:7,h:1},{t:'spike',x:73,y:0,h:1},{t:'block',x:76,y:6,w:3,h:1},{t:'block',x:76,y:0,w:3,h:1},
+      {t:'grav-portal',x:82,y:3},{t:'spike-down',x:86,y:7,h:1},{t:'spike',x:88,y:0,h:1},{t:'block',x:91,y:5,w:4,h:1},{t:'block',x:91,y:1,w:4,h:1},{t:'spike-down',x:97,y:7,h:1},{t:'spike',x:99,y:0,h:1},{t:'spike-down',x:101,y:7,h:1},{t:'grav-portal',x:104,y:3},{t:'spike',x:108,y:0,h:1},{t:'spike-down',x:110,y:7,h:1},{t:'spike',x:112,y:0,h:1},
+      {t:'portal',x:116,y:0,kind:'cube'},{t:'spike',x:120,y:0,h:1},{t:'spike',x:122,y:0,h:1},{t:'spike',x:124,y:0,h:1},{t:'spike',x:126,y:0,h:1},{t:'block',x:130,y:0,w:2,h:2},{t:'spike',x:134,y:0,h:1},{t:'block',x:137,y:0,w:2,h:3},{t:'spike',x:141,y:0,h:1},{t:'pad',x:144,y:0},{t:'ring',x:149,y:7},
+      {t:'spike',x:154,y:0,h:1},{t:'spike',x:156,y:0,h:1},{t:'spike',x:158,y:0,h:1},{t:'spike',x:160,y:0,h:1},{t:'spike',x:162,y:0,h:1},{t:'spike',x:164,y:0,h:1},{t:'spike',x:166,y:0,h:1},{t:'spike',x:168,y:0,h:1},{t:'spike',x:170,y:0,h:1},{t:'spike',x:172,y:0,h:1},{t:'spike',x:174,y:0,h:1},{t:'spike',x:176,y:0,h:1},
+      {t:'portal',x:180,y:3,kind:'ship'},{t:'block',x:184,y:5,w:3,h:1},{t:'block',x:184,y:2,w:3,h:1},{t:'block',x:189,y:6,w:3,h:1},{t:'block',x:189,y:1,w:3,h:1},{t:'block',x:194,y:5,w:3,h:1},{t:'block',x:194,y:0,w:3,h:1},{t:'block',x:199,y:6,w:3,h:1},{t:'block',x:199,y:1,w:3,h:1},{t:'spike-down',x:205,y:7,h:1},{t:'spike',x:207,y:0,h:1},{t:'block',x:210,y:5,w:4,h:1},{t:'block',x:210,y:1,w:4,h:1},
+      {t:'grav-portal',x:218,y:3},{t:'spike-down',x:222,y:7,h:1},{t:'spike-down',x:224,y:7,h:1},{t:'spike',x:226,y:0,h:1},{t:'spike',x:228,y:0,h:1},{t:'grav-portal',x:232,y:3},{t:'spike',x:236,y:0,h:1},{t:'spike-down',x:238,y:7,h:1},{t:'spike',x:240,y:0,h:1},{t:'spike-down',x:242,y:7,h:1},{t:'portal',x:246,y:0,kind:'cube'},
+      {t:'pad',x:250,y:0},{t:'ring',x:256,y:7},{t:'ring',x:260,y:6},{t:'ring',x:264,y:7},{t:'spike',x:267,y:0,h:1},{t:'ring',x:270,y:6},{t:'ring',x:274,y:7},{t:'spike',x:277,y:0,h:1},{t:'spike',x:279,y:0,h:1},
+      {t:'block',x:284,y:0,w:2,h:1},{t:'spike',x:287,y:1,h:1},{t:'block',x:289,y:0,w:2,h:2},{t:'spike',x:292,y:2,h:1},{t:'block',x:294,y:0,w:2,h:3},{t:'spike',x:297,y:3,h:1},{t:'block',x:299,y:0,w:2,h:4},{t:'spike',x:302,y:4,h:1},{t:'block',x:304,y:0,w:2,h:3},{t:'spike',x:307,y:3,h:1},{t:'block',x:309,y:0,w:2,h:2},{t:'block',x:311,y:0,w:2,h:1},
+      {t:'portal',x:316,y:3,kind:'ship'},{t:'spike-down',x:320,y:7,h:1},{t:'spike',x:322,y:0,h:1},{t:'spike-down',x:324,y:7,h:1},{t:'spike',x:326,y:0,h:1},{t:'block',x:329,y:5,w:3,h:1},{t:'block',x:329,y:1,w:3,h:1},{t:'grav-portal',x:334,y:3},{t:'spike',x:338,y:0,h:1},{t:'spike-down',x:340,y:7,h:1},{t:'spike',x:342,y:0,h:1},{t:'block',x:345,y:6,w:3,h:1},{t:'block',x:345,y:0,w:3,h:1},{t:'grav-portal',x:350,y:3},{t:'spike',x:354,y:0,h:1},{t:'spike-down',x:356,y:7,h:1},{t:'spike',x:358,y:0,h:1},{t:'spike-down',x:360,y:7,h:1},{t:'block',x:363,y:5,w:4,h:1},{t:'block',x:363,y:1,w:4,h:1},{t:'portal',x:370,y:0,kind:'cube'},{t:'ring',x:375,y:6}
+    ]},
+  { id:'cube-angel-demon', name:'HEAVENLY GATES', difficulty:'angel-demon', mode:'cube',
+    themeBgTop:'#e8f7ff', themeBgBot:'#a8dcff', themeGround:'#ffffff', themeAccent:'#ffd35a',
+    speed:10.6, gravity:28, jumpVel:14, length:380,
+    obstacles:[
+      {t:'pad',x:8,y:0},{t:'ring',x:14,y:6},{t:'ring',x:18,y:7},{t:'ring',x:22,y:6},{t:'ring',x:26,y:8},{t:'spike',x:30,y:0,h:1},{t:'ring',x:33,y:6},{t:'ring',x:37,y:7},{t:'spike',x:41,y:0,h:1},{t:'pad',x:45,y:0},{t:'ring',x:51,y:7},{t:'ring',x:55,y:6},
+      {t:'block',x:60,y:2,w:3,h:1},{t:'spike',x:64,y:0,h:1},{t:'block',x:66,y:3,w:3,h:1},{t:'spike',x:70,y:0,h:1},{t:'spike',x:72,y:0,h:1},{t:'block',x:74,y:4,w:3,h:1},{t:'ring',x:78,y:7},{t:'block',x:80,y:2,w:3,h:1},{t:'spike',x:84,y:0,h:1},{t:'block',x:86,y:3,w:3,h:1},{t:'spike',x:90,y:0,h:1},
+      {t:'portal',x:95,y:3,kind:'ship'},{t:'ring',x:100,y:5},{t:'ring',x:104,y:4},{t:'block',x:108,y:6,w:4,h:1},{t:'ring',x:114,y:3},{t:'block',x:117,y:1,w:4,h:1},{t:'ring',x:122,y:5},{t:'spike-down',x:126,y:7,h:1},{t:'spike',x:128,y:0,h:1},{t:'block',x:131,y:5,w:5,h:1},{t:'block',x:131,y:1,w:5,h:1},{t:'ring',x:138,y:3},{t:'portal',x:144,y:0,kind:'cube'},
+      {t:'pad',x:148,y:0},{t:'ring',x:154,y:8},{t:'ring',x:158,y:7},{t:'pad',x:162,y:0},{t:'ring',x:168,y:8},{t:'ring',x:172,y:7},{t:'spike',x:176,y:0,h:1},{t:'pad',x:180,y:0},{t:'ring',x:186,y:8},{t:'ring',x:190,y:6},
+      {t:'block',x:195,y:0,w:1,h:4},{t:'spike',x:198,y:0,h:1},{t:'spike',x:200,y:0,h:1},{t:'block',x:203,y:0,w:1,h:5},{t:'spike',x:206,y:0,h:1},{t:'spike',x:208,y:0,h:1},{t:'block',x:211,y:0,w:1,h:4},{t:'spike',x:214,y:0,h:1},{t:'spike',x:216,y:0,h:1},{t:'pad',x:220,y:0},{t:'ring',x:226,y:8},
+      {t:'portal',x:232,y:3,kind:'ship'},{t:'block',x:236,y:6,w:4,h:1},{t:'block',x:236,y:1,w:4,h:1},{t:'grav-portal',x:242,y:3},{t:'ring',x:246,y:5},{t:'block',x:250,y:7,w:4,h:1},{t:'block',x:250,y:2,w:4,h:1},{t:'ring',x:256,y:4},{t:'grav-portal',x:260,y:3},{t:'ring',x:264,y:5},{t:'block',x:268,y:6,w:4,h:1},{t:'block',x:268,y:1,w:4,h:1},{t:'spike',x:274,y:0,h:1},{t:'spike-down',x:276,y:7,h:1},{t:'portal',x:280,y:0,kind:'cube'},
+      {t:'ring',x:285,y:6},{t:'spike',x:288,y:0,h:1},{t:'ring',x:291,y:7},{t:'spike',x:294,y:0,h:1},{t:'ring',x:297,y:6},{t:'spike',x:300,y:0,h:1},{t:'ring',x:303,y:7},{t:'spike',x:306,y:0,h:1},{t:'spike',x:308,y:0,h:1},{t:'pad',x:312,y:0},{t:'ring',x:318,y:8},
+      {t:'block',x:324,y:0,w:2,h:1},{t:'block',x:326,y:0,w:2,h:2},{t:'block',x:328,y:0,w:2,h:3},{t:'spike',x:332,y:3,h:1},{t:'block',x:334,y:0,w:2,h:3},{t:'block',x:336,y:0,w:2,h:2},{t:'block',x:338,y:0,w:2,h:1},
+      {t:'pad',x:344,y:0},{t:'ring',x:350,y:6},{t:'ring',x:354,y:7},{t:'ring',x:358,y:8},{t:'ring',x:362,y:7},{t:'spike',x:366,y:0,h:1},{t:'spike',x:368,y:0,h:1},{t:'pad',x:372,y:0},{t:'ring',x:377,y:8}
+    ]},
+  { id:'cube-impossible-demon', name:'TARTARUS', difficulty:'impossible-demon', mode:'cube',
+    themeBgTop:'#000000', themeBgBot:'#050010', themeGround:'#0a0a0a', themeAccent:'#ff00ff',
+    speed:11.0, gravity:28, jumpVel:14, length:440,
+    obstacles:[
+      {t:'spike',x:8,y:0,h:1},{t:'spike',x:10,y:0,h:1},{t:'spike',x:12,y:0,h:1},{t:'spike',x:14,y:0,h:1},{t:'block',x:17,y:0,w:1,h:2},{t:'spike',x:19,y:2,h:1},{t:'block',x:21,y:0,w:1,h:3},{t:'spike',x:23,y:3,h:1},{t:'block',x:25,y:0,w:1,h:2},{t:'spike',x:27,y:0,h:1},{t:'spike',x:29,y:0,h:1},{t:'pad',x:32,y:0},{t:'ring',x:37,y:6},{t:'ring',x:40,y:7},{t:'spike',x:43,y:0,h:1},
+      {t:'spike',x:48,y:0,h:1},{t:'spike',x:50,y:0,h:1},{t:'spike',x:52,y:0,h:1},{t:'spike',x:54,y:0,h:1},{t:'spike',x:56,y:0,h:1},{t:'spike',x:58,y:0,h:1},{t:'spike',x:60,y:0,h:1},{t:'spike',x:62,y:0,h:1},{t:'spike',x:64,y:0,h:1},{t:'spike',x:66,y:0,h:1},{t:'spike',x:68,y:0,h:1},{t:'spike',x:70,y:0,h:1},{t:'spike',x:72,y:0,h:1},{t:'spike',x:74,y:0,h:1},{t:'spike',x:76,y:0,h:1},{t:'spike',x:78,y:0,h:1},
+      {t:'portal',x:82,y:3,kind:'ship'},{t:'grav-portal',x:86,y:3},{t:'spike-down',x:90,y:7,h:1},{t:'spike-down',x:92,y:7,h:1},{t:'spike',x:94,y:0,h:1},{t:'spike',x:96,y:0,h:1},{t:'block',x:99,y:5,w:3,h:1},{t:'block',x:99,y:2,w:3,h:1},{t:'grav-portal',x:104,y:3},{t:'block',x:108,y:6,w:3,h:1},{t:'block',x:108,y:1,w:3,h:1},{t:'spike',x:113,y:0,h:1},{t:'spike-down',x:115,y:7,h:1},{t:'block',x:118,y:5,w:4,h:1},{t:'block',x:118,y:1,w:4,h:1},{t:'spike',x:124,y:0,h:1},{t:'spike-down',x:126,y:7,h:1},{t:'spike',x:128,y:0,h:1},
+      {t:'portal',x:132,y:0,kind:'cube'},{t:'spike',x:136,y:0,h:1},{t:'spike',x:138,y:0,h:1},{t:'block',x:141,y:0,w:2,h:3},{t:'spike',x:145,y:3,h:1},{t:'block',x:147,y:0,w:2,h:4},{t:'spike',x:151,y:0,h:1},{t:'portal',x:154,y:3,kind:'ship'},
+      {t:'block',x:158,y:5,w:3,h:1},{t:'block',x:158,y:2,w:3,h:1},{t:'block',x:163,y:6,w:3,h:1},{t:'block',x:163,y:1,w:3,h:1},{t:'block',x:168,y:5,w:3,h:1},{t:'block',x:168,y:2,w:3,h:1},{t:'spike-down',x:173,y:7,h:1},{t:'spike',x:175,y:0,h:1},{t:'block',x:178,y:6,w:3,h:1},{t:'block',x:178,y:1,w:3,h:1},{t:'spike-down',x:183,y:7,h:1},{t:'spike',x:185,y:0,h:1},{t:'spike-down',x:187,y:7,h:1},{t:'spike',x:189,y:0,h:1},
+      {t:'grav-portal',x:193,y:3},{t:'spike-down',x:197,y:7,h:1},{t:'spike',x:199,y:0,h:1},{t:'grav-portal',x:202,y:3},{t:'spike',x:206,y:0,h:1},{t:'spike-down',x:208,y:7,h:1},{t:'grav-portal',x:211,y:3},{t:'spike-down',x:215,y:7,h:1},{t:'spike',x:217,y:0,h:1},{t:'grav-portal',x:220,y:3},{t:'spike',x:224,y:0,h:1},{t:'spike-down',x:226,y:7,h:1},
+      {t:'portal',x:230,y:0,kind:'cube'},{t:'spike',x:234,y:0,h:1},{t:'spike',x:236,y:0,h:1},{t:'spike',x:238,y:0,h:1},{t:'spike',x:240,y:0,h:1},{t:'block',x:243,y:0,w:1,h:4},{t:'spike',x:246,y:0,h:1},{t:'spike',x:248,y:0,h:1},{t:'block',x:251,y:0,w:1,h:5},{t:'spike',x:254,y:0,h:1},{t:'spike',x:256,y:0,h:1},{t:'pad',x:259,y:0},{t:'ring',x:264,y:7},{t:'ring',x:267,y:6},{t:'ring',x:270,y:8},{t:'spike',x:273,y:0,h:1},
+      {t:'spike',x:276,y:0,h:1},{t:'spike',x:278,y:0,h:1},{t:'spike',x:280,y:0,h:1},{t:'spike',x:282,y:0,h:1},{t:'spike',x:284,y:0,h:1},{t:'spike',x:286,y:0,h:1},{t:'spike',x:288,y:0,h:1},{t:'spike',x:290,y:0,h:1},{t:'spike',x:292,y:0,h:1},{t:'spike',x:294,y:0,h:1},{t:'spike',x:296,y:0,h:1},{t:'spike',x:298,y:0,h:1},{t:'spike',x:300,y:0,h:1},{t:'spike',x:302,y:0,h:1},
+      {t:'portal',x:306,y:3,kind:'ship'},{t:'grav-portal',x:310,y:3},{t:'spike-down',x:314,y:7,h:1},{t:'spike-down',x:316,y:7,h:1},{t:'block',x:319,y:5,w:3,h:1},{t:'block',x:319,y:2,w:3,h:1},{t:'grav-portal',x:324,y:3},{t:'spike',x:328,y:0,h:1},{t:'spike',x:330,y:0,h:1},{t:'block',x:333,y:6,w:3,h:1},{t:'block',x:333,y:1,w:3,h:1},{t:'grav-portal',x:338,y:3},{t:'spike-down',x:342,y:7,h:1},{t:'block',x:345,y:5,w:4,h:1},{t:'block',x:345,y:1,w:4,h:1},{t:'spike-down',x:351,y:7,h:1},{t:'spike',x:353,y:0,h:1},{t:'block',x:356,y:6,w:3,h:1},{t:'block',x:356,y:0,w:3,h:1},
+      {t:'grav-portal',x:362,y:3},{t:'spike',x:366,y:0,h:1},{t:'spike-down',x:368,y:7,h:1},{t:'spike',x:370,y:0,h:1},{t:'spike-down',x:372,y:7,h:1},{t:'block',x:375,y:5,w:3,h:1},{t:'block',x:375,y:1,w:3,h:1},{t:'spike',x:380,y:0,h:1},{t:'spike-down',x:382,y:7,h:1},{t:'portal',x:386,y:0,kind:'cube'},
+      {t:'spike',x:390,y:0,h:1},{t:'spike',x:392,y:0,h:1},{t:'spike',x:394,y:0,h:1},{t:'spike',x:396,y:0,h:1},{t:'pad',x:399,y:0},{t:'ring',x:404,y:8},{t:'spike',x:407,y:0,h:1},{t:'spike',x:409,y:0,h:1},{t:'spike',x:411,y:0,h:1},{t:'block',x:414,y:0,w:1,h:4},{t:'spike',x:417,y:0,h:1},{t:'spike',x:419,y:0,h:1},{t:'block',x:422,y:0,w:1,h:5},{t:'spike',x:425,y:0,h:1},{t:'spike',x:427,y:0,h:1},{t:'pad',x:430,y:0},{t:'ring',x:435,y:8}
+    ]}
+];
+const LEVELS_WAVE = [
+  { id:'wave-easy', name:'CYCLES', difficulty:'easy', mode:'wave',
+    themeBgTop:'#1e3a5f', themeBgBot:'#0a1929', themeGround:'#2c5282', themeAccent:'#63b3ed',
+    speed:8.0, riseRate:8.0, length:220,
+    obstacles:[
+      {t:'block',x:60,y:0,w:2,h:1},{t:'block',x:100,y:9,w:2,h:1},{t:'block',x:150,y:0,w:2,h:1},{t:'block',x:190,y:9,w:2,h:1}
+    ],
+    corridor:[
+      {fromX:0,toX:25,topY:10,botY:0},{fromX:25,toX:45,topY:9.5,botY:0.5},{fromX:45,toX:70,topY:9,botY:1},
+      {fromX:70,toX:90,topY:9,botY:2},{fromX:90,toX:110,topY:8.5,botY:1.5},{fromX:110,toX:130,topY:10,botY:0},
+      {fromX:130,toX:155,topY:9,botY:1.5},{fromX:155,toX:180,topY:8.5,botY:1},{fromX:180,toX:205,topY:9,botY:1},{fromX:205,toX:220,topY:10,botY:0}
+    ]},
+  { id:'wave-medium', name:'TIDEPOOL', difficulty:'medium', mode:'wave',
+    themeBgTop:'#234e52', themeBgBot:'#0d1f1f', themeGround:'#2c7a7b', themeAccent:'#4fd1c5',
+    speed:8.5, riseRate:8.5, length:260,
+    obstacles:[
+      {t:'block',x:45,y:0,w:1.5,h:1.5},{t:'block',x:75,y:8.5,w:1.5,h:1.5},{t:'block',x:110,y:4,w:1.5,h:1.5},{t:'block',x:145,y:0,w:1.5,h:2},
+      {t:'block',x:175,y:8,w:1.5,h:2},{t:'block',x:210,y:3.5,w:1.5,h:2},{t:'block',x:240,y:0,w:1.5,h:1.5}
+    ],
+    corridor:[
+      {fromX:0,toX:20,topY:10,botY:0},{fromX:20,toX:40,topY:9,botY:2},{fromX:40,toX:60,topY:8.5,botY:2.5},
+      {fromX:60,toX:80,topY:8,botY:3},{fromX:80,toX:100,topY:7.5,botY:2.5},{fromX:100,toX:120,topY:9,botY:1},
+      {fromX:120,toX:140,topY:9,botY:3},{fromX:140,toX:160,topY:8.5,botY:3.5},{fromX:160,toX:180,topY:8,botY:3},
+      {fromX:180,toX:200,topY:7,botY:2},{fromX:200,toX:220,topY:8,botY:2},{fromX:220,toX:245,topY:8.5,botY:2.5},{fromX:245,toX:260,topY:10,botY:0}
+    ]},
+  { id:'wave-hard', name:'NEEDLE', difficulty:'hard', mode:'wave',
+    themeBgTop:'#4a1d4a', themeBgBot:'#1a0a1a', themeGround:'#702070', themeAccent:'#d53f8c',
+    speed:9.0, riseRate:9.0, length:300,
+    obstacles:[
+      {t:'block',x:50,y:0,w:1,h:2},{t:'block',x:50,y:8,w:1,h:2},{t:'block',x:55,y:4,w:1,h:1.5},
+      {t:'block',x:95,y:3,w:1,h:1},{t:'block',x:98,y:6,w:1,h:1},{t:'block',x:101,y:3,w:1,h:1},
+      {t:'block',x:145,y:0,w:1,h:3},{t:'block',x:148,y:7,w:1,h:3},
+      {t:'block',x:195,y:4,w:1,h:1.5},{t:'block',x:198,y:4,w:1,h:1.5},
+      {t:'block',x:240,y:0,w:1,h:2.5},{t:'block',x:245,y:7.5,w:1,h:2.5},{t:'block',x:250,y:0,w:1,h:2.5}
+    ],
+    corridor:[
+      {fromX:0,toX:15,topY:10,botY:0},{fromX:15,toX:35,topY:8,botY:2},{fromX:35,toX:60,topY:7.5,botY:3.5},
+      {fromX:60,toX:80,topY:7,botY:4},{fromX:80,toX:100,topY:6.5,botY:3.5},{fromX:100,toX:120,topY:8,botY:4},
+      {fromX:120,toX:140,topY:7,botY:3},{fromX:140,toX:160,topY:7,botY:4},{fromX:160,toX:180,topY:6,botY:3},
+      {fromX:180,toX:200,topY:7.5,botY:3.5},{fromX:200,toX:220,topY:6.5,botY:2.5},{fromX:220,toX:245,topY:7,botY:4},
+      {fromX:245,toX:270,topY:6.5,botY:3.5},{fromX:270,toX:285,topY:8,botY:2},{fromX:285,toX:300,topY:10,botY:0}
+    ]},
+  { id:'wave-harder', name:'SHATTER', difficulty:'harder', mode:'wave',
+    themeBgTop:'#742a2a', themeBgBot:'#1a0606', themeGround:'#9b2c2c', themeAccent:'#fc8181',
+    speed:9.0, riseRate:9.0, length:340,
+    obstacles:[
+      {t:'block',x:40,y:4.5,w:1,h:1},{t:'block',x:70,y:3,w:1,h:1},{t:'block',x:73,y:6,w:1,h:1},
+      {t:'block',x:110,y:0,w:1,h:3},{t:'block',x:113,y:7,w:1,h:3},
+      {t:'block',x:160,y:4,w:0.8,h:1},{t:'block',x:170,y:5,w:0.8,h:1},{t:'block',x:180,y:4,w:0.8,h:1},{t:'block',x:190,y:5,w:0.8,h:1},{t:'block',x:200,y:4,w:0.8,h:1},
+      {t:'block',x:245,y:0,w:1,h:3.5},{t:'block',x:250,y:6.5,w:1,h:3.5},{t:'block',x:280,y:4,w:1,h:1.5},{t:'block',x:305,y:0,w:1,h:3},{t:'block',x:308,y:7,w:1,h:3}
+    ],
+    corridor:[
+      {fromX:0,toX:12,topY:10,botY:0},{fromX:12,toX:30,topY:7,botY:4},{fromX:30,toX:50,topY:6.5,botY:3.5},
+      {fromX:50,toX:70,topY:6,botY:3.5},{fromX:70,toX:90,topY:7,botY:4.5},{fromX:90,toX:105,topY:7.5,botY:4.5},
+      {fromX:105,toX:125,topY:7,botY:4},{fromX:125,toX:145,topY:7.5,botY:4.5},{fromX:145,toX:160,topY:7,botY:4},
+      {fromX:160,toX:180,topY:7,botY:4},{fromX:180,toX:210,topY:6.5,botY:3.5},{fromX:210,toX:225,topY:6,botY:3.5},
+      {fromX:225,toX:245,topY:7,botY:4},{fromX:245,toX:265,topY:6.5,botY:3.5},{fromX:265,toX:285,topY:7,botY:4},
+      {fromX:285,toX:305,topY:6,botY:3.5},{fromX:305,toX:325,topY:7,botY:4},{fromX:325,toX:340,topY:10,botY:0}
+    ]},
+  { id:'wave-easy-demon', name:'HOLLOW', difficulty:'easy-demon', mode:'wave',
+    themeBgTop:'#1c1c2e', themeBgBot:'#0a0a14', themeGround:'#2d3748', themeAccent:'#9f7aea',
+    speed:9.5, riseRate:9.5, length:380,
+    obstacles:[
+      {t:'block',x:55,y:4,w:0.8,h:1},{t:'block',x:85,y:5,w:0.8,h:1},{t:'block',x:115,y:4,w:0.8,h:1},{t:'block',x:145,y:5,w:0.8,h:1},
+      {t:'block',x:175,y:4,w:0.8,h:1},{t:'block',x:205,y:5,w:0.8,h:1},{t:'block',x:230,y:0,w:1,h:3.5},{t:'block',x:234,y:6.5,w:1,h:3.5},
+      {t:'block',x:265,y:4,w:0.8,h:1},{t:'block',x:290,y:5,w:0.8,h:1},{t:'block',x:315,y:4,w:0.8,h:1},{t:'block',x:340,y:5,w:0.8,h:1}
+    ],
+    corridor:[
+      {fromX:0,toX:10,topY:10,botY:0},{fromX:10,toX:30,topY:7,botY:4},{fromX:30,toX:50,topY:6.5,botY:3.5},
+      {fromX:50,toX:70,topY:7,botY:4.2},{fromX:70,toX:90,topY:6.3,botY:3.5},{fromX:90,toX:110,topY:7,botY:4.2},
+      {fromX:110,toX:130,topY:6.3,botY:3.5},{fromX:130,toX:150,topY:7,botY:4.2},{fromX:150,toX:170,topY:6.3,botY:3.5},
+      {fromX:170,toX:185,topY:7.5,botY:4},{fromX:185,toX:205,topY:6.5,botY:4},{fromX:205,toX:225,topY:6,botY:3.5},
+      {fromX:225,toX:245,topY:7,botY:3},{fromX:245,toX:265,topY:6.5,botY:4},{fromX:265,toX:285,topY:6,botY:3.5},
+      {fromX:285,toX:305,topY:6.5,botY:4},{fromX:305,toX:325,topY:6,botY:3.5},{fromX:325,toX:350,topY:7,botY:4},
+      {fromX:350,toX:370,topY:6.5,botY:3.5},{fromX:370,toX:380,topY:10,botY:0}
+    ]},
+  { id:'wave-medium-demon', name:'FRACTURE', difficulty:'medium-demon', mode:'wave',
+    themeBgTop:'#1a3a1a', themeBgBot:'#050f05', themeGround:'#22543d', themeAccent:'#48bb78',
+    speed:9.0, riseRate:9.0, length:420,
+    obstacles:[
+      {t:'speed-portal',x:70,mul:1.5},{t:'speed-portal',x:140,mul:1.0},{t:'speed-portal',x:210,mul:1.5},{t:'speed-portal',x:280,mul:1.0},{t:'speed-portal',x:340,mul:1.5},
+      {t:'block',x:35,y:4.5,w:0.8,h:1},{t:'block',x:95,y:5,w:0.8,h:0.8},{t:'block',x:105,y:4,w:0.8,h:0.8},
+      {t:'block',x:165,y:0,w:1,h:4},{t:'block',x:170,y:6,w:1,h:4},{t:'block',x:235,y:4.5,w:0.8,h:0.8},{t:'block',x:250,y:4.5,w:0.8,h:0.8},
+      {t:'block',x:310,y:0,w:1,h:4.2},{t:'block',x:315,y:5.8,w:1,h:4.2},{t:'block',x:365,y:4.5,w:0.8,h:0.8},{t:'block',x:380,y:4.5,w:0.8,h:0.8}
+    ],
+    corridor:[
+      {fromX:0,toX:10,topY:10,botY:0},{fromX:10,toX:30,topY:7,botY:4},{fromX:30,toX:50,topY:6.5,botY:3.5},
+      {fromX:50,toX:70,topY:6,botY:4},{fromX:70,toX:90,topY:7,botY:4},{fromX:90,toX:110,topY:6.5,botY:3.5},
+      {fromX:110,toX:130,topY:7,botY:4},{fromX:130,toX:140,topY:6,botY:4},{fromX:140,toX:160,topY:7,botY:4},
+      {fromX:160,toX:180,topY:7.5,botY:3},{fromX:180,toX:200,topY:7,botY:4},{fromX:200,toX:210,topY:6,botY:4},
+      {fromX:210,toX:230,topY:7,botY:4},{fromX:230,toX:260,topY:6.5,botY:4.5},{fromX:260,toX:280,topY:7,botY:4},
+      {fromX:280,toX:300,topY:6.5,botY:3.5},{fromX:300,toX:320,topY:7.5,botY:3},{fromX:320,toX:340,topY:7,botY:4},
+      {fromX:340,toX:360,topY:7,botY:4},{fromX:360,toX:375,topY:6.5,botY:4.5},{fromX:375,toX:395,topY:7,botY:4},
+      {fromX:395,toX:410,topY:6.5,botY:4.5},{fromX:410,toX:420,topY:10,botY:0}
+    ]},
+  { id:'wave-insane-demon', name:'ANNIHILATE', difficulty:'insane-demon', mode:'wave',
+    themeBgTop:'#1a0000', themeBgBot:'#000000', themeGround:'#4a0000', themeAccent:'#ff1744',
+    speed:10.5, riseRate:10.5, length:480,
+    obstacles:[
+      {t:'speed-portal',x:40,mul:1.5},{t:'speed-portal',x:110,mul:1.0},{t:'speed-portal',x:180,mul:1.5},{t:'speed-portal',x:250,mul:1.0},{t:'speed-portal',x:320,mul:1.5},{t:'speed-portal',x:400,mul:1.0},
+      {t:'block',x:25,y:4.5,w:0.5,h:0.8},{t:'block',x:32,y:4.7,w:0.5,h:0.8},
+      {t:'block',x:55,y:4.5,w:0.5,h:0.5},{t:'block',x:62,y:5,w:0.5,h:0.5},{t:'block',x:70,y:4.5,w:0.5,h:0.5},{t:'block',x:78,y:5,w:0.5,h:0.5},{t:'block',x:88,y:4.5,w:0.5,h:0.5},{t:'block',x:96,y:5,w:0.5,h:0.5},
+      {t:'block',x:120,y:0,w:0.8,h:4.3},{t:'block',x:124,y:5.8,w:0.8,h:4.2},{t:'block',x:132,y:0,w:0.8,h:4.3},{t:'block',x:136,y:5.8,w:0.8,h:4.2},{t:'block',x:144,y:0,w:0.8,h:4.3},{t:'block',x:148,y:5.8,w:0.8,h:4.2},{t:'block',x:156,y:0,w:0.8,h:4.3},{t:'block',x:160,y:5.8,w:0.8,h:4.2},
+      {t:'block',x:195,y:4.7,w:0.5,h:0.6},{t:'block',x:205,y:4.7,w:0.5,h:0.6},{t:'block',x:215,y:4.7,w:0.5,h:0.6},{t:'block',x:225,y:4.7,w:0.5,h:0.6},{t:'block',x:235,y:4.7,w:0.5,h:0.6},
+      {t:'block',x:260,y:0,w:0.8,h:4.4},{t:'block',x:264,y:5.9,w:0.8,h:4.1},{t:'block',x:272,y:0,w:0.8,h:4.4},{t:'block',x:276,y:5.9,w:0.8,h:4.1},{t:'block',x:284,y:0,w:0.8,h:4.4},{t:'block',x:288,y:5.9,w:0.8,h:4.1},{t:'block',x:296,y:0,w:0.8,h:4.4},{t:'block',x:300,y:5.9,w:0.8,h:4.1},{t:'block',x:308,y:0,w:0.8,h:4.4},{t:'block',x:312,y:5.9,w:0.8,h:4.1},
+      {t:'block',x:335,y:4.7,w:0.5,h:0.6},{t:'block',x:345,y:4.7,w:0.5,h:0.6},{t:'block',x:355,y:4.7,w:0.5,h:0.6},{t:'block',x:365,y:4.7,w:0.5,h:0.6},{t:'block',x:375,y:4.7,w:0.5,h:0.6},{t:'block',x:385,y:4.7,w:0.5,h:0.6},{t:'block',x:395,y:4.7,w:0.5,h:0.6},
+      {t:'block',x:415,y:0,w:1,h:4.5},{t:'block',x:419,y:6,w:1,h:4},{t:'block',x:430,y:0,w:1,h:4.5},{t:'block',x:434,y:6,w:1,h:4},{t:'block',x:445,y:0,w:1,h:4.5},{t:'block',x:449,y:6,w:1,h:4}
+    ],
+    corridor:[
+      {fromX:0,toX:8,topY:10,botY:0},{fromX:8,toX:20,topY:6.5,botY:4.5},{fromX:20,toX:40,topY:6.3,botY:4.5},
+      {fromX:40,toX:60,topY:6,botY:4.5},{fromX:60,toX:80,topY:6.3,botY:4.8},{fromX:80,toX:100,topY:6,botY:4.5},
+      {fromX:100,toX:110,topY:6.5,botY:4.5},{fromX:110,toX:130,topY:6,botY:4.3},{fromX:130,toX:150,topY:5.8,botY:4.3},
+      {fromX:150,toX:170,topY:6,botY:4.3},{fromX:170,toX:180,topY:6.5,botY:4.5},{fromX:180,toX:200,topY:6.2,botY:4.5},
+      {fromX:200,toX:220,topY:6,botY:4.3},{fromX:220,toX:240,topY:6.2,botY:4.5},{fromX:240,toX:250,topY:6.5,botY:4.5},
+      {fromX:250,toX:270,topY:6,botY:4.4},{fromX:270,toX:290,topY:5.9,botY:4.4},{fromX:290,toX:310,topY:6,botY:4.4},
+      {fromX:310,toX:320,topY:6.5,botY:4.5},{fromX:320,toX:340,topY:6.2,botY:4.5},{fromX:340,toX:360,topY:6,botY:4.3},
+      {fromX:360,toX:380,topY:6.2,botY:4.5},{fromX:380,toX:400,topY:6,botY:4.3},{fromX:400,toX:415,topY:6.5,botY:4.5},
+      {fromX:415,toX:435,topY:6,botY:4.5},{fromX:435,toX:455,topY:6,botY:4.5},{fromX:455,toX:470,topY:6.5,botY:4.5},{fromX:470,toX:480,topY:10,botY:0}
+    ]}
+];
+const LEVELS_FROG = [
+  { id:'frog-hard', name:'FROG MARSH', difficulty:'hard', mode:'frog',
+    themeBgTop:'#7ed957', themeBgBot:'#cdebb0', themeGround:'#3a5f1a', themeAccent:'#f4e04d',
+    maxCharge:1.0, maxJumpX:6, maxJumpY:4, start:{x:2,y:0}, goal:{x:80,y:0},
+    length: 80,
+    obstacles:[
+      {t:'water',x:0,y:0,w:80},
+      {t:'lilypad',x:1,y:0,w:2.0,h:0.4},{t:'lilypad',x:5,y:0.5,w:1.4,h:0.4},{t:'lilypad',x:9,y:1.0,w:1.4,h:0.4},
+      {t:'lilypad',x:13,y:1.0,w:1.4,h:0.4},{t:'lilypad',x:17,y:1.5,w:1.4,h:0.4},
+      {t:'lilypad',x:21,y:2.0,w:1.2,h:0.4},{t:'lilypad',x:25,y:2.5,w:1.2,h:0.4},{t:'lilypad',x:29,y:3.0,w:1.2,h:0.4},
+      {t:'lilypad',x:33,y:3.0,w:1.2,h:0.4},{t:'lilypad',x:37,y:2.5,w:1.2,h:0.4},
+      {t:'lilypad',x:41,y:2.0,w:1.2,h:0.4},{t:'lilypad',x:45,y:1.5,w:1.2,h:0.4},{t:'lilypad',x:49,y:1.5,w:1.2,h:0.4},
+      {t:'lilypad',x:53,y:2.0,w:1.2,h:0.4},{t:'lilypad',x:57,y:2.0,w:1.2,h:0.4},{t:'lilypad',x:61,y:1.5,w:1.2,h:0.4},
+      {t:'lilypad',x:65,y:1.0,w:1.4,h:0.4},{t:'lilypad',x:69,y:0.5,w:1.4,h:0.4},{t:'lilypad',x:73,y:0.5,w:1.6,h:0.4},
+      {t:'lilypad',x:78,y:0,w:3.0,h:0.4}
+    ]},
+  { id:'frog-harder', name:'FROG ABYSS', difficulty:'harder', mode:'frog',
+    themeBgTop:'#1a3a5c', themeBgBot:'#0a1a2e', themeGround:'#0d5c3a', themeAccent:'#00e5a8',
+    maxCharge:1.0, maxJumpX:6, maxJumpY:4, start:{x:2,y:0}, goal:{x:80,y:0},
+    length: 80,
+    obstacles:[
+      {t:'water',x:0,y:0,w:80},
+      {t:'lilypad',x:1,y:0,w:2.0,h:0.4},{t:'lilypad',x:5,y:1.0,w:0.9,h:0.4},{t:'lilypad',x:9,y:1.5,w:0.9,h:0.4},
+      {t:'lilypad',x:13,y:2.0,w:0.9,h:0.4},{t:'spike',x:15,y:0,h:1},{t:'lilypad',x:17,y:2.0,w:0.9,h:0.4},
+      {t:'moving-pad',x:21,y:2.0,w:1.0,h:0.4,vx:0,vy:0,amp:1.5,freq:1.2},{t:'lilypad',x:25,y:2.5,w:0.9,h:0.4},
+      {t:'moving-pad',x:29,y:2.5,w:1.0,h:0.4,vx:0,vy:0,amp:1.2,freq:1.5},{t:'moving-pad',x:33,y:2.5,w:1.0,h:0.4,vx:0,vy:0,amp:1.5,freq:1.0},
+      {t:'lilypad',x:37,y:2.0,w:0.9,h:0.4},
+      {t:'wall',x:40,y:0,w:1.0,h:3.0},{t:'moving-pad',x:44,y:3.5,w:1.0,h:0.4,vx:1,vy:0,amp:2.0,freq:0.8},
+      {t:'lilypad',x:49,y:3.0,w:0.9,h:0.4},{t:'spike',x:51,y:0,h:1},{t:'lilypad',x:53,y:2.5,w:0.9,h:0.4},
+      {t:'moving-pad',x:57,y:2.0,w:1.0,h:0.4,vx:0,vy:0,amp:1.0,freq:1.4},{t:'lilypad',x:61,y:1.5,w:0.9,h:0.4},
+      {t:'moving-pad',x:65,y:1.5,w:1.0,h:0.4,vx:0,vy:0,amp:1.2,freq:1.1},{t:'lilypad',x:69,y:1.0,w:0.9,h:0.4},
+      {t:'moving-pad',x:73,y:1.0,w:1.0,h:0.4,vx:1,vy:0,amp:1.5,freq:1.0},{t:'lilypad',x:78,y:0,w:3.0,h:0.4},
+      {t:'lilypad',x:3,y:0.5,w:0.8,h:0.4},{t:'lilypad',x:11,y:1.7,w:0.8,h:0.4},{t:'lilypad',x:23,y:1.5,w:0.7,h:0.4},{t:'lilypad',x:47,y:2.8,w:0.7,h:0.4}
+    ]},
+  { id:'frog-demon', name:'FROG OF FATE', difficulty:'demon', mode:'frog',
+    themeBgTop:'#2a0a3e', themeBgBot:'#0a0014', themeGround:'#5a1a8a', themeAccent:'#ff2bd6',
+    maxCharge:1.0, maxJumpX:6, maxJumpY:4, start:{x:2,y:0}, goal:{x:80,y:0},
+    length: 80,
+    obstacles:[
+      {t:'water',x:0,y:0,w:80},
+      {t:'lilypad',x:1,y:0,w:1.6,h:0.4},{t:'lilypad',x:5,y:1.0,w:0.55,h:0.4},{t:'lilypad',x:9,y:1.5,w:0.55,h:0.4},
+      {t:'lilypad',x:13,y:2.0,w:0.5,h:0.4},{t:'spike',x:11,y:0,h:1},{t:'spike',x:15,y:0,h:1},
+      {t:'sticky-pad',x:17,y:2.0,w:0.8,h:0.4},
+      {t:'moving-pad',x:20,y:2.5,w:0.6,h:0.4,vx:0,vy:0,amp:1.0,freq:1.6},{t:'moving-pad',x:23,y:2.5,w:0.6,h:0.4,vx:0,vy:0,amp:1.2,freq:1.8},
+      {t:'moving-pad',x:26,y:3.0,w:0.6,h:0.4,vx:0,vy:0,amp:1.5,freq:1.4},{t:'moving-pad',x:29,y:3.0,w:0.6,h:0.4,vx:0,vy:0,amp:1.0,freq:2.0},
+      {t:'moving-pad',x:32,y:2.5,w:0.6,h:0.4,vx:0,vy:0,amp:1.3,freq:1.5},
+      {t:'wall',x:35,y:0,w:1.0,h:3.5},{t:'moving-pad',x:39,y:3.5,w:0.6,h:0.4,vx:1,vy:0,amp:2.5,freq:0.9},
+      {t:'moving-pad',x:43,y:3.5,w:0.6,h:0.4,vx:1,vy:0,amp:2.0,freq:1.1},{t:'spike',x:41,y:0,h:1},{t:'spike',x:45,y:0,h:1},
+      {t:'sticky-pad',x:47,y:3.0,w:0.8,h:0.4},
+      {t:'moving-pad',x:50,y:2.5,w:0.55,h:0.4,vx:0,vy:0,amp:1.0,freq:1.7},{t:'moving-pad',x:53,y:2.0,w:0.55,h:0.4,vx:0,vy:0,amp:1.2,freq:1.5},
+      {t:'moving-pad',x:56,y:1.5,w:0.55,h:0.4,vx:0,vy:0,amp:0.9,freq:1.9},{t:'moving-pad',x:59,y:1.0,w:0.55,h:0.4,vx:0,vy:0,amp:0.8,freq:2.0},
+      {t:'spike',x:61,y:0,h:1},{t:'moving-pad',x:63,y:1.5,w:0.55,h:0.4,vx:1,vy:0,amp:1.5,freq:1.2},{t:'moving-pad',x:66,y:2.0,w:0.55,h:0.4,vx:1,vy:0,amp:1.5,freq:1.3},
+      {t:'sticky-pad',x:68,y:2.0,w:0.7,h:0.4},{t:'wall',x:70,y:0,w:0.5,h:2.8},
+      {t:'moving-pad',x:72,y:3.0,w:0.55,h:0.4,vx:0,vy:0,amp:1.2,freq:1.6},{t:'spike',x:74,y:0,h:1},
+      {t:'moving-pad',x:75,y:2.0,w:0.55,h:0.4,vx:0,vy:0,amp:1.0,freq:1.8},{t:'sticky-pad',x:77,y:1.0,w:0.7,h:0.4},
+      {t:'lilypad',x:78.5,y:0,w:2.5,h:0.4},
+      {t:'lilypad',x:7,y:1.2,w:0.45,h:0.4},{t:'lilypad',x:22,y:3.5,w:0.45,h:0.4},{t:'lilypad',x:38,y:4.0,w:0.45,h:0.4},{t:'lilypad',x:55,y:2.8,w:0.45,h:0.4}
+    ]}
+];
+// 4 hand-authored cube-mode tracks (compact 8-bar loops; engine loops them).
+const MUSIC_CUBE_STD = [
+  { name:'STEREO MADNESS', bpm:140, bars:8, timeSig:4,
+    lead:[
+      {n:'E5',d:0.5,v:0.8},{n:'G5',d:0.5,v:0.8},{n:'B5',d:0.5,v:0.85},{n:'G5',d:0.5,v:0.8},
+      {n:'E5',d:0.5,v:0.8},{n:'G5',d:0.5,v:0.8},{n:'A5',d:1.0,v:0.85},
+      {n:'D5',d:0.5,v:0.8},{n:'F#5',d:0.5,v:0.8},{n:'A5',d:0.5,v:0.85},{n:'F#5',d:0.5,v:0.8},
+      {n:'D5',d:0.5,v:0.8},{n:'F#5',d:0.5,v:0.8},{n:'G5',d:1.0,v:0.85},
+      {n:'C5',d:0.5,v:0.8},{n:'E5',d:0.5,v:0.8},{n:'G5',d:0.5,v:0.85},{n:'E5',d:0.5,v:0.8},
+      {n:'C5',d:0.5,v:0.8},{n:'E5',d:0.5,v:0.8},{n:'F5',d:1.0,v:0.85},
+      {n:'B4',d:0.5,v:0.8},{n:'D5',d:0.5,v:0.8},{n:'G5',d:0.5,v:0.85},{n:'D5',d:0.5,v:0.8},
+      {n:'B4',d:0.5,v:0.8},{n:'D5',d:0.5,v:0.8},{n:'C5',d:1.0,v:0.85}
+    ],
+    bass:[
+      {n:'E2',d:1,v:0.9},{n:'G2',d:1,v:0.8},{n:'B2',d:1,v:0.8},{n:'G2',d:1,v:0.8},
+      {n:'D2',d:1,v:0.9},{n:'F#2',d:1,v:0.8},{n:'A2',d:1,v:0.8},{n:'F#2',d:1,v:0.8},
+      {n:'C2',d:1,v:0.9},{n:'E2',d:1,v:0.8},{n:'G2',d:1,v:0.8},{n:'E2',d:1,v:0.8},
+      {n:'G2',d:1,v:0.9},{n:'B2',d:1,v:0.8},{n:'A2',d:1,v:0.8},{n:'G2',d:1,v:0.8}
+    ],
+    drums:[
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},{k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},{k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},{k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},{k:'k',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'c',d:0.5}
+    ]
+  },
+  { name:'BACK ON TRACK', bpm:145, bars:8, timeSig:4,
+    lead:[
+      {n:'A4',d:0.5,v:0.85},{n:'A5',d:0.5,v:0.9},{n:'E5',d:0.5,v:0.85},{n:'C5',d:0.5,v:0.85},
+      {n:'A4',d:0.5,v:0.85},{n:'A5',d:0.5,v:0.9},{n:'B4',d:0.5,v:0.85},{n:'C5',d:0.5,v:0.85},
+      {n:'D5',d:0.5,v:0.85},{n:'D6',d:0.5,v:0.9},{n:'A5',d:0.5,v:0.85},{n:'F5',d:0.5,v:0.85},
+      {n:'D5',d:0.5,v:0.85},{n:'F5',d:0.5,v:0.85},{n:'E5',d:1.0,v:0.9},
+      {n:'G4',d:0.5,v:0.85},{n:'G5',d:0.5,v:0.9},{n:'D5',d:0.5,v:0.85},{n:'B4',d:0.5,v:0.85},
+      {n:'G4',d:0.5,v:0.85},{n:'B4',d:0.5,v:0.85},{n:'D5',d:1.0,v:0.9},
+      {n:'E4',d:0.5,v:0.85},{n:'E5',d:0.5,v:0.9},{n:'B4',d:0.5,v:0.85},{n:'G4',d:0.5,v:0.85},
+      {n:'A4',d:0.5,v:0.85},{n:'B4',d:0.5,v:0.85},{n:'C5',d:1.0,v:0.9}
+    ],
+    bass:[
+      {n:'A1',d:1,v:0.95},{n:'A1',d:1,v:0.8},{n:'E2',d:1,v:0.85},{n:'A1',d:1,v:0.85},
+      {n:'D2',d:1,v:0.95},{n:'D2',d:1,v:0.8},{n:'A2',d:1,v:0.85},{n:'F2',d:1,v:0.85},
+      {n:'G1',d:1,v:0.95},{n:'G1',d:1,v:0.8},{n:'D2',d:1,v:0.85},{n:'B1',d:1,v:0.85},
+      {n:'E2',d:1,v:0.95},{n:'E2',d:1,v:0.8},{n:'B2',d:1,v:0.85},{n:'G2',d:1,v:0.85}
+    ],
+    drums:[
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.5},
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.5},
+      {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.5},
+      {k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'c',d:0.25},{k:'k',d:0.5},{k:'k',d:0.5},{k:'c',d:1}
+    ]
+  },
+  { name:'POLARGEIST', bpm:150, bars:8, timeSig:4,
+    lead:[
+      {n:'A5',d:0.5,v:0.9},{n:'G5',d:0.5,v:0.85},{n:'F5',d:0.5,v:0.85},{n:'E5',d:0.5,v:0.85},
+      {n:'D5',d:0.5,v:0.9},{n:'C5',d:0.5,v:0.85},{n:'A4',d:0.5,v:0.85},{n:'D5',d:0.5,v:0.85},
+      {n:'A5',d:0.5,v:0.9},{n:'G5',d:0.5,v:0.85},{n:'F5',d:0.5,v:0.85},{n:'E5',d:0.5,v:0.85},
+      {n:'D5',d:0.5,v:0.9},{n:'C#5',d:0.5,v:0.85},{n:'D5',d:1.0,v:0.9},
+      {n:'F5',d:0.5,v:0.9},{n:'E5',d:0.5,v:0.85},{n:'D5',d:0.5,v:0.85},{n:'C5',d:0.5,v:0.85},
+      {n:'A4',d:0.5,v:0.85},{n:'G4',d:0.5,v:0.85},{n:'F4',d:0.5,v:0.85},{n:'A4',d:0.5,v:0.85},
+      {n:'A5',d:0.5,v:0.9},{n:'F5',d:0.5,v:0.85},{n:'D5',d:0.5,v:0.85},{n:'A4',d:0.5,v:0.85},
+      {n:'C#5',d:0.5,v:0.85},{n:'E5',d:0.5,v:0.85},{n:'D5',d:1.0,v:0.95}
+    ],
+    bass:[
+      {n:'D2',d:2,v:0.95},{n:'D2',d:0.5,v:0.8},{n:'A2',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'F2',d:0.5,v:0.85},
+      {n:'D2',d:2,v:0.95},{n:'D2',d:0.5,v:0.8},{n:'A2',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'C#2',d:0.5,v:0.85},
+      {n:'F2',d:2,v:0.95},{n:'F2',d:0.5,v:0.8},{n:'C3',d:0.5,v:0.85},{n:'F2',d:0.5,v:0.85},{n:'A2',d:0.5,v:0.85},
+      {n:'A1',d:2,v:0.95},{n:'A1',d:0.5,v:0.8},{n:'E2',d:0.5,v:0.85},{n:'C#2',d:0.5,v:0.85},{n:'A1',d:0.5,v:0.85}
+    ],
+    drums:[
+      {k:'k',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},
+      {k:'k',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},
+      {k:'k',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},
+      {k:'k',d:0.5},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'c',d:0.5},{k:'k',d:0.5}
+    ]
+  },
+  { name:'CLUTTERFUNK', bpm:160, bars:8, timeSig:4,
+    lead:[
+      {n:'E5',d:0.25,v:0.9},{n:'G5',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.85},{n:'E6',d:0.25,v:0.9},{n:'D6',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.85},{n:'G5',d:0.25,v:0.85},{n:'E5',d:0.25,v:0.85},
+      {n:'E5',d:0.25,v:0.9},{n:'G5',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.85},{n:'E6',d:0.25,v:0.9},{n:'F#6',d:0.25,v:0.85},{n:'E6',d:0.25,v:0.85},{n:'D6',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.85},
+      {n:'D5',d:0.25,v:0.9},{n:'F#5',d:0.25,v:0.85},{n:'A5',d:0.25,v:0.85},{n:'D6',d:0.25,v:0.9},{n:'C6',d:0.25,v:0.85},{n:'A5',d:0.25,v:0.85},{n:'F#5',d:0.25,v:0.85},{n:'D5',d:0.25,v:0.85},
+      {n:'D5',d:0.25,v:0.9},{n:'F#5',d:0.25,v:0.85},{n:'A5',d:0.25,v:0.85},{n:'D6',d:0.25,v:0.9},{n:'E6',d:0.25,v:0.85},{n:'D6',d:0.25,v:0.85},{n:'C6',d:0.25,v:0.85},{n:'A5',d:0.25,v:0.85},
+      {n:'C5',d:0.25,v:0.9},{n:'E5',d:0.25,v:0.85},{n:'G5',d:0.25,v:0.85},{n:'C6',d:0.25,v:0.9},{n:'B5',d:0.25,v:0.85},{n:'G5',d:0.25,v:0.85},{n:'E5',d:0.25,v:0.85},{n:'C5',d:0.25,v:0.85},
+      {n:'C5',d:0.25,v:0.9},{n:'E5',d:0.25,v:0.85},{n:'G5',d:0.25,v:0.85},{n:'C6',d:0.25,v:0.9},{n:'D6',d:0.25,v:0.85},{n:'C6',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.85},{n:'G5',d:0.25,v:0.85},
+      {n:'B4',d:0.25,v:0.9},{n:'D5',d:0.25,v:0.85},{n:'F#5',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.9},{n:'A5',d:0.25,v:0.85},{n:'F#5',d:0.25,v:0.85},{n:'D5',d:0.25,v:0.85},{n:'B4',d:0.25,v:0.85},
+      {n:'C5',d:0.25,v:0.9},{n:'D5',d:0.25,v:0.85},{n:'E5',d:0.25,v:0.85},{n:'F#5',d:0.25,v:0.85},{n:'G5',d:0.25,v:0.85},{n:'A5',d:0.25,v:0.85},{n:'B5',d:0.25,v:0.85},{n:'E6',d:0.25,v:0.95}
+    ],
+    bass:[
+      {n:'E2',d:0.5,v:0.95},{n:'E2',d:0.5,v:0.85},{n:'E2',d:0.5,v:0.85},{n:'E3',d:0.5,v:0.85},{n:'E2',d:0.5,v:0.85},{n:'E2',d:0.5,v:0.85},{n:'G2',d:0.5,v:0.85},{n:'B2',d:0.5,v:0.85},
+      {n:'E2',d:0.5,v:0.95},{n:'E2',d:0.5,v:0.85},{n:'E2',d:0.5,v:0.85},{n:'E3',d:0.5,v:0.85},{n:'E2',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'C2',d:0.5,v:0.85},{n:'B1',d:0.5,v:0.85},
+      {n:'D2',d:0.5,v:0.95},{n:'D2',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'D3',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'F#2',d:0.5,v:0.85},{n:'A2',d:0.5,v:0.85},
+      {n:'D2',d:0.5,v:0.95},{n:'D2',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'D3',d:0.5,v:0.85},{n:'D2',d:0.5,v:0.85},{n:'C2',d:0.5,v:0.85},{n:'B1',d:0.5,v:0.85},{n:'A1',d:0.5,v:0.85}
+    ],
+    drums:[
+      {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},
+      {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},
+      {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},
+      {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'c',d:0.25},{k:'c',d:0.25},{k:'k',d:0.5},{k:'k',d:0.5}
+    ]
+  }
+];
+// TARTARUS — impossible-demon track (Bb minor with tritones)
+const MUSIC_TARTARUS = {
+  name:'TARTARUS', bpm:185, bars:8, timeSig:4,
+  lead:[
+    {n:'Bb4',d:0.25,v:0.95},{n:'E5',d:0.25,v:0.95},{n:'Bb5',d:0.25,v:1},{n:'E6',d:0.25,v:1},{n:'D6',d:0.25,v:0.9},{n:'Bb5',d:0.25,v:0.85},{n:'E5',d:0.25,v:0.85},{n:'Bb4',d:0.25,v:0.85},
+    {n:'C5',d:0.25,v:0.85},{n:'F#5',d:0.25,v:0.9},{n:'C6',d:0.25,v:0.95},{n:'F#6',d:0.25,v:1},{n:'E6',d:0.5,v:0.95},{n:'Bb5',d:0.5,v:0.9},
+    {n:'Db6',d:0.25,v:0.95},{n:'G6',d:0.25,v:1},{n:'Db6',d:0.25,v:0.9},{n:'G5',d:0.25,v:0.85},{n:'F6',d:0.5,v:0.95},{n:'B5',d:0.5,v:0.9},{n:'E6',d:0.25,v:0.95},{n:'Bb5',d:0.25,v:0.85},{n:'E5',d:0.25,v:0.85},{n:'Bb4',d:0.25,v:0.85},{n:'Bb4',d:1,v:0.95},
+    {n:'Bb5',d:0.25,v:0.95},{n:'E5',d:0.25,v:0.85},{n:'Bb5',d:0.25,v:0.95},{n:'F#5',d:0.25,v:0.85},{n:'C6',d:0.25,v:0.95},{n:'F#5',d:0.25,v:0.85},{n:'C6',d:0.25,v:0.95},{n:'G5',d:0.25,v:0.85},{n:'Db6',d:0.25,v:0.95},{n:'G5',d:0.25,v:0.85},{n:'Db6',d:0.25,v:0.95},{n:'Ab5',d:0.25,v:0.85},{n:'D6',d:0.5,v:1},{n:'Ab5',d:0.5,v:0.9},
+    {n:'F6',d:0.25,v:1},{n:'E6',d:0.25,v:0.95},{n:'Eb6',d:0.25,v:0.95},{n:'D6',d:0.25,v:0.95},{n:'Db6',d:0.25,v:0.95},{n:'C6',d:0.25,v:0.9},{n:'B5',d:0.25,v:0.9},{n:'Bb5',d:0.25,v:0.9},{n:'F6',d:0.5,v:1},{n:'B5',d:0.5,v:0.95},{n:'F#6',d:1,v:1},
+    {n:'Bb6',d:0.25,v:1},{n:'E6',d:0.25,v:0.95},{n:'Bb5',d:0.25,v:0.95},{n:'E5',d:0.25,v:0.9},{n:'Bb4',d:0.5,v:1},{n:'E5',d:0.5,v:0.95},{n:'Bb5',d:0.5,v:1},{n:'E6',d:0.5,v:1},{n:'Bb6',d:1,v:1},
+    {n:'Ab6',d:0.25,v:1},{n:'D6',d:0.25,v:0.95},{n:'Ab5',d:0.25,v:0.95},{n:'D5',d:0.25,v:0.9},{n:'Ab4',d:0.5,v:1},{n:'D5',d:0.5,v:0.95},{n:'Ab5',d:0.5,v:1},{n:'D6',d:0.5,v:1},{n:'Ab6',d:1,v:1}
+  ],
+  bass:[
+    {n:'Bb1',d:0.25,v:0.95},{n:'Bb1',d:0.25,v:0.8},{n:'E1',d:0.25,v:0.95},{n:'E1',d:0.25,v:0.8},{n:'Bb1',d:0.25,v:0.95},{n:'Bb1',d:0.25,v:0.8},{n:'E1',d:0.25,v:0.95},{n:'E1',d:0.25,v:0.8},
+    {n:'Bb1',d:0.25,v:0.95},{n:'Bb1',d:0.25,v:0.8},{n:'E1',d:0.25,v:0.95},{n:'E1',d:0.25,v:0.8},{n:'Bb1',d:0.5,v:0.95},{n:'Bb2',d:0.5,v:0.85},
+    {n:'Ab1',d:0.25,v:0.95},{n:'Ab1',d:0.25,v:0.8},{n:'D1',d:0.25,v:0.95},{n:'D1',d:0.25,v:0.8},{n:'Ab1',d:0.25,v:0.95},{n:'Ab1',d:0.25,v:0.8},{n:'D1',d:0.25,v:0.95},{n:'D1',d:0.25,v:0.8},
+    {n:'Ab1',d:0.25,v:0.95},{n:'Ab1',d:0.25,v:0.8},{n:'D1',d:0.25,v:0.95},{n:'D1',d:0.25,v:0.8},{n:'Ab1',d:0.5,v:0.95},{n:'Ab2',d:0.5,v:0.85},
+    {n:'Gb1',d:0.25,v:0.95},{n:'Gb1',d:0.25,v:0.8},{n:'C1',d:0.25,v:0.95},{n:'C1',d:0.25,v:0.8},{n:'Gb1',d:0.25,v:0.95},{n:'Gb1',d:0.25,v:0.8},{n:'C1',d:0.25,v:0.95},{n:'C1',d:0.25,v:0.8},
+    {n:'Gb1',d:0.25,v:0.95},{n:'Gb1',d:0.25,v:0.8},{n:'C1',d:0.25,v:0.95},{n:'C1',d:0.25,v:0.8},{n:'Gb1',d:0.5,v:0.95},{n:'Gb2',d:0.5,v:0.85},
+    {n:'F1',d:0.25,v:1},{n:'F1',d:0.25,v:0.85},{n:'B0',d:0.25,v:1},{n:'B0',d:0.25,v:0.85},{n:'F1',d:0.25,v:1},{n:'F1',d:0.25,v:0.85},{n:'B0',d:0.25,v:1},{n:'B0',d:0.25,v:0.85},
+    {n:'F#1',d:0.5,v:1},{n:'F#2',d:0.5,v:0.9},{n:'F#1',d:1,v:1}
+  ],
+  drums:[
+    {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},
+    {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'s',d:0.125},{k:'s',d:0.125},
+    {k:'k',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'h',d:0.25},
+    {k:'k',d:0.125},{k:'k',d:0.125},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.25},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'c',d:0.5},{k:'c',d:0.5},
+    {k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'c',d:0.25},
+    {k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'c',d:0.25},
+    {k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'k',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'k',d:0.25},{k:'h',d:0.25},{k:'s',d:0.25},{k:'c',d:0.25},
+    {k:'k',d:0.125},{k:'k',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'s',d:0.125},{k:'c',d:1}
+  ]
+};
+const FX = {
+  particles: [],
+  trails: [],
+  shake: { mag: 0, time: 0 },
+  _stars: null,
+  _silhouettes: null,
+  _rand(a, b) { return a + Math.random() * (b - a); },
+  _hexToRgb(hex) {
+    if (!hex || typeof hex !== 'string') return { r: 255, g: 255, b: 255 };
+    let h = hex.replace('#', '');
+    if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16);
+    if (isNaN(n)) return { r: 255, g: 255, b: 255 };
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  },
+  _rgba(hex, a) {
+    const c = this._hexToRgb(hex);
+    return `rgba(${c.r},${c.g},${c.b},${a})`;
+  },
+  _mixHex(a, b, t) {
+    const ca = this._hexToRgb(a), cb = this._hexToRgb(b);
+    return `rgb(${Math.round(ca.r+(cb.r-ca.r)*t)},${Math.round(ca.g+(cb.g-ca.g)*t)},${Math.round(ca.b+(cb.b-ca.b)*t)})`;
+  },
+  _initBg(w, h) {
+    if (this._stars && this._stars._w === w && this._stars._h === h) return;
+    const stars = [];
+    const count = Math.floor((w * h) / 4500);
+    for (let i = 0; i < count; i++) {
+      stars.push({ x: Math.random()*w, y: Math.random()*h*0.85, r: this._rand(0.4,1.8), tw: this._rand(0,Math.PI*2), sp: this._rand(0.6,2.2), drift: this._rand(2,9) });
+    }
+    stars._w = w; stars._h = h;
+    this._stars = stars;
+    const sil = [];
+    for (let layer = 0; layer < 3; layer++) {
+      const arr = [];
+      const c2 = 6 + layer * 3;
+      for (let i = 0; i < c2; i++) arr.push({ x: (i/c2)*w + this._rand(-30,30), size: this._rand(40,100)+(2-layer)*30, rot: this._rand(0,Math.PI*2), spin: this._rand(-0.3,0.3) });
+      sil.push(arr);
+    }
+    this._silhouettes = sil;
+  },
+  emitJumpDust(wx, wy) {
+    for (let i = 0; i < 6; i++) {
+      this.particles.push({ kind:'dust', x:wx+this._rand(-0.15,0.15), y:wy, vx:(Math.random()-0.5)*4, vy:Math.random()*2+0.5, life:this._rand(0.3,0.6), age:0, size:this._rand(3,6), rot:0, color:'#8a6a45', color2:'#b89070', gravity:6, drag:0.92 });
+    }
+  },
+  emitDeath(wx, wy, color) {
+    color = color || '#ffffff';
+    this.particles.push({ kind:'flash', x:wx, y:wy, life:0.25, age:0, size:80, color:'#ffffff' });
+    this.particles.push({ kind:'ring', x:wx, y:wy, life:0.6, age:0, r0:6, r1:140, w0:8, w1:0.5, color });
+    for (let i = 0; i < 30; i++) {
+      const ang = (i/30)*Math.PI*2 + this._rand(-0.1,0.1);
+      const sp = this._rand(4,12);
+      this.particles.push({ kind:'spark', x:wx, y:wy, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life:this._rand(0.5,1.1), age:0, size:this._rand(3,7), rot:Math.random()*Math.PI*2, vr:(Math.random()-0.5)*16, color, color2:'#ffffff', gravity:28, drag:0.95, glow:true });
+    }
+    this.triggerShake(14, 0.45);
+  },
+  emitPortalEnter(wx, wy, color) {
+    color = color || '#66ccff';
+    for (let i = 0; i < 16; i++) {
+      const ang = Math.random()*Math.PI*2;
+      const sp = this._rand(2,6);
+      this.particles.push({ kind:'spark', x:wx, y:wy, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life:this._rand(0.5,1.0), age:0, size:this._rand(2,5), rot:0, color, color2:'#ffffff', gravity:-4, drag:0.93, glow:true });
+    }
+    this.particles.push({ kind:'ring', x:wx, y:wy, life:0.5, age:0, r0:4, r1:80, w0:5, w1:0.5, color });
+    this.triggerShake(4, 0.15);
+  },
+  emitRingPop(wx, wy, color) {
+    color = color || '#ffd24a';
+    this.particles.push({ kind:'ring', x:wx, y:wy, life:0.5, age:0, r0:8, r1:70, w0:6, w1:0.5, color });
+    for (let i = 0; i < 8; i++) {
+      const ang = (i/8)*Math.PI*2;
+      const sp = this._rand(4,7);
+      this.particles.push({ kind:'spark', x:wx, y:wy, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life:this._rand(0.4,0.7), age:0, size:this._rand(3,5), rot:0, color, color2:'#fff5b0', gravity:10, drag:0.94, glow:true });
+    }
+  },
+  emitPadBounce(wx, wy, color) {
+    color = color || '#ffe066';
+    this.particles.push({ kind:'ring', x:wx, y:wy, life:0.4, age:0, r0:6, r1:60, w0:5, w1:0.4, color });
+    for (let i = 0; i < 10; i++) {
+      const ang = -Math.PI/2 + (Math.random()-0.5)*Math.PI*0.6;
+      const sp = this._rand(3,8);
+      this.particles.push({ kind:'spark', x:wx, y:wy, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life:this._rand(0.4,0.8), age:0, size:this._rand(2,5), rot:0, color, color2:'#ffffff', gravity:22, drag:0.94, glow:true });
+    }
+  },
+  emitTrail(wx, wy, color) {
+    color = color || '#ffffff';
+    this.trails.push({ x:wx, y:wy, color, life:0.4, age:0, size:0.22 });
+    if (this.trails.length > 180) this.trails.splice(0, this.trails.length - 180);
+  },
+  triggerShake(magnitude, time) {
+    if (magnitude > this.shake.mag) this.shake.mag = magnitude;
+    if (time > this.shake.time) this.shake.time = time;
+  },
+  update(dt) {
+    if (dt > 0.1) dt = 0.1;
+    for (let i = this.particles.length-1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.age += dt;
+      if (p.age >= p.life) { this.particles.splice(i,1); continue; }
+      if (p.kind === 'spark' || p.kind === 'dust') {
+        p.vy += (p.gravity || 0) * dt;
+        p.vx *= Math.pow(p.drag || 1, dt*60);
+        p.vy *= Math.pow(p.drag || 1, dt*60);
+        p.x += p.vx*dt; p.y += p.vy*dt;
+        if (p.vr) p.rot += p.vr*dt;
+      }
+    }
+    for (let i = this.trails.length-1; i >= 0; i--) {
+      this.trails[i].age += dt;
+      if (this.trails[i].age >= this.trails[i].life) this.trails.splice(i,1);
+    }
+    if (this.shake.time > 0) {
+      this.shake.time -= dt;
+      if (this.shake.time <= 0) { this.shake.time = 0; this.shake.mag = 0; }
+      else this.shake.mag *= Math.pow(0.001, dt);
+    }
+  },
+  render(ctx, worldToScreen, tileSize) {
+    tileSize = tileSize || 40;
+    if (this.trails.length > 1) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < this.trails.length; i++) {
+        const a = this.trails[i-1], b = this.trails[i];
+        if (a.color !== b.color) continue;
+        const pa = worldToScreen(a.x, a.y), pb = worldToScreen(b.x, b.y);
+        const alpha = 1 - b.age/b.life;
+        ctx.strokeStyle = this._rgba(b.color, alpha*0.5);
+        ctx.lineWidth = b.size * tileSize;
+        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    for (const p of this.particles) {
+      const t = p.age / p.life, fade = 1 - t;
+      const pos = worldToScreen(p.x, p.y);
+      if (p.kind === 'flash') {
+        const r = p.size * (0.5 + t*1.2);
+        const g = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, r);
+        g.addColorStop(0, `rgba(255,255,255,${fade})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI*2); ctx.fill();
+      } else if (p.kind === 'ring') {
+        const r = p.r0 + (p.r1 - p.r0)*t;
+        const w = p.w0 + (p.w1 - p.w0)*t;
+        ctx.strokeStyle = this._rgba(p.color, fade*0.9);
+        ctx.lineWidth = w;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI*2); ctx.stroke();
+      } else if (p.kind === 'spark') {
+        const s = p.size * (1 - t*0.5);
+        if (p.glow) {
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          const g = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, s*3);
+          g.addColorStop(0, this._rgba(p.color2 || '#fff', fade*0.9));
+          g.addColorStop(1, this._rgba(p.color, 0));
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(pos.x, pos.y, s*3, 0, Math.PI*2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = this._rgba(p.color, fade);
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, s, 0, Math.PI*2); ctx.fill();
+      } else if (p.kind === 'dust') {
+        const s = p.size * (0.6 + t*0.8);
+        ctx.fillStyle = this._rgba(p.color, fade*0.7);
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, s, 0, Math.PI*2); ctx.fill();
+      }
+    }
+  },
+  drawBackground(ctx, w, h, themeTop, themeBot, t, accent) {
+    themeTop = themeTop || '#1a1040'; themeBot = themeBot || '#3a1860'; accent = accent || '#ff4fa3';
+    this._initBg(w, h);
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, themeTop);
+    grad.addColorStop(0.55, this._mixHex(themeTop, themeBot, 0.55));
+    grad.addColorStop(1, themeBot);
+    ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
+    // Pulsing accent glow
+    const beat = 0.5 + 0.5 * Math.sin(t * 2.0);
+    const glowR = Math.max(w,h) * 0.5;
+    const rad = ctx.createRadialGradient(w/2, h*0.6, 0, w/2, h*0.6, glowR);
+    rad.addColorStop(0, this._rgba(accent, 0.18 + beat*0.12));
+    rad.addColorStop(1, this._rgba(accent, 0));
+    ctx.fillStyle = rad; ctx.fillRect(0,0,w,h);
+    // Stars
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const s of this._stars) {
+      const tw = 0.55 + 0.45*Math.sin(s.tw + t*s.sp);
+      const x = ((s.x - t*s.drift) % w + w) % w;
+      ctx.fillStyle = this._rgba('#ffffff', 0.6*tw);
+      ctx.beginPath(); ctx.arc(x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+    // Parallax diamonds
+    for (let l = 0; l < this._silhouettes.length; l++) {
+      const layer = this._silhouettes[l];
+      const depth = (l+1)/this._silhouettes.length;
+      const speed = 8 + l*16;
+      const baseY = h * (0.62 + l*0.06);
+      const tint = this._mixHex(themeBot, '#000000', 0.35 + l*0.15);
+      ctx.save(); ctx.fillStyle = tint; ctx.globalAlpha = 0.18 + l*0.18;
+      for (let i = 0; i < layer.length; i++) {
+        const o = layer[i];
+        const spacing = w/layer.length;
+        let x = (o.x - t*speed) % (w+spacing);
+        if (x < -spacing) x += w+spacing;
+        const sz = o.size * (0.6 + depth*0.6);
+        ctx.save(); ctx.translate(x, baseY); ctx.rotate(o.rot + t*o.spin*0.5);
+        ctx.beginPath(); ctx.moveTo(0,-sz); ctx.lineTo(sz,0); ctx.lineTo(0,sz); ctx.lineTo(-sz,0); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+  },
+  drawGround(ctx, w, h, gy, themeGround, accent, scrollX) {
+    themeGround = themeGround || '#1a1a2a'; accent = accent || '#ff4fa3'; scrollX = scrollX || 0;
+    if (gy >= h) return;
+    const gg = ctx.createLinearGradient(0, gy, 0, h);
+    gg.addColorStop(0, themeGround); gg.addColorStop(1, this._mixHex(themeGround, '#000000', 0.55));
+    ctx.fillStyle = gg; ctx.fillRect(0, gy, w, h-gy);
+    ctx.save();
+    ctx.strokeStyle = this._rgba(accent, 0.2);
+    ctx.lineWidth = 1;
+    const spacing = 40;
+    const off = ((scrollX % spacing)+spacing) % spacing;
+    for (let x = -off; x < w+spacing; x += spacing) {
+      ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x, h); ctx.stroke();
+    }
+    ctx.restore();
+    // Glowing top edge
+    const lg = ctx.createLinearGradient(0, gy-8, 0, gy+2);
+    lg.addColorStop(0, this._rgba(accent, 0)); lg.addColorStop(1, this._rgba(accent, 0.55));
+    ctx.fillStyle = lg; ctx.fillRect(0, gy-8, w, 10);
+    ctx.fillStyle = this._rgba('#ffffff', 0.85);
+    ctx.fillRect(0, gy-1, w, 2);
+  }
+};
+function drawDifficultyIcon(ctx, type, cx, cy, r) {
+  const configs = {
+    'easy':            { ringColor: '#4ade80', ringDark: '#15803d', faceColor: '#86efac', mood: 'happy' },
+    'medium':          { ringColor: '#fb923c', ringDark: '#c2410c', faceColor: '#fdba74', mood: 'neutral' },
+    'hard':            { ringColor: '#ef4444', ringDark: '#991b1b', faceColor: '#fca5a5', mood: 'angry' },
+    'harder':          { ringColor: '#a855f7', ringDark: '#6b21a8', faceColor: '#d8b4fe', mood: 'snarl' },
+    'insane':          { ringColor: '#dc2626', ringDark: '#7f1d1d', faceColor: '#fca5a5', mood: 'gritted' },
+    'easy-demon':      { ringColor: '#7c3aed', ringDark: '#4c1d95', faceColor: '#c4b5fd', mood: 'smirk', demon: 1 },
+    'medium-demon':    { ringColor: '#7c3aed', ringDark: '#4c1d95', faceColor: '#c4b5fd', mood: 'smirk', demon: 1 },
+    'hard-demon':      { ringColor: '#b91c1c', ringDark: '#450a0a', faceColor: '#fca5a5', mood: 'jagged', demon: 2 },
+    'insane-demon':    { ringColor: '#1a1a1a', ringDark: '#000000', faceColor: '#3a0a0a', mood: 'monster', demon: 3 },
+    'angel-demon':     { ringColor: '#fef3c7', ringDark: '#d4a017', faceColor: '#fffbeb', mood: 'serene', demon: 1, angel: true },
+    'impossible-demon':{ ringColor: '#ff0080', ringDark: '#1a0033', faceColor: '#2a0a2a', mood: 'scream', demon: 4, rainbow: true, flames: true },
+    'demon':           { ringColor: '#7c3aed', ringDark: '#4c1d95', faceColor: '#c4b5fd', mood: 'smirk', demon: 1 }
+  };
+  const cfg = configs[type] || configs['easy'];
+  const ringWidth = r * 0.18;
+  const innerR = r - ringWidth;
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (cfg.flames) {
+    ctx.save();
+    const flameCount = 14;
+    for (let i = 0; i < flameCount; i++) {
+      const a = (i/flameCount) * Math.PI*2;
+      const hue = (i/flameCount) * 360;
+      ctx.save(); ctx.rotate(a);
+      ctx.beginPath();
+      const tipR = r*1.18, baseR = r*0.96, w = 0.22;
+      ctx.moveTo(Math.cos(-w)*baseR, Math.sin(-w)*baseR);
+      ctx.quadraticCurveTo(r*1.05, -r*0.05, tipR, 0);
+      ctx.quadraticCurveTo(r*1.05, r*0.05, Math.cos(w)*baseR, Math.sin(w)*baseR);
+      ctx.closePath();
+      const fg = ctx.createLinearGradient(baseR, 0, tipR, 0);
+      fg.addColorStop(0, `hsl(${hue}, 100%, 50%)`);
+      fg.addColorStop(1, `hsl(${(hue+40)%360}, 100%, 70%)`);
+      ctx.fillStyle = fg; ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  if (cfg.demon) {
+    const drawHorn = (side, baseY, size, curl) => {
+      ctx.save(); ctx.beginPath();
+      const bx = side*r*0.55, by = baseY;
+      const tipX = side*r*(0.55+size*0.45), tipY = baseY-r*size*1.1;
+      ctx.moveTo(bx-side*r*0.18, by);
+      ctx.quadraticCurveTo(side*r*(0.65+curl), by-r*size*0.55, tipX, tipY);
+      ctx.quadraticCurveTo(side*r*(0.4+curl*0.5), by-r*size*0.3, bx+side*r*0.05, by);
+      ctx.closePath();
+      const hg = ctx.createLinearGradient(0, tipY, 0, by);
+      hg.addColorStop(0, '#1a1a1a'); hg.addColorStop(1, cfg.ringDark);
+      ctx.fillStyle = hg; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = r*0.04; ctx.stroke();
+      ctx.restore();
+    };
+    const hornSize = 0.45 + (cfg.demon-1)*0.12;
+    drawHorn(-1, -r*0.75, hornSize, 0.1);
+    drawHorn(1, -r*0.75, hornSize, -0.1);
+    if (cfg.demon >= 3) {
+      for (let i = 0; i < 6; i++) {
+        const a = -Math.PI/2 + (i - 3 + 0.5) * 0.35;
+        ctx.save(); ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(-r*0.08, -r*0.95);
+        ctx.lineTo(0, -r*1.25);
+        ctx.lineTo(r*0.08, -r*0.95);
+        ctx.closePath();
+        ctx.fillStyle = '#0a0a0a'; ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = r*0.03; ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+  // Outer ring
+  if (cfg.rainbow) {
+    ctx.lineWidth = ringWidth;
+    const segs = 36;
+    for (let i = 0; i < segs; i++) {
+      const a1 = (i/segs)*Math.PI*2 - Math.PI/2;
+      const a2 = ((i+1)/segs)*Math.PI*2 - Math.PI/2;
+      ctx.beginPath(); ctx.arc(0, 0, r-ringWidth/2, a1, a2+0.01);
+      ctx.strokeStyle = `hsl(${(i/segs)*360}, 100%, 55%)`;
+      ctx.stroke();
+    }
+  } else {
+    ctx.beginPath(); ctx.arc(0, 0, r-ringWidth/2, 0, Math.PI*2);
+    const rg = ctx.createRadialGradient(0, -r*0.3, r*0.2, 0, 0, r);
+    rg.addColorStop(0, cfg.ringColor); rg.addColorStop(1, cfg.ringDark);
+    ctx.strokeStyle = rg; ctx.lineWidth = ringWidth; ctx.stroke();
+  }
+  // Inner face background
+  ctx.beginPath(); ctx.arc(0, 0, innerR, 0, Math.PI*2);
+  const fg = ctx.createRadialGradient(0, -innerR*0.4, innerR*0.1, 0, 0, innerR);
+  if (cfg.demon >= 3) { fg.addColorStop(0, '#4a0a0a'); fg.addColorStop(1, '#000'); }
+  else { fg.addColorStop(0, cfg.faceColor); fg.addColorStop(1, cfg.ringColor); }
+  ctx.fillStyle = fg; ctx.fill();
+  // Halo for angel
+  if (cfg.angel) {
+    ctx.beginPath();
+    ctx.ellipse(0, -r*1.05, r*0.55, r*0.18, 0, 0, Math.PI*2);
+    ctx.strokeStyle = '#fde047'; ctx.lineWidth = r*0.08; ctx.stroke();
+  }
+  // Face elements
+  const eyeY = -innerR*0.15;
+  const eyeOffset = innerR*0.38;
+  const drawEye = (sx) => {
+    const ex = sx*eyeOffset;
+    if (cfg.mood === 'serene') {
+      ctx.beginPath(); ctx.arc(ex, eyeY, innerR*0.18, Math.PI*0.15, Math.PI*0.85, false);
+      ctx.strokeStyle = '#7c2d12'; ctx.lineWidth = innerR*0.06; ctx.lineCap = 'round'; ctx.stroke();
+    } else if (cfg.mood === 'scream') {
+      ctx.beginPath(); ctx.arc(ex, eyeY, innerR*0.22, 0, Math.PI*2);
+      const eg = ctx.createRadialGradient(ex, eyeY, 0, ex, eyeY, innerR*0.22);
+      eg.addColorStop(0, '#000'); eg.addColorStop(0.7, '#330011'); eg.addColorStop(1, '#ff0066');
+      ctx.fillStyle = eg; ctx.fill();
+      ctx.beginPath(); ctx.arc(ex, eyeY, innerR*0.05, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill();
+    } else if (cfg.mood === 'monster') {
+      ctx.save(); ctx.strokeStyle = '#ff3333'; ctx.lineWidth = innerR*0.08; ctx.lineCap = 'round';
+      const s = innerR*0.18;
+      ctx.beginPath(); ctx.moveTo(ex-s, eyeY-s); ctx.lineTo(ex+s, eyeY+s);
+      ctx.moveTo(ex+s, eyeY-s); ctx.lineTo(ex-s, eyeY+s); ctx.stroke(); ctx.restore();
+    } else if (cfg.mood === 'smirk' || cfg.mood === 'jagged') {
+      ctx.save(); ctx.translate(ex, eyeY); ctx.rotate(sx*0.3);
+      ctx.beginPath(); ctx.ellipse(0, 0, innerR*0.22, innerR*0.13, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = innerR*0.03; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(sx*innerR*0.06, 0, innerR*0.05, innerR*0.11, 0, 0, Math.PI*2);
+      ctx.fillStyle = cfg.demon >= 2 ? '#ff0000' : '#000'; ctx.fill();
+      ctx.restore();
+    } else if (cfg.mood === 'angry' || cfg.mood === 'snarl' || cfg.mood === 'gritted') {
+      ctx.beginPath(); ctx.ellipse(ex, eyeY, innerR*0.18, innerR*0.1, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = innerR*0.025; ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex, eyeY+innerR*0.02, innerR*0.07, 0, Math.PI*2); ctx.fillStyle = '#000'; ctx.fill();
+    } else if (cfg.mood === 'neutral') {
+      ctx.beginPath(); ctx.ellipse(ex, eyeY, innerR*0.16, innerR*0.11, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = innerR*0.025; ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex, eyeY, innerR*0.07, 0, Math.PI*2); ctx.fillStyle = '#000'; ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(ex, eyeY, innerR*0.2, 0, Math.PI*2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = innerR*0.03; ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex+innerR*0.04, eyeY+innerR*0.04, innerR*0.1, 0, Math.PI*2); ctx.fillStyle = '#000'; ctx.fill();
+    }
+  };
+  drawEye(-1); drawEye(1);
+  // Mouth
+  const mouthY = innerR*0.4;
+  ctx.lineCap = 'round';
+  if (cfg.mood === 'happy') {
+    ctx.beginPath(); ctx.arc(0, mouthY-innerR*0.05, innerR*0.35, Math.PI*0.15, Math.PI*0.85);
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = innerR*0.08; ctx.stroke();
+  } else if (cfg.mood === 'neutral') {
+    ctx.beginPath(); ctx.moveTo(-innerR*0.25, mouthY); ctx.lineTo(innerR*0.25, mouthY);
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = innerR*0.08; ctx.stroke();
+  } else if (cfg.mood === 'angry') {
+    ctx.beginPath(); ctx.arc(0, mouthY+innerR*0.25, innerR*0.3, Math.PI*1.2, Math.PI*1.8);
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = innerR*0.08; ctx.stroke();
+  } else if (cfg.mood === 'snarl') {
+    ctx.beginPath();
+    const zw = innerR*0.5, zh = innerR*0.08;
+    ctx.moveTo(-zw, mouthY);
+    for (let i = 1; i <= 6; i++) {
+      const x = -zw + (i/6)*zw*2;
+      ctx.lineTo(x, mouthY + (i%2 === 0 ? -zh : zh));
+    }
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = innerR*0.07; ctx.stroke();
+  } else if (cfg.mood === 'gritted') {
+    ctx.beginPath(); ctx.rect(-innerR*0.4, mouthY-innerR*0.08, innerR*0.8, innerR*0.2);
+    ctx.fillStyle = '#0a0a0a'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = innerR*0.03;
+    for (let i = 1; i < 6; i++) {
+      const tx = -innerR*0.4 + (i/6)*innerR*0.8;
+      ctx.beginPath(); ctx.moveTo(tx, mouthY-innerR*0.08); ctx.lineTo(tx, mouthY+innerR*0.12); ctx.stroke();
+    }
+  } else if (cfg.mood === 'smirk') {
+    ctx.beginPath();
+    ctx.moveTo(-innerR*0.3, mouthY); ctx.quadraticCurveTo(0, mouthY+innerR*0.18, innerR*0.3, mouthY-innerR*0.1);
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = innerR*0.07; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(innerR*0.15, mouthY-innerR*0.05); ctx.lineTo(innerR*0.2, mouthY+innerR*0.12); ctx.lineTo(innerR*0.25, mouthY-innerR*0.05); ctx.closePath();
+    ctx.fillStyle = '#fff'; ctx.fill();
+  } else if (cfg.mood === 'jagged') {
+    const jw = innerR*0.55, jh = innerR*0.22;
+    ctx.fillStyle = '#1a0000'; ctx.fillRect(-jw, mouthY-jh/2, jw*2, jh);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = innerR*0.04;
+    for (let i = 0; i < 6; i++) {
+      const x = -jw + (i+0.5)/6 * jw*2;
+      ctx.beginPath(); ctx.moveTo(x, mouthY-jh/2); ctx.lineTo(x+jw/6, mouthY); ctx.lineTo(x+jw/3, mouthY-jh/2); ctx.stroke();
+    }
+  } else if (cfg.mood === 'monster') {
+    ctx.beginPath(); ctx.ellipse(0, mouthY+innerR*0.05, innerR*0.55, innerR*0.32, 0, 0, Math.PI*2);
+    const mg = ctx.createRadialGradient(0, mouthY, 0, 0, mouthY, innerR*0.5);
+    mg.addColorStop(0, '#660000'); mg.addColorStop(1, '#000');
+    ctx.fillStyle = mg; ctx.fill();
+    for (let i = 0; i < 5; i++) {
+      const fx = -innerR*0.4 + (i/4)*innerR*0.8;
+      ctx.beginPath();
+      ctx.moveTo(fx-innerR*0.06, mouthY-innerR*0.2);
+      ctx.lineTo(fx, mouthY+innerR*0.05);
+      ctx.lineTo(fx+innerR*0.06, mouthY-innerR*0.2);
+      ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+    }
+  } else if (cfg.mood === 'serene') {
+    ctx.beginPath(); ctx.arc(0, mouthY-innerR*0.1, innerR*0.22, Math.PI*0.2, Math.PI*0.8);
+    ctx.strokeStyle = '#7c2d12'; ctx.lineWidth = innerR*0.05; ctx.stroke();
+  } else if (cfg.mood === 'scream') {
+    ctx.beginPath(); ctx.ellipse(0, mouthY+innerR*0.05, innerR*0.22, innerR*0.3, 0, 0, Math.PI*2);
+    const sg = ctx.createRadialGradient(0, mouthY, 0, 0, mouthY, innerR*0.3);
+    sg.addColorStop(0, '#000'); sg.addColorStop(0.6, '#330011'); sg.addColorStop(1, '#ff0066');
+    ctx.fillStyle = sg; ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* =============================================================
+   MUSIC LIBRARY + PROCEDURAL FALLBACK
+   ============================================================= */
+const MUSIC_LIBRARY = {};
+(function buildMusicLibrary(){
+  if (typeof MUSIC_CUBE_STD !== 'undefined') {
+    for (const t of MUSIC_CUBE_STD) MUSIC_LIBRARY[t.name] = t;
+  }
+  if (typeof MUSIC_TARTARUS !== 'undefined') {
+    MUSIC_LIBRARY['TARTARUS'] = MUSIC_TARTARUS;
+  }
+})();
+
+// Procedural track generator for levels missing hand-authored music.
+// Generates lead/bass/drums from a scale + seed.
+function procTrack(name, bpm, key, mode, bars) {
+  bars = bars || 32;
+  const scales = {
+    minor: [0, 2, 3, 5, 7, 8, 10],
+    major: [0, 2, 4, 5, 7, 9, 11],
+    phrygian: [0, 1, 3, 5, 7, 8, 10],
+  };
+  const scale = scales[mode] || scales.minor;
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const keyMap = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const root = (keyMap[key[0]] || 0) + (key[1] === '#' ? 1 : (key[1] === 'b' ? -1 : 0));
+
+  function noteAt(deg, oct) {
+    const n = scale[((deg % scale.length) + scale.length) % scale.length];
+    const total = root + n + (oct + Math.floor(deg / scale.length)) * 12;
+    const o = Math.floor(total / 12);
+    const idx = ((total % 12) + 12) % 12;
+    return noteNames[idx] + o;
+  }
+
+  // Seeded random
+  let seed = 0;
+  for (let i = 0; i < name.length; i++) seed = (seed * 31 + name.charCodeAt(i)) & 0xffffffff;
+  function rng() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  }
+
+  const lead = [], bass = [], drums = [];
+  for (let bar = 0; bar < bars; bar++) {
+    const chordDeg = [0, 3, 4, 5][bar % 4];
+    // Bass: root note on 1 + 3
+    bass.push({ n: noteAt(chordDeg, 1), d: 2, v: 0.9 });
+    bass.push({ n: noteAt(chordDeg + 4, 1), d: 2, v: 0.85 });
+    // Lead: 8 eighth-notes per bar walking around scale
+    for (let i = 0; i < 8; i++) {
+      const stepDeg = chordDeg + Math.floor(rng() * 5) - 2;
+      lead.push({ n: noteAt(stepDeg, 4 + (rng() > 0.7 ? 1 : 0)), d: 0.5, v: 0.7 + rng() * 0.25 });
+    }
+    // Drums: kick on 1+3, snare on 2+4, hat on every 8th
+    drums.push({k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5},
+               {k:'k',d:0.5},{k:'h',d:0.5},{k:'s',d:0.5},{k:'h',d:0.5});
+  }
+  return { name, bpm, bars, timeSig: 4, lead, bass, drums };
+}
+
+// Pre-generate procedural tracks for known names if they don't exist.
+function ensureTrack(name, bpm, key, mode) {
+  if (MUSIC_LIBRARY[name]) return MUSIC_LIBRARY[name];
+  const t = procTrack(name, bpm, key, mode);
+  MUSIC_LIBRARY[name] = t;
+  return t;
+}
+ensureTrack('GEOMETRIA', 130, 'C', 'major');
+ensureTrack('CYCLES', 152, 'D', 'major');
+ensureTrack('TIDEPOOL', 145, 'F', 'major');
+ensureTrack('NEEDLE', 158, 'A', 'minor');
+ensureTrack('SHATTER', 162, 'E', 'phrygian');
+ensureTrack('HOLLOW', 160, 'B', 'minor');
+ensureTrack('FRACTURE', 166, 'G', 'minor');
+ensureTrack('ANNIHILATE', 178, 'D', 'phrygian');
+ensureTrack('FROG MARSH', 130, 'G', 'major');
+ensureTrack('FROG ABYSS', 138, 'D', 'minor');
+ensureTrack('FROG OF FATE', 140, 'C', 'minor');
+ensureTrack('DEMON PARK', 158, 'A', 'minor');
+ensureTrack('CATACLYSM', 168, 'E', 'phrygian');
+ensureTrack('BLOODBATH', 175, 'C', 'phrygian');
+ensureTrack('HEAVENLY GATES', 152, 'D', 'major');
+
+function trackForLevel(level) {
+  // Map level name → track if available
+  if (MUSIC_LIBRARY[level.name]) return MUSIC_LIBRARY[level.name];
+  if (level.difficulty === 'impossible-demon') return MUSIC_LIBRARY['TARTARUS'];
+  // fallback rotation
+  const order = ['STEREO MADNESS', 'BACK ON TRACK', 'POLARGEIST', 'CLUTTERFUNK'];
+  let h = 0;
+  for (let i = 0; i < (level.id || '').length; i++) h += level.id.charCodeAt(i);
+  return MUSIC_LIBRARY[order[h % order.length]];
+}
+
+/* =============================================================
+   WEB AUDIO ENGINE
+   ============================================================= */
+const Audio = {
+  ctx: null,
+  master: null,
+  muted: false,
+  startedAt: 0,
+  schedule: null,
+  bpm: 130,
+  init() {
+    if (this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.18;
+    this.master.connect(this.ctx.destination);
+  },
+  noteToFreq(n) {
+    if (n === 'r') return 0;
+    const m = /^([A-G])(#|b)?(-?\d)$/.exec(n);
+    if (!m) return 0;
+    const names = { C:0,D:2,E:4,F:5,G:7,A:9,B:11 };
+    let semi = names[m[1]] + (m[2] === '#' ? 1 : (m[2] === 'b' ? -1 : 0));
+    semi += (parseInt(m[3], 10) + 1) * 12;
+    // MIDI 69 = A4 = 440 Hz; semi here is MIDI number
+    return 440 * Math.pow(2, (semi - 69) / 12);
+  },
+  playNote(freq, when, dur, type, vel) {
+    if (!this.ctx || freq === 0 || vel <= 0) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type || 'sawtooth';
+    osc.frequency.value = freq;
+    const a = 0.005, r = Math.min(0.06, dur * 0.4);
+    gain.gain.setValueAtTime(0, when);
+    gain.gain.linearRampToValueAtTime(vel, when + a);
+    gain.gain.linearRampToValueAtTime(vel * 0.7, when + dur - r);
+    gain.gain.linearRampToValueAtTime(0, when + dur);
+    osc.connect(gain).connect(this.master);
+    osc.start(when);
+    osc.stop(when + dur + 0.02);
+  },
+  playKick(when) {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.frequency.setValueAtTime(140, when);
+    osc.frequency.exponentialRampToValueAtTime(45, when + 0.12);
+    gain.gain.setValueAtTime(0.0, when);
+    gain.gain.linearRampToValueAtTime(0.8, when + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.18);
+    osc.connect(gain).connect(this.master);
+    osc.start(when); osc.stop(when + 0.22);
+  },
+  playSnare(when) {
+    if (!this.ctx) return;
+    const buf = this.ctx.createBuffer(1, 4410, 44100);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1500;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.5, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.16);
+    src.connect(hp).connect(g).connect(this.master);
+    src.start(when); src.stop(when + 0.18);
+    // body tone
+    const osc = this.ctx.createOscillator();
+    const og = this.ctx.createGain();
+    osc.frequency.value = 200;
+    og.gain.setValueAtTime(0.25, when);
+    og.gain.exponentialRampToValueAtTime(0.001, when + 0.08);
+    osc.connect(og).connect(this.master);
+    osc.start(when); osc.stop(when + 0.1);
+  },
+  playHat(when) {
+    if (!this.ctx) return;
+    const buf = this.ctx.createBuffer(1, 2205, 44100);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 7000;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.2, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.05);
+    src.connect(hp).connect(g).connect(this.master);
+    src.start(when); src.stop(when + 0.06);
+  },
+  playClap(when) {
+    if (!this.ctx) return;
+    for (let i = 0; i < 3; i++) {
+      const t = when + i * 0.012;
+      const buf = this.ctx.createBuffer(1, 2205, 44100);
+      const data = buf.getChannelData(0);
+      for (let j = 0; j < data.length; j++) data[j] = Math.random() * 2 - 1;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'bandpass'; hp.frequency.value = 1800; hp.Q.value = 2;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      src.connect(hp).connect(g).connect(this.master);
+      src.start(t); src.stop(t + 0.1);
+    }
+  },
+  playSfx(kind) {
+    if (!this.ctx || this.muted) return;
+    const now = this.ctx.currentTime;
+    if (kind === 'jump') {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(900, now + 0.08);
+      g.gain.setValueAtTime(0.18, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.connect(g).connect(this.master);
+      osc.start(now); osc.stop(now + 0.12);
+    } else if (kind === 'death') {
+      for (let i = 0; i < 3; i++) {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220 - i * 40, now + i * 0.04);
+        osc.frequency.exponentialRampToValueAtTime(40, now + i * 0.04 + 0.3);
+        g.gain.setValueAtTime(0.3, now + i * 0.04);
+        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.3);
+        osc.connect(g).connect(this.master);
+        osc.start(now + i * 0.04); osc.stop(now + i * 0.04 + 0.35);
+      }
+    } else if (kind === 'portal') {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, now);
+      osc.frequency.exponentialRampToValueAtTime(1600, now + 0.4);
+      g.gain.setValueAtTime(0.15, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.connect(g).connect(this.master);
+      osc.start(now); osc.stop(now + 0.42);
+    } else if (kind === 'ring') {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = 1200;
+      g.gain.setValueAtTime(0.25, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.connect(g).connect(this.master);
+      osc.start(now); osc.stop(now + 0.18);
+    } else if (kind === 'win') {
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      for (let i = 0; i < notes.length; i++) {
+        this.playNote(notes[i], now + i * 0.08, 0.18, 'square', 0.35);
+      }
+    }
+  },
+  startTrack(track) {
+    if (!this.ctx) return;
+    this.schedule = { lead:[], bass:[], drums:[] };
+    this.bpm = track.bpm;
+    const bps = track.bpm / 60;
+    function accumulate(lane, source) {
+      let t = 0;
+      for (const e of source) {
+        lane.push({ at: t, d: e.d / bps, n: e.n, v: e.v, k: e.k });
+        t += e.d / bps;
+      }
+      return t;
+    }
+    accumulate(this.schedule.lead, track.lead || []);
+    accumulate(this.schedule.bass, track.bass || []);
+    accumulate(this.schedule.drums, track.drums || []);
+    this.startedAt = this.ctx.currentTime;
+    this.scheduleAhead();
+  },
+  scheduleAhead() {
+    if (!this.ctx || !this.schedule || this.muted) return;
+    const now = this.ctx.currentTime;
+    const horizon = 0.4;
+    const elapsed = now - this.startedAt;
+    function process(lane, fn) {
+      if (!lane._cursor) lane._cursor = 0;
+      while (lane._cursor < lane.length && lane[lane._cursor].at <= elapsed + horizon) {
+        const ev = lane[lane._cursor++];
+        const when = this.startedAt + ev.at;
+        if (when >= now - 0.05) fn.call(this, ev, when);
+      }
+    }
+    process.call(this, this.schedule.lead, (ev, when) => {
+      const f = this.noteToFreq(ev.n);
+      this.playNote(f, when, ev.d * 0.92, 'sawtooth', (ev.v || 0.7) * 0.22);
+    });
+    process.call(this, this.schedule.bass, (ev, when) => {
+      const f = this.noteToFreq(ev.n);
+      this.playNote(f, when, ev.d * 0.92, 'square', (ev.v || 0.8) * 0.18);
+    });
+    process.call(this, this.schedule.drums, (ev, when) => {
+      if (ev.k === 'k') this.playKick(when);
+      else if (ev.k === 's') this.playSnare(when);
+      else if (ev.k === 'h') this.playHat(when);
+      else if (ev.k === 'c') this.playClap(when);
+    });
+  },
+  stop() { this.schedule = null; },
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.value = m ? 0 : 0.18;
+  }
+};
+
+/* =============================================================
+   GAME ENGINE
+   ============================================================= */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.addEventListener('resize', resize);
+
+const TILE = 40; // pixels per world unit
+
+const Game = {
+  scene: 'title', // 'title' | 'level-select' | 'tower-select' | 'playing' | 'death' | 'win'
+  modeCategory: null, // 'cube' | 'wave' | 'frog' | 'tower'
+  level: null,
+  subLevel: 1, // for tower mode
+  attempt: 1,
+  best: {},  // levelId → percent
+  player: null,
+  obstacles: [],
+  corridor: null, // for wave levels
+  startX: 0,
+  endX: 0,
+  scrollX: 0,
+  worldTime: 0,
+  speedMul: 1,
+  invertedG: false,
+  pressed: false,
+  pressTime: 0,
+  pendingDeath: false,
+  deathT: 0,
+
+  startLevel(level, sublevel) {
+    this.level = level;
+    if (level === SPIKE_TOWER) {
+      const data = SPIKE_TOWER.generate(sublevel || 1);
+      this.subLevel = sublevel || 1;
+      this.obstacles = data.obstacles;
+      this.endX = data.length;
+      this.ceilingY = data.ceilingY;
+      this.floorY = data.floorY;
+      this.activeMode = 'tower';
+    } else {
+      this.obstacles = level.obstacles || [];
+      this.endX = level.length || 200;
+      this.corridor = level.corridor || null;
+      this.activeMode = level.mode;
+    }
+    this.startX = 4;
+    this.scrollX = 0;
+    this.worldTime = 0;
+    this.speedMul = 1;
+    this.invertedG = false;
+    this.attempt = (this.best[(level.id || 'tower') + ':' + (sublevel || 0)] !== undefined ? this.attempt + 1 : 1);
+    this.player = new Player(this.activeMode, level);
+    this.player.x = this.startX;
+    this.player.y = (this.activeMode === 'wave') ? 5 : 0;
+    this.pressed = false;
+    this.pendingDeath = false;
+    this.deathT = 0;
+    this.scene = 'playing';
+    document.getElementById('hud').classList.remove('off');
+    document.getElementById('death-screen').classList.add('off');
+    document.getElementById('win-screen').classList.add('off');
+    setScreen(null);
+    updateLevelHUD();
+    // Start music
+    Audio.init();
+    Audio.stop();
+    Audio.startTrack(trackForLevel(level === SPIKE_TOWER ? {name:'CLUTTERFUNK', id:'tower'} : level));
+  },
+
+  update(dt) {
+    if (this.scene !== 'playing') return;
+    this.worldTime += dt;
+    this.player.update(dt, this);
+    if (this.player.dead) this.die();
+    if (this.player.x >= this.endX - 1) this.win();
+    if (Audio.ctx) Audio.scheduleAhead();
+  },
+
+  die() {
+    if (this.pendingDeath) return;
+    this.pendingDeath = true;
+    Audio.playSfx('death');
+    FX.emitDeath(this.player.x, this.player.y + 0.5, this.level.themeAccent || '#ff5050');
+    setTimeout(() => {
+      this.scene = 'death';
+      const progress = Math.floor(this.player.x / this.endX * 100);
+      document.getElementById('death-sub').textContent = `ATTEMPT ${this.attempt} · ${progress}%`;
+      document.getElementById('death-screen').classList.remove('off');
+      document.getElementById('hud').classList.add('off');
+    }, 600);
+  },
+
+  win() {
+    if (this.scene === 'win') return;
+    this.scene = 'win';
+    Audio.playSfx('win');
+    const lvlId = (this.level === SPIKE_TOWER ? 'tower-' + this.subLevel : this.level.id);
+    this.best[lvlId] = 100;
+    document.getElementById('win-sub').textContent = `${this.level.name || 'SUBLEVEL ' + this.subLevel}`;
+    document.getElementById('win-screen').classList.remove('off');
+    document.getElementById('hud').classList.add('off');
+  },
+
+  retry() {
+    if (this.level === SPIKE_TOWER) this.startLevel(SPIKE_TOWER, this.subLevel);
+    else this.startLevel(this.level);
+  },
+
+  next() {
+    if (this.level === SPIKE_TOWER) {
+      if (this.subLevel < 100) this.startLevel(SPIKE_TOWER, this.subLevel + 1);
+      else this.quit();
+    } else {
+      const pool = LEVELS_BY_CATEGORY[this.modeCategory] || [];
+      const idx = pool.indexOf(this.level);
+      if (idx >= 0 && idx + 1 < pool.length) this.startLevel(pool[idx + 1]);
+      else this.quit();
+    }
+  },
+
+  quit() {
+    Audio.stop();
+    this.scene = 'title';
+    this.level = null;
+    document.getElementById('hud').classList.add('off');
+    document.getElementById('death-screen').classList.add('off');
+    document.getElementById('win-screen').classList.add('off');
+    setScreen('title');
+  }
+};
+
+/* =============================================================
+   PLAYER (mode-specific physics)
+   ============================================================= */
+class Player {
+  constructor(mode, level) {
+    this.mode = mode;
+    this.x = 0; this.y = 0;
+    this.vx = level && level.speed ? level.speed : 9;
+    this.vy = 0;
+    this.grav = level && level.gravity ? level.gravity : 28;
+    this.jumpVel = level && level.jumpVel ? level.jumpVel : 14;
+    this.riseRate = level && level.riseRate ? level.riseRate : 9;
+    this.grounded = false;
+    this.gFlipped = false;
+    this.dead = false;
+    this.rot = 0;
+    this.size = 0.85;
+    this.charge = 0;
+    this.charging = false;
+    this.usedRing = null;
+  }
+  update(dt, game) {
+    if (this.dead) return;
+    if (this.mode === 'cube') this.updateCube(dt, game);
+    else if (this.mode === 'ship') this.updateShip(dt, game);
+    else if (this.mode === 'wave') this.updateWave(dt, game);
+    else if (this.mode === 'frog') this.updateFrog(dt, game);
+    else if (this.mode === 'tower') this.updateTower(dt, game);
+    if (!this.dead) this.handlePortals(game);
+    if (!this.dead) this.checkCollisions(game);
+    // Trail
+    FX.emitTrail(this.x, this.y + this.size / 2, game.level.themeAccent || '#ffd84d');
+    game.scrollX += this.vx * game.speedMul * dt;
+  }
+  updateCube(dt, game) {
+    this.x += this.vx * game.speedMul * dt;
+    // gravity
+    const g = this.gFlipped ? -this.grav : this.grav;
+    this.vy -= g * dt;
+    this.y += this.vy * dt;
+    // floor & ceiling
+    const floorY = this.gFlipped ? 9 : 0;
+    if ((!this.gFlipped && this.y <= 0) || (this.gFlipped && this.y >= 9)) {
+      this.y = floorY;
+      this.vy = 0;
+      this.grounded = true;
+      this.rot = Math.round(this.rot / (Math.PI/2)) * (Math.PI/2);
+    } else {
+      this.grounded = false;
+      this.rot += (this.gFlipped ? -1 : 1) * 5 * dt;
+    }
+    // Jump on press while grounded
+    if (game.pressed && this.grounded) {
+      this.vy = this.gFlipped ? -this.jumpVel : this.jumpVel;
+      this.grounded = false;
+      FX.emitJumpDust(this.x, this.y);
+      Audio.playSfx('jump');
+    }
+  }
+  updateShip(dt, game) {
+    this.x += this.vx * game.speedMul * dt;
+    const thrust = game.pressed ? (this.gFlipped ? -34 : 34) : (this.gFlipped ? 28 : -28);
+    this.vy += thrust * dt;
+    this.vy = Math.max(-22, Math.min(22, this.vy));
+    this.y += this.vy * dt;
+    // Constrain between floor and ceiling
+    if (this.y <= 0) { this.y = 0; this.vy = Math.max(0, this.vy); }
+    if (this.y >= 8) { this.y = 8; this.vy = Math.min(0, this.vy); }
+    this.rot = -this.vy * 0.08;
+  }
+  updateWave(dt, game) {
+    this.x += this.vx * game.speedMul * dt;
+    const dy = game.pressed ? this.riseRate : -this.riseRate;
+    this.y += dy * game.speedMul * dt;
+    if (this.y < 0) this.y = 0;
+    if (this.y > 10) this.y = 10;
+    this.rot = (game.pressed ? -1 : 1) * Math.PI / 4;
+    // Wave corridor
+    if (game.corridor) {
+      for (const seg of game.corridor) {
+        if (this.x >= seg.fromX && this.x < seg.toX) {
+          if (this.y < seg.botY + 0.1 || this.y > seg.topY - 0.1) {
+            this.dead = true;
+          }
+          break;
+        }
+      }
+    }
+  }
+  updateFrog(dt, game) {
+    // Camera follows; player can charge & jump
+    // Gravity always applies
+    this.vy -= this.grav * dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    // Check if landing on any pad
+    let landed = false;
+    if (this.vy <= 0) {
+      for (const o of game.obstacles) {
+        if (o.t === 'lilypad' || o.t === 'moving-pad' || o.t === 'sticky-pad') {
+          const oy = (o.t === 'moving-pad') ? o.y + (o.amp || 0) * Math.sin((o.freq || 1) * game.worldTime) : o.y;
+          const ox = (o.t === 'moving-pad' && o.vx) ? o.x + (o.amp || 0) * Math.sin((o.freq || 1) * game.worldTime) : o.x;
+          const padTop = oy + (o.h || 0.4);
+          if (this.x + this.size/2 > ox - 0.05 && this.x - this.size/2 < ox + o.w &&
+              this.y <= padTop + 0.1 && this.y >= padTop - 0.3 && this.vy <= 0) {
+            this.y = padTop;
+            this.vy = 0;
+            this.vx = (o.t === 'sticky-pad') ? 0.6 : 0;
+            landed = true;
+            this.grounded = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!landed) this.grounded = false;
+    // Water (death)
+    if (this.y < -0.5) {
+      this.dead = true;
+    }
+    // Charge + release
+    if (game.pressed) {
+      if (this.grounded) {
+        this.charge = Math.min((this.level && this.level.maxCharge) || 1.0, this.charge + dt);
+        this.charging = true;
+      }
+    } else {
+      if (this.charging && this.grounded) {
+        const maxX = (game.level && game.level.maxJumpX) || 6;
+        const maxY = (game.level && game.level.maxJumpY) || 4;
+        const ratio = this.charge / ((game.level && game.level.maxCharge) || 1);
+        this.vx = maxX * 0.7 + ratio * (maxX - maxX * 0.7);
+        this.vy = maxY * 0.5 + ratio * (maxY - maxY * 0.5);
+        FX.emitJumpDust(this.x, this.y);
+        Audio.playSfx('jump');
+        this.charging = false;
+        this.charge = 0;
+      }
+    }
+    this.rot += this.vx * 0.5 * dt;
+  }
+  updateTower(dt, game) {
+    // Cube-like, but with ceiling
+    this.x += this.vx * game.speedMul * dt;
+    this.vy -= this.grav * dt;
+    this.y += this.vy * dt;
+    if (this.y <= 0) {
+      this.y = 0; this.vy = 0; this.grounded = true;
+      this.rot = Math.round(this.rot / (Math.PI/2)) * (Math.PI/2);
+    } else {
+      this.grounded = false;
+      this.rot += 5 * dt;
+    }
+    if (this.y >= (game.ceilingY || 10) - this.size) {
+      this.y = (game.ceilingY || 10) - this.size;
+      this.vy = Math.min(0, this.vy);
+    }
+    if (game.pressed && this.grounded) {
+      this.vy = this.jumpVel;
+      this.grounded = false;
+      FX.emitJumpDust(this.x, this.y);
+      Audio.playSfx('jump');
+    }
+  }
+  handlePortals(game) {
+    for (const o of game.obstacles) {
+      if (Math.abs(o.x - this.x) > 1.5) continue;
+      if (this.y < (o.y || 0) - 1.5 || this.y > (o.y || 0) + 4) continue;
+      if (o.t === 'portal') {
+        if (!o._used) {
+          o._used = true;
+          this.mode = o.kind;
+          this.vy = 0;
+          Audio.playSfx('portal');
+          FX.emitPortalEnter(o.x, o.y, '#88aaff');
+        }
+      } else if (o.t === 'grav-portal') {
+        if (!o._used) {
+          o._used = true;
+          this.gFlipped = !this.gFlipped;
+          this.vy = -this.vy * 0.5;
+          Audio.playSfx('portal');
+          FX.emitPortalEnter(o.x, o.y, '#a060ff');
+        }
+      } else if (o.t === 'speed-portal') {
+        if (!o._used) {
+          o._used = true;
+          game.speedMul = o.mul || 1;
+          FX.emitPortalEnter(o.x, o.y || 5, '#ffd84d');
+        }
+      }
+    }
+  }
+  checkCollisions(game) {
+    const px1 = this.x - this.size/2, px2 = this.x + this.size/2;
+    const py1 = this.y, py2 = this.y + this.size;
+    for (const o of game.obstacles) {
+      if (Math.abs(o.x - this.x) > 6) continue;
+      if (o.t === 'spike' || o.t === 'spike-up') {
+        const h = o.h || 1;
+        // Triangle: x..x+1, y..y+h
+        const ox1 = o.x, ox2 = o.x + 1, oy2 = (o.y || 0) + h;
+        if (px2 > ox1 + 0.15 && px1 < ox2 - 0.15 && py1 < oy2 - 0.1 && py2 > (o.y || 0)) {
+          this.dead = true; return;
+        }
+      } else if (o.t === 'spike-down') {
+        const h = o.h || 1;
+        const oy1 = (o.y || 10) - h, oy2 = (o.y || 10);
+        const ox1 = o.x, ox2 = o.x + 1;
+        if (px2 > ox1 + 0.15 && px1 < ox2 - 0.15 && py2 > oy1 + 0.1 && py1 < oy2) {
+          this.dead = true; return;
+        }
+      } else if (o.t === 'block') {
+        const ox1 = o.x, ox2 = o.x + (o.w || 1);
+        const oy1 = (o.y || 0), oy2 = oy1 + (o.h || 1);
+        if (px2 > ox1 && px1 < ox2 && py2 > oy1 && py1 < oy2) {
+          // Stand on top if falling
+          if (this.vy <= 0 && py1 < oy2 && py1 > oy1) {
+            this.y = oy2;
+            this.vy = 0;
+            this.grounded = true;
+          } else if (this.vy >= 0 && py2 > oy1 && py2 < oy2) {
+            // hit ceiling — die in cube/tower, just bonk in ship
+            if (this.mode === 'cube' || this.mode === 'tower') {
+              this.dead = true; return;
+            }
+            this.y = oy1 - this.size;
+            this.vy = 0;
+          } else {
+            // Side collision = death in cube/wave/tower
+            if (this.mode !== 'frog') { this.dead = true; return; }
+          }
+        }
+      } else if (o.t === 'ring') {
+        const dx = this.x - o.x, dy = (this.y + this.size/2) - o.y;
+        if (dx*dx + dy*dy < 1.5 && !o._used) {
+          if (game.pressed) {
+            o._used = true;
+            this.vy = this.jumpVel * 1.05 * (this.gFlipped ? -1 : 1);
+            FX.emitRingPop(o.x, o.y, '#ffd84d');
+            Audio.playSfx('ring');
+          }
+        }
+      } else if (o.t === 'pad') {
+        if (px2 > o.x && px1 < o.x + 1 && py1 < (o.y || 0) + 0.5 && py1 > (o.y || 0) - 0.4 && this.vy <= 0) {
+          if (!o._used) {
+            o._used = true;
+            this.vy = this.jumpVel * 1.45 * (this.gFlipped ? -1 : 1);
+            FX.emitPadBounce(o.x, o.y || 0, '#ffd84d');
+            Audio.playSfx('ring');
+            setTimeout(() => { o._used = false; }, 800);
+          }
+        }
+      } else if (o.t === 'slope-up' || o.t === 'slope-down') {
+        // Treat as block diagonal; simpler: walk on top
+        const ox1 = o.x, ox2 = o.x + 1;
+        if (px2 > ox1 && px1 < ox2) {
+          const localX = (this.x - ox1) / 1;
+          const topY = (o.t === 'slope-up') ? (o.y || 0) + localX : (o.y || 0) + (1 - localX);
+          if (py1 < topY && py1 > topY - 0.6 && this.vy <= 1) {
+            this.y = topY; this.vy = Math.max(0, this.vy);
+            this.grounded = true;
+          }
+        }
+      } else if (o.t === 'wall') {
+        const ox1 = o.x, ox2 = o.x + (o.w || 1);
+        const oy1 = (o.y || 0), oy2 = oy1 + (o.h || 1);
+        if (px2 > ox1 && px1 < ox2 && py2 > oy1 && py1 < oy2 && this.mode === 'frog') {
+          // bounce back
+          this.vx = -Math.abs(this.vx) * 0.3;
+          this.x = ox1 - this.size/2 - 0.05;
+        }
+      } else if (o.t === 'spike' && this.mode === 'frog') {
+        if (px2 > o.x && px1 < o.x + 1 && py1 < (o.h || 1)) { this.dead = true; return; }
+      }
+    }
+  }
+}
+
+/* =============================================================
+   LEVELS REGISTRY
+   ============================================================= */
+const LEVELS_BY_CATEGORY = {
+  cube: (typeof LEVELS_CUBE_STD !== 'undefined' ? LEVELS_CUBE_STD : []).concat(typeof LEVELS_CUBE_DEMON !== 'undefined' ? LEVELS_CUBE_DEMON : []),
+  wave: typeof LEVELS_WAVE !== 'undefined' ? LEVELS_WAVE : [],
+  frog: typeof LEVELS_FROG !== 'undefined' ? LEVELS_FROG : []
+};
+
+/* =============================================================
+   RENDERING
+   ============================================================= */
+function worldToScreen(wx, wy) {
+  const camX = Math.max(Game.player ? Game.player.x - 6 : 0, 0);
+  const screenX = (wx - camX) * TILE + 100;
+  const screenY = canvas.height - 100 - wy * TILE;
+  return { x: screenX, y: screenY };
+}
+
+function render() {
+  const w = canvas.width, h = canvas.height;
+  if (Game.scene === 'playing' || Game.scene === 'death') {
+    const lvl = Game.level || {};
+    const themeTop = lvl.themeBgTop || '#1a1040';
+    const themeBot = lvl.themeBgBot || '#0a0820';
+    const themeGround = lvl.themeGround || '#0a0a1a';
+    const themeAccent = lvl.themeAccent || '#ffd84d';
+    FX.drawBackground(ctx, w, h, themeTop, themeBot, Game.worldTime, themeAccent);
+    const groundY = h - 100;
+    FX.drawGround(ctx, w, h, groundY, themeGround, themeAccent, Game.scrollX * TILE);
+
+    // Camera shake
+    let shakeX = 0, shakeY = 0;
+    if (FX.shake && FX.shake.mag > 0) {
+      shakeX = (Math.random() - 0.5) * FX.shake.mag;
+      shakeY = (Math.random() - 0.5) * FX.shake.mag;
+    }
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    // Render obstacles
+    renderObstacles(Game.obstacles);
+    // Render wave corridor walls
+    if (Game.corridor) renderCorridor(Game.corridor);
+    // Render player
+    renderPlayer(Game.player);
+    // FX
+    FX.render(ctx, worldToScreen, TILE);
+
+    ctx.restore();
+    FX.update(0.016);
+
+    // Update HUD
+    if (Game.player && Game.endX) {
+      const pct = Math.max(0, Math.min(100, Math.floor(Game.player.x / Game.endX * 100)));
+      document.getElementById('progress').style.width = pct + '%';
+      document.getElementById('progress-text').textContent = pct + '%';
+      const st = document.getElementById('st-progress');
+      if (st) st.textContent = pct + '%';
+    }
+  } else {
+    // Idle title background
+    FX.drawBackground(ctx, w, h, '#1a0a3a', '#050010', performance.now() / 1000, '#ff4fa3');
+    FX.update(0.016);
+  }
+}
+
+function renderObstacles(list) {
+  for (const o of list) {
+    const x = o.x, y = o.y || 0;
+    if (o.x < (Game.player ? Game.player.x - 8 : 0) || o.x > (Game.player ? Game.player.x + 24 : 100)) continue;
+    if (o.t === 'spike' || o.t === 'spike-up') {
+      drawSpike(x, 0, o.h || 1, false);
+    } else if (o.t === 'spike-down') {
+      drawSpike(x, o.y || 10, o.h || 1, true);
+    } else if (o.t === 'block') {
+      drawBlock(x, y, o.w || 1, o.h || 1);
+    } else if (o.t === 'ring' && !o._used) {
+      drawRing(x, o.y);
+    } else if (o.t === 'pad') {
+      drawPad(x, o.y || 0);
+    } else if (o.t === 'portal') {
+      drawPortal(x, o.y || 3, o.kind);
+    } else if (o.t === 'grav-portal') {
+      drawPortal(x, o.y || 3, 'grav');
+    } else if (o.t === 'speed-portal') {
+      drawPortal(x, 5, 'speed');
+    } else if (o.t === 'slope-up') {
+      drawSlope(x, y, true);
+    } else if (o.t === 'slope-down') {
+      drawSlope(x, y, false);
+    } else if (o.t === 'lilypad' || o.t === 'moving-pad' || o.t === 'sticky-pad') {
+      const ox = (o.t === 'moving-pad' && o.vx) ? o.x + (o.amp || 0) * Math.sin((o.freq || 1) * Game.worldTime) : o.x;
+      const oy = (o.t === 'moving-pad' && !o.vx) ? (o.y || 0) + (o.amp || 0) * Math.sin((o.freq || 1) * Game.worldTime) : (o.y || 0);
+      drawLilypad(ox, oy, o.w || 1, o.h || 0.4, o.t === 'sticky-pad' ? '#a050ff' : '#7ed957');
+    } else if (o.t === 'wall') {
+      drawBlock(x, y, o.w || 1, o.h || 1, '#3a2a55');
+    } else if (o.t === 'water') {
+      // Skip — handled in background
+    }
+  }
+}
+
+function drawSpike(x, baseY, h, down) {
+  const p1 = worldToScreen(x, baseY);
+  const p2 = worldToScreen(x + 1, baseY);
+  const p3 = worldToScreen(x + 0.5, baseY + (down ? -h : h));
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(p1.x, p1.y, p3.x, p3.y);
+  g.addColorStop(0, '#ddd');
+  g.addColorStop(1, '#888');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function drawBlock(x, y, w, h, color) {
+  const p1 = worldToScreen(x, y + h);
+  const p2 = worldToScreen(x + w, y);
+  const wd = p2.x - p1.x, ht = p2.y - p1.y;
+  const grad = ctx.createLinearGradient(p1.x, p1.y, p1.x, p2.y);
+  grad.addColorStop(0, color || '#5d6280');
+  grad.addColorStop(1, color ? '#1a1a2a' : '#252840');
+  ctx.fillStyle = grad;
+  ctx.fillRect(p1.x, p1.y, wd, ht);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(p1.x, p1.y, wd, ht);
+  // Highlight top
+  ctx.fillStyle = 'rgba(255,255,255,.2)';
+  ctx.fillRect(p1.x, p1.y, wd, Math.max(2, ht * 0.1));
+}
+
+function drawRing(x, y) {
+  const p = worldToScreen(x, y);
+  const r = TILE * 0.55;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+  grad.addColorStop(0, 'rgba(255,216,77,0)');
+  grad.addColorStop(0.6, 'rgba(255,216,77,.6)');
+  grad.addColorStop(1, 'rgba(255,216,77,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#ffd84d';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r * 0.6, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawPad(x, y) {
+  const p1 = worldToScreen(x, y + 0.2);
+  const p2 = worldToScreen(x + 1, y);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+  ctx.strokeStyle = '#000';
+  ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+}
+
+function drawPortal(x, y, kind) {
+  const p = worldToScreen(x, y);
+  const colorMap = { cube: '#3a7fff', ship: '#ff6688', wave: '#4fd1c5', frog: '#7ed957', grav: '#a060ff', speed: '#ffd84d' };
+  const color = colorMap[kind] || '#fff';
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, TILE * 1.8);
+  grad.addColorStop(0, color);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, TILE * 0.6, TILE * 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, TILE * 0.4, TILE * 1.2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawSlope(x, y, up) {
+  const p1 = worldToScreen(x, y);
+  const p2 = worldToScreen(x + 1, y);
+  const p3 = up ? worldToScreen(x + 1, y + 1) : worldToScreen(x, y + 1);
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.lineTo(p3.x, p3.y);
+  ctx.closePath();
+  ctx.fillStyle = '#5d6280';
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.stroke();
+}
+
+function drawLilypad(x, y, w, h, color) {
+  const p1 = worldToScreen(x, y + h);
+  const p2 = worldToScreen(x + w, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse((p1.x + p2.x)/2, (p1.y + p2.y)/2, (p2.x - p1.x)/2, (p2.y - p1.y)/2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1a3a1a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function renderCorridor(corridor) {
+  const cx = Game.player ? Game.player.x : 0;
+  ctx.fillStyle = '#1a1a3a';
+  for (const seg of corridor) {
+    if (seg.toX < cx - 8 || seg.fromX > cx + 24) continue;
+    // top wall
+    const t1 = worldToScreen(seg.fromX, 10);
+    const t2 = worldToScreen(seg.toX, seg.topY);
+    ctx.fillRect(t1.x, 0, t2.x - t1.x, t1.y - (canvas.height - 100 - seg.topY * TILE) + 200);
+    const t3 = worldToScreen(seg.fromX, seg.topY);
+    const t4 = worldToScreen(seg.toX, seg.topY);
+    ctx.fillStyle = '#1a1a3a';
+    ctx.fillRect(t3.x, 0, t4.x - t3.x, t3.y);
+    // bot wall
+    const b1 = worldToScreen(seg.fromX, seg.botY);
+    const b2 = worldToScreen(seg.toX, seg.botY);
+    ctx.fillRect(b1.x, b1.y, b2.x - b1.x, canvas.height - b1.y);
+  }
+}
+
+function renderPlayer(player) {
+  if (!player) return;
+  const p = worldToScreen(player.x, player.y + player.size);
+  const size = TILE * player.size;
+  ctx.save();
+  ctx.translate(p.x + size/2, p.y + size/2);
+  ctx.rotate(player.rot);
+  // Body
+  const lvl = Game.level || {};
+  const accent = lvl.themeAccent || '#ffd84d';
+  if (player.mode === 'cube' || player.mode === 'tower') {
+    const g = ctx.createLinearGradient(-size/2, -size/2, size/2, size/2);
+    g.addColorStop(0, '#ffd84d');
+    g.addColorStop(1, '#ff5050');
+    ctx.fillStyle = g;
+    ctx.fillRect(-size/2, -size/2, size, size);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-size/2, -size/2, size, size);
+    // Eye
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-size*0.15, -size*0.1, size*0.3, size*0.2);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-size*0.05, 0, size*0.1, size*0.1);
+  } else if (player.mode === 'ship') {
+    ctx.fillStyle = '#3a7fff';
+    ctx.beginPath();
+    ctx.moveTo(-size/2, size/2);
+    ctx.lineTo(size/2, 0);
+    ctx.lineTo(-size/2, -size/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else if (player.mode === 'wave') {
+    ctx.fillStyle = '#4fd1c5';
+    ctx.beginPath();
+    ctx.moveTo(size/2, 0);
+    ctx.lineTo(-size/2, size/2);
+    ctx.lineTo(-size/2, -size/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else if (player.mode === 'frog') {
+    ctx.fillStyle = '#7ed957';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size*0.5, size*0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1a3a1a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // eyes
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-size*0.15, -size*0.15, size*0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(size*0.15, -size*0.15, size*0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(-size*0.15, -size*0.15, size*0.05, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(size*0.15, -size*0.15, size*0.05, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  // Charge indicator for frog
+  if (player.mode === 'frog' && player.charging) {
+    const ratio = player.charge / ((Game.level && Game.level.maxCharge) || 1);
+    ctx.fillStyle = `hsl(${120 - ratio * 120}, 80%, 60%)`;
+    ctx.fillRect(p.x, p.y - 10, size * ratio, 5);
+  }
+}
+
+/* =============================================================
+   MENUS
+   ============================================================= */
+function setScreen(name) {
+  ['title', 'level', 'tower'].forEach(s => {
+    const el = document.getElementById('screen-' + s);
+    if (el) el.classList.toggle('off', s !== name);
+  });
+}
+
+function buildLevelGrid(category) {
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  const levels = LEVELS_BY_CATEGORY[category] || [];
+  document.getElementById('level-mode-banner').textContent = category.toUpperCase();
+  document.getElementById('level-title-banner').textContent = category.toUpperCase() + ' LEVELS';
+
+  for (let i = 0; i < levels.length; i++) {
+    const lvl = levels[i];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.act = 'play-' + category + '-' + i;
+    card.innerHTML = `
+      <canvas class="face"></canvas>
+      <div class="lbl">${lvl.name}</div>
+      <div class="diff-tag" style="color:${diffColor(lvl.difficulty)};border-color:${diffColor(lvl.difficulty)}40">${(lvl.difficulty || '').toUpperCase()}</div>
+      <div class="desc">${diffDesc(lvl.difficulty)}</div>
+    `;
+    grid.appendChild(card);
+    const c = card.querySelector('canvas.face');
+    c.width = 78; c.height = 78;
+    try { drawDifficultyIcon(c.getContext('2d'), normalizeDifficulty(lvl.difficulty), 39, 39, 34); } catch(e){}
+  }
+}
+
+function buildTowerGrid() {
+  const grid = document.getElementById('tower-grid');
+  grid.innerHTML = '';
+  for (let i = 1; i <= 100; i++) {
+    const btn = document.createElement('div');
+    btn.style.cssText = 'background:rgba(40,30,10,.85);border:1px solid rgba(255,140,0,.4);padding:14px 0;text-align:center;font-family:"Bebas Neue",sans-serif;font-size:16px;letter-spacing:2px;color:#ffd84d;cursor:pointer;clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%);transition:all .15s';
+    btn.textContent = i;
+    btn.dataset.act = 'play-tower-' + i;
+    btn.onmouseenter = () => { btn.style.background = 'rgba(80,50,15,.95)'; btn.style.transform = 'translateY(-2px)'; };
+    btn.onmouseleave = () => { btn.style.background = 'rgba(40,30,10,.85)'; btn.style.transform = ''; };
+    grid.appendChild(btn);
+  }
+}
+
+function normalizeDifficulty(d) {
+  if (!d) return 'easy';
+  return d.replace('hard-demon', 'hard-demon').replace('medium-demon', 'easy-demon');
+}
+function diffColor(d) {
+  const map = { easy:'#4ade80', medium:'#fb923c', hard:'#ef4444', harder:'#a855f7', insane:'#dc2626',
+    'easy-demon':'#7c3aed', 'medium-demon':'#7c3aed', 'hard-demon':'#b91c1c', 'insane-demon':'#1a1a1a',
+    'angel-demon':'#fef3c7', 'impossible-demon':'#ff0080', 'demon':'#7c3aed' };
+  return map[d] || '#ffd84d';
+}
+function diffDesc(d) {
+  const map = {
+    easy: 'Casual obby — gentle pacing',
+    medium: 'Stepping up the heat',
+    hard: 'Real challenge incoming',
+    harder: 'Pushes timing windows',
+    insane: 'Dense, fast, brutal',
+    'easy-demon': 'Demon-tier sustained pressure',
+    'medium-demon': 'Demon — alternating pressure',
+    'hard-demon': 'Rapid portal swaps + ring chains',
+    'insane-demon': 'Nightmare corridors',
+    'angel-demon': 'Bright, beautiful, brutal',
+    'impossible-demon': 'Considered unbeatable',
+    'demon': 'Demon-tier'
+  };
+  return map[d] || '';
+}
+
+function updateLevelHUD() {
+  const lvl = Game.level;
+  if (lvl === SPIKE_TOWER) {
+    document.getElementById('level-name').textContent = 'SPIKE TOWER';
+    document.getElementById('sub-info').textContent = 'SUBLEVEL ' + Game.subLevel + ' / 100';
+    document.getElementById('attempt').textContent = 'ATTEMPT ' + Game.attempt;
+    document.getElementById('st-hud').style.display = 'block';
+    document.getElementById('st-level').textContent = 'SUB-LEVEL ' + Game.subLevel;
+  } else if (lvl) {
+    document.getElementById('level-name').textContent = lvl.name || '';
+    document.getElementById('sub-info').textContent = (Game.modeCategory || '').toUpperCase() + ' · ' + (lvl.difficulty || '').toUpperCase();
+    document.getElementById('attempt').textContent = 'ATTEMPT ' + Game.attempt;
+    document.getElementById('st-hud').style.display = 'none';
+  }
+}
+
+/* =============================================================
+   INPUT
+   ============================================================= */
+function pressDown() {
+  Audio.init();
+  if (Audio.ctx && Audio.ctx.state === 'suspended') Audio.ctx.resume();
+  Game.pressed = true;
+}
+function pressUp() {
+  Game.pressed = false;
+}
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') { pressDown(); e.preventDefault(); }
+  if (e.code === 'Escape' && Game.scene === 'playing') Game.quit();
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') pressUp();
+});
+
+const tapZone = document.getElementById('tap-zone');
+tapZone.addEventListener('mousedown', e => { pressDown(); e.preventDefault(); });
+tapZone.addEventListener('mouseup', e => { pressUp(); });
+tapZone.addEventListener('touchstart', e => { pressDown(); e.preventDefault(); }, { passive: false });
+tapZone.addEventListener('touchend', e => { pressUp(); e.preventDefault(); }, { passive: false });
+
+/* Menu actions */
+document.body.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const act = el.dataset.act;
+  Audio.init();
+  if (Audio.ctx && Audio.ctx.state === 'suspended') Audio.ctx.resume();
+
+  if (act === 'mode-cube') { Game.modeCategory = 'cube'; buildLevelGrid('cube'); setScreen('level'); }
+  else if (act === 'mode-wave') { Game.modeCategory = 'wave'; buildLevelGrid('wave'); setScreen('level'); }
+  else if (act === 'mode-frog') { Game.modeCategory = 'frog'; buildLevelGrid('frog'); setScreen('level'); }
+  else if (act === 'mode-tower') { Game.modeCategory = 'tower'; buildTowerGrid(); setScreen('tower'); }
+  else if (act === 'back-title') { setScreen('title'); }
+  else if (act === 'retry') { document.getElementById('death-screen').classList.add('off'); document.getElementById('win-screen').classList.add('off'); Game.retry(); }
+  else if (act === 'next') { document.getElementById('win-screen').classList.add('off'); Game.next(); }
+  else if (act === 'quit') { Game.quit(); }
+  else if (act === 'mute') {
+    Audio.setMuted(!Audio.muted);
+    el.textContent = Audio.muted ? '♪ OFF' : '♪ ON';
+  }
+  else if (act.startsWith('play-')) {
+    const parts = act.split('-');
+    const cat = parts[1];
+    if (cat === 'tower') {
+      Game.modeCategory = 'tower';
+      Game.startLevel(SPIKE_TOWER, parseInt(parts[2], 10));
+    } else {
+      const idx = parseInt(parts[2], 10);
+      const lvl = (LEVELS_BY_CATEGORY[cat] || [])[idx];
+      if (lvl) Game.startLevel(lvl);
+    }
+  }
+});
+
+/* =============================================================
+   GAME LOOP
+   ============================================================= */
+let lastT = performance.now();
+function loop(t) {
+  const dt = Math.min(0.033, (t - lastT) / 1000);
+  lastT = t;
+  Game.update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* Initial setup */
+setScreen('title');
+</script>
+</body>
+</html>

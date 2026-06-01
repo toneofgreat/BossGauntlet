@@ -81,6 +81,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Spider vs Superman card */
 .bg-svs{background:linear-gradient(135deg,#1a0020 0%,#3a0a14 50%,#0a1a4a 100%)}
 .bg-svs canvas{width:100%;height:100%}
+/* Geometry Dash card */
+.bg-gd{background:linear-gradient(135deg,#0a0a3a 0%,#3a0a5a 50%,#ff2a6d 100%)}
+.bg-gd canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -230,6 +233,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>BOSS RUSH</h2>
       <p>Sword + gun bullet-hell against five hand-drawn bosses. Demon Lord with hellfire pillars, Trollface with 15 troll attacks (fake bullets, reversed controls, screen flip), Cursed Latte spawning sugar &amp; creamer enemies, Static TV that pauses for puzzles and math problems, and a Cursed Sneaker with four waves of zombies ending in a Zomboss. Watch out for the final troll ending.</p>
       <span class="tag" style="background:#3a0a14;color:#ff5a72">ARROW KEYS · SPACE · X</span>
+    </div>
+  </a>
+  <a href="geometry-dash.html" class="card">
+    <div class="card-img bg-gd"><canvas id="c20"></canvas></div>
+    <div class="card-body">
+      <h2>GEOMETRY DASH — ABYSSAL</h2>
+      <p>3D-feel browser GD clone with 4 modes: classic Cube (9 levels, Easy → Impossible Demon), Wave (7 levels, thread the corridor), Frog (3 levels, charge-jump puzzles), and SPIKE TOWER 100 — 100 procedural sublevels that get 1% harder each time. Hand-authored synth music, screen shake, particle FX. Space / click / tap.</p>
+      <span class="tag" style="background:#3a0a5a;color:#ff2a6d">RHYTHM · 19 LEVELS + 100 TOWER</span>
     </div>
   </a>
   <a href="spider-vs-superman.html" class="card">
@@ -1240,6 +1251,70 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.fillStyle='#cc1111';ctx.fillRect(sx,sy,16,12);
     ctx.fillStyle='#dd2222';ctx.beginPath();ctx.moveTo(sx,sy+12);ctx.lineTo(sx+16,sy+12);ctx.lineTo(sx+8,sy+20);ctx.closePath();ctx.fill();
     ctx.fillStyle='#fff';ctx.fillRect(sx+3,sy+3,2,2);ctx.fillRect(sx+11,sy+3,2,2);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Geometry Dash preview: yellow cube hopping over neon spikes ----
+(function(){
+  const c=document.getElementById('c20'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.04;
+    // Pink-purple gradient background
+    const grad=ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,'#0a0a3a');grad.addColorStop(0.5,'#3a0a5a');grad.addColorStop(1,'#1a0033');
+    ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
+    // Grid lattice ground
+    const groundY=h*0.7;
+    ctx.fillStyle='#1a1a4a';ctx.fillRect(0,groundY,w,h-groundY);
+    ctx.strokeStyle='rgba(255,42,109,0.45)';ctx.lineWidth=1;
+    const spacing=18,off=(t*60)%spacing;
+    for(let x=-off;x<w;x+=spacing){ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x,h);ctx.stroke();}
+    // Glowing top line
+    ctx.fillStyle='#ff2a6d';ctx.fillRect(0,groundY-2,w,2);
+    ctx.fillStyle='rgba(255,42,109,0.4)';ctx.fillRect(0,groundY-8,w,6);
+    // Spikes along the ground
+    ctx.fillStyle='#bbb';
+    const spikeW=18,nSpikes=Math.ceil(w/spikeW)+2;
+    const sOff=(t*60)%spikeW;
+    for(let i=0;i<nSpikes;i++){
+      const sx=i*spikeW-sOff;
+      ctx.beginPath();ctx.moveTo(sx,groundY);ctx.lineTo(sx+spikeW,groundY);ctx.lineTo(sx+spikeW/2,groundY-14);ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
+    }
+    // Cube bouncing
+    const cubeX=w*0.4;
+    // Sin wave hop with parabolic jumps
+    const phase=(t*2)%2;
+    const jump=phase<1?Math.sin(phase*Math.PI)*40:0;
+    const cubeY=groundY-22-jump;
+    ctx.save();
+    ctx.translate(cubeX,cubeY);
+    ctx.rotate(phase<1?phase*Math.PI*0.5:0);
+    const cg=ctx.createLinearGradient(-12,-12,12,12);
+    cg.addColorStop(0,'#ffd84d');cg.addColorStop(1,'#ff5050');
+    ctx.fillStyle=cg;ctx.fillRect(-12,-12,24,24);
+    ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.strokeRect(-12,-12,24,24);
+    // Eye
+    ctx.fillStyle='#fff';ctx.fillRect(-4,-4,8,5);
+    ctx.fillStyle='#000';ctx.fillRect(-2,-2,4,3);
+    ctx.restore();
+    // Trail behind cube
+    for(let i=0;i<5;i++){
+      ctx.fillStyle=`rgba(255,216,77,${0.4-i*0.07})`;
+      ctx.fillRect(cubeX-12-i*6,cubeY-12+i*2,24-i*4,24-i*4);
+    }
+    // Title
+    if(sin(t*0.6)>0.4){
+      ctx.font='bold 16px "Bebas Neue", Arial';ctx.fillStyle='#ffd84d';ctx.textAlign='center';
+      ctx.fillText('JUMP!',w/2,h*0.3);
+    }
     requestAnimationFrame(draw);
   }
   draw();
