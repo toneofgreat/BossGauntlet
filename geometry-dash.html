@@ -1566,7 +1566,7 @@ class Player {
     this.vx = level && level.speed ? level.speed : 9;
     this.vy = 0;
     this.grav = level && level.gravity ? level.gravity : 28;
-    this.jumpVel = level && level.jumpVel ? level.jumpVel : 14;
+    this.jumpVel = (level && level.jumpVel ? level.jumpVel : 14) * 0.82;
     this.riseRate = level && level.riseRate ? level.riseRate : 9;
     this.grounded = false;
     this.gFlipped = false;
