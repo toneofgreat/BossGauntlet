@@ -1480,8 +1480,14 @@ const Game = {
     this.invertedG = false;
     this.attempt = (this.best[(level.id || 'tower') + ':' + (sublevel || 0)] !== undefined ? this.attempt + 1 : 1);
     this.player = new Player(this.activeMode, level);
-    this.player.x = this.startX;
-    this.player.y = (this.activeMode === 'wave') ? 5 : 0;
+    if (this.activeMode === 'frog' && level && level.start) {
+      // Spawn on the level's designated start lilypad.
+      this.player.x = level.start.x;
+      this.player.y = level.start.y + 0.4;
+    } else {
+      this.player.x = this.startX;
+      this.player.y = (this.activeMode === 'wave') ? 5 : 0;
+    }
     this.pressed = false;
     this.pendingDeath = false;
     this.deathT = 0;
@@ -1573,7 +1579,8 @@ class Player {
   constructor(mode, level) {
     this.mode = mode;
     this.x = 0; this.y = 0;
-    this.vx = level && level.speed ? level.speed : 9;
+    // Frog doesn't auto-scroll; movement comes from charged jumps only.
+    this.vx = (mode === 'frog') ? 0 : (level && level.speed ? level.speed : 9);
     this.vy = 0;
     this.grav = level && level.gravity ? level.gravity : 28;
     this.jumpVel = (level && level.jumpVel ? level.jumpVel : 14) * 0.82;
