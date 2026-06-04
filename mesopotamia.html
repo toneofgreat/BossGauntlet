@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mesopotamia: Rise of Ages</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#0c0a06;color:#efe6d2;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{display:flex;flex-direction:column;height:100%}
+  #top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 14px;background:#1a1408;border-bottom:2px solid #4a3a18}
+  .stat{font-weight:800;font-size:14px;white-space:nowrap}
+  .stat small{display:block;font-size:10px;color:#b8a878;font-weight:600}
+  #money{color:#ffd24d} #pop{color:#7fd0ff} #happy{color:#7fe09a} #haters{color:#ff8a8a} #eraS{color:#d3a6ff}
+  #leaderS{color:#ffce54}
+  a#back{margin-left:auto;color:#8a7a52;font-size:12px;text-decoration:none;font-weight:700}
+  #main{flex:1;display:flex;min-height:0}
+  #mapWrap{flex:1;position:relative;min-width:0}
+  canvas{display:block;width:100%;height:100%;background:#1c160a}
+  #panel{width:340px;background:#15110a;border-left:2px solid #4a3a18;display:flex;flex-direction:column;min-height:0}
+  #tabs{display:flex;flex-wrap:wrap;gap:3px;padding:6px;background:#1a1408;border-bottom:1px solid #4a3a18}
+  .tab{flex:1;min-width:60px;font-size:11px;font-weight:800;padding:7px 4px;background:#241c0e;color:#b8a878;
+       border:1px solid #3a2e14;border-radius:7px;cursor:pointer;text-align:center}
+  .tab.on{background:#4a3a18;color:#ffd24d;border-color:#ffd24d}
+  #body{flex:1;overflow-y:auto;padding:10px;scrollbar-width:thin}
+  #body::-webkit-scrollbar{width:6px}#body::-webkit-scrollbar-thumb{background:#3a2e14;border-radius:3px}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#1f1809;border:1px solid #352a12;
+       border-radius:8px;padding:7px 9px;margin-bottom:6px}
+  .row .nm{font-size:12px;font-weight:700;line-height:1.2}
+  .row .ds{font-size:10px;color:#a89868}
+  .btn{background:#3a6a2e;color:#dfffe0;border:0;border-radius:7px;padding:6px 10px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap}
+  .btn:hover{filter:brightness(1.15)}
+  .btn.cant{background:#5a2a2a;color:#ffb0b0;cursor:not-allowed}
+  .btn.owned{background:#2a3a5a;color:#a8c8ff}
+  .btn.gold{background:#7a5a14;color:#ffe9a8}
+  h3{font-size:13px;color:#ffce54;margin:4px 0 8px;letter-spacing:.5px}
+  .note{font-size:11px;color:#a89868;margin-bottom:8px;line-height:1.4}
+  input.price{width:74px;background:#0e0b05;border:1px solid #4a3a18;color:#ffd24d;border-radius:6px;padding:5px;font-weight:800;font-size:12px}
+  #ticker{padding:6px 14px;background:#1a1408;border-top:2px solid #4a3a18;font-size:12px;color:#d8c89a;
+          white-space:nowrap;overflow:hidden}
+  #ticker b{color:#ffce54}
+  #inspect{position:absolute;left:12px;top:12px;width:230px;background:#1a1408ee;border:2px solid #ffce54;border-radius:12px;
+           padding:12px;display:none;box-shadow:0 10px 30px #000a}
+  #inspect h4{font-size:14px;color:#ffd24d;margin-bottom:6px}
+  #inspect .bar{height:10px;background:#3a2e14;border-radius:5px;overflow:hidden;margin:4px 0}
+  #inspect .bar i{display:block;height:100%}
+  #inspect p{font-size:11px;color:#cbb98a;margin:3px 0}
+  #inspect button{margin-top:8px;background:#4a3a18;color:#ffce54;border:0;border-radius:6px;padding:5px 10px;font-weight:700;cursor:pointer}
+  #overlay{position:absolute;inset:0;background:#0c0a06f0;display:none;flex-direction:column;align-items:center;justify-content:center;
+           text-align:center;gap:14px;z-index:30;padding:24px}
+  #overlay h1{font-size:40px;color:#ff6b6b;text-shadow:0 0 24px #ff6b6b}
+  #overlay h1.good{color:#7fe09a;text-shadow:0 0 24px #7fe09a}
+  #overlay p{max-width:440px;color:#cbb98a;line-height:1.5}
+  #overlay button{background:#7a5a14;color:#ffe9a8;border:0;border-radius:10px;padding:12px 24px;font-weight:800;font-size:16px;cursor:pointer}
+  #saveTag{position:absolute;right:10px;bottom:8px;font-size:10px;color:#5a4a28}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="top">
+    <div class="stat" id="money">$0<small>treasury</small></div>
+    <div class="stat" id="pop">0<small>citizens</small></div>
+    <div class="stat" id="happy">0%<small>avg happy</small></div>
+    <div class="stat" id="haters">0/200<small>hate you</small></div>
+    <div class="stat" id="eraS">Stone<small>era</small></div>
+    <div class="stat" id="leaderS">LEADER<small>status</small></div>
+    <a id="back" href="index.html">&larr; Platyfy</a>
+  </div>
+  <div id="main">
+    <div id="mapWrap">
+      <canvas id="cv"></canvas>
+      <div id="inspect"></div>
+      <div id="overlay"><h1 id="ovH"></h1><p id="ovP"></p><button id="ovB"></button></div>
+      <div id="saveTag">auto-saving…</div>
+    </div>
+    <div id="panel">
+      <div id="tabs"></div>
+      <div id="body"></div>
+    </div>
+  </div>
+  <div id="ticker"></div>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);const r=cv.parentElement.getBoundingClientRect();
+  W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);
+
+// ============ ERAS & CATALOGS ============
+const ERAS=[
+  {name:'Stone Age', col:'#9a8a6a', cap:50,  next:5000,    happyReq:55},
+  {name:'Medieval Age', col:'#c0a060', cap:110, next:250000,  happyReq:60},
+  {name:'Modern Age', col:'#7fd0ff', cap:170, next:25000000, happyReq:65},
+  {name:'Futuristic Age', col:'#d3a6ff', cap:200, next:Infinity, happyReq:70},
+];
+// Build a catalog of exactly n helpful items for an era
+function makeCatalog(bases,prefixes,n,costBase,costGrow,happyBase){
+  const out=[];let i=0;
+  outer:for(let pi=0;pi<prefixes.length;pi++)for(let bi=0;bi<bases.length;bi++){
+    if(out.length>=n)break outer;
+    const pre=prefixes[pi];
+    out.push({name:(pre?pre+' ':'')+bases[bi],
+      cost:Math.round(costBase*Math.pow(costGrow,i)),
+      happy:+(happyBase*(1+i*0.015)).toFixed(1)});
+    i++;
+  }
+  // pad if needed
+  while(out.length<n){out.push({name:bases[out.length%bases.length]+' #'+out.length,
+    cost:Math.round(costBase*Math.pow(costGrow,out.length)),happy:+(happyBase).toFixed(1)});}
+  return out.slice(0,n);
+}
+const HELP=[
+  makeCatalog(
+    ['Mud Hut','Reed Shelter','Fire Pit','Clay Pot','Stone Hearth','Grain Store','Fishing Net','Flint Tools',
+     'Hide Bed','Wooden Bowl','Herb Garden','Cave Painting','Bone Flute','Spear Rack','Tanning Rack','Stone Well',
+     'Irrigation Ditch','Granary','Pottery Kiln','Loom','Threshing Floor','Cattle Pen','Bread Oven','Beer Vat','River Shrine'],
+    ['Basic','Improved','Large'],75, 10,1.13, 1.2),
+  makeCatalog(
+    ['Stone House','Bakery','Blacksmith','Tavern','Market Stall','Temple','Ziggurat Step','Library','Aqueduct',
+     'Stone Bridge','Watchtower','Granary Hall','Vineyard','Stable','Tailor','Bathhouse','Town Square','Clock Tower',
+     'Schoolhouse','Apothecary','Mill','Courthouse','Garden','Inn','Workshop'],
+    ['Old','Sturdy','Grand','Royal'],100, 200,1.10, 4),
+  makeCatalog(
+    ['Apartment','Supermarket','Power Plant','Hospital','School','Park','Cinema','Highway','Train Station',
+     'Office Tower','Stadium','Mall','Factory','Bank','Restaurant','Gym','Museum','Airport','Solar Farm','Water Plant'],
+    ['Public','Modern','Luxury','Mega'],80, 5000,1.10, 14),
+  [ {name:'Fusion Reactor Home',cost:1000000,happy:60},
+    {name:'Neural Happiness Hub',cost:8000000,happy:140},
+    {name:'Anti-Gravity Sky Plaza',cost:50000000,happy:320} ],
+];
+const MIL=[
+  [['Club Warriors',40,3],['Spear Throwers',120,7],['Stone Slingers',300,14],['War Dogs',700,26],['Tribal Guard',1500,55]],
+  [['Swordsmen',3000,90],['Archers',7000,170],['Knights',18000,400],['Catapult',45000,950],['Castle Wall',120000,2200]],
+  [['Riflemen',300000,5000],['Tanks',900000,14000],['Fighter Jets',2500000,40000],['Artillery',7000000,110000],['Missile Battery',20000000,320000]],
+  [['Laser Drones',60000000,900000],['Mech Walkers',180000000,2800000],['Orbital Cannon',600000000,9000000],['Nanobot Swarm',2000000000,30000000],['Force Field',8000000000,100000000]],
+].map((era,ei)=>era.map(m=>({name:m[0],cost:m[1],power:m[2],era:ei})));
+// Citizen sell-shop goods (the "fake shop" you set prices for). buying upgrades house / happiness.
+const GOODS=[
+  {id:'water', name:'Clean Water', def:1,   hp:2,  house:0},
+  {id:'bread', name:'Bread',       def:3,   hp:3,  house:0},
+  {id:'pot',   name:'Pottery',     def:8,   hp:4,  house:0},
+  {id:'table', name:'Table',       def:20,  hp:6,  house:1},
+  {id:'furn',  name:'Furniture',   def:120, hp:10, house:2},
+  {id:'cart',  name:'Cart',        def:600, hp:14, house:2},
+  {id:'shop2', name:'Small Home',  def:4000,hp:25, house:3},
+  {id:'home',  name:'Big Home',    def:200000,hp:60,house:5},
+];
+const TAXES=[
+  {id:'free', name:'Free Census', rate:0,    anger:0,  note:'No money, no anger — keeps the peace'},
+  {id:'low',  name:'Light Tax',   rate:2,    anger:3,  note:'A gentle levy'},
+  {id:'med',  name:'Standard Tax',rate:8,    anger:8,  note:'The classic Mesopotamian grain tax'},
+  {id:'high', name:'Heavy Tax',   rate:25,   anger:18, note:'They will grumble'},
+  {id:'trib', name:'Royal Tribute',rate:80,  anger:38, note:'Squeeze the people dry'},
+];
+const FACTS=[
+  "Mesopotamia means 'land between the rivers' — the Tigris and Euphrates.",
+  "The Sumerians invented one of the first writing systems: cuneiform, pressed into clay.",
+  "The wheel, the plow, and irrigation canals were all early Mesopotamian innovations.",
+  "Ziggurats were giant stepped temple-towers reaching toward the gods.",
+  "Hammurabi's Code (c.1754 BC) was one of the earliest written sets of laws.",
+  "Sumer had the first cities, like Uruk and Ur, around 4000 BC.",
+  "Mesopotamians invented the 60-minute hour and 360-degree circle (base-60 math).",
+  "Taxes in Sumer were often paid in grain, livestock, or labor — not coins.",
+  "The Epic of Gilgamesh is the oldest known great work of literature.",
+  "Beer was a daily staple and even used as wages for workers.",
+  "The Hanging Gardens of Babylon were one of the Seven Wonders of the ancient world.",
+  "City rulers were called 'lugal' (big man) or 'ensi' — keep your people happy or lose the title!",
+  "Across history, leaders who over-taxed unhappy people were often overthrown.",
+];
+
+// ============ STATE ============
+let S;
+function freshCitizen(i){
+  const first=['Enki','Inanna','Sargon','Lugal','Nin','Ur','Gil','Bel','Adda','Ea','Shamash','Kira','Ada','Nabu','Tiri','Aya','Ki','Bau','Zim','Ish'];
+  const last=['the Potter','the Scribe','of Ur','the Farmer','the Weaver','of Uruk','the Smith','the Brewer','of Eridu','the Fisher'];
+  return {id:i, name:first[i%first.length]+' '+last[(i*7+3)%last.length],
+    happy:55, house:0, owned:{}, px:0, py:0};
+}
+function newGame(){
+  S={money:25, era:0, unlocked:0, day:0,
+    citizens:[], comfort:0, taxPressure:0,
+    help:{}, army:{}, armyPower:0,
+    sell:{}, leader:true, exiled:false, npc:'', order:null,
+    deaths:0, reclaims:0, warWon:false, warTried:false};
+  for(let i=0;i<14;i++)S.citizens.push(freshCitizen(i));
+  GOODS.forEach(g=>S.sell[g.id]=g.def);
+  layoutCitizens();
+  save();
+}
+function layoutCitizens(){
+  // place on a grid map
+  const cols=20;
+  S.citizens.forEach((c,i)=>{c.px=80+(i%cols)*70; c.py=120+Math.floor(i/cols)*90;});
+}
+
+// ============ SAVE ============
+const KEY='mesopotamia_save_v3';
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);
+  // backfill
+  S.citizens.forEach(c=>{if(!c.owned)c.owned={};});
+  GOODS.forEach(g=>{if(S.sell[g.id]==null)S.sell[g.id]=g.def;});
+  return true;}}catch(e){}return false;}
+if(!load())newGame();
+resize();
+
+// ============ HELPERS ============
+function fmt(n){n=Math.floor(n);
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return n.toString();}
+function avgHappy(){if(!S.citizens.length)return 0;return S.citizens.reduce((a,c)=>a+c.happy,0)/S.citizens.length;}
+function haterCount(){return S.citizens.filter(c=>c.happy<=15).length;}
+function helpKey(era,idx){return era+':'+idx;}
+function targetHappy(){
+  // deterministic: comfort raises, tax pressure lowers
+  const base=40;
+  const comf=50*S.comfort/(S.comfort+220); // asymptotes to ~+50
+  return Math.max(0,Math.min(100, base+comf-S.taxPressure));
+}
+
+// ============ ECONOMY TICK (deterministic) ============
+function tick(){
+  S.day++;
+  const tgt=targetHappy();
+  // happiness eases toward target (deterministic, no randomness)
+  for(const c of S.citizens){
+    c.happy += (tgt - c.happy)*0.10;
+    c.happy=Math.max(0,Math.min(100,c.happy));
+  }
+  // tax pressure decays
+  S.taxPressure=Math.max(0,S.taxPressure-1.2);
+  // citizen sell-shop purchases -> your money (only reasonably happy citizens buy)
+  let income=0;
+  for(const c of S.citizens){
+    if(c.happy<35)continue;
+    const willingness=c.happy*c.happy*0.9*(1+S.era*4); // richer eras spend more
+    // buy cheapest good they don't own and can be tempted by
+    for(const g of GOODS){
+      if(c.owned[g.id])continue;
+      const price=Math.max(0,S.sell[g.id]??g.def);
+      if(price<=willingness){c.owned[g.id]=1;income+=price;
+        c.house=Math.max(c.house,g.house);
+        c.happy=Math.min(100,c.happy+g.hp*0.4); break;}
+      else break; // goods are sorted cheap->expensive; if can't afford this, stop
+    }
+  }
+  S.money+=income;
+  // population growth if happy + capacity
+  const cap=ERAS[S.era].cap;
+  if(avgHappy()>60 && S.citizens.length<cap && S.day%2===0){
+    const c=freshCitizen(S.citizens.length);S.citizens.push(c);layoutCitizens();
+  }
+  S.armyPower=Object.entries(S.army).reduce((a,[k,n])=>{const[e,i]=k.split(':').map(Number);return a+MIL[e][i].power*n;},0);
+  checkPolitics();
+  save();
+}
+
+// ============ TAXES ============
+function levy(t){
+  if(S.exiled){toast("You aren't the leader — you can't tax!");return;}
+  const happyPayers=S.citizens.filter(c=>c.happy>20);
+  const gain=happyPayers.length*t.rate*(1+S.era*6);
+  S.money+=gain;
+  S.taxPressure+=t.anger;
+  for(const c of happyPayers)c.happy=Math.max(0,c.happy-t.anger*0.5);
+  toast('Collected $'+fmt(gain)+(t.anger?'  ( -happiness )':''));
+  render();save();
+}
+
+// ============ BUY HELPFUL ITEM ============
+function buyHelp(era,idx){
+  const it=HELP[era][idx];
+  const ageDiff=Math.abs(era-S.era);
+  const cost=Math.round(it.cost*(1+0.7*ageDiff)); // other ages cost more
+  if(S.exiled){toast("The leader controls the treasury — you're exiled.");return;}
+  if(S.money<cost){toast('Need $'+fmt(cost));return;}
+  S.money-=cost;
+  const k=helpKey(era,idx);S.help[k]=(S.help[k]||0)+1;
+  S.comfort+=it.happy;
+  toast('Built '+it.name+'  (+'+it.happy+' comfort)');
+  render();save();
+}
+// ============ BUY MILITARY ============
+function buyMil(era,idx){
+  const m=MIL[era][idx];const ageDiff=Math.abs(era-S.era);
+  const cost=Math.round(m.cost*(1+0.7*ageDiff));
+  if(S.money<cost){toast('Need $'+fmt(cost));return;}
+  S.money-=cost;const k=era+':'+idx;S.army[k]=(S.army[k]||0)+1;
+  toast('Recruited '+m.name);render();save();
+}
+// ============ ERA ============
+function nextEra(){
+  if(S.era>=ERAS.length-1){toast('Already in the final age!');return;}
+  const e=ERAS[S.era];
+  if(S.money<e.next){toast('Need $'+fmt(e.next)+' treasury to advance');return;}
+  if(avgHappy()<e.happyReq){toast('People too unhappy — need '+e.happyReq+'% avg happiness');return;}
+  S.money-=e.next;S.era++;S.unlocked=Math.max(S.unlocked,S.era);
+  toast('🎉 Advanced to the '+ERAS[S.era].name+'!');render();save();
+}
+
+// ============ POLITICS: leader / exile / death / war ============
+function checkPolitics(){
+  const haters=haterCount();
+  if(haters>=200){death();return;}
+  if(haters>=150 && !S.exiled){
+    S.exiled=true;S.leader=false;
+    S.npc=['Sargon the Cruel','Gilgamesh II','Lady Inanna','Warlord Adda'][S.reclaims%4];
+    S.order={text:'Reach $1,000,000 personal wealth to overthrow '+S.npc+' and reclaim the throne.',need:1000000};
+    overlay(false,'YOU HAVE BEEN OVERTHROWN',
+      S.npc+' has seized power because 150+ citizens hate you. You are now a subject. Obey: become a MILLIONAIRE ($1,000,000) to reclaim leadership — but you will start poor again.',
+      'Accept exile');
+  }
+  if(S.exiled && S.money>=1000000){
+    S.exiled=false;S.leader=true;S.reclaims++;S.money=100;S.order=null;
+    // reclaiming resets anger a bit
+    S.taxPressure=0;for(const c of S.citizens)c.happy=Math.max(c.happy,45);
+    overlay(true,'YOU RECLAIM THE THRONE','You are leader again — but poor, with only $100. Rule wisely this time.','Rule again');
+  }
+}
+function death(){
+  S.deaths++;
+  overlay(false,'YOU HAVE DIED','All 200 citizens hated you and the people rose up. Your reign ends. (This is very hard to reach!) The kingdom starts anew.','Start over');
+  $('ovB').onclick=()=>{localStorage.removeItem(KEY);newGame();$('overlay').style.display='none';render();};
+}
+function startWar(){
+  S.warTried=true;
+  const enemy=2000+S.citizens.length*1500+S.day*200+S.era*500000; // brutal
+  if(S.armyPower>=enemy){
+    S.warWon=true;S.money+=enemy*5;
+    overlay(true,'AGAINST ALL ODDS — YOU WON THE 200-PERSON WAR!','Your army of power '+fmt(S.armyPower)+' crushed the uprising of power '+fmt(enemy)+'. Spoils: $'+fmt(enemy*5)+'. Legend.','Glorious!');
+  }else{
+    // lose: citizens flee, anger spikes
+    for(const c of S.citizens)c.happy=Math.max(0,c.happy-30);
+    S.taxPressure+=20;
+    overlay(false,'YOU LOST THE 200-PERSON WAR','Your army (power '+fmt(S.armyPower)+') fell to the uprising (power '+fmt(enemy)+'). The people are furious. Told you it was hard.','Survive');
+  }
+  render();save();
+}
+function overlay(good,h,p,btn){
+  $('ovH').textContent=h;$('ovH').className=good?'good':'';
+  $('ovP').textContent=p;$('ovB').textContent=btn;
+  $('ovB').onclick=()=>{$('overlay').style.display='none';};
+  $('overlay').style.display='flex';
+}
+let toastT=0;
+function toast(m){$('ovB');const t=$('saveTag');/*reuse ticker for toast*/
+  tickerMsg=m;tickerTimer=3;}
+
+// ============ UI / TABS ============
+const TABS=['Build','Taxes','Sell Shop','Buy Shop','Military','Era','Politics'];
+let curTab='Build';
+function buildTabs(){const el=$('tabs');el.innerHTML='';
+  TABS.forEach(t=>{const b=document.createElement('div');b.className='tab'+(t===curTab?' on':'');
+    b.textContent=t;b.onclick=()=>{curTab=t;buildTabs();render();};el.appendChild(b);});}
+
+function render(){
+  // stats
+  $('money').innerHTML='$'+fmt(S.money)+'<small>treasury</small>';
+  $('pop').innerHTML=S.citizens.length+'/200<small>citizens</small>';
+  $('happy').innerHTML=Math.round(avgHappy())+'%<small>avg happy</small>';
+  $('haters').innerHTML=haterCount()+'/200<small>hate you</small>';
+  $('eraS').innerHTML=ERAS[S.era].name.split(' ')[0]+'<small>era</small>';
+  $('leaderS').innerHTML=(S.exiled?'EXILED':'LEADER')+'<small>'+(S.exiled?'obey '+S.npc:'status')+'</small>';
+  const b=$('body');b.innerHTML='';
+  if(curTab==='Build')renderBuild(b);
+  else if(curTab==='Taxes')renderTaxes(b);
+  else if(curTab==='Sell Shop')renderSell(b);
+  else if(curTab==='Buy Shop')renderBuyShop(b);
+  else if(curTab==='Military')renderMil(b);
+  else if(curTab==='Era')renderEra(b);
+  else if(curTab==='Politics')renderPolitics(b);
+}
+function eraPicker(cb){
+  const wrap=document.createElement('div');wrap.style.cssText='display:flex;gap:4px;margin-bottom:8px';
+  for(let e=0;e<=S.unlocked;e++){const x=document.createElement('div');x.className='tab'+(e===viewEra?' on':'');
+    x.textContent=ERAS[e].name.split(' ')[0];x.onclick=()=>{viewEra=e;cb();};wrap.appendChild(x);}
+  return wrap;
+}
+let viewEra=0;
+function renderBuild(b){
+  viewEra=Math.min(viewEra,S.unlocked);
+  b.innerHTML='<h3>HELPFUL SHOP — buy with your treasury to make citizens happy</h3>'+
+    '<div class="note">Stone Age has '+HELP[0].length+' items · Medieval '+HELP[1].length+' · Modern '+HELP[2].length+' · Future '+HELP[3].length+'. Items from other ages cost extra. Comfort: '+S.comfort.toFixed(0)+'</div>';
+  b.appendChild(eraPicker(()=>render()));
+  HELP[viewEra].forEach((it,idx)=>{
+    const ageDiff=Math.abs(viewEra-S.era);
+    const cost=Math.round(it.cost*(1+0.7*ageDiff));
+    const owned=S.help[helpKey(viewEra,idx)]||0;
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">'+it.name+(owned?' ×'+owned:'')+'</div><div class="ds">+'+it.happy+' comfort'+(ageDiff?' · cross-age':'')+'</div></div>';
+    const btn=document.createElement('button');btn.className='btn'+(S.money<cost?' cant':'');
+    btn.textContent='$'+fmt(cost);btn.onclick=()=>buyHelp(viewEra,idx);
+    r.appendChild(btn);b.appendChild(r);
+  });
+}
+function renderTaxes(b){
+  b.innerHTML='<h3>TAX OFFICE — you invented taxes!</h3>'+
+    '<div class="note">Tax your <b>happy</b> citizens for instant money. It lowers their happiness. Unhappy people refuse to pay. Balance greed vs. revolt.</div>';
+  TAXES.forEach(t=>{
+    const payers=S.citizens.filter(c=>c.happy>20).length;
+    const gain=payers*t.rate*(1+S.era*6);
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">'+t.name+'</div><div class="ds">'+t.note+' · -'+t.anger+' anger</div></div>';
+    const btn=document.createElement('button');btn.className='btn gold';btn.textContent='+$'+fmt(gain);
+    btn.onclick=()=>levy(t);r.appendChild(btn);b.appendChild(r);
+  });
+}
+function renderSell(b){
+  b.innerHTML='<h3>YOUR SHOP FOR THE PEOPLE (set prices)</h3>'+
+    '<div class="note">This is the shop everyone buys from. Set each price: low = more buyers + happier, high = more profit per sale but only rich/happy citizens buy. Citizens buy automatically over time.</div>';
+  GOODS.forEach(g=>{
+    const r=document.createElement('div');r.className='row';
+    const buyers=S.citizens.filter(c=>c.owned[g.id]).length;
+    r.innerHTML='<div><div class="nm">'+g.name+'</div><div class="ds">+'+g.hp+' happy · '+buyers+' bought</div></div>';
+    const inp=document.createElement('input');inp.className='price';inp.type='number';inp.value=S.sell[g.id];
+    inp.onchange=()=>{S.sell[g.id]=Math.max(0,+inp.value||0);save();render();};
+    r.appendChild(inp);b.appendChild(r);
+  });
+}
+function renderBuyShop(b){
+  b.innerHTML='<h3>SUPPLY SHOP (for you)</h3>'+
+    '<div class="note">Quick supplies that boost city comfort directly. The real progression is in the Build tab — this is for fast happiness fixes.</div>';
+  const quick=[{n:'Food Ration Drop',c:50,h:8},{n:'Festival',c:500,h:30},{n:'Public Works',c:5000,h:120},{n:'Golden Jubilee',c:100000,h:900}];
+  quick.forEach(q=>{const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">'+q.n+'</div><div class="ds">+'+q.h+' comfort instantly</div></div>';
+    const btn=document.createElement('button');btn.className='btn'+(S.money<q.c?' cant':'');btn.textContent='$'+fmt(q.c);
+    btn.onclick=()=>{if(S.money<q.c){toast('Need $'+fmt(q.c));return;}S.money-=q.c;S.comfort+=q.h;toast('+'+q.h+' comfort');render();save();};
+    r.appendChild(btn);b.appendChild(r);});
+}
+function renderMil(b){
+  viewEra=Math.min(viewEra,S.unlocked);
+  b.innerHTML='<h3>WAR COUNCIL — 5 units per age</h3>'+
+    '<div class="note">Army power: <b>'+fmt(S.armyPower)+'</b>. Build an army to face the 200-person war (see Politics). Units from other ages cost extra.</div>';
+  b.appendChild(eraPicker(()=>render()));
+  MIL[viewEra].forEach((m,idx)=>{
+    const ageDiff=Math.abs(viewEra-S.era);const cost=Math.round(m.cost*(1+0.7*ageDiff));
+    const owned=S.army[viewEra+':'+idx]||0;
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">'+m.name+(owned?' ×'+owned:'')+'</div><div class="ds">+'+fmt(m.power)+' power</div></div>';
+    const btn=document.createElement('button');btn.className='btn'+(S.money<cost?' cant':'');btn.textContent='$'+fmt(cost);
+    btn.onclick=()=>buyMil(viewEra,idx);r.appendChild(btn);b.appendChild(r);
+  });
+}
+function renderEra(b){
+  const e=ERAS[S.era];
+  b.innerHTML='<h3>AGE PROGRESSION</h3>'+
+    '<div class="note">Current: <b>'+e.name+'</b>. Advance through Stone → Medieval → Modern → Futuristic. Each age unlocks new buildings, supplies and military.</div>';
+  for(let i=0;i<ERAS.length;i++){
+    const r=document.createElement('div');r.className='row';
+    const st=i<S.era?'✓ done':i===S.era?'current':(i===S.era+1?'next':'locked');
+    r.innerHTML='<div><div class="nm">'+ERAS[i].name+'</div><div class="ds">'+st+' · cap '+ERAS[i].cap+' citizens</div></div>';
+    b.appendChild(r);
+  }
+  if(S.era<ERAS.length-1){
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">Advance to '+ERAS[S.era+1].name+'</div><div class="ds">Need $'+fmt(e.next)+' + '+e.happyReq+'% happy</div></div>';
+    const ok=S.money>=e.next&&avgHappy()>=e.happyReq;
+    const btn=document.createElement('button');btn.className='btn'+(ok?' gold':' cant');btn.textContent='ADVANCE';
+    btn.onclick=nextEra;r.appendChild(btn);b.appendChild(r);
+  }
+}
+function renderPolitics(b){
+  const haters=haterCount();
+  b.innerHTML='<h3>POLITICS</h3>'+
+    '<div class="note">Status: <b>'+(S.exiled?'EXILED under '+S.npc:'LEADER')+'</b><br>'+
+    haters+'/200 citizens hate you (happy ≤15%).<br>'+
+    '• 150 haters → you are overthrown.<br>• 200 haters → you die & restart.<br>'+
+    'Reclaims: '+S.reclaims+' · Deaths: '+S.deaths+'</div>';
+  if(S.exiled){
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">Order from '+S.npc+'</div><div class="ds">'+S.order.text+'</div></div>';
+    b.appendChild(r);
+    const p=document.createElement('div');p.className='note';p.textContent='Your wealth: $'+fmt(S.money)+' / $1,000,000 needed.';b.appendChild(p);
+  }
+  // war
+  const enemy=2000+S.citizens.length*1500+S.day*200+S.era*500000;
+  const r=document.createElement('div');r.className='row';
+  r.innerHTML='<div><div class="nm">The 200-Person War</div><div class="ds">Your power '+fmt(S.armyPower)+' vs uprising ~'+fmt(enemy)+'</div></div>';
+  const btn=document.createElement('button');btn.className='btn'+(S.citizens.length>=200?' gold':' cant');
+  btn.textContent='FIGHT';btn.onclick=()=>{if(S.citizens.length<200){toast('War unlocks at 200 citizens');return;}startWar();};
+  r.appendChild(btn);b.appendChild(r);
+  // reset
+  const rs=document.createElement('div');rs.className='row';rs.innerHTML='<div><div class="nm">Reset kingdom</div><div class="ds">wipe save & start fresh</div></div>';
+  const rb=document.createElement('button');rb.className='btn cant';rb.textContent='RESET';
+  rb.onclick=()=>{if(confirm('Wipe your kingdom and restart?')){localStorage.removeItem(KEY);newGame();viewEra=0;render();}};
+  rs.appendChild(rb);b.appendChild(rs);
+}
+
+// ============ MAP DRAW ============
+let camX=0;
+let drag=null;
+cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,cam:camX,moved:false};});
+cv.addEventListener('pointermove',e=>{if(drag){const dx=e.clientX-drag.x;if(Math.abs(dx)>4)drag.moved=true;
+  camX=Math.max(0,drag.cam-dx);}});
+cv.addEventListener('pointerup',e=>{
+  if(drag&&!drag.moved){selectCitizen(e.clientX,e.clientY);}drag=null;});
+function worldW(){const cols=20;return 80+cols*70+120;}
+function selectCitizen(sx,sy){
+  const mx=sx+camX, my=sy;let best=null,bd=1e9;
+  for(const c of S.citizens){const d=Math.hypot(c.px-mx,c.py-my);if(d<bd){bd=d;best=c;}}
+  if(best&&bd<45)showInspect(best);else $('inspect').style.display='none';
+}
+function opinion(h){return h>80?'Loves you ❤':h>55?'Likes you':h>30?'Neutral':h>15?'Dislikes you':'HATES YOU 💢';}
+function showInspect(c){
+  const el=$('inspect');el.style.display='block';
+  const col=c.happy>55?'#7fe09a':c.happy>30?'#ffce54':'#ff6b6b';
+  const houses=['No house (tent)','Mud hut','Cottage','Town house','Fine house','Manor','Palace'];
+  el.innerHTML='<h4>'+c.name+'</h4>'+
+    '<div class="bar"><i style="width:'+c.happy+'%;background:'+col+'"></i></div>'+
+    '<p>Happiness: '+Math.round(c.happy)+'%</p>'+
+    '<p>Opinion: '+opinion(c.happy)+'</p>'+
+    '<p>Home: '+houses[Math.min(c.house,6)]+'</p>'+
+    '<p>Owns: '+(Object.keys(c.owned).length||'nothing')+' goods</p>'+
+    '<button onclick="document.getElementById(\'inspect\').style.display=\'none\'">close</button>';
+}
+function drawHouse(x,y,lvl,happy,era){
+  const col=happy>55?'#3a6a2e':happy>30?'#6a5a18':'#6a2a2a';
+  // person dot
+  ctx.fillStyle=happy>55?'#7fe09a':happy>30?'#ffce54':'#ff6b6b';
+  ctx.beginPath();ctx.arc(x,y+22,5,0,7);ctx.fill();
+  if(lvl<=0){ // tent
+    ctx.fillStyle='#5a4a2a';ctx.beginPath();ctx.moveTo(x-12,y+12);ctx.lineTo(x,y-6);ctx.lineTo(x+12,y+12);ctx.closePath();ctx.fill();
+    return;}
+  const w=16+lvl*4, h=14+lvl*3;
+  ctx.fillStyle=['#6b5836','#8a6a3a','#9aa7b8','#cdd6e0','#d3a6ff','#bdf2ff'][Math.min(lvl-1,5)]||'#8a6a3a';
+  ctx.fillRect(x-w/2,y-h+10,w,h);
+  // roof
+  ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(x-w/2-3,y-h+10);ctx.lineTo(x,y-h-4);ctx.lineTo(x+w/2+3,y-h+10);ctx.closePath();ctx.fill();
+  // door
+  ctx.fillStyle='#2a2012';ctx.fillRect(x-3,y+2,6,8);
+  if(lvl>=4){ctx.fillStyle='#ffe9a8';ctx.fillRect(x-w/2+3,y-h+14,4,4);ctx.fillRect(x+w/2-7,y-h+14,4,4);}
+}
+function drawMap(){
+  ctx.clearRect(0,0,W,H);
+  // ground
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#3a2e16');g.addColorStop(1,'#241a0c');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // rivers Tigris & Euphrates (flavor)
+  ctx.save();ctx.translate(-camX*0.6,0);
+  ctx.strokeStyle='#2a6a8a';ctx.lineWidth=22;ctx.globalAlpha=.7;
+  ctx.beginPath();ctx.moveTo(-50,40);ctx.bezierCurveTo(300,90,500,30,worldW(),120);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-50,H-50);ctx.bezierCurveTo(350,H-120,600,H-30,worldW(),H-90);ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle='#5a7a8a';ctx.font='italic 12px Segoe UI';ctx.fillText('Tigris',20,30);ctx.fillText('Euphrates',20,H-30);
+  // citizens
+  ctx.save();ctx.translate(-camX,0);
+  for(const c of S.citizens)drawHouse(c.px,c.py,c.house,c.happy,S.era);
+  ctx.restore();
+  // title
+  ctx.fillStyle='#ffce54';ctx.font='bold 14px Segoe UI';ctx.textAlign='right';
+  ctx.fillText('🗺 '+ERAS[S.era].name+' — drag to pan, tap a house',W-10,H-10);ctx.textAlign='left';
+}
+
+// ============ LOOP ============
+let tickerMsg='Welcome, lugal! Drop a rock... er, rule Mesopotamia. Keep your people happy, then tax them.';
+let tickerTimer=0, factIdx=0, factTimer=0, acc=0, last=performance.now();
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.1);last=now;
+  acc+=dt;if(acc>=1.4){acc=0;tick();render();}
+  factTimer-=dt;if(factTimer<=0){factTimer=7;factIdx=(factIdx+1)%FACTS.length;
+    if(tickerTimer<=0)tickerMsg=null;}
+  if(tickerTimer>0)tickerTimer-=dt;
+  $('ticker').innerHTML=tickerTimer>0?('<b>★</b> '+tickerMsg):('<b>Did you know?</b> '+FACTS[factIdx]);
+  $('saveTag').textContent='Day '+S.day+' · auto-saved';
+  drawMap();
+  requestAnimationFrame(loop);
+}
+buildTabs();render();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

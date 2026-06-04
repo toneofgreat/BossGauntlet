@@ -90,6 +90,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Brick Tycoon card */
 .bg-brk{background:linear-gradient(135deg,#142a40 0%,#1d3a2a 55%,#0a0f16 100%)}
 .bg-brk canvas{width:100%;height:100%}
+/* Mesopotamia card */
+.bg-mes{background:linear-gradient(135deg,#2a1e08 0%,#4a3a18 55%,#1c160a 100%)}
+.bg-mes canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -263,6 +266,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>ROCK TYCOON</h2>
       <p>Click the green button on your dropper to send a rock down the conveyor — each one collected pays out cash. Unlock a manual 2x upgrader, a duplicator, automated droppers and upgraders, diamond machines, then REBIRTH for a permanent ore boost. Post-rebirth opens future tech: future droppers, faster conveyors, five triple droppers, a fire dropper, a mega illuminati dropper, and a final WIN at $100B. Gets way harder as you climb.</p>
       <span class="tag" style="background:#0a2a16;color:#3fd97a">IDLE · TYCOON · CLICK</span>
+    </div>
+  </a>
+  <a href="mesopotamia.html" class="card">
+    <div class="card-img bg-mes"><canvas id="c23"></canvas></div>
+    <div class="card-body">
+      <h2>MESOPOTAMIA: RISE OF AGES</h2>
+      <p>A deterministic city-ruler sim across four ages — Stone, Medieval, Modern, Futuristic. Build from a helpful shop (75 / 100 / 80 / 3 items per age) to make citizens happy, then invent and levy taxes to get rich (which makes them sad). Run your own shop where YOU set prices for everything from free water to $200k homes. Recruit 5 military units per age. Walk the living map of every citizen and their house. If 150 of 200 hate you, you're overthrown until you become a millionaire; if 200 hate you, you die. Survive the brutal 200-person war. Auto-saves. Learn real Mesopotamian history as you rule.</p>
+      <span class="tag" style="background:#2a1e08;color:#ffce54">CIV SIM · 4 AGES · SAVES</span>
     </div>
   </a>
   <a href="brick-tycoon.html" class="card">
@@ -1505,6 +1516,40 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     for(let i=0;i<4;i++){const ox=w*0.2+((t*40+i*60)%(w*0.6));
       ctx.fillStyle='#9a8a73';ctx.fillRect(ox,fT-12,7,7);}
     ctx.fillStyle='#5cf09a';ctx.font='bold 13px Arial';ctx.textAlign='left';ctx.fillText('$'+Math.floor(t*9),6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Mesopotamia preview: ziggurat, river, little citizen houses ----
+(function(){
+  const c=document.getElementById('c23'); if(!c) return;
+  const ctx=c.getContext('2d');let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.02;ctx.clearRect(0,0,w,h);
+    // desert ground
+    const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,'#caa55a');g.addColorStop(1,'#7a5a2a');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    // sun
+    ctx.fillStyle='#ffe08a';ctx.beginPath();ctx.arc(w*0.82,h*0.24,h*0.12,0,7);ctx.fill();
+    // river
+    ctx.strokeStyle='#2a6a8a';ctx.lineWidth=h*0.07;ctx.globalAlpha=.8;
+    ctx.beginPath();ctx.moveTo(0,h*0.85);ctx.bezierCurveTo(w*0.4,h*0.78,w*0.6,h*0.95,w,h*0.82);ctx.stroke();ctx.globalAlpha=1;
+    // ziggurat (stepped temple)
+    const zx=w*0.5,zy=h*0.74;
+    for(let i=0;i<4;i++){const bw=w*(0.34-i*0.07);
+      ctx.fillStyle=['#b58a4a','#a87a3a','#9a6a2e','#8a5a22'][i];
+      ctx.fillRect(zx-bw/2,zy-i*h*0.14,bw,h*0.14);}
+    ctx.fillStyle='#ffce54';ctx.fillRect(zx-w*0.02,zy-4*h*0.14,w*0.04,h*0.05);
+    // little citizen houses
+    for(let i=0;i<5;i++){const hx=w*(0.08+i*0.18),hy=h*0.6+Math.sin(t+i)*1;
+      ctx.fillStyle='#6b5836';ctx.fillRect(hx,hy,12,10);
+      ctx.fillStyle='#8a3a2a';ctx.beginPath();ctx.moveTo(hx-2,hy);ctx.lineTo(hx+6,hy-7);ctx.lineTo(hx+14,hy);ctx.closePath();ctx.fill();
+      // happy/sad dot
+      ctx.fillStyle=(i+Math.floor(t))%3===0?'#ff6b6b':'#7fe09a';ctx.beginPath();ctx.arc(hx+6,hy+16,3,0,7);ctx.fill();}
+    ctx.fillStyle='#3a2a10';ctx.font='bold 12px Arial';ctx.textAlign='left';ctx.fillText('☥ MESOPOTAMIA',6,16);
     requestAnimationFrame(draw);
   }
   draw();
