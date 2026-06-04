@@ -84,6 +84,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Geometry Dash card */
 .bg-gd{background:linear-gradient(135deg,#0a0a3a 0%,#3a0a5a 50%,#ff2a6d 100%)}
 .bg-gd canvas{width:100%;height:100%}
+/* Rock Tycoon card */
+.bg-tyc{background:linear-gradient(135deg,#0a2a16 0%,#13351f 55%,#0d1117 100%)}
+.bg-tyc canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -249,6 +252,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>SPIDER-MAN VS SUPERMAN</h2>
       <p>3D fighting game. Pick a side, then pick a difficulty — EASY or HARD. Spider-Man brings web attacks and Spider Sense (see the AI's next move 2 seconds early). Superman flies, fires laser eyes, and goes Super Strength mode. Each side has multiple levels that strip abilities away to ramp the challenge. PC + mobile controls.</p>
       <span class="tag" style="background:#3a0a14;color:#ffd84d">3D · FIGHTER · EASY/HARD AI</span>
+    </div>
+  </a>
+  <a href="tycoon-game.html" class="card">
+    <div class="card-img bg-tyc"><canvas id="c21"></canvas></div>
+    <div class="card-body">
+      <h2>ROCK TYCOON</h2>
+      <p>Click the green button on your dropper to send a rock down the conveyor — each one collected pays out cash. Unlock a manual 2x upgrader, a duplicator, automated droppers and upgraders, diamond machines, then REBIRTH for a permanent ore boost. Post-rebirth opens future tech: future droppers, faster conveyors, five triple droppers, a fire dropper, a mega illuminati dropper, and a final WIN at $100B. Gets way harder as you climb.</p>
+      <span class="tag" style="background:#0a2a16;color:#3fd97a">IDLE · TYCOON · CLICK</span>
     </div>
   </a>
   <a href="super_block_bros.html" class="card">
@@ -1407,6 +1418,42 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
       ctx.font='bold 18px "Bebas Neue", Arial';ctx.fillStyle='#ffd84d';ctx.textAlign='center';
       ctx.fillText('VS',w/2,h/2);
     }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Rock Tycoon preview: rocks rolling down a conveyor into a collector ----
+(function(){
+  const c=document.getElementById('c21'); if(!c) return;
+  const ctx=c.getContext('2d');let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  let rocks=[];
+  function draw(){
+    t+=0.02;
+    ctx.clearRect(0,0,w,h);
+    const by=h*0.6;
+    // belt
+    ctx.fillStyle='#2b2b2b';ctx.fillRect(w*0.18,by,w*0.64,12);
+    ctx.strokeStyle='#111';ctx.lineWidth=1;
+    for(let x=w*0.18;x<w*0.82;x+=10){ctx.beginPath();ctx.moveTo(x-(t*30%10),by);ctx.lineTo(x-(t*30%10),by+12);ctx.stroke();}
+    // dropper
+    ctx.fillStyle='#6b6b6b';ctx.fillRect(w*0.1,by-34,w*0.12,34);
+    ctx.fillStyle=sin(t*4)>0?'#2ecf63':'#9dffb8';ctx.beginPath();ctx.arc(w*0.16,by-18,6,0,7);ctx.fill();
+    // collector
+    ctx.fillStyle='#1c2a3a';ctx.fillRect(w*0.82,by-26,w*0.1,26);
+    ctx.fillStyle='#3fd97a';ctx.font='12px Arial';ctx.textAlign='center';ctx.fillText('$',w*0.87,by-8);
+    // spawn
+    if(t%0.7<0.02)rocks.push({x:w*0.2,c:rand()<0.3?'#9af0ff':'#8a7d6a',s:5+rand()*3,r:0});
+    for(let i=rocks.length-1;i>=0;i--){
+      const rk=rocks[i];rk.x+=1.6;rk.r+=0.1;
+      ctx.save();ctx.translate(rk.x,by-3);ctx.rotate(rk.r);
+      ctx.fillStyle=rk.c;ctx.beginPath();ctx.arc(0,0,rk.s,0,7);ctx.fill();ctx.restore();
+      if(rk.x>w*0.82)rocks.splice(i,1);
+    }
+    ctx.fillStyle='#3fd97a';ctx.font='bold 14px Arial';ctx.textAlign='left';
+    ctx.fillText('$'+Math.floor(t*7),w*0.04,h*0.18);
     requestAnimationFrame(draw);
   }
   draw();
