@@ -181,19 +181,21 @@ function freshCitizen(i){
 }
 function newGame(){
   S={money:25, era:0, unlocked:0, day:0,
-    citizens:[], comfort:0, taxPressure:0,
+    citizens:[], buildings:[], comfort:0, taxPressure:0,
     help:{}, army:{}, armyPower:0,
     sell:{}, leader:true, exiled:false, npc:'', order:null,
     deaths:0, reclaims:0, warWon:false, warTried:false};
   for(let i=0;i<14;i++)S.citizens.push(freshCitizen(i));
   GOODS.forEach(g=>S.sell[g.id]=g.def);
-  layoutCitizens();
+  layoutAll();
   save();
 }
-function layoutCitizens(){
-  // place on a grid map
-  const cols=20;
-  S.citizens.forEach((c,i)=>{c.px=80+(i%cols)*70; c.py=120+Math.floor(i/cols)*90;});
+// places BOTH your bought buildings (civic district, top band) and citizen houses
+function layoutAll(){
+  const bRows=2, bColW=58, bTop=72, bGapY=70;
+  (S.buildings||[]).forEach((b,i)=>{b.bx=70+Math.floor(i/bRows)*bColW; b.by=bTop+(i%bRows)*bGapY;});
+  const cRows=3, cColW=70, cTop=bTop+bRows*bGapY+40, cGapY=84;
+  S.citizens.forEach((c,i)=>{c.px=80+Math.floor(i/cRows)*cColW; c.py=cTop+(i%cRows)*cGapY;});
 }
 
 // ============ SAVE ============
@@ -203,6 +205,12 @@ function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);
   // backfill
   S.citizens.forEach(c=>{if(!c.owned)c.owned={};});
   GOODS.forEach(g=>{if(S.sell[g.id]==null)S.sell[g.id]=g.def;});
+  // backfill buildings from prior saves so already-bought items show on the map
+  if(!S.buildings){S.buildings=[];
+    for(const k in (S.help||{})){const p=k.split(':').map(Number),e=p[0],idx=p[1];
+      const it=HELP[e]&&HELP[e][idx];const n=S.help[k]||0;
+      for(let q=0;q<n;q++)S.buildings.push({era:e,idx:idx,name:it?it.name:'Building'});}}
+  layoutAll();
   return true;}}catch(e){}return false;}
 if(!load())newGame();
 resize();
@@ -254,7 +262,7 @@ function tick(){
   // population growth if happy + capacity
   const cap=ERAS[S.era].cap;
   if(avgHappy()>60 && S.citizens.length<cap && S.day%2===0){
-    const c=freshCitizen(S.citizens.length);S.citizens.push(c);layoutCitizens();
+    const c=freshCitizen(S.citizens.length);S.citizens.push(c);layoutAll();
   }
   S.armyPower=Object.entries(S.army).reduce((a,[k,n])=>{const[e,i]=k.split(':').map(Number);return a+MIL[e][i].power*n;},0);
   checkPolitics();
@@ -283,7 +291,8 @@ function buyHelp(era,idx){
   S.money-=cost;
   const k=helpKey(era,idx);S.help[k]=(S.help[k]||0)+1;
   S.comfort+=it.happy;
-  toast('Built '+it.name+'  (+'+it.happy+' comfort)');
+  S.buildings.push({era:era,idx:idx,name:it.name});layoutAll();
+  toast('Built '+it.name+' — see it on the map!  (+'+it.happy+' comfort)');
   render();save();
 }
 // ============ BUY MILITARY ============
@@ -500,12 +509,27 @@ cv.addEventListener('pointermove',e=>{if(drag){const dx=e.clientX-drag.x;if(Math
   camX=Math.max(0,drag.cam-dx);}});
 cv.addEventListener('pointerup',e=>{
   if(drag&&!drag.moved){selectCitizen(e.clientX,e.clientY);}drag=null;});
-function worldW(){const cols=20;return 80+cols*70+120;}
-function selectCitizen(sx,sy){
-  const mx=sx+camX, my=sy;let best=null,bd=1e9;
-  for(const c of S.citizens){const d=Math.hypot(c.px-mx,c.py-my);if(d<bd){bd=d;best=c;}}
-  if(best&&bd<45)showInspect(best);else $('inspect').style.display='none';
+function worldW(){
+  const bw=70+Math.ceil((S.buildings.length||1)/2)*58+140;
+  const cw=80+Math.ceil((S.citizens.length||1)/3)*70+140;
+  return Math.max(bw,cw,W);
 }
+function selectCitizen(sx,sy){
+  const mx=sx+camX, my=sy;
+  // check your buildings first
+  let bb=null,bbd=1e9;
+  for(const b of S.buildings){const d=Math.hypot(b.bx+21-mx,b.by+16-my);if(d<bbd){bbd=d;bb=b;}}
+  let best=null,bd=1e9;
+  for(const c of S.citizens){const d=Math.hypot(c.px-mx,c.py-my);if(d<bd){bd=d;best=c;}}
+  if(bb&&bbd<28){showBuildingInspect(bb);return;}
+  if(best&&bd<45){showInspect(best);return;}
+  $('inspect').style.display='none';
+}
+function showBuildingInspect(b){const el=$('inspect');el.style.display='block';
+  const it=HELP[b.era]&&HELP[b.era][b.idx];
+  el.innerHTML='<h4>🏛 '+b.name+'</h4><p>From the '+ERAS[b.era].name+'</p>'+
+    '<p>Adds +'+(it?it.happy:0)+' city comfort, making everyone happier.</p>'+
+    '<button onclick="document.getElementById(\'inspect\').style.display=\'none\'">close</button>';}
 function opinion(h){return h>80?'Loves you ❤':h>55?'Likes you':h>30?'Neutral':h>15?'Dislikes you':'HATES YOU 💢';}
 function showInspect(c){
   const el=$('inspect');el.style.display='block';
@@ -536,6 +560,27 @@ function drawHouse(x,y,lvl,happy,era){
   ctx.fillStyle='#2a2012';ctx.fillRect(x-3,y+2,6,8);
   if(lvl>=4){ctx.fillStyle='#ffe9a8';ctx.fillRect(x-w/2+3,y-h+14,4,4);ctx.fillRect(x+w/2-7,y-h+14,4,4);}
 }
+function drawBuilding(x,y,era,name){
+  const cset=[['#b58a4a','#8a5a22'],['#9aa7b8','#5a6678'],['#7fb0e0','#2a5a8a'],['#d3a6ff','#6a3a9a']];
+  const col=cset[era]||cset[0], w=42, h=34;
+  ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(x-2,y+h-3,w+6,4); // shadow
+  if(era===0){ // mud-brick temple / ziggurat-ish
+    ctx.fillStyle=col[0];ctx.fillRect(x,y+10,w,h-10);
+    ctx.fillStyle=col[1];ctx.beginPath();ctx.moveTo(x-3,y+10);ctx.lineTo(x+w/2,y-4);ctx.lineTo(x+w+3,y+10);ctx.closePath();ctx.fill();
+  }else if(era===1){ // medieval house + flag
+    ctx.fillStyle=col[0];ctx.fillRect(x,y+8,w,h-8);
+    ctx.fillStyle=col[1];ctx.fillRect(x-2,y+4,w+4,8);
+    ctx.fillStyle='#c0392b';ctx.fillRect(x+w-7,y-8,2,12);ctx.fillRect(x+w-7,y-8,8,5);
+  }else if(era===2){ // glass tower
+    ctx.fillStyle=col[0];ctx.fillRect(x+6,y-10,w-12,h+10);
+    ctx.fillStyle='rgba(255,255,255,.35)';
+    for(let r=0;r<5;r++)for(let cc=0;cc<3;cc++)ctx.fillRect(x+10+cc*8,y-6+r*8,4,4);
+  }else{ // future dome
+    ctx.fillStyle=col[0];ctx.beginPath();ctx.arc(x+w/2,y+h-4,w/2,Math.PI,0);ctx.fill();
+    ctx.fillStyle='#fff';ctx.globalAlpha=.35;ctx.beginPath();ctx.arc(x+w/2,y+h-4,w/2-6,Math.PI,0);ctx.fill();ctx.globalAlpha=1;
+  }
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.fillRect(x+w/2-3,y+h-12,6,12); // door
+}
 function drawMap(){
   ctx.clearRect(0,0,W,H);
   // ground
@@ -548,13 +593,19 @@ function drawMap(){
   ctx.beginPath();ctx.moveTo(-50,H-50);ctx.bezierCurveTo(350,H-120,600,H-30,worldW(),H-90);ctx.stroke();
   ctx.restore();
   ctx.fillStyle='#5a7a8a';ctx.font='italic 12px Segoe UI';ctx.fillText('Tigris',20,30);ctx.fillText('Euphrates',20,H-30);
-  // citizens
+  // your buildings (civic district) + citizen houses
   ctx.save();ctx.translate(-camX,0);
+  // district labels
+  ctx.fillStyle='rgba(255,206,84,.5)';ctx.font='bold 11px Segoe UI';ctx.textAlign='left';
+  if(S.buildings.length)ctx.fillText('— YOUR CITY (buildings you bought) —',70,60);
+  ctx.fillStyle='rgba(127,208,255,.5)';
+  ctx.fillText('— CITIZENS & THEIR HOMES —',80,72+2*70+24);
+  for(const b of S.buildings)drawBuilding(b.bx,b.by,b.era,b.name);
   for(const c of S.citizens)drawHouse(c.px,c.py,c.house,c.happy,S.era);
   ctx.restore();
   // title
-  ctx.fillStyle='#ffce54';ctx.font='bold 14px Segoe UI';ctx.textAlign='right';
-  ctx.fillText('🗺 '+ERAS[S.era].name+' — drag to pan, tap a house',W-10,H-10);ctx.textAlign='left';
+  ctx.fillStyle='#ffce54';ctx.font='bold 13px Segoe UI';ctx.textAlign='right';
+  ctx.fillText('🗺 '+ERAS[S.era].name+' · '+S.buildings.length+' buildings — drag to pan, tap anything',W-10,H-10);ctx.textAlign='left';
 }
 
 // ============ LOOP ============
