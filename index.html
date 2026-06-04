@@ -1558,33 +1558,38 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
   }
   draw();
 })();
-
-// ---- Play counts (per browser) + sort most-played to the top ----
+</script>
+<!-- Play counts + sort most-played to top — isolated so nothing can block it -->
+<script>
 (function(){
-  const KEY='platyfy_plays';
-  let plays={};
-  try{plays=JSON.parse(localStorage.getItem('platyfy_plays'))||{};}catch(e){}
-  const cards=Array.prototype.slice.call(document.querySelectorAll('a.card'));
-  if(!cards.length)return;
-  const grid=cards[0].parentElement;
-  cards.forEach(function(c){
-    const href=c.getAttribute('href');
-    const n=plays[href]||0;
-    const badge=document.createElement('div');
-    badge.className='plays';
-    badge.textContent='▶ '+n.toLocaleString()+' play'+(n===1?'':'s');
-    c.appendChild(badge);
-    // count a play when the card is opened (localStorage write is synchronous)
-    c.addEventListener('click',function(){
-      plays[href]=(plays[href]||0)+1;
-      try{localStorage.setItem(KEY,JSON.stringify(plays));}catch(e){}
-    });
-  });
-  // most plays at the top, least at the bottom
-  cards.sort(function(a,b){
-    return (plays[b.getAttribute('href')]||0)-(plays[a.getAttribute('href')]||0);
-  });
-  cards.forEach(function(c){grid.appendChild(c);});
+  function run(){
+    try{
+      var KEY='platyfy_plays';
+      var plays={};
+      try{plays=JSON.parse(localStorage.getItem(KEY))||{};}catch(e){plays={};}
+      var cards=Array.prototype.slice.call(document.querySelectorAll('a.card'));
+      if(!cards.length)return;
+      var grid=cards[0].parentElement;
+      cards.forEach(function(c){
+        var href=c.getAttribute('href');
+        var n=plays[href]||0;
+        var badge=document.createElement('div');
+        badge.className='plays';
+        badge.textContent='▶ '+n.toLocaleString()+' play'+(n===1?'':'s');
+        c.appendChild(badge);
+        c.addEventListener('click',function(){
+          plays[href]=(plays[href]||0)+1;
+          try{localStorage.setItem(KEY,JSON.stringify(plays));}catch(e){}
+        });
+      });
+      cards.sort(function(a,b){
+        return (plays[b.getAttribute('href')]||0)-(plays[a.getAttribute('href')]||0);
+      });
+      cards.forEach(function(c){grid.appendChild(c);});
+    }catch(e){console.error('play-count error',e);}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run);
+  else run();
 })();
 </script>
 </body>
