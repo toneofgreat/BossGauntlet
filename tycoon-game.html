@@ -91,7 +91,8 @@ const TIER={
   fire:{col:'#ff7a3a',col2:'#c0341a',glow:'#ff5a2a',name:'Fire'},
   illum:{col:'#ffe27a',col2:'#caa64a',glow:'#ffd24d',name:'Illuminati'},
 };
-function rebirthMult(){return 1+G.rebirth*0.5;}
+const GLOBAL_MULT=40; // everything gives 40x as much
+function rebirthMult(){return (1+G.rebirth*0.5)*GLOBAL_MULT;}
 
 // ---------- Machine lists (these GROW as you buy upgrades) ----------
 function getDroppers(){
