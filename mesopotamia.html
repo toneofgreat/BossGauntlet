@@ -191,6 +191,18 @@ const FACTS=[
   "Across history, leaders who over-taxed unhappy people were often overthrown.",
 ];
 
+// ============ ENEMY NATIONS & BOSSES ============
+const NATIONS=['Elam','Akkad','Assyria','Babylonia','the Hittites','the Gutians',
+  'the Kassites','the Lullubi','Mari','Ebla','the Amorites','Urartu'];
+const BOSSES=[
+  {name:'Humbaba, Guardian of the Cedar Forest', item:'Cedar Grand Hall',  happy:80},
+  {name:'Pazuzu, Demon King of the Wind',        item:'Wind Temple',       happy:150},
+  {name:'Anzu, the Storm Thunderbird',           item:'Storm Beacon',      happy:240},
+  {name:'Nergal, Lord of War & Plague',          item:'War Memorial',      happy:360},
+  {name:'Tiamat, Dragon of Primordial Chaos',    item:'Dragon Throne',     happy:560},
+  {name:'Marduk the Usurper God',                item:'Temple of Marduk',  happy:820},
+];
+
 // ============ STATE ============
 let S;
 function freshCitizen(i){
@@ -204,7 +216,8 @@ function newGame(){
     citizens:[], buildings:[], comfort:0, taxPressure:0,
     help:{}, army:{}, armyPower:0,
     sell:{}, leader:true, exiled:false, npc:'', order:null,
-    deaths:0, reclaims:0, warWon:false, warTried:false};
+    deaths:0, reclaims:0, warWon:false, warTried:false,
+    territory:1, threat:null, threatCd:5, threatCount:0, nationsBeaten:0, bossesBeaten:0, loot:[]};
   for(let i=0;i<14;i++)S.citizens.push(freshCitizen(i));
   GOODS.forEach(g=>S.sell[g.id]=g.def);
   layoutAll();
@@ -229,7 +242,13 @@ function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);
   if(!S.buildings){S.buildings=[];
     for(const k in (S.help||{})){const p=k.split(':').map(Number),e=p[0],idx=p[1];
       const it=HELP[e]&&HELP[e][idx];const n=S.help[k]||0;
-      for(let q=0;q<n;q++)S.buildings.push({era:e,idx:idx,name:it?it.name:'Building'});}}
+      for(let q=0;q<n;q++)S.buildings.push({era:e,idx:idx,name:it?it.name:'Building',happy:it?it.happy:0});}}
+  if(S.territory==null)S.territory=1;
+  if(S.threatCd==null)S.threatCd=5;
+  if(S.threatCount==null)S.threatCount=0;
+  if(S.nationsBeaten==null)S.nationsBeaten=0;
+  if(S.bossesBeaten==null)S.bossesBeaten=0;
+  if(!S.loot)S.loot=[];
   layoutAll();
   return true;}}catch(e){}return false;}
 if(!load())newGame();
@@ -279,12 +298,17 @@ function tick(){
     }
   }
   S.money+=income;
-  // population growth if happy + capacity
-  const cap=ERAS[S.era].cap;
+  // territory passive income (each conquered region pays tribute)
+  S.money += S.territory*10*(1+S.era*3);
+  // population growth if happy + capacity (territory raises the cap)
+  const cap=Math.min(200, ERAS[S.era].cap + S.territory*2);
   if(avgHappy()>60 && S.citizens.length<cap && S.day%2===0){
     const c=freshCitizen(S.citizens.length);S.citizens.push(c);layoutAll();
   }
   S.armyPower=Object.entries(S.army).reduce((a,[k,n])=>{const[e,i]=k.split(':').map(Number);return a+MIL[e][i].power*n;},0);
+  // enemy nations & bosses invade your country
+  if(!S.threat){ S.threatCd--; if(S.threatCd<=0)spawnThreat(); }
+  else { S.threat.patience--; if(S.threat.patience<=0)resolveFight(true); }
   checkPolitics();
   save();
 }
@@ -293,7 +317,7 @@ function tick(){
 function levy(t){
   if(S.exiled){toast("You aren't the leader — you can't tax!");return;}
   const happyPayers=S.citizens.filter(c=>c.happy>20);
-  const gain=happyPayers.length*t.rate*(1+S.era*6);
+  const gain=happyPayers.length*t.rate*(1+S.era*6)*(1+0.05*S.territory);
   S.money+=gain;
   S.taxPressure+=t.anger;
   for(const c of happyPayers)c.happy=Math.max(0,c.happy-t.anger*0.5);
@@ -311,7 +335,7 @@ function buyHelp(era,idx){
   S.money-=cost;
   const k=helpKey(era,idx);S.help[k]=(S.help[k]||0)+1;
   S.comfort+=it.happy;
-  S.buildings.push({era:era,idx:idx,name:it.name});layoutAll();
+  S.buildings.push({era:era,idx:idx,name:it.name,happy:it.happy});layoutAll();
   toast('Built '+it.name+' — see it on the map!  (+'+it.happy+' comfort)');
   render();save();
 }
@@ -371,9 +395,60 @@ function startWar(){
   }
   render();save();
 }
+// ============ INVASIONS, BOSSES & CONQUEST ============
+function spawnThreat(){
+  S.threatCount++;
+  const beaten=S.nationsBeaten+S.bossesBeaten;
+  const base=(60 + S.day*25 + S.territory*150 + S.era*6000)*(1+beaten*0.12);
+  const isBoss=(S.threatCount%4===0);
+  if(isBoss){
+    const b=BOSSES[S.bossesBeaten%BOSSES.length];
+    S.threat={kind:'boss',name:b.name,power:Math.round(base*4),reward:Math.round(base*6),
+      itemName:b.item,itemHappy:b.happy,patience:9};
+  }else{
+    const n=NATIONS[beaten%NATIONS.length];
+    S.threat={kind:'nation',name:n+' invades',power:Math.round(base),reward:Math.round(base*1.6),patience:9};
+  }
+  toast('⚔ '+S.threat.name+' — power '+fmt(S.threat.power)+'! Open the Battles tab.');
+}
+function resolveFight(forced){
+  if(!S.threat)return;
+  const t=S.threat;
+  if(S.armyPower>=t.power){
+    S.money+=t.reward;
+    const terr=t.kind==='boss'?3:1;S.territory+=terr;
+    let extra='';
+    if(t.kind==='boss'){S.bossesBeaten++;
+      const cost=Math.round(t.power*0.4);
+      S.loot.push({name:t.itemName,cost:cost,happy:t.itemHappy});
+      extra='<br>🏛 New shop item unlocked: <b>'+t.itemName+'</b> — buy it in the Build tab!';
+    }else S.nationsBeaten++;
+    overlay(true,(t.kind==='boss'?'👹 BOSS SLAIN!':'⚔ VICTORY!'),
+      'You defeated <b>'+t.name+'</b> (power '+fmt(t.power)+') with your army (power '+fmt(S.armyPower)+').<br>'+
+      'Spoils: <b>$'+fmt(t.reward)+'</b> + <b>'+terr+' territory</b>.'+extra,'Onward!');
+    S.threat=null;S.threatCd=8;
+  }else{
+    const dmg=t.kind==='boss'?22:14;
+    for(const c of S.citizens)c.happy=Math.max(0,c.happy-dmg);
+    const loss=Math.floor(S.money*0.25);S.money-=loss;
+    if(S.territory>1)S.territory--;
+    overlay(false,(forced?'🔥 YOU WERE RAIDED!':'DEFEAT'),
+      'Your army (power '+fmt(S.armyPower)+') lost to <b>'+t.name+'</b> (power '+fmt(t.power)+').<br>'+
+      'You lost <b>$'+fmt(loss)+'</b>, a territory, and happiness. Recruit more in the Military tab!','Regroup');
+    S.threat=null;S.threatCd=11;
+  }
+  render();save();
+}
+function buyLoot(i){
+  const it=S.loot[i];if(!it)return;
+  if(S.money<it.cost){toast('Need $'+fmt(it.cost));return;}
+  S.money-=it.cost;S.comfort+=it.happy;
+  S.buildings.push({era:S.era,idx:-1,name:it.name,happy:it.happy});layoutAll();
+  toast('Placed relic '+it.name+'! (+'+it.happy+' comfort)');render();save();
+}
 function overlay(good,h,p,btn){
   $('ovH').textContent=h;$('ovH').className=good?'good':'';
-  $('ovP').textContent=p;$('ovB').textContent=btn;
+  $('ovP').innerHTML=p;$('ovB').textContent=btn;
   $('ovB').onclick=()=>{$('overlay').style.display='none';};
   $('overlay').style.display='flex';
 }
@@ -382,7 +457,7 @@ function toast(m){$('ovB');const t=$('saveTag');/*reuse ticker for toast*/
   tickerMsg=m;tickerTimer=3;}
 
 // ============ UI / TABS ============
-const TABS=['Build','Taxes','Sell Shop','Buy Shop','Military','Era','Politics'];
+const TABS=['Build','Taxes','Sell Shop','Buy Shop','Military','Battles','Era','Politics'];
 let curTab='Build';
 function buildTabs(){const el=$('tabs');el.innerHTML='';
   TABS.forEach(t=>{const b=document.createElement('div');b.className='tab'+(t===curTab?' on':'');
@@ -390,11 +465,12 @@ function buildTabs(){const el=$('tabs');el.innerHTML='';
 
 function render(){
   // stats
-  $('money').innerHTML='$'+fmt(S.money)+'<small>treasury</small>';
+  const golden=avgHappy()>=90;
+  $('money').innerHTML='$'+fmt(S.money)+'<small>'+(golden?'★ GOLDEN AGE +$1000/2s':'treasury')+'</small>';
   $('pop').innerHTML=S.citizens.length+'/200<small>citizens</small>';
   $('happy').innerHTML=Math.round(avgHappy())+'%<small>avg happy</small>';
   $('haters').innerHTML=haterCount()+'/200<small>hate you</small>';
-  $('eraS').innerHTML=ERAS[S.era].name.split(' ')[0]+'<small>era</small>';
+  $('eraS').innerHTML=ERAS[S.era].name.split(' ')[0]+'<small>'+S.territory+' territory</small>';
   $('leaderS').innerHTML=(S.exiled?'EXILED':'LEADER')+'<small>'+(S.exiled?'obey '+S.npc:'status')+'</small>';
   const b=$('body');b.innerHTML='';
   if(curTab==='Build')renderBuild(b);
@@ -402,8 +478,31 @@ function render(){
   else if(curTab==='Sell Shop')renderSell(b);
   else if(curTab==='Buy Shop')renderBuyShop(b);
   else if(curTab==='Military')renderMil(b);
+  else if(curTab==='Battles')renderBattles(b);
   else if(curTab==='Era')renderEra(b);
   else if(curTab==='Politics')renderPolitics(b);
+}
+function renderBattles(b){
+  b.innerHTML='<h3>⚔ BATTLES & CONQUEST</h3>'+
+    '<div class="note">Territory: <b>'+S.territory+'</b> · Nations beaten: '+S.nationsBeaten+' · Bosses slain: '+S.bossesBeaten+
+    '<br>Your army power: <b>'+fmt(S.armyPower)+'</b>. Each territory gives +passive income, +5% tax and +2 population cap. '+
+    'Enemy nations attack on their own — beat them for money & land. Every 4th foe is a BOSS that also drops a new shop item. Recruit in Military.</div>';
+  if(S.threat){
+    const t=S.threat, win=S.armyPower>=t.power;
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">'+(t.kind==='boss'?'👹 BOSS: ':'🏴 ')+t.name+'</div>'+
+      '<div class="ds">Power '+fmt(t.power)+' · reward $'+fmt(t.reward)+(t.kind==='boss'?' + relic':'')+' · attacks in '+Math.max(0,t.patience)+'</div></div>';
+    const btn=document.createElement('button');btn.className='btn'+(win?' gold':' cant');
+    btn.textContent=win?'ATTACK ✓':'ATTACK';
+    btn.onclick=()=>resolveFight(false);r.appendChild(btn);b.appendChild(r);
+    if(!win){const p=document.createElement('div');p.className='note';p.style.color='#ff8a8a';
+      p.textContent='⚠ Army too weak ('+fmt(S.armyPower)+' < '+fmt(t.power)+'). Buy military now, or you will lose when they strike!';
+      b.appendChild(p);}
+  }else{
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML='<div><div class="nm">Scouts report calm…</div><div class="ds">Enemies are massing — next incursion soon</div></div>';
+    b.appendChild(r);
+  }
 }
 function eraPicker(cb){
   const wrap=document.createElement('div');wrap.style.cssText='display:flex;gap:4px;margin-bottom:8px';
@@ -411,22 +510,44 @@ function eraPicker(cb){
     x.textContent=ERAS[e].name.split(' ')[0];x.onclick=()=>{viewEra=e;cb();};wrap.appendChild(x);}
   return wrap;
 }
-let viewEra=0;
+let viewEra=0, buildAll=false;
+function helpRow(b,e,idx){
+  const it=HELP[e][idx];
+  const ageDiff=Math.abs(e-S.era);
+  const cost=Math.round(it.cost*(1+0.7*ageDiff));
+  const owned=S.help[helpKey(e,idx)]||0;
+  const r=document.createElement('div');r.className='row';
+  r.innerHTML='<div><div class="nm">'+it.name+(owned?' ×'+owned:'')+'</div><div class="ds">+'+it.happy+' comfort'+(ageDiff?' · cross-age':'')+'</div></div>';
+  const btn=document.createElement('button');btn.className='btn'+(S.money<cost?' cant':'');
+  btn.textContent='$'+fmt(cost);btn.onclick=()=>buyHelp(e,idx);
+  r.appendChild(btn);b.appendChild(r);
+}
 function renderBuild(b){
   viewEra=Math.min(viewEra,S.unlocked);
-  b.innerHTML='<h3>HELPFUL SHOP — buy with your treasury to make citizens happy</h3>'+
-    '<div class="note">Stone Age has '+HELP[0].length+' items · Medieval '+HELP[1].length+' · Modern '+HELP[2].length+' · Future '+HELP[3].length+'. Items from other ages cost extra. Comfort: '+S.comfort.toFixed(0)+'</div>';
-  b.appendChild(eraPicker(()=>render()));
-  HELP[viewEra].forEach((it,idx)=>{
-    const ageDiff=Math.abs(viewEra-S.era);
-    const cost=Math.round(it.cost*(1+0.7*ageDiff));
-    const owned=S.help[helpKey(viewEra,idx)]||0;
-    const r=document.createElement('div');r.className='row';
-    r.innerHTML='<div><div class="nm">'+it.name+(owned?' ×'+owned:'')+'</div><div class="ds">+'+it.happy+' comfort'+(ageDiff?' · cross-age':'')+'</div></div>';
-    const btn=document.createElement('button');btn.className='btn'+(S.money<cost?' cant':'');
-    btn.textContent='$'+fmt(cost);btn.onclick=()=>buyHelp(viewEra,idx);
-    r.appendChild(btn);b.appendChild(r);
-  });
+  b.innerHTML='<h3>HELPFUL SHOP — buy to make citizens happy (appears on the map)</h3>'+
+    '<div class="note">Every item is shown here: Stone '+HELP[0].length+' · Medieval '+HELP[1].length+' · Modern '+HELP[2].length+' · Future '+HELP[3].length+'. Other-age items cost extra. Comfort: '+S.comfort.toFixed(0)+'</div>';
+  // conquered relics (boss loot)
+  if(S.loot.length){
+    const hd=document.createElement('div');hd.innerHTML='<h3 style="color:#ff8a8a">⚔ CONQUERED RELICS</h3>';b.appendChild(hd);
+    S.loot.forEach((it,i)=>{
+      const r=document.createElement('div');r.className='row';
+      r.innerHTML='<div><div class="nm">'+it.name+'</div><div class="ds">+'+it.happy+' comfort · won from a boss</div></div>';
+      const btn=document.createElement('button');btn.className='btn gold'+(S.money<it.cost?' cant':'');
+      btn.textContent='$'+fmt(it.cost);btn.onclick=()=>buyLoot(i);r.appendChild(btn);b.appendChild(r);
+    });
+  }
+  // age selector + "All ages" toggle
+  const tg=document.createElement('div');tg.style.cssText='display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px';
+  const allB=document.createElement('div');allB.className='tab'+(buildAll?' on':'');allB.textContent='ALL ages';
+  allB.onclick=()=>{buildAll=!buildAll;render();};tg.appendChild(allB);
+  if(!buildAll)for(let e=0;e<=S.unlocked;e++){const x=document.createElement('div');x.className='tab'+(e===viewEra?' on':'');
+    x.textContent=ERAS[e].name.split(' ')[0];x.onclick=()=>{viewEra=e;render();};tg.appendChild(x);}
+  b.appendChild(tg);
+  const eras=buildAll?Array.from({length:S.unlocked+1},(_,i)=>i):[viewEra];
+  for(const e of eras){
+    if(buildAll){const hd=document.createElement('div');hd.innerHTML='<h3>'+ERAS[e].name+' ('+HELP[e].length+')</h3>';b.appendChild(hd);}
+    HELP[e].forEach((it,idx)=>helpRow(b,e,idx));
+  }
 }
 function renderTaxes(b){
   b.innerHTML='<h3>TAX OFFICE — you invented taxes!</h3>'+
@@ -546,9 +667,12 @@ function selectCitizen(sx,sy){
   $('inspect').style.display='none';
 }
 function showBuildingInspect(b){const el=$('inspect');el.style.display='block';
-  const it=HELP[b.era]&&HELP[b.era][b.idx];
-  el.innerHTML='<h4>🏛 '+b.name+'</h4><p>From the '+ERAS[b.era].name+'</p>'+
-    '<p>Adds +'+(it?it.happy:0)+' city comfort, making everyone happier.</p>'+
+  const loot=(b.idx<0);
+  const it=(!loot&&HELP[b.era])?HELP[b.era][b.idx]:null;
+  const hp=b.happy!=null?b.happy:(it?it.happy:0);
+  el.innerHTML='<h4>'+(loot?'⚔ ':'🏛 ')+b.name+'</h4>'+
+    '<p>'+(loot?'A relic won in battle':'From the '+ERAS[b.era].name)+'</p>'+
+    '<p>Adds +'+hp+' city comfort, making everyone happier.</p>'+
     '<button onclick="document.getElementById(\'inspect\').style.display=\'none\'">close</button>';}
 function opinion(h){return h>80?'Loves you ❤':h>55?'Likes you':h>30?'Neutral':h>15?'Dislikes you':'HATES YOU 💢';}
 function showInspect(c){
@@ -623,16 +747,35 @@ function drawMap(){
   for(const b of S.buildings)drawBuilding(b.bx,b.by,b.era,b.name);
   for(const c of S.citizens)drawHouse(c.px,c.py,c.house,c.happy,S.era);
   ctx.restore();
+  // enemy army camp on the far right when a threat is active
+  if(S.threat){
+    const ex=W-70;
+    ctx.fillStyle='#3a0e0e';ctx.fillRect(ex-30,H*0.45,60,40);
+    ctx.fillStyle=S.threat.kind==='boss'?'#b01838':'#7a1a1a';
+    ctx.beginPath();ctx.moveTo(ex-34,H*0.45);ctx.lineTo(ex,H*0.45-22);ctx.lineTo(ex+34,H*0.45);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#ff6b6b';ctx.fillRect(ex+18,H*0.45-40,2,20);ctx.fillRect(ex+18,H*0.45-40,12,7);
+    // warning banner
+    ctx.fillStyle='#7a1a1aee';ctx.fillRect(W/2-170,8,340,30);
+    ctx.strokeStyle='#ff6b6b';ctx.lineWidth=2;ctx.strokeRect(W/2-170,8,340,30);
+    ctx.fillStyle='#ffd0d0';ctx.font='bold 13px Segoe UI';ctx.textAlign='center';
+    ctx.fillText((S.threat.kind==='boss'?'👹 ':'⚔ ')+S.threat.name+' (pwr '+fmt(S.threat.power)+') — Battles tab!',W/2,28);
+  }
+  // golden-age badge
+  if(avgHappy()>=90){ctx.fillStyle='#ffce54';ctx.font='bold 13px Segoe UI';ctx.textAlign='center';
+    ctx.fillText('★ GOLDEN AGE — earning $1000 / 2s ★',W/2,H-12);}
   // title
   ctx.fillStyle='#ffce54';ctx.font='bold 13px Segoe UI';ctx.textAlign='right';
-  ctx.fillText('🗺 '+ERAS[S.era].name+' · '+S.buildings.length+' buildings — drag to pan, tap anything',W-10,H-10);ctx.textAlign='left';
+  ctx.fillText('🗺 '+ERAS[S.era].name+' · '+S.territory+' territory — drag to pan, tap anything',W-10,H-10);ctx.textAlign='left';
 }
 
 // ============ LOOP ============
 let tickerMsg='Welcome, lugal! Drop a rock... er, rule Mesopotamia. Keep your people happy, then tax them.';
 let tickerTimer=0, factIdx=0, factTimer=0, acc=0, last=performance.now();
+let hi90=0;
 function loop(now){
   const dt=Math.min((now-last)/1000,0.1);last=now;
+  // GOLDEN AGE: 90%+ happiness pays $1000 every 2 seconds
+  if(avgHappy()>=90){hi90+=dt;while(hi90>=2){hi90-=2;S.money+=1000;}}else hi90=0;
   acc+=dt;if(acc>=1.4){acc=0;tick();render();}
   factTimer-=dt;if(factTimer<=0){factTimer=7;factIdx=(factIdx+1)%FACTS.length;
     if(tickerTimer<=0)tickerMsg=null;}
