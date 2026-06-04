@@ -87,6 +87,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Rock Tycoon card */
 .bg-tyc{background:linear-gradient(135deg,#0a2a16 0%,#13351f 55%,#0d1117 100%)}
 .bg-tyc canvas{width:100%;height:100%}
+/* Brick Tycoon card */
+.bg-brk{background:linear-gradient(135deg,#142a40 0%,#1d3a2a 55%,#0a0f16 100%)}
+.bg-brk canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -260,6 +263,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>ROCK TYCOON</h2>
       <p>Click the green button on your dropper to send a rock down the conveyor — each one collected pays out cash. Unlock a manual 2x upgrader, a duplicator, automated droppers and upgraders, diamond machines, then REBIRTH for a permanent ore boost. Post-rebirth opens future tech: future droppers, faster conveyors, five triple droppers, a fire dropper, a mega illuminati dropper, and a final WIN at $100B. Gets way harder as you climb.</p>
       <span class="tag" style="background:#0a2a16;color:#3fd97a">IDLE · TYCOON · CLICK</span>
+    </div>
+  </a>
+  <a href="brick-tycoon.html" class="card">
+    <div class="card-img bg-brk"><canvas id="c22"></canvas></div>
+    <div class="card-body">
+      <h2>BRICK TYCOON</h2>
+      <p>Roblox-style tycoon: walk your character around the plot and step on glowing green pads to BUY droppers, upgraders, and a faster conveyor. Ore drops onto the belt, runs through your upgraders, and pays out at the collector. Build from a stone dropper up to copper, silver, gold, diamond and ruby droppers, then REBIRTH for +100% ore each time. WASD / arrows or tap to move.</p>
+      <span class="tag" style="background:#0a2a16;color:#3fd97a">TYCOON · WALK &amp; BUILD</span>
     </div>
   </a>
   <a href="super_block_bros.html" class="card">
@@ -1454,6 +1465,46 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     }
     ctx.fillStyle='#3fd97a';ctx.font='bold 14px Arial';ctx.textAlign='left';
     ctx.fillText('$'+Math.floor(t*7),w*0.04,h*0.18);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Brick Tycoon preview: blocky character walking to a green buy pad ----
+(function(){
+  const c=document.getElementById('c22'); if(!c) return;
+  const ctx=c.getContext('2d');let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.02;ctx.clearRect(0,0,w,h);
+    // floor + grid
+    const fT=h*0.4;
+    ctx.fillStyle='#27313f';ctx.fillRect(0,fT,w,h-fT);
+    ctx.fillStyle='#16243a';ctx.fillRect(0,0,w,fT);
+    ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;
+    for(let x=0;x<w;x+=22){ctx.beginPath();ctx.moveTo(x,fT);ctx.lineTo(x,h);ctx.stroke();}
+    // belt
+    ctx.fillStyle='#2b2b2b';ctx.fillRect(w*0.1,fT-14,w*0.8,10);
+    // dropper
+    ctx.fillStyle='#9a8a73';ctx.fillRect(w*0.18,fT-44,w*0.1,24);
+    // green buy pad
+    const pg=0.5+sin(t*3)*0.4;
+    ctx.fillStyle='#2ecf63';ctx.fillRect(w*0.6,h*0.62,w*0.16,h*0.14);
+    ctx.fillStyle='#0e1626';ctx.fillRect(w*0.58,h*0.4,w*0.2,h*0.1);
+    ctx.fillStyle='#ffce54';ctx.font='bold 9px Arial';ctx.textAlign='center';ctx.fillText('$BUY',w*0.68,h*0.47);
+    // walking character
+    const cx=w*0.3+sin(t)*w*0.12, cy=h*0.66, sw=sin(t*8)*3;
+    ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(cx,cy+10,9,3,0,0,7);ctx.fill();
+    ctx.fillStyle='#2a4a8a';ctx.fillRect(cx-5,cy+2+sw,3,8);ctx.fillRect(cx+2,cy+2-sw,3,8);
+    ctx.fillStyle='#3fd97a';ctx.fillRect(cx-7,cy-8,14,12);
+    ctx.fillStyle='#ffd9a8';ctx.fillRect(cx-6,cy-20,12,11);
+    ctx.fillStyle='#5a3a1a';ctx.fillRect(cx-6,cy-20,12,3);
+    ctx.fillStyle='#1a1a1a';ctx.fillRect(cx-3,cy-15,2,2);ctx.fillRect(cx+1,cy-15,2,2);
+    // ore on belt
+    for(let i=0;i<4;i++){const ox=w*0.2+((t*40+i*60)%(w*0.6));
+      ctx.fillStyle='#9a8a73';ctx.fillRect(ox,fT-12,7,7);}
+    ctx.fillStyle='#5cf09a';ctx.font='bold 13px Arial';ctx.textAlign='left';ctx.fillText('$'+Math.floor(t*9),6,16);
     requestAnimationFrame(draw);
   }
   draw();

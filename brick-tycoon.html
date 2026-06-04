@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Brick Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#0a0f16;color:#e6edf3;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none}
+  #money{font-size:32px;font-weight:800;color:#5cf09a;text-shadow:0 2px 14px rgba(60,217,122,.5),0 2px 2px #000}
+  #sub{font-size:13px;font-weight:700;color:#8aa0bd;margin-top:2px}
+  #rb{font-size:14px;font-weight:800;color:#ffce54;text-shadow:0 1px 4px #000;text-align:right}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;
+        font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
+  #back:hover{color:#9aa7bd}
+  #help{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;
+        font-weight:600;text-align:center;pointer-events:none}
+  #toast{position:absolute;left:50%;bottom:50px;transform:translateX(-50%) translateY(10px);background:#121925ee;
+         border:1px solid #3fd97a;border-radius:11px;padding:10px 18px;font-weight:700;color:#5cf09a;
+         opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%;box-shadow:0 6px 20px #000a}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div><div id="money">$0</div><div id="sub"></div></div>
+    <div id="rb"></div>
+  </div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <div id="toast"></div>
+  <div id="help">WASD / Arrows to walk &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; step on a green pad to BUY</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+const WLD=2100;                 // world width (scrolls)
+const beltY=()=>Math.min(H*0.34,230);
+const floorTop=()=>beltY()+150;
+
+// ---------- Ore tiers ----------
+const TIER={
+  stone:{a:'#9a8a73',b:'#6b5d49',glow:null},
+  copper:{a:'#e08a4a',b:'#a85a26',glow:null},
+  silver:{a:'#d9e2ea',b:'#9aa7b8',glow:null},
+  gold:{a:'#ffd84d',b:'#c79a1e',glow:'#ffd84d'},
+  diamond:{a:'#bdf2ff',b:'#62c4d8',glow:'#9af0ff'},
+  ruby:{a:'#ff5a72',b:'#b01838',glow:'#ff3a5c'},
+};
+
+// ---------- Parts (the buyable tycoon) ----------
+// type: dropper | upgrader | conveyor | rebirth
+// slot = x along the belt
+function P(o){return Object.assign({bought:false,cool:0},o);}
+let PARTS=[];
+function initParts(){
+  PARTS=[
+    P({id:'d1',type:'dropper',name:'Ore Dropper',cost:0,slot:300,kind:'stone',val:1,rate:1.1,free:true}),
+    P({id:'d2',type:'dropper',name:'Ore Dropper II',cost:75,slot:430,kind:'stone',val:2,rate:1.1}),
+    P({id:'d3',type:'dropper',name:'Copper Dropper',cost:300,slot:560,kind:'copper',val:5,rate:1.0}),
+    P({id:'u1',type:'upgrader',name:'Upgrader (2x)',cost:700,slot:690,mult:2}),
+    P({id:'d4',type:'dropper',name:'Silver Dropper',cost:1800,slot:820,kind:'silver',val:14,rate:1.0}),
+    P({id:'cv',type:'conveyor',name:'Faster Conveyor',cost:4500,slot:950}),
+    P({id:'u2',type:'upgrader',name:'Upgrader (3x)',cost:14000,slot:1080,mult:3}),
+    P({id:'d5',type:'dropper',name:'Gold Dropper',cost:35000,slot:1210,kind:'gold',val:60,rate:0.9}),
+    P({id:'u3',type:'upgrader',name:'Mega Upgrader (5x)',cost:140000,slot:1340,mult:5}),
+    P({id:'d6',type:'dropper',name:'Diamond Dropper',cost:600000,slot:1470,kind:'diamond',val:400,rate:0.9}),
+    P({id:'d7',type:'dropper',name:'Ruby Dropper',cost:4000000,slot:1600,kind:'ruby',val:2500,rate:0.85}),
+    P({id:'rb',type:'rebirth',name:'⭐ REBIRTH',cost:25000000,slot:1760}),
+  ];
+}
+initParts();
+
+// ---------- State ----------
+const G={money:0, rebirth:0, bricks:[], pops:[], part:null, buyT:0};
+function rbMult(){return 1+G.rebirth;}                 // +100% per rebirth
+function collectorX(){return WLD-150;}
+function beltStart(){return 230;}
+
+function ownedConveyorFast(){const c=PARTS.find(p=>p.id==='cv');return c&&c.bought;}
+function beltSpeed(){return (ownedConveyorFast()?260:140);}
+
+// ---------- Player ----------
+const pl={x:300, y:0, vx:0, vy:0, face:1, anim:0};
+pl.y=0; // set after layout
+let camX=0;
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+let target=null;
+cv.addEventListener('pointerdown',e=>{target={x:e.clientX+camX, y:e.clientY};});
+
+// ---------- Helpers ----------
+function fmt(n){
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return Math.floor(n).toString();
+}
+let toastT=0;const toastEl=document.getElementById('toast');
+function toast(m){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.2;}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// ---------- Purchase ----------
+function buyPart(p){
+  if(p.bought)return;
+  if(G.money<p.cost){toast('Need $'+fmt(p.cost));p.cool=.8;return;}
+  G.money-=p.cost;p.bought=true;
+  if(p.type==='rebirth'){doRebirth();return;}
+  toast('✓ Built: '+p.name);
+}
+function doRebirth(){
+  G.rebirth++;const rb=G.rebirth;
+  G.money=0;G.bricks=[];G.pops=[];
+  initParts();
+  PARTS.find(p=>p.id==='d1').bought=true; // keep starter
+  toast('⭐ REBIRTH '+rb+'! All ore +'+(rb*100)+'%');
+}
+
+// auto-own free starter
+PARTS.find(p=>p.id==='d1').bought=true;
+
+// ---------- Update ----------
+let last=performance.now();
+function update(dt){
+  const fT=floorTop();
+  if(pl.y===0)pl.y=fT+120;
+  // input
+  let ax=0,ay=0;
+  if(keys['a']||keys['arrowleft'])ax-=1;
+  if(keys['d']||keys['arrowright'])ax+=1;
+  if(keys['w']||keys['arrowup'])ay-=1;
+  if(keys['s']||keys['arrowdown'])ay+=1;
+  if(ax||ay)target=null;
+  if(target){const dx=target.x-pl.x,dy=target.y-pl.y,d=Math.hypot(dx,dy);
+    if(d>6){ax=dx/d;ay=dy/d;}else target=null;}
+  const sp=340;
+  pl.x+=ax*sp*dt;pl.y+=ay*sp*dt;
+  if(ax)pl.face=ax>0?1:-1;
+  pl.anim+=(Math.abs(ax)+Math.abs(ay))*dt*10;
+  // bounds (floor area)
+  pl.x=Math.max(70,Math.min(WLD-70,pl.x));
+  pl.y=Math.max(fT+40,Math.min(H-40,pl.y));
+  // camera
+  camX=Math.max(0,Math.min(WLD-W,pl.x-W/2));
+
+  // buy pad detection
+  G.part=null;
+  for(const p of PARTS){
+    if(p.bought&&p.type!=='rebirth')continue;
+    if(p.cool>0)p.cool-=dt;
+    const px=p.slot, py=fT+95;
+    if(Math.abs(pl.x-px)<46 && Math.abs(pl.y-py)<46){
+      G.part=p;
+      G.buyT+=dt;
+      if(G.buyT>0.35){G.buyT=0;buyPart(p);}
+    }
+  }
+  if(!G.part)G.buyT=0;
+
+  // droppers spawn bricks
+  const by=beltY();
+  for(const p of PARTS){
+    if(p.type!=='dropper'||!p.bought)continue;
+    p.t=(p.t||0)-dt;
+    if(p.t<=0){p.t=p.rate;
+      G.bricks.push({x:Math.max(p.slot,beltStart()), y:by-40, vy:0, onbelt:false,
+        value:p.val*rbMult(), kind:p.kind, size:13+Math.random()*4, spin:Math.random()*6, boost:0, bob:Math.random()*6});
+    }
+  }
+  // move bricks
+  const spd=beltSpeed();
+  for(let i=G.bricks.length-1;i>=0;i--){
+    const r=G.bricks[i];
+    if(!r.onbelt){r.vy+=900*dt;r.y+=r.vy*dt;if(r.y>=by-2){r.y=by-2;r.onbelt=true;}}
+    else{
+      const px=r.x;r.x+=spd*dt;r.spin+=dt*3;r.bob+=dt*5;
+      for(const u of PARTS){if(u.type==='upgrader'&&u.bought&&px<u.slot&&r.x>=u.slot){r.value*=u.mult;r.boost=.35;}}
+      if(r.boost>0)r.boost-=dt;
+      if(r.x>=collectorX()){G.money+=r.value;
+        G.pops.push({x:collectorX(),y:by-30,vy:-40,life:1,t:'+$'+fmt(r.value)});
+        G.bricks.splice(i,1);}
+    }
+  }
+  if(G.bricks.length>600)G.bricks.splice(0,G.bricks.length-600);
+  for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
+  if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
+}
+
+// ---------- Draw ----------
+let T=0;
+function drawFloor(){
+  const fT=floorTop();
+  // back wall
+  const wg=ctx.createLinearGradient(0,0,0,fT);
+  wg.addColorStop(0,'#16243a');wg.addColorStop(1,'#0e1626');
+  ctx.fillStyle=wg;ctx.fillRect(0,0,W,fT);
+  // floor
+  const fg=ctx.createLinearGradient(0,fT,0,H);
+  fg.addColorStop(0,'#27313f');fg.addColorStop(1,'#161d27');
+  ctx.fillStyle=fg;ctx.fillRect(0,fT,W,H-fT);
+  // floor grid (camera-scrolled)
+  ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;
+  const gs=70,ox=-(camX%gs);
+  for(let x=ox;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,fT);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=fT;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // wall trim
+  ctx.fillStyle='#3a4a63';ctx.fillRect(0,fT-6,W,6);
+}
+
+function drawBelt(){
+  const by=beltY(),x0=beltStart()-camX,x1=collectorX()-camX;
+  // supports
+  ctx.fillStyle='#1a232f';
+  for(let x=x0;x<x1;x+=140){ctx.fillRect(x,by+22,10,floorTop()-by-22);}
+  // belt
+  const g=ctx.createLinearGradient(0,by,0,by+24);
+  g.addColorStop(0,ownedConveyorFast()?'#3a4a6a':'#3a3a3f');g.addColorStop(1,'#15181f');
+  ctx.fillStyle=g;roundRect(x0-14,by,x1-x0+28,24,12);ctx.fill();
+  ctx.save();roundRect(x0-14,by,x1-x0+28,24,12);ctx.clip();
+  ctx.strokeStyle=ownedConveyorFast()?'#5a72a0':'#4a4a52';ctx.lineWidth=3;
+  const off=(T*(ownedConveyorFast()?150:80))%22;
+  for(let x=x0-30;x<x1+30;x+=22){ctx.beginPath();ctx.moveTo(x+off,by);ctx.lineTo(x+off-13,by+24);ctx.stroke();}
+  ctx.restore();
+  for(const rx of [x0-14,x1+14]){const rg=ctx.createRadialGradient(rx-3,by+9,2,rx,by+12,14);
+    rg.addColorStop(0,'#6a6a72');rg.addColorStop(1,'#2a2a30');ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(rx,by+12,13,0,7);ctx.fill();}
+}
+
+function drawDropper(p){
+  const x=p.slot-camX, by=beltY();
+  if(x<-80||x>W+80)return;
+  const t=TIER[p.kind],top=by-118;
+  if(t.glow){ctx.save();ctx.shadowColor=t.glow;ctx.shadowBlur=16;}
+  // funnel
+  ctx.fillStyle=t.b;ctx.beginPath();
+  ctx.moveTo(x-30,top);ctx.lineTo(x+30,top);ctx.lineTo(x+20,top-16);ctx.lineTo(x-20,top-16);ctx.closePath();ctx.fill();
+  // body
+  const bg=ctx.createLinearGradient(0,top,0,top+58);bg.addColorStop(0,t.a);bg.addColorStop(1,t.b);
+  ctx.fillStyle=bg;roundRect(x-30,top,60,58,8);ctx.fill();
+  if(t.glow)ctx.restore();
+  ctx.fillStyle='rgba(0,0,0,.3)';roundRect(x-24,top+8,48,18,4);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText(p.name.toUpperCase(),x,top+21);
+  // chute + legs
+  ctx.fillStyle='#11151c';ctx.fillRect(x-8,by-40,16,12);
+  ctx.strokeStyle=t.b;ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x-22,top+58);ctx.lineTo(x-22,by-2);ctx.moveTo(x+22,top+58);ctx.lineTo(x+22,by-2);ctx.stroke();
+}
+
+function drawUpgrader(p){
+  const x=p.slot-camX, by=beltY();
+  if(x<-80||x>W+80)return;
+  const on=p.bought, h=120, top=by-h;
+  // arch posts
+  ctx.fillStyle=on?(p.mult>=5?'#7a3aa0':'#2e8a4e'):'#43506a';
+  roundRect(x-36,top,12,h,4);ctx.fill();roundRect(x+24,top,12,h,4);ctx.fill();
+  roundRect(x-36,top,72,16,5);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 10px Segoe UI';ctx.textAlign='center';ctx.fillText('×'+p.mult,x,top+12);
+  if(on){ctx.fillStyle=p.mult>=5?'rgba(180,120,255,.22)':'rgba(90,240,150,.20)';
+    ctx.fillRect(x-24,top+16,48,h-16);}
+}
+
+function drawCollector(){
+  const x=collectorX()-camX, by=beltY();
+  const g=ctx.createLinearGradient(0,by-70,0,by+10);g.addColorStop(0,'#27405a');g.addColorStop(1,'#13202e');
+  ctx.fillStyle=g;roundRect(x-6,by-70,76,80,10);ctx.fill();
+  ctx.fillStyle='#0e1620';roundRect(x+2,by-62,58,30,6);ctx.fill();
+  ctx.fillStyle='#5cf09a';ctx.font='bold 22px Segoe UI';ctx.textAlign='center';ctx.fillText('💰',x+32,by-40);
+  ctx.fillStyle='#8aa0bd';ctx.font='bold 10px Segoe UI';ctx.fillText('COLLECTOR',x+32,by-16);
+  ctx.fillStyle='#0a0f16';ctx.fillRect(x-6,by-2,18,12);
+}
+
+function drawBrick(r){
+  const x=r.x-camX;if(x<-40||x>W+40)return;
+  const t=TIER[r.kind], s=r.size*(r.boost>0?1.35:1);
+  const yy=r.y-(r.onbelt?Math.abs(Math.sin(r.bob))*2:0);
+  ctx.save();ctx.translate(x,yy);ctx.rotate(r.spin);
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=10;}
+  const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.a);g.addColorStop(1,t.b);ctx.fillStyle=g;
+  if(r.kind==='diamond'){ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s*.8,0);ctx.lineTo(0,s);ctx.lineTo(-s*.8,0);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.stroke();}
+  else{roundRect(-s*.7,-s*.6,s*1.4,s*1.2,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(-s*.7,-s*.6,s*1.4,3);
+    ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(-s*.7,s*.4,s*1.4,2);}
+  ctx.restore();
+}
+
+function drawPad(p){
+  const x=p.slot-camX, fT=floorTop(), y=fT+95;
+  if(x<-90||x>W+90)return;
+  const owned=p.bought&&p.type!=='rebirth';
+  const can=!owned&&G.money>=p.cost;
+  const here=G.part===p;
+  // pad
+  ctx.save();
+  const col=owned?'#3a4a63':(p.cool>0?'#b03a3a':(can?'#2ecf63':'#3a8050'));
+  if(here&&!owned){ctx.shadowColor=can?'#5cf09a':'#ff6b6b';ctx.shadowBlur=22;}
+  ctx.fillStyle=col;roundRect(x-40,y-26,80,52,10);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=2;roundRect(x-40,y-26,80,52,10);ctx.stroke();
+  // buy fill ring
+  if(here&&can){ctx.strokeStyle='#fff';ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(x,y,30,-Math.PI/2,-Math.PI/2+Math.PI*2*(G.buyT/0.35));ctx.stroke();}
+  // floating sign
+  const sy=y-78+Math.sin(T*2+p.slot)*3;
+  ctx.fillStyle='#0e1626ee';roundRect(x-66,sy-20,132,40,8);ctx.fill();
+  ctx.strokeStyle=owned?'#3fd97a':'#2a3647';ctx.lineWidth=1.5;roundRect(x-66,sy-20,132,40,8);ctx.stroke();
+  ctx.fillStyle='#e6edf3';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText(p.name,x,sy-3);
+  ctx.fillStyle=owned?'#3fd97a':(can?'#ffce54':'#ff8a8a');ctx.font='bold 12px Segoe UI';
+  ctx.fillText(owned?'OWNED':(p.free?'FREE':'$'+fmt(p.cost)),x,sy+13);
+  // post
+  ctx.fillStyle='#2a3647';ctx.fillRect(x-3,sy+20,6,y-26-(sy+20));
+}
+
+function drawPlayer(){
+  const x=pl.x-camX, y=pl.y;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(x,y+18,18,7,0,0,7);ctx.fill();
+  const sw=Math.sin(pl.anim)*4;
+  // legs
+  ctx.fillStyle='#2a4a8a';
+  ctx.fillRect(x-9,y+6+sw,7,14);ctx.fillRect(x+2,y+6-sw,7,14);
+  // torso (blocky)
+  const bg=ctx.createLinearGradient(0,y-14,0,y+8);bg.addColorStop(0,'#3fd97a');bg.addColorStop(1,'#2ea85e');
+  ctx.fillStyle=bg;roundRect(x-13,y-14,26,22,4);ctx.fill();
+  // arms
+  ctx.fillStyle='#ffd9a8';
+  ctx.fillRect(x-18,y-12+sw,6,16);ctx.fillRect(x+12,y-12-sw,6,16);
+  // head
+  ctx.fillStyle='#ffd9a8';roundRect(x-11,y-34,22,20,5);ctx.fill();
+  // face (direction)
+  ctx.fillStyle='#1a1a1a';
+  ctx.fillRect(x-6+pl.face*3,y-27,3,4);ctx.fillRect(x+3+pl.face*3,y-27,3,4);
+  ctx.fillStyle='#c98';ctx.fillRect(x-4+pl.face*3,y-21,8,2);
+  // hair
+  ctx.fillStyle='#5a3a1a';ctx.fillRect(x-11,y-34,22,5);
+}
+
+function draw(){
+  drawFloor();
+  drawBelt();
+  for(const p of PARTS)if(p.type==='upgrader')drawUpgrader(p);
+  for(const r of G.bricks)drawBrick(r);
+  for(const p of PARTS)if(p.type==='dropper'&&p.bought)drawDropper(p);
+  drawCollector();
+  for(const p of PARTS)drawPad(p);
+  // player drawn with depth: behind pads if above, simplest just draw on top
+  drawPlayer();
+  for(const q of G.pops){const x=q.x-camX;ctx.globalAlpha=Math.max(0,q.life);
+    ctx.fillStyle='#5cf09a';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,q.y);ctx.globalAlpha=1;}
+}
+
+// ---------- Loop ----------
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();
+  document.getElementById('money').textContent='$'+fmt(G.money);
+  const owned=PARTS.filter(p=>p.bought&&p.type!=='rebirth').length;
+  document.getElementById('sub').textContent=owned+' machines built';
+  document.getElementById('rb').textContent=G.rebirth>0?('⭐ Rebirth '+G.rebirth+'  (+'+(G.rebirth*100)+'% ore)'):'';
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
