@@ -6,41 +6,51 @@
 <title>Rock Tycoon</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;background:#0d1117;color:#e6edf3;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  html,body{height:100%;background:#070b12;color:#e6edf3;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
   #wrap{position:relative;width:100%;height:100%}
-  canvas{display:block;width:100%;height:100%;background:linear-gradient(#1a2332,#0d1117)}
-  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;
-       padding:10px 16px;pointer-events:none;font-weight:700}
-  #money{font-size:28px;color:#3fd97a;text-shadow:0 2px 8px #000}
-  #rebirthTag{font-size:14px;color:#c08bff}
-  #shop{position:absolute;top:54px;right:10px;width:230px;max-height:calc(100% - 64px);overflow-y:auto;
-        display:flex;flex-direction:column;gap:8px;padding-right:4px}
-  .buy{pointer-events:auto;background:#161d29;border:1px solid #2a3647;border-radius:10px;padding:9px 11px;
-       cursor:pointer;transition:.12s;text-align:left}
-  .buy:hover{border-color:#3fd97a;transform:translateY(-1px)}
-  .buy .t{font-size:13px;font-weight:700}
-  .buy .c{font-size:12px;color:#ffce54;margin-top:2px}
-  .buy.locked{opacity:.4;filter:grayscale(.6);cursor:not-allowed}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none}
+  #moneyBox{display:flex;flex-direction:column;gap:2px}
+  #money{font-size:32px;font-weight:800;color:#5cf09a;text-shadow:0 2px 14px rgba(60,217,122,.5),0 2px 2px #000}
+  #rate{font-size:13px;font-weight:700;color:#8aa0bd;text-shadow:0 1px 2px #000}
+  #rebirthTag{font-size:14px;font-weight:800;color:#d3a6ff;text-shadow:0 1px 4px #000}
+  #shop{position:absolute;top:60px;right:10px;width:236px;max-height:calc(100% - 72px);overflow-y:auto;
+        display:flex;flex-direction:column;gap:7px;padding:2px 4px 2px 2px;scrollbar-width:thin}
+  #shop::-webkit-scrollbar{width:6px}
+  #shop::-webkit-scrollbar-thumb{background:#2a3647;border-radius:3px}
+  .buy{pointer-events:auto;background:linear-gradient(180deg,#19222f,#121925);border:1px solid #2a3647;
+       border-radius:11px;padding:9px 12px;cursor:pointer;transition:.12s;text-align:left;position:relative;overflow:hidden}
+  .buy:hover{border-color:#3fd97a;transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  .buy.afford{border-color:#3fd97a55;box-shadow:0 0 0 1px #3fd97a33}
+  .buy .t{font-size:13px;font-weight:700;line-height:1.2}
+  .buy .c{font-size:12px;font-weight:700;color:#ffce54;margin-top:3px}
+  .buy.locked{opacity:.45;filter:grayscale(.6);cursor:default}
+  .buy.locked:hover{transform:none;border-color:#2a3647;box-shadow:none}
   .buy.cant .c{color:#ff6b6b}
-  #toast{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);background:#161d29cc;
-         border:1px solid #3fd97a;border-radius:10px;padding:10px 18px;font-weight:700;color:#3fd97a;
-         opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%}
-  #toast.show{opacity:1}
-  #back{position:absolute;top:10px;left:50%;transform:translateX(-50%);color:#7d8aa0;font-size:12px;
-        text-decoration:none;pointer-events:auto}
-  #win{position:absolute;inset:0;background:#0d1117ee;display:none;flex-direction:column;
-       align-items:center;justify-content:center;gap:16px;text-align:center;z-index:20}
-  #win h1{font-size:48px;color:#ffce54;text-shadow:0 0 24px #ffce54}
-  #win p{color:#9aa7bd;max-width:400px}
-  #win button{pointer-events:auto;background:#3fd97a;color:#08130c;border:0;border-radius:10px;
-              padding:12px 24px;font-weight:800;font-size:16px;cursor:pointer}
+  #toast{position:absolute;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);background:#121925ee;
+         border:1px solid #3fd97a;border-radius:11px;padding:11px 20px;font-weight:700;color:#5cf09a;
+         opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%;box-shadow:0 6px 20px #000a}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;
+        font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
+  #back:hover{color:#9aa7bd}
+  #win{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,#142a1c,#070b12);display:none;
+       flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;z-index:20}
+  #win h1{font-size:54px;font-weight:900;color:#ffce54;text-shadow:0 0 30px #ffce54}
+  #win p{color:#9aa7bd;max-width:420px;line-height:1.5}
+  #win button{pointer-events:auto;background:linear-gradient(180deg,#5cf09a,#2ecf63);color:#07130c;border:0;
+              border-radius:11px;padding:13px 26px;font-weight:800;font-size:16px;cursor:pointer}
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="cv"></canvas>
   <div id="hud">
-    <div id="money">$0</div>
+    <div id="moneyBox">
+      <div id="money">$0</div>
+      <div id="rate"></div>
+    </div>
     <div id="rebirthTag"></div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
@@ -48,7 +58,7 @@
   <div id="toast"></div>
   <div id="win">
     <h1>YOU WIN!</h1>
-    <p>You built the ultimate rock empire and conquered the Rock Tycoon. Legend.</p>
+    <p>You built the ultimate rock empire and conquered Rock Tycoon. A true legend of industry.</p>
     <button onclick="location.reload()">Play Again</button>
   </div>
 </div>
@@ -61,189 +71,130 @@ addEventListener('resize',resize);resize();
 
 // ---------- Game state ----------
 const G={
-  money:0,
-  rebirth:0,
-  rocks:[],           // {x, value, color, kind, size}
-  dropTimer:0,
-  flashGreen:0, flashUp:0,
+  money:0, rebirth:0, rocks:[], pops:[], dropTimer:0,
+  flash:{}, earnedRecent:0, rate:0, rateTimer:0,
   // unlock flags
-  haveUpgrader:false,        // manual upgrader unlocked (at $10)
-  upgraderActive:0,          // seconds remaining of manual 2x
-  haveDuplicator:false,      // duplicates drops
-  autoDrop:false,
-  autoUpgrade:false,
-  dropDuplicated:false,      // dropper produces 2 rocks
-  upgraderFixed:false,       // manual upgrader stays on permanently
-  diamondDropper:false,
-  diamondDup:false,
-  upg1Diamond:false,         // upgrader 1 -> diamond (50k)
-  upg2:false,                // second upgrader (180k) [post-rebirth tier path]
+  haveUpgrader:false, upgraderActive:0,
+  haveDuplicator:false, autoDrop:false, autoUpgrade:false,
+  dropDuplicated:false, upgraderFixed:false,
+  diamondDropper:false, diamondDup:false, upg1Diamond:false, upg2:false,
   // post-rebirth
-  futureDropper:false,
-  futureUpgrader:false,
-  fastConveyor:false,
-  triple:0,                  // count of triple droppers (0..5)
-  fireDropper:false,
-  illuminati:false,
+  futureDropper:false, futureUpgrader:false, fastConveyor:false,
+  triple:0, fireDropper:false, illuminati:false,
 };
 
-// dropper config derived from flags
-function dropCount(){
-  let n=1;
-  if(G.dropDuplicated)n++;          // duplicator on dropper
-  n+=G.triple*2;                    // each triple dropper adds 2 (so total triples)
-  return n;
+// ---------- Ore tiers ----------
+const TIER={
+  rock:{col:'#9a8a73',col2:'#6b5d49',glow:null,name:'Rock'},
+  diamond:{col:'#bdf2ff',col2:'#62c4d8',glow:'#9af0ff',name:'Diamond'},
+  future:{col:'#5ff0ff',col2:'#1f8fb0',glow:'#46e0ff',name:'Future'},
+  fire:{col:'#ff7a3a',col2:'#c0341a',glow:'#ff5a2a',name:'Fire'},
+  illum:{col:'#ffe27a',col2:'#caa64a',glow:'#ffd24d',name:'Illuminati'},
+};
+function rebirthMult(){return 1+G.rebirth*0.5;}
+
+// ---------- Machine lists (these GROW as you buy upgrades) ----------
+function getDroppers(){
+  const ds=[];
+  // main dropper — tier escalates with purchases
+  let k='rock',m=1;
+  if(G.illuminati){k='illum';m=5000;}
+  else if(G.fireDropper){k='fire';m=200;}
+  else if(G.futureDropper){k='future';m=25;}
+  else if(G.diamondDropper){k='diamond';m=8;}
+  ds.push({id:'main',name:'DROPPER',kind:k,mult:m,drops:G.dropDuplicated?2:1,btn:true});
+  // duplicator becomes its own dropper machine
+  if(G.haveDuplicator)
+    ds.push({id:'dup',name:'DUPLICATOR',kind:G.diamondDup?'diamond':'rock',mult:G.diamondDup?3:1,drops:1});
+  // each triple dropper is its own machine
+  for(let i=0;i<G.triple;i++)
+    ds.push({id:'tri'+i,name:'TRIPLE '+(i+1),kind:'future',mult:30,drops:3});
+  return ds;
 }
-function rockBase(){
-  let v=1;
-  if(G.diamondDropper)v*=8;
-  if(G.diamondDup)v*=3;
-  if(G.futureDropper)v*=25;
-  if(G.fireDropper)v*=200;
-  if(G.illuminati)v*=5000;
-  v*=(1+G.rebirth*0.5);             // rebirth bonus
-  return v;
+function getUpgraders(){
+  const us=[];
+  if(G.haveUpgrader)us.push({id:'u1',name:G.upg1Diamond?'UPGRADER ◆':'UPGRADER',
+    mult:G.upg1Diamond?4:2, active:up1Active(), manual:!(G.upgraderFixed||G.autoUpgrade)});
+  if(G.upg2)us.push({id:'u2',name:G.futureUpgrader?'UPGRADER 2 ⚡':'UPGRADER 2',
+    mult:G.futureUpgrader?8:5, active:true, manual:false});
+  return us;
 }
-function rockStyle(){
-  if(G.illuminati)return['#ffd24d','illum'];
-  if(G.fireDropper)return['#ff5a2a','fire'];
-  if(G.futureDropper)return['#46e0ff','future'];
-  if(G.diamondDropper)return['#9af0ff','diamond'];
-  return['#8a7d6a','rock'];
-}
+function up1Active(){return G.upgraderFixed||G.autoUpgrade||G.upgraderActive>0;}
 
 // ---------- Layout ----------
-function belt(){
-  const top=Math.min(H*0.62, H-120);
-  return {x0:60, x1:W-60, y:top};
+function belt(){const top=Math.min(H*0.60, H-150);return {x0:54, x1:W-150, y:top};}
+function layout(){
+  const b=belt(),len=b.x1-b.x0;
+  const ds=getDroppers(), us=getUpgraders();
+  const dS=b.x0+24, dE=b.x0+len*0.30;
+  ds.forEach((d,i)=>d.bx=ds.length===1?dS:dS+(dE-dS)*(i/(ds.length-1)));
+  const uS=b.x0+len*0.44, uE=b.x0+len*0.80;
+  us.forEach((u,i)=>u.bx=us.length===1?uS:uS+(uE-uS)*(i/(us.length-1)));
+  return {b,len,ds,us};
 }
 
-// ---------- Drop a rock ----------
-function dropRock(){
-  const b=belt();
-  const[col,kind]=rockStyle();
-  const n=dropCount();
-  for(let i=0;i<n;i++){
-    G.rocks.push({x:b.x0+i*6, prog:0, value:rockBase(), color:col, kind:kind,
-      size:kind==='rock'?14:16, spin:Math.random()*6});
+// ---------- Drop ----------
+function dropAll(){
+  const {ds}=layout();
+  const rb=rebirthMult();
+  for(const d of ds){
+    const t=TIER[d.kind];
+    for(let i=0;i<d.drops;i++){
+      G.rocks.push({x:d.bx+(i*7-3), value:d.mult*rb, kind:d.kind,
+        size:11+Math.random()*4, spin:Math.random()*6, boost:0, bob:Math.random()*6});
+    }
   }
+  G.flash.main=.16;
 }
 
-// ---------- Upgraders ----------
-// upgrader 1 multiplier (manual or auto). active if upgraderFixed OR autoUpgrade OR timed active
-function up1Active(){return G.upgraderFixed||G.autoUpgrade||G.upgraderActive>0;}
-function up1Mult(){
-  if(!up1Active())return 1;
-  let m=2;
-  if(G.upg1Diamond)m=4;
-  return m;
-}
-function up2Active(){return G.upg2;}
-function up2Mult(){return G.upg2?(G.futureUpgrader?8:5):1;}
-
-// ---------- Shop definitions ----------
-// each: id,title, cost, visible(), buy(), bought()
+// ---------- Shop ----------
 const SHOP=[
-  {id:'upgrader', title:'Upgrader (2x) — push to activate 20s',
-    cost:10, vis:()=>true, done:()=>G.haveUpgrader,
-    buy:()=>{G.haveUpgrader=true;}},
-  {id:'dup', title:'Duplicator — 2x drops',
-    cost:100, vis:()=>G.haveUpgrader, done:()=>G.haveDuplicator,
-    buy:()=>{G.haveDuplicator=true;}},
-  {id:'autodrop', title:'Automated Rock Dropper',
-    cost:300, vis:()=>G.haveDuplicator, done:()=>G.autoDrop,
-    buy:()=>{G.autoDrop=true;}},
-  {id:'autoup', title:'Auto Upgrader',
-    cost:1500, vis:()=>G.autoDrop, done:()=>G.autoUpgrade,
-    buy:()=>{G.autoUpgrade=true;}},
-  {id:'dropdup', title:'Upgrade Dropper w/ Duplicator',
-    cost:2000, vis:()=>G.autoUpgrade, done:()=>G.dropDuplicated,
-    buy:()=>{G.dropDuplicated=true;}},
-  {id:'fixup', title:'Fix Manual Upgrader (always on)',
-    cost:2500, vis:()=>G.dropDuplicated, done:()=>G.upgraderFixed,
-    buy:()=>{G.upgraderFixed=true;}},
-  {id:'diadrop', title:'Diamond Dropper (8x ore)',
-    cost:13500, vis:()=>G.upgraderFixed, done:()=>G.diamondDropper,
-    buy:()=>{G.diamondDropper=true;}},
-  {id:'diadup', title:'Diamond Dropper + Duplicator',
-    cost:40000, vis:()=>G.diamondDropper, done:()=>G.diamondDup,
-    buy:()=>{G.diamondDup=true;}},
-  {id:'upg1d', title:'Upgrade Upgrader 1 → Diamond (4x)',
-    cost:50000, vis:()=>G.diamondDup, done:()=>G.upg1Diamond,
-    buy:()=>{G.upg1Diamond=true;}},
-  {id:'upg2', title:'Build Upgrader 2 (5x)',
-    cost:180000, vis:()=>G.upg1Diamond, done:()=>G.upg2,
-    buy:()=>{G.upg2=true;}},
-  {id:'rebirth', title:'⭐ REBIRTH (+50% ore each)',
-    cost:250000, vis:()=>G.upg2, done:()=>false,
-    buy:()=>{doRebirth();}},
-  // ---- post-rebirth tier ----
-  {id:'future', title:'Future Dropper (25x)',
-    cost:5000000, vis:()=>G.rebirth>0&&G.upg2, done:()=>G.futureDropper,
-    buy:()=>{G.futureDropper=true;}},
-  {id:'futureup', title:'Future Upgrader (8x)',
-    cost:10000000, vis:()=>G.futureDropper, done:()=>G.futureUpgrader,
-    buy:()=>{G.futureUpgrader=true;}},
-  {id:'conv', title:'Upgrade Conveyor (faster)',
-    cost:12000000, vis:()=>G.futureUpgrader, done:()=>G.fastConveyor,
-    buy:()=>{G.fastConveyor=true;}},
-  {id:'tri1', title:'Triple Dropper I', cost:15000000,
-    vis:()=>G.fastConveyor, done:()=>G.triple>=1, buy:()=>{G.triple=1;}},
-  {id:'tri2', title:'Triple Dropper II', cost:20000000,
-    vis:()=>G.triple>=1, done:()=>G.triple>=2, buy:()=>{G.triple=2;}},
-  {id:'tri3', title:'Triple Dropper III', cost:25000000,
-    vis:()=>G.triple>=2, done:()=>G.triple>=3, buy:()=>{G.triple=3;}},
-  {id:'tri4', title:'Triple Dropper IV', cost:35000000,
-    vis:()=>G.triple>=3, done:()=>G.triple>=4, buy:()=>{G.triple=4;}},
-  {id:'tri5', title:'Triple Dropper V', cost:50000000,
-    vis:()=>G.triple>=4, done:()=>G.triple>=5, buy:()=>{G.triple=5;}},
-  {id:'fire', title:'🔥 Fire Dropper (200x)', cost:100000000,
-    vis:()=>G.triple>=5, done:()=>G.fireDropper, buy:()=>{G.fireDropper=true;}},
-  {id:'illum', title:'👁 Mega Illuminati Dropper (5000x)', cost:1500000000,
-    vis:()=>G.fireDropper, done:()=>G.illuminati, buy:()=>{G.illuminati=true;}},
-  {id:'win', title:'🏆 WIN THE GAME', cost:100000000000,
-    vis:()=>G.illuminati, done:()=>false, buy:()=>{document.getElementById('win').style.display='flex';}},
+  {id:'upgrader',title:'Upgrader (2x) — tap to run 20s',cost:10,vis:()=>true,done:()=>G.haveUpgrader,buy:()=>G.haveUpgrader=true},
+  {id:'dup',title:'Duplicator — adds a 2nd dropper',cost:100,vis:()=>G.haveUpgrader,done:()=>G.haveDuplicator,buy:()=>G.haveDuplicator=true},
+  {id:'autodrop',title:'Automated Rock Dropper',cost:300,vis:()=>G.haveDuplicator,done:()=>G.autoDrop,buy:()=>G.autoDrop=true},
+  {id:'autoup',title:'Auto Upgrader',cost:1500,vis:()=>G.autoDrop,done:()=>G.autoUpgrade,buy:()=>G.autoUpgrade=true},
+  {id:'dropdup',title:'Dropper x2 (duplicate drops)',cost:2000,vis:()=>G.autoUpgrade,done:()=>G.dropDuplicated,buy:()=>G.dropDuplicated=true},
+  {id:'fixup',title:'Fix Manual Upgrader (always on)',cost:2500,vis:()=>G.dropDuplicated,done:()=>G.upgraderFixed,buy:()=>G.upgraderFixed=true},
+  {id:'diadrop',title:'Diamond Dropper (8x ore)',cost:13500,vis:()=>G.upgraderFixed,done:()=>G.diamondDropper,buy:()=>G.diamondDropper=true},
+  {id:'diadup',title:'Diamond Duplicator (3x)',cost:40000,vis:()=>G.diamondDropper,done:()=>G.diamondDup,buy:()=>G.diamondDup=true},
+  {id:'upg1d',title:'Upgrader 1 → Diamond (4x)',cost:50000,vis:()=>G.diamondDup,done:()=>G.upg1Diamond,buy:()=>G.upg1Diamond=true},
+  {id:'upg2',title:'Build Upgrader 2 (5x)',cost:180000,vis:()=>G.upg1Diamond,done:()=>G.upg2,buy:()=>G.upg2=true},
+  {id:'rebirth',title:'⭐ REBIRTH (+50% ore each)',cost:250000,vis:()=>G.upg2,done:()=>false,buy:()=>doRebirth()},
+  {id:'future',title:'Future Dropper (25x)',cost:5000000,vis:()=>G.rebirth>0&&G.upg2,done:()=>G.futureDropper,buy:()=>G.futureDropper=true},
+  {id:'futureup',title:'Future Upgrader (8x)',cost:10000000,vis:()=>G.futureDropper,done:()=>G.futureUpgrader,buy:()=>G.futureUpgrader=true},
+  {id:'conv',title:'Upgrade Conveyor (faster)',cost:12000000,vis:()=>G.futureUpgrader,done:()=>G.fastConveyor,buy:()=>G.fastConveyor=true},
+  {id:'tri1',title:'Triple Dropper I',cost:15000000,vis:()=>G.fastConveyor,done:()=>G.triple>=1,buy:()=>G.triple=1},
+  {id:'tri2',title:'Triple Dropper II',cost:20000000,vis:()=>G.triple>=1,done:()=>G.triple>=2,buy:()=>G.triple=2},
+  {id:'tri3',title:'Triple Dropper III',cost:25000000,vis:()=>G.triple>=2,done:()=>G.triple>=3,buy:()=>G.triple=3},
+  {id:'tri4',title:'Triple Dropper IV',cost:35000000,vis:()=>G.triple>=3,done:()=>G.triple>=4,buy:()=>G.triple=4},
+  {id:'tri5',title:'Triple Dropper V',cost:50000000,vis:()=>G.triple>=4,done:()=>G.triple>=5,buy:()=>G.triple=5},
+  {id:'fire',title:'🔥 Fire Dropper (200x)',cost:100000000,vis:()=>G.triple>=5,done:()=>G.fireDropper,buy:()=>G.fireDropper=true},
+  {id:'illum',title:'👁 Mega Illuminati Dropper (5000x)',cost:1500000000,vis:()=>G.fireDropper,done:()=>G.illuminati,buy:()=>G.illuminati=true},
+  {id:'win',title:'🏆 WIN THE GAME',cost:100000000000,vis:()=>G.illuminati,done:()=>false,buy:()=>document.getElementById('win').style.display='flex'},
 ];
-
 function doRebirth(){
   const rb=G.rebirth+1;
-  // keep diamond-tier dropper upgrades, reset money + early flow, bump rebirth
-  Object.assign(G,{money:0,rebirth:rb,rocks:[],
+  Object.assign(G,{money:0,rebirth:rb,rocks:[],pops:[],
     haveUpgrader:true,haveDuplicator:true,autoDrop:true,autoUpgrade:true,
-    dropDuplicated:true,upgraderFixed:true,
-    upgraderActive:0});
-  toast('REBIRTH! Ore +'+(rb*50)+'%  •  Future tech unlocked');
+    dropDuplicated:true,upgraderFixed:true,upgraderActive:0});
+  toast('⭐ REBIRTH! Ore +'+(rb*50)+'%  •  Future tech unlocked');
 }
 
-// ---------- Shop UI ----------
-const shopEl=document.getElementById('shop');
-let shopNodes={};
-function buildShop(){
-  shopEl.innerHTML='';shopNodes={};
-  for(const s of SHOP){
-    const d=document.createElement('div');d.className='buy';
-    d.innerHTML='<div class="t"></div><div class="c"></div>';
-    d.onclick=()=>tryBuy(s);
-    shopEl.appendChild(d);shopNodes[s.id]=d;
-  }
-}
-function tryBuy(s){
-  if(s.done()||!s.vis())return;
-  if(G.money<s.cost){toast('Need '+fmt(s.cost));return;}
-  G.money-=s.cost;s.buy();toast('Bought: '+s.title);
-}
-function refreshShop(){
-  for(const s of SHOP){
-    const d=shopNodes[s.id];if(!d)continue;
-    if(!s.vis()){d.style.display='none';continue;}
-    d.style.display='';
-    const done=s.done();
-    d.querySelector('.t').textContent=s.title;
-    d.querySelector('.c').textContent=done?'OWNED':('$'+fmt(s.cost));
-    d.classList.toggle('locked',done);
-    d.classList.toggle('cant',!done&&G.money<s.cost);
-  }
-}
+const shopEl=document.getElementById('shop');let shopNodes={};
+function buildShop(){shopEl.innerHTML='';shopNodes={};
+  for(const s of SHOP){const d=document.createElement('div');d.className='buy';
+    d.innerHTML='<div class="t"></div><div class="c"></div>';d.onclick=()=>tryBuy(s);
+    shopEl.appendChild(d);shopNodes[s.id]=d;}}
+function tryBuy(s){if(s.done()||!s.vis())return;
+  if(G.money<s.cost){toast('Need $'+fmt(s.cost));return;}
+  G.money-=s.cost;s.buy();toast('✓ '+s.title);}
+function refreshShop(){for(const s of SHOP){const d=shopNodes[s.id];if(!d)continue;
+  if(!s.vis()){d.style.display='none';continue;}d.style.display='';
+  const done=s.done(),can=!done&&G.money>=s.cost;
+  d.querySelector('.t').textContent=s.title;
+  d.querySelector('.c').textContent=done?'OWNED':'$'+fmt(s.cost);
+  d.classList.toggle('locked',done);d.classList.toggle('cant',!done&&G.money<s.cost);
+  d.classList.toggle('afford',can);}}
 
 // ---------- Helpers ----------
 function fmt(n){
@@ -254,16 +205,19 @@ function fmt(n){
   return Math.floor(n).toString();
 }
 let toastT=0;const toastEl=document.getElementById('toast');
-function toast(m){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.2;}
+function toast(m){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.4;}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 
-// ---------- Input: click green buttons on machines ----------
-let buttons=[]; // filled each draw: {x,y,r,type}
+// ---------- Input ----------
+let buttons=[];
 cv.addEventListener('pointerdown',e=>{
   const mx=e.clientX,my=e.clientY;
   for(const b of buttons){
-    if(Math.hypot(mx-b.x,my-b.y)<b.r+8){
-      if(b.type==='drop'){dropRock();G.flashGreen=.15;}
-      if(b.type==='up'){if(!G.upgraderFixed&&!G.autoUpgrade){G.upgraderActive=20;G.flashUp=.15;toast('Upgrader ON 20s');}}
+    if(Math.hypot(mx-b.x,my-b.y)<b.r+10){
+      if(b.type==='drop'){dropAll();}
+      else if(b.type==='up'){if(!G.upgraderFixed&&!G.autoUpgrade){G.upgraderActive=20;G.flash.u1=.16;toast('Upgrader ON for 20s');}}
       return;
     }
   }
@@ -272,136 +226,205 @@ cv.addEventListener('pointerdown',e=>{
 // ---------- Update ----------
 let last=performance.now();
 function update(dt){
-  const b=belt();
-  const speed=(G.fastConveyor?180:95)*(1+G.rebirth*0.04);
-  // auto drop
-  if(G.autoDrop){G.dropTimer-=dt;const iv=G.fastConveyor?0.5:0.9;
-    if(G.dropTimer<=0){dropRock();G.dropTimer=iv;}}
-  // manual upgrader timer
+  const {b,len,ds,us}=layout();
+  const speed=(G.fastConveyor?185:95)*(1+G.rebirth*0.04);
+  if(G.autoDrop){G.dropTimer-=dt;const iv=G.fastConveyor?0.45:0.85;
+    if(G.dropTimer<=0){dropAll();G.dropTimer=iv;}}
   if(G.upgraderActive>0)G.upgraderActive-=dt;
-  // move rocks
-  const len=b.x1-b.x0;
-  // upgrader zones along belt (fractions)
   for(let i=G.rocks.length-1;i>=0;i--){
-    const r=G.rocks[i];
-    const px=r.x;
-    r.x+=speed*dt;
-    r.spin+=dt*3;
-    // upgrader 1 zone at 40%
-    const z1=b.x0+len*0.40;
-    if(px<z1&&r.x>=z1&&up1Active()){r.value*=up1Mult();r.boost=.3;}
-    // upgrader 2 zone at 65%
-    const z2=b.x0+len*0.65;
-    if(px<z2&&r.x>=z2&&up2Active()){r.value*=up2Mult();r.boost=.3;}
-    if(r.boost)r.boost-=dt;
-    // reach collector
-    if(r.x>=b.x1){G.money+=r.value;G.rocks.splice(i,1);}
+    const r=G.rocks[i],px=r.x;
+    r.x+=speed*dt;r.spin+=dt*2.5;r.bob+=dt*4;
+    for(const u of us){if(u.active&&px<u.bx&&r.x>=u.bx){r.value*=u.mult;r.boost=.35;}}
+    if(r.boost>0)r.boost-=dt;
+    if(r.x>=b.x1){
+      G.money+=r.value;G.earnedRecent+=r.value;
+      G.pops.push({x:b.x1,y:b.y-20,vy:-34,life:1,text:'+$'+fmt(r.value)});
+      G.flash.coll=.2;G.rocks.splice(i,1);
+    }
   }
-  if(G.rocks.length>400)G.rocks.splice(0,G.rocks.length-400);
-  if(G.flashGreen>0)G.flashGreen-=dt;
-  if(G.flashUp>0)G.flashUp-=dt;
+  if(G.rocks.length>500)G.rocks.splice(0,G.rocks.length-500);
+  for(let i=G.pops.length-1;i>=0;i--){const p=G.pops[i];p.y+=p.vy*dt;p.vy*=0.96;p.life-=dt*1.1;
+    if(p.life<=0)G.pops.splice(i,1);}
+  for(const k in G.flash)if(G.flash[k]>0)G.flash[k]-=dt;
   if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
+  // income rate (per second, rolling)
+  G.rateTimer+=dt;if(G.rateTimer>=1){G.rate=G.earnedRecent/G.rateTimer;G.earnedRecent=0;G.rateTimer=0;}
 }
 
-// ---------- Draw ----------
-function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
-  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+// ---------- Drawing ----------
+let bgT=0;
+function drawBackground(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#101a2b');g.addColorStop(.55,'#0b1320');g.addColorStop(1,'#070b12');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // soft factory pipes / parallax stripes
+  ctx.save();ctx.globalAlpha=.06;ctx.strokeStyle='#5cf09a';ctx.lineWidth=2;
+  for(let i=0;i<8;i++){const y=(i*70+ (bgT*8)%70);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y-40);ctx.stroke();}
+  ctx.restore();
+  // ground glow under belt
+  const b=belt();
+  const gg=ctx.createRadialGradient(W/2,b.y+30,20,W/2,b.y+30,W*0.7);
+  gg.addColorStop(0,'rgba(60,217,122,.10)');gg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=gg;ctx.fillRect(0,b.y-40,W,200);
+}
 
-function drawMachine(x,topY,w,label,color,withBtn,btnType,flash){
-  // body
-  ctx.fillStyle=color;roundRect(x-w/2,topY-70,w,70,8);ctx.fill();
-  ctx.fillStyle='#0d1117';ctx.font='bold 12px Segoe UI';ctx.textAlign='center';
-  ctx.fillText(label,x,topY-50);
-  // chute
-  ctx.fillStyle='#222b39';ctx.fillRect(x-8,topY-12,16,12);
-  // green button
-  if(withBtn){
-    const by=topY-30,bx=x,br=14;
-    ctx.fillStyle=flash>0?'#9dffb8':'#2ecf63';
-    ctx.beginPath();ctx.arc(bx,by,br,0,7);ctx.fill();
-    ctx.strokeStyle='#0d3d1e';ctx.lineWidth=2;ctx.stroke();
-    buttons.push({x:bx,y:by,r:br,type:btnType});
+function drawBelt(b,len){
+  // legs
+  ctx.fillStyle='#1a232f';
+  ctx.fillRect(b.x0+10,b.y+22,12,H-(b.y+22));
+  ctx.fillRect(b.x1-22,b.y+22,12,H-(b.y+22));
+  // belt body
+  const grad=ctx.createLinearGradient(0,b.y,0,b.y+26);
+  grad.addColorStop(0,G.fastConveyor?'#3a4a6a':'#3a3a3f');grad.addColorStop(1,'#15181f');
+  ctx.fillStyle=grad;roundRect(b.x0-12,b.y,len+24,26,13);ctx.fill();
+  // tread
+  ctx.save();roundRect(b.x0-12,b.y,len+24,26,13);ctx.clip();
+  ctx.strokeStyle=G.fastConveyor?'#5a72a0':'#4a4a52';ctx.lineWidth=3;
+  const off=(bgT*(G.fastConveyor?120:70))% 22;
+  for(let x=b.x0-30;x<b.x1+30;x+=22){ctx.beginPath();ctx.moveTo(x+off,b.y);ctx.lineTo(x+off-14,b.y+26);ctx.stroke();}
+  // top highlight
+  ctx.fillStyle='rgba(255,255,255,.07)';ctx.fillRect(b.x0-12,b.y+1,len+24,4);
+  ctx.restore();
+  // rollers
+  for(const rx of [b.x0-12,b.x1+12]){
+    const rg=ctx.createRadialGradient(rx-3,b.y+10,2,rx,b.y+13,15);
+    rg.addColorStop(0,'#6a6a72');rg.addColorStop(1,'#2a2a30');
+    ctx.fillStyle=rg;ctx.beginPath();ctx.arc(rx,b.y+13,14,0,7);ctx.fill();
   }
+}
+
+function drawMachine(x,y,d,isDropper){
+  const t=TIER[d.kind]||TIER.rock;
+  const w=isDropper?58:54,bodyH=60;
+  const top=y-bodyH-14;
+  // glow for premium tiers
+  if(t.glow){ctx.save();ctx.shadowColor=t.glow;ctx.shadowBlur=18;}
+  // hopper/funnel
+  ctx.fillStyle=t.col2;ctx.beginPath();
+  ctx.moveTo(x-w/2,top);ctx.lineTo(x+w/2,top);ctx.lineTo(x+w/2-10,top-16);ctx.lineTo(x-w/2+10,top-16);ctx.closePath();ctx.fill();
+  // body
+  const bg=ctx.createLinearGradient(0,top,0,top+bodyH);
+  bg.addColorStop(0,t.col);bg.addColorStop(1,t.col2);
+  ctx.fillStyle=bg;roundRect(x-w/2,top,w,bodyH,9);ctx.fill();
+  if(t.glow)ctx.restore();
+  // panel
+  ctx.fillStyle='rgba(0,0,0,.28)';roundRect(x-w/2+7,top+8,w-14,20,5);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(d.name,x,top+21);
+  // chute
+  ctx.fillStyle='#11151c';ctx.fillRect(x-7,y-12,14,12);
+  // legs
+  ctx.strokeStyle=t.col2;ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x-w/2+8,top+bodyH);ctx.lineTo(x-w/2+8,y-12);
+  ctx.moveTo(x+w/2-8,top+bodyH);ctx.lineTo(x+w/2-8,y-12);ctx.stroke();
+
+  if(isDropper&&d.btn){
+    const by=top+44,fl=G.flash.main>0;
+    ctx.save();if(fl)ctx.shadowColor='#5cf09a',ctx.shadowBlur=16;
+    const bgr=ctx.createRadialGradient(x-3,by-3,2,x,by,12);
+    bgr.addColorStop(0,fl?'#bdffd2':'#5cf09a');bgr.addColorStop(1,'#1d8a47');
+    ctx.fillStyle=bgr;ctx.beginPath();ctx.arc(x,by,fl?13:12,0,7);ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle='#0d3d1e';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,by,12,0,7);ctx.stroke();
+    buttons.push({x:x,y:by,r:12,type:'drop'});
+  }
+  // drop multiplier badge
+  if(isDropper&&d.drops>1){ctx.fillStyle='#ffce54';ctx.font='bold 10px Segoe UI';ctx.fillText('×'+d.drops,x,top-22);}
+}
+
+function drawUpgrader(x,y,u){
+  const w=52,bodyH=58,top=y-bodyH-10;
+  const on=u.active;
+  // arch over belt
+  ctx.save();if(on){ctx.shadowColor=u.mult>=4?'#9af0ff':'#5cf09a';ctx.shadowBlur=16;}
+  ctx.fillStyle=on?(u.mult>=5?'#7a3aa0':'#2e8a4e'):'#5a4a2a';
+  roundRect(x-w/2,top,w,bodyH,9);ctx.fill();ctx.restore();
+  ctx.fillStyle='rgba(0,0,0,.3)';roundRect(x-w/2+6,top+8,w-12,18,5);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 8px Segoe UI';ctx.textAlign='center';ctx.fillText(u.name,x,top+20);
+  // beam down to belt when active
+  if(on){ctx.fillStyle=u.mult>=5?'rgba(180,120,255,.25)':'rgba(90,240,150,.22)';
+    ctx.beginPath();ctx.moveTo(x-14,top+bodyH);ctx.lineTo(x+14,top+bodyH);ctx.lineTo(x+8,y);ctx.lineTo(x-8,y);ctx.closePath();ctx.fill();}
+  // mult label
+  ctx.fillStyle=on?'#5cf09a':'#9aa7bd';ctx.font='bold 11px Segoe UI';ctx.fillText('×'+u.mult,x,top+40);
+  // timer
+  if(u.id==='u1'&&G.upgraderActive>0){ctx.fillStyle='#ffce54';ctx.font='bold 10px Segoe UI';ctx.fillText(Math.ceil(G.upgraderActive)+'s',x,top-6);}
+  // green button if manual
+  if(u.manual){const by=top+50,fl=G.flash.u1>0;
+    ctx.save();if(fl)ctx.shadowColor='#5cf09a',ctx.shadowBlur=14;
+    ctx.fillStyle=fl?'#bdffd2':'#5cf09a';ctx.beginPath();ctx.arc(x,by,10,0,7);ctx.fill();ctx.restore();
+    ctx.strokeStyle='#0d3d1e';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,by,10,0,7);ctx.stroke();
+    buttons.push({x:x,y:by,r:10,type:'up'});
+  }
+}
+
+function drawRock(r,y){
+  const t=TIER[r.kind]||TIER.rock;
+  const s=r.size*(r.boost>0?1.35:1);
+  const yy=y-2-Math.abs(Math.sin(r.bob))*2;
+  ctx.save();ctx.translate(r.x,yy);ctx.rotate(r.spin);
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=12;}
+  const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.col);g.addColorStop(1,t.col2);
+  ctx.fillStyle=g;
+  if(r.kind==='diamond'||r.kind==='future'){
+    ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s*.8,-s*.1);ctx.lineTo(0,s);ctx.lineTo(-s*.8,-s*.1);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.stroke();
+  }else if(r.kind==='fire'){
+    ctx.beginPath();ctx.arc(0,0,s*.7,0,7);ctx.fill();
+    ctx.fillStyle='#ffe27a';ctx.beginPath();ctx.arc(0,-2,s*.32,0,7);ctx.fill();
+  }else if(r.kind==='illum'){
+    ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s,s*.8);ctx.lineTo(-s,s*.8);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#1a1408';ctx.beginPath();ctx.ellipse(0,s*.1,s*.42,s*.26,0,0,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,s*.1,s*.13,0,7);ctx.fill();
+  }else{
+    ctx.beginPath();
+    ctx.moveTo(-s*.6,-s*.3);ctx.lineTo(-s*.2,-s*.6);ctx.lineTo(s*.5,-s*.4);
+    ctx.lineTo(s*.6,s*.3);ctx.lineTo(s*.1,s*.6);ctx.lineTo(-s*.5,s*.4);ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.arc(s*.15,s*.1,s*.18,0,7);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCollector(b){
+  const x=b.x1+12, y=b.y;
+  ctx.save();if(G.flash.coll>0){ctx.shadowColor='#5cf09a';ctx.shadowBlur=20;}
+  const g=ctx.createLinearGradient(0,y-66,0,y+10);g.addColorStop(0,'#27405a');g.addColorStop(1,'#13202e');
+  ctx.fillStyle=g;roundRect(x-6,y-66,72,76,10);ctx.fill();ctx.restore();
+  ctx.fillStyle='#0e1620';roundRect(x+2,y-58,56,30,6);ctx.fill();
+  ctx.fillStyle='#5cf09a';ctx.font='bold 22px Segoe UI';ctx.textAlign='center';ctx.fillText('💰',x+30,y-36);
+  ctx.fillStyle='#8aa0bd';ctx.font='bold 10px Segoe UI';ctx.fillText('COLLECT',x+30,y-12);
+  // mouth opening on belt
+  ctx.fillStyle='#0a0f16';ctx.fillRect(x-6,y-2,16,12);
 }
 
 function draw(){
   buttons=[];
-  ctx.clearRect(0,0,W,H);
-  const b=belt(),len=b.x1-b.x0;
-  // conveyor belt
-  ctx.fillStyle=G.fastConveyor?'#2a3550':'#2b2b2b';
-  roundRect(b.x0-10,b.y,len+20,22,11);ctx.fill();
-  ctx.strokeStyle='#0d1117';
-  for(let i=0;i<len;i+=18){ctx.beginPath();ctx.moveTo(b.x0+i,b.y);ctx.lineTo(b.x0+i,b.y+22);ctx.stroke();}
-  // rollers
-  ctx.fillStyle='#3a3a3a';
-  ctx.beginPath();ctx.arc(b.x0-10,b.y+11,12,0,7);ctx.fill();
-  ctx.beginPath();ctx.arc(b.x1+10,b.y+11,12,0,7);ctx.fill();
-
-  // dropper (left)
-  drawMachine(b.x0+20,b.y, 70,
-    G.illuminati?'ILLUMINATI':G.fireDropper?'FIRE DROP':G.futureDropper?'FUTURE':G.diamondDropper?'DIAMOND':'DROPPER',
-    G.illuminati?'#caa64a':G.fireDropper?'#c0432a':G.futureDropper?'#2a8fb0':G.diamondDropper?'#6fc7d8':'#6b6b6b',
-    true,'drop',G.flashGreen);
-  if(dropCount()>1){ctx.fillStyle='#fff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';
-    ctx.fillText('x'+dropCount(),b.x0+20,b.y-2);}
-
-  // upgrader 1 (40%)
-  if(G.haveUpgrader){
-    const x=b.x0+len*0.40;
-    drawMachine(x,b.y,64, up1Active()?(G.upg1Diamond?'UPG ◆4x ON':'UPG 2x ON'):'UPGRADER',
-      up1Active()?'#2e7d46':'#5a4a2a', !(G.upgraderFixed||G.autoUpgrade),'up',G.flashUp);
-    if(G.upgraderActive>0){ctx.fillStyle='#ffce54';ctx.font='bold 11px Segoe UI';
-      ctx.fillText(Math.ceil(G.upgraderActive)+'s',x,b.y-2);}
-  }
-  // upgrader 2 (65%)
-  if(G.upg2){
-    const x=b.x0+len*0.65;
-    drawMachine(x,b.y,64, G.futureUpgrader?'UPG2 8x':'UPG2 5x','#5a2e7d',false,'',0);
-  }
-
-  // collector (right)
-  ctx.fillStyle='#1c2a3a';roundRect(b.x1-10,b.y-60,60,60,8);ctx.fill();
-  ctx.fillStyle='#3fd97a';ctx.font='bold 12px Segoe UI';ctx.textAlign='center';
-  ctx.fillText('💰',b.x1+20,b.y-30);ctx.fillText('COLLECT',b.x1+20,b.y-10);
-
-  // rocks
-  for(const r of G.rocks){
-    const y=b.y-2;
-    ctx.save();ctx.translate(r.x,y);ctx.rotate(r.spin);
-    const s=r.size*(r.boost>0?1.3:1);
-    ctx.fillStyle=r.color;
-    if(r.kind==='diamond'||r.kind==='future'){
-      ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s*.8,0);ctx.lineTo(0,s);ctx.lineTo(-s*.8,0);ctx.closePath();ctx.fill();
-      ctx.strokeStyle='#fff';ctx.globalAlpha=.5;ctx.stroke();ctx.globalAlpha=1;
-    }else if(r.kind==='fire'){
-      ctx.beginPath();ctx.arc(0,0,s*.7,0,7);ctx.fill();
-      ctx.fillStyle='#ffd24d';ctx.beginPath();ctx.arc(0,-2,s*.35,0,7);ctx.fill();
-    }else if(r.kind==='illum'){
-      ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s,s);ctx.lineTo(-s,s);ctx.closePath();ctx.fill();
-      ctx.fillStyle='#000';ctx.beginPath();ctx.arc(0,s*.2,s*.28,0,7);ctx.fill();
-      ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,s*.2,s*.12,0,7);ctx.fill();
-    }else{
-      ctx.beginPath();ctx.arc(0,0,s*.6,0,7);ctx.fill();
-      ctx.fillStyle='#00000033';ctx.beginPath();ctx.arc(s*.15,s*.1,s*.2,0,7);ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  // hint at start
+  const {b,len,ds,us}=layout();
+  drawBackground();
+  drawBelt(b,len);
+  // rocks under machines
+  for(const r of G.rocks)drawRock(r,b.y);
+  // machines
+  for(const u of us)drawUpgrader(u.bx,b.y,u);
+  for(const d of ds)drawMachine(d.bx,b.y,d,true);
+  drawCollector(b);
+  // money pops
+  for(const p of G.pops){ctx.globalAlpha=Math.max(0,Math.min(1,p.life));
+    ctx.fillStyle='#5cf09a';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';
+    ctx.fillText(p.text,p.x,p.y);ctx.globalAlpha=1;}
+  // start hint
   if(!G.haveUpgrader&&G.money<10&&G.rocks.length<2){
-    ctx.fillStyle='#7d8aa0';ctx.font='14px Segoe UI';ctx.textAlign='center';
-    ctx.fillText('Click the green button on the DROPPER to drop a rock →',W/2,b.y+70);
+    ctx.fillStyle='#8aa0bd';ctx.font='15px Segoe UI';ctx.textAlign='center';
+    ctx.fillText('▼ Tap the green button on the DROPPER to drop a rock', (ds[0]?ds[0].bx:120)+90, b.y+62);
   }
 }
 
 // ---------- Loop ----------
 function loop(now){
-  const dt=Math.min((now-last)/1000,0.05);last=now;
+  const dt=Math.min((now-last)/1000,0.05);last=now;bgT+=dt;
   update(dt);draw();
   document.getElementById('money').textContent='$'+fmt(G.money);
-  document.getElementById('rebirthTag').textContent=G.rebirth>0?('⭐ Rebirth '+G.rebirth):'';
+  document.getElementById('rate').textContent=G.rate>0?('+$'+fmt(G.rate)+' /sec'):'';
+  document.getElementById('rebirthTag').textContent=G.rebirth>0?('⭐ Rebirth '+G.rebirth+'  (+'+(G.rebirth*50)+'% ore)'):'';
   refreshShop();
   requestAnimationFrame(loop);
 }
