@@ -1559,34 +1559,50 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
   draw();
 })();
 </script>
-<!-- Play counts + sort most-played to top — isolated so nothing can block it -->
+<!-- GLOBAL play counts (everyone's plays, via Abacus counter) + sort most-played to top -->
 <script>
 (function(){
+  var NS='platyfy-tw-2026';                 // shared namespace = global across all visitors
+  var BASE='https://abacus.jasoncameron.dev';
+  var CACHE='platyfy_global_cache';          // local cache only for instant display before the network responds
+  function keyFor(h){return h.replace(/[^a-z0-9]/gi,'-').toLowerCase().replace(/^-+|-+$/g,'').slice(0,64);}
+  function label(n){return '▶ '+(n==null?'…':Number(n).toLocaleString())+(n===1?' play':' plays');}
+  function valOf(j){var v=j&&(j.value!=null?j.value:j.count);return typeof v==='number'?v:0;}
   function run(){
     try{
-      var KEY='platyfy_plays';
-      var plays={};
-      try{plays=JSON.parse(localStorage.getItem(KEY))||{};}catch(e){plays={};}
+      var cache={};try{cache=JSON.parse(localStorage.getItem(CACHE))||{};}catch(e){cache={};}
       var cards=Array.prototype.slice.call(document.querySelectorAll('a.card'));
       if(!cards.length)return;
       var grid=cards[0].parentElement;
       cards.forEach(function(c){
-        var href=c.getAttribute('href');
-        var n=plays[href]||0;
-        var badge=document.createElement('div');
-        badge.className='plays';
-        badge.textContent='▶ '+n.toLocaleString()+' play'+(n===1?'':'s');
-        c.appendChild(badge);
+        var href=c.getAttribute('href');c._href=href;
+        var badge=document.createElement('div');badge.className='plays';
+        badge.textContent=label(cache[href]!=null?cache[href]:null);
+        c.appendChild(badge);c._badge=badge;
         c.addEventListener('click',function(){
-          plays[href]=(plays[href]||0)+1;
-          try{localStorage.setItem(KEY,JSON.stringify(plays));}catch(e){}
+          // record this play for EVERYONE (keepalive lets the request finish during navigation)
+          try{fetch(BASE+'/hit/'+NS+'/'+keyFor(href),{keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
+          cache[href]=(cache[href]||0)+1;badge.textContent=label(cache[href]);
+          try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
         });
       });
-      cards.sort(function(a,b){
-        return (plays[b.getAttribute('href')]||0)-(plays[a.getAttribute('href')]||0);
+      function resort(){
+        cards.sort(function(a,b){return (cache[b._href]||0)-(cache[a._href]||0);});
+        cards.forEach(function(c){grid.appendChild(c);});
+      }
+      resort(); // instant order from cache
+      // pull the real GLOBAL counts for every game
+      Promise.all(cards.map(function(c){
+        return fetch(BASE+'/get/'+NS+'/'+keyFor(c._href),{mode:'cors'})
+          .then(function(r){return r.ok?r.json():{value:0};})  // 404 = never played yet = 0
+          .then(valOf)
+          .catch(function(){return null;});                    // network error = keep cached
+      })).then(function(vals){
+        cards.forEach(function(c,i){if(vals[i]!=null){cache[c._href]=vals[i];c._badge.textContent=label(vals[i]);}});
+        try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
+        resort();
       });
-      cards.forEach(function(c){grid.appendChild(c);});
-    }catch(e){console.error('play-count error',e);}
+    }catch(e){console.error('play-count',e);}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run);
   else run();
