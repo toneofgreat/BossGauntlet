@@ -60,7 +60,12 @@
     <div id="road"></div>
   </div>
   <div id="toast"></div>
-  <div id="win"><h1>YOU WIN!</h1><p id="winp"></p><button onclick="location.reload()">Play Again</button></div>
+  <div id="win"><h1>YOU WIN!</h1><p id="winp"></p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+      <button id="winkeep">Keep Playing →</button>
+      <button onclick="location.reload()" style="background:#3a4256;color:#cdd6e0">Play Again</button>
+    </div>
+  </div>
 </div>
 <script>
 "use strict";
@@ -86,6 +91,7 @@ const TIER={
   heavenly:{a:'#fff6d8',b:'#e8c878',glow:'#fff2a8',        mult:700000, nm:'Heavenly'},
   godly:   {a:'#fffbe0',b:'#ffd24d',glow:'#ffffff',        mult:4200000,nm:'Godly'},
   rainbow: {a:'#ff5a72',b:'#46e0ff',glow:'#ffffff',        mult:30000000,nm:'Rainbow Glitch',rainbow:true},
+  rbh:     {a:'#ff5a72',b:'#000000',glow:'#ffffff',        mult:1e9,    nm:'Rainbow Hole',rainbow:true},
 };
 function tmult(t){return TIER[t]?TIER[t].mult:1;}
 const DROP_MULT=80; // every dropper gives 80x as much money
@@ -110,6 +116,7 @@ function addUpg(cls,tier,auto){S.upgraders.push({cls,tier,auto,t:0,flash:0,activ
 function setDropTier(cls,tier){S.droppers.filter(d=>d.cls===cls).forEach(d=>d.tier=tier);}
 function setUpgTier(cls,tier){S.upgraders.filter(u=>u.cls===cls).forEach(u=>u.tier=tier);}
 function automateBasics(){S.droppers.forEach(d=>{if(d.cls==='basic')d.auto=true;});S.upgraders.forEach(u=>{if(u.cls==='basic')u.auto=true;});}
+function setAllRainbow(){S.droppers.forEach(d=>d.tier='rainbow');S.upgraders.forEach(u=>u.tier='rainbow');}
 
 // ================= THE BIG LINEAR SHOP =================
 let _c=10; function PC(m){_c=Math.round(_c*m);return _c;}
@@ -167,6 +174,11 @@ const STEPS=[
   {t:'✨ Godly Dropper',           c:PC(2.8), do:()=>addDrop('end',500000,'godly',true)},
   {t:'🌈 Rainbow Glitched Dropper',c:PC(2.9), do:()=>addDrop('end',5000000,'rainbow',true)},
   {t:'🏆 WIN THE GAME',            c:PC(3.0), do:()=>winGame()},
+  // ----- POST-WIN endgame -----
+  {t:'🌈 Rainbow Glitch EVERYTHING',         c:1e25, do:()=>setAllRainbow()},
+  {t:'🌈⚫ Rainbow Black Hole Dropper',       c:5e25, do:()=>addDrop('end',5e7,'rbh',true)},
+  {t:'🌈⚫ Rainbow Black Hole Dropper II',    c:1e26, do:()=>addDrop('end',5e7,'rbh',true)},
+  {t:'🌈⚫ Rainbow Black Hole Dropper III',   c:2e26, do:()=>addDrop('end',5e7,'rbh',true)},
 ];
 
 // ================= HELPERS =================
@@ -192,7 +204,8 @@ function buyNext(){
   S.money-=st.c;st.do();S.stepIndex++;
   toast('✓ '+st.t);renderShop();save();
 }
-function winGame(){$('winp').textContent='You built the ultimate factory — from a single manual rock dropper all the way to the Rainbow Glitched Dropper. '+ (STEPS.length-1)+' upgrades conquered. Absolute legend.';$('win').style.display='flex';save();}
+function winGame(){$('winp').textContent='You built the ultimate factory — from a single manual rock dropper all the way to the Rainbow Glitched Dropper. Absolute legend! But there is MORE: keep playing to glitch everything to Rainbow and unlock the Rainbow Black Hole droppers.';$('win').style.display='flex';save();}
+$('winkeep').onclick=()=>{$('win').style.display='none';};
 
 // ================= LAYOUT =================
 function belt(){return {x0:54, x1:W-140, y:Math.min(H*0.60,H-150)};}
@@ -276,6 +289,9 @@ function drawOre(o){
     ctx.fillStyle='#ffe27a';ctx.beginPath();ctx.arc(0,-2,s*.34,0,7);ctx.fill();
   }else if(k==='blackhole'){ctx.fillStyle='#000';ctx.beginPath();ctx.arc(0,0,s*.7,0,7);ctx.fill();
     ctx.strokeStyle='#ff8a3a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,s*1.05,o.spin,o.spin+5);ctx.stroke();
+  }else if(k==='rbh'){ctx.fillStyle='#000';ctx.beginPath();ctx.arc(0,0,s*.65,0,7);ctx.fill();
+    for(let r=0;r<4;r++){const hue=(T*200+r*90)%360;ctx.strokeStyle='hsl('+hue+',100%,60%)';ctx.lineWidth=2.4;
+      ctx.beginPath();ctx.arc(0,0,s*(1.0+r*0.18),o.spin+r,o.spin+r+4);ctx.stroke();}
   }else if(k==='heavenly'||k==='godly'){ctx.beginPath();ctx.arc(0,0,s*.7,0,7);ctx.fill();
     ctx.strokeStyle='#fff';ctx.globalAlpha=.7;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,-s,s*.8,s*.3,0,0,7);ctx.stroke();ctx.globalAlpha=1;
   }else if(k==='darkmatter'){ctx.beginPath();ctx.arc(0,0,s*.7,0,7);ctx.fill();
