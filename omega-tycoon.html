@@ -107,12 +107,13 @@ let S;
 function newGame(){
   S={money:0, stepIndex:0,
      droppers:[{cls:'basic',base:1,tier:'rock',auto:false,t:0,flash:0}],
-     upgraders:[], ore:[], pops:[], earned:0, rate:0, rt:0, codeMult:1, codes:{}};
+     upgraders:[], ore:[], pops:[], earned:0, rate:0, rt:0, codeMult:1, codes:{}, ascend:0, ascendMult:1};
 }
 const KEY='omega_tycoon_v1';
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);
-  S.ore=S.ore||[];S.pops=S.pops||[];S.codeMult=S.codeMult||1;S.codes=S.codes||{};return true;}}catch(e){}return false;}
+  S.ore=S.ore||[];S.pops=S.pops||[];S.codeMult=S.codeMult||1;S.codes=S.codes||{};
+  S.ascend=S.ascend||0;S.ascendMult=S.ascendMult||1;return true;}}catch(e){}return false;}
 if(!load())newGame();
 
 // ================= MACHINE BUILDERS (used by steps) =================
@@ -197,6 +198,7 @@ const STEPS=[
   {t:'🟦 +15 Random Stud Droppers',          c:5e38, do:()=>{for(let i=0;i<15;i++)addDrop('stud',2e10,'randomstud',true);}},
   {t:'🟦 Random Stud EVERYTHING',            c:2e39, do:()=>setAll('randomstud')},
   {t:'✨ Godly EVERYTHING',                  c:8e39, do:()=>setAll('godly')},
+  {t:'🌟 ASCEND — restart for +1.5× forever',c:5e40, do:()=>ascend()},
 ];
 
 // ================= HELPERS =================
@@ -216,11 +218,21 @@ function upgValueMult(){
 }
 
 // ================= BUY =================
+let justAscended=false;
 function buyNext(){
   const st=STEPS[S.stepIndex];if(!st)return;
   if(S.money<st.c){toast('Need $'+fmt(st.c));return;}
-  S.money-=st.c;st.do();S.stepIndex++;
+  S.money-=st.c;st.do();
+  if(justAscended)justAscended=false; else S.stepIndex++;
   toast('✓ '+st.t);renderShop();save();
+}
+function ascend(){
+  const cm=S.codeMult||1, codes=S.codes||{}, asc=(S.ascend||0)+1, am=Math.pow(1.5,asc);
+  newGame();
+  S.ascend=asc;S.ascendMult=am;S.codeMult=cm;S.codes=codes;S.stepIndex=0;
+  justAscended=true;
+  toast('🌟 Ascended #'+asc+'! Permanent ×'+am.toFixed(2)+' money forever');
+  save();
 }
 function winGame(){$('winp').textContent='You built the ultimate factory — from a single manual rock dropper all the way to the Rainbow Glitched Dropper. Absolute legend! But there is MORE: keep playing to glitch everything to Rainbow and unlock the Rainbow Black Hole droppers.';$('win').style.display='flex';save();}
 $('winkeep').onclick=()=>{$('win').style.display='none';};
@@ -241,7 +253,7 @@ function layoutUpgraders(){
 // ================= ORE =================
 function spawn(d){
   S.ore.push({x:d.bx, y:belt().y-70, vy:0, onbelt:false,
-    val:d.base*tmult(d.tier)*DROP_MULT*ALL_MULT*(S.codeMult||1), tier:d.tier, size:11+Math.random()*4, spin:Math.random()*6, bob:Math.random()*6});
+    val:d.base*tmult(d.tier)*DROP_MULT*ALL_MULT*(S.codeMult||1)*(S.ascendMult||1), tier:d.tier, size:11+Math.random()*4, spin:Math.random()*6, bob:Math.random()*6});
 }
 
 // ================= INPUT =================
@@ -427,7 +439,7 @@ function loop(now){
   update(dt);draw();
   $('money').textContent='$'+fmt(S.money);
   $('rate').textContent=S.rate>0?('+$'+fmt(S.rate)+' /sec'):'';
-  $('prog').textContent='Upgrade '+Math.min(S.stepIndex+1,STEPS.length)+' / '+STEPS.length;
+  $('prog').textContent=(S.ascend?('🌟 Ascension '+S.ascend+' (×'+(S.ascendMult>=1000?fmt(S.ascendMult):S.ascendMult.toFixed(2))+')  ·  '):'')+'Upgrade '+Math.min(S.stepIndex+1,STEPS.length)+' / '+STEPS.length;
   const st=STEPS[S.stepIndex];
   $('buy').className=(st&&S.money>=st.c)?'':'cant';
   if(now-(loop._s||0)>1500){loop._s=now;save();}
