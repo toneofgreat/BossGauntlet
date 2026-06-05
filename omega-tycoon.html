@@ -93,6 +93,10 @@ const TIER={
   rainbow: {a:'#ff5a72',b:'#46e0ff',glow:'#ffffff',        mult:30000000,nm:'Rainbow Glitch',rainbow:true},
   rbh:     {a:'#ff5a72',b:'#000000',glow:'#ffffff',        mult:1e9,    nm:'Rainbow Hole',rainbow:true},
   futuresky:{a:'#bdeeff',b:'#3a6aff',glow:'#bfe6ff',       mult:5e10,   nm:'Future Sky'},
+  mars:    {a:'#e0623a',b:'#7a2410',glow:'#ff6a3a',        mult:2e11,   nm:'Mars'},
+  sun:     {a:'#fff36a',b:'#ff7a1a',glow:'#ffd24d',        mult:1e12,   nm:'Sun'},
+  universe:{a:'#9a6aff',b:'#0a0030',glow:'#b06aff',        mult:5e12,   nm:'Universe'},
+  randomstud:{a:'#7fd0ff',b:'#2a6aff',glow:'#bfe6ff',      mult:2e13,   nm:'Random Stud',rainbow:true},
 };
 function tmult(t){return TIER[t]?TIER[t].mult:1;}
 const DROP_MULT=80; // every dropper gives 80x as much money
@@ -119,6 +123,7 @@ function setUpgTier(cls,tier){S.upgraders.filter(u=>u.cls===cls).forEach(u=>u.ti
 function automateBasics(){S.droppers.forEach(d=>{if(d.cls==='basic')d.auto=true;});S.upgraders.forEach(u=>{if(u.cls==='basic')u.auto=true;});}
 function setAllRainbow(){S.droppers.forEach(d=>d.tier='rainbow');S.upgraders.forEach(u=>u.tier='rainbow');}
 function setAllRBH(){S.droppers.forEach(d=>d.tier='rbh');S.upgraders.forEach(u=>u.tier='rbh');}
+function setAll(tier){S.droppers.forEach(d=>d.tier=tier);S.upgraders.forEach(u=>u.tier=tier);}
 
 // ================= THE BIG LINEAR SHOP =================
 let _c=10; function PC(m){_c=Math.round(_c*m);return _c;}
@@ -184,7 +189,14 @@ const STEPS=[
   {t:'🌈⚫ Rainbow Black Hole EVERYTHING',    c:5e31, do:()=>setAllRBH()},
   {t:'☁🚀 Future Sky Dropper',               c:3.5e32, do:()=>addDrop('end',5e8,'futuresky',true)},
   {t:'☁🚀 Future Sky Dropper II',            c:1e33, do:()=>addDrop('end',5e8,'futuresky',true)},
-  {t:'☁🚀 Future Sky Dropper III',           c:4e33, do:()=>addDrop('end',5e8,'futuresky',true)},
+  {t:'☁🚀 Future Sky EVERYTHING',            c:5e35, do:()=>setAll('futuresky')},
+  {t:'🔴 Mars Dropper',                      c:2e36, do:()=>addDrop('mars',5e9,'mars',true)},
+  {t:'☀ Upgrade Mars → Sun',                 c:8e36, do:()=>setDropTier('mars','sun')},
+  {t:'🌌 Upgrade Sun → Universe',            c:3e37, do:()=>setDropTier('mars','universe')},
+  {t:'🟦 Random Stud Dropper',               c:1e38, do:()=>addDrop('stud',2e10,'randomstud',true)},
+  {t:'🟦 +15 Random Stud Droppers',          c:5e38, do:()=>{for(let i=0;i<15;i++)addDrop('stud',2e10,'randomstud',true);}},
+  {t:'🟦 Random Stud EVERYTHING',            c:2e39, do:()=>setAll('randomstud')},
+  {t:'✨ Godly EVERYTHING',                  c:8e39, do:()=>setAll('godly')},
 ];
 
 // ================= HELPERS =================
@@ -303,6 +315,14 @@ function drawOre(o){
   }else if(k==='futuresky'){ctx.beginPath();ctx.arc(0,0,s*.72,0,7);ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.85)';ctx.beginPath();ctx.arc(-s*.2,s*.1,s*.32,0,7);ctx.arc(s*.18,s*.05,s*.26,0,7);ctx.fill();
     ctx.fillStyle='#fff';ctx.fillRect(-1,-s*1.05,2,s*.5);ctx.fillRect(-s*.5,-s*.85,s,2);
+  }else if(k==='mars'){ctx.beginPath();ctx.arc(0,0,s*.72,0,7);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.arc(-s*.22,-s*.12,s*.18,0,7);ctx.arc(s*.26,s*.2,s*.12,0,7);ctx.fill();
+  }else if(k==='sun'){ctx.beginPath();ctx.arc(0,0,s*.6,0,7);ctx.fill();
+    ctx.strokeStyle='#ffd24d';ctx.lineWidth=2;for(let r=0;r<8;r++){const a=o.spin+r*0.785;ctx.beginPath();ctx.moveTo(Math.cos(a)*s*.68,Math.sin(a)*s*.68);ctx.lineTo(Math.cos(a)*s*1.05,Math.sin(a)*s*1.05);ctx.stroke();}
+  }else if(k==='universe'){ctx.beginPath();ctx.arc(0,0,s*.72,0,7);ctx.fill();
+    ctx.fillStyle='#fff';for(let p=0;p<6;p++){const a=o.spin*0.5+p*1.1,rr=s*(0.18+0.1*p);ctx.fillRect(Math.cos(a)*rr,Math.sin(a)*rr,1.6,1.6);}
+  }else if(k==='randomstud'){ctx.beginPath();ctx.arc(0,0,s*.72,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.4)';ctx.beginPath();ctx.arc(0,0,s*.4,0,7);ctx.fill();
   }else if(k==='darkmatter'){ctx.beginPath();ctx.arc(0,0,s*.7,0,7);ctx.fill();
     ctx.fillStyle='#fff';for(let p=0;p<3;p++){const a=o.spin+p*2;ctx.fillRect(Math.cos(a)*s*.4,Math.sin(a)*s*.4,1.6,1.6);}
   }else if(k==='omega'||k==='supreme'){ctx.beginPath();ctx.arc(0,0,s*.72,0,7);ctx.fill();
