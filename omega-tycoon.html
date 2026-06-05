@@ -15,6 +15,9 @@
   #prog{font-size:13px;font-weight:800;color:#c8a6ff;text-align:right;text-shadow:0 1px 4px #000}
   #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;font-weight:700;text-decoration:none;pointer-events:auto}
   #back:hover{color:#9aa7bd}
+  #codeBtn{position:absolute;left:12px;bottom:14px;z-index:15;background:linear-gradient(180deg,#7a5ad0,#4a2aa0);
+    color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:800;font-size:13px;cursor:pointer;box-shadow:0 4px 14px #0008}
+  #codeBtn:hover{filter:brightness(1.12)}
   #shop{position:absolute;top:60px;right:10px;width:260px;max-height:calc(100% - 72px);display:flex;flex-direction:column;gap:8px;pointer-events:auto}
   #next{background:linear-gradient(180deg,#1a2740,#111a2c);border:2px solid #5cf09a;border-radius:14px;padding:12px;box-shadow:0 6px 24px #0008}
   #next .lbl{font-size:11px;font-weight:800;color:#8aa0bd;letter-spacing:1px}
@@ -46,6 +49,7 @@
   <canvas id="cv"></canvas>
   <div id="hud"><div><div id="money">$0</div><div id="rate"></div></div><div id="prog"></div></div>
   <a id="back" href="index.html">&larr; Platyfy</a>
+  <button id="codeBtn">🎁 Enter Code</button>
   <div id="shop">
     <div id="next">
       <div class="lbl">NEXT UPGRADE</div>
@@ -92,12 +96,12 @@ let S;
 function newGame(){
   S={money:0, stepIndex:0,
      droppers:[{cls:'basic',base:1,tier:'rock',auto:false,t:0,flash:0}],
-     upgraders:[], ore:[], pops:[], earned:0, rate:0, rt:0};
+     upgraders:[], ore:[], pops:[], earned:0, rate:0, rt:0, codeMult:1, codes:{}};
 }
 const KEY='omega_tycoon_v1';
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);
-  S.ore=S.ore||[];S.pops=S.pops||[];return true;}}catch(e){}return false;}
+  S.ore=S.ore||[];S.pops=S.pops||[];S.codeMult=S.codeMult||1;S.codes=S.codes||{};return true;}}catch(e){}return false;}
 if(!load())newGame();
 
 // ================= MACHINE BUILDERS (used by steps) =================
@@ -206,7 +210,7 @@ function layoutUpgraders(){
 // ================= ORE =================
 function spawn(d){
   S.ore.push({x:d.bx, y:belt().y-70, vy:0, onbelt:false,
-    val:d.base*tmult(d.tier)*DROP_MULT*ALL_MULT, tier:d.tier, size:11+Math.random()*4, spin:Math.random()*6, bob:Math.random()*6});
+    val:d.base*tmult(d.tier)*DROP_MULT*ALL_MULT*(S.codeMult||1), tier:d.tier, size:11+Math.random()*4, spin:Math.random()*6, bob:Math.random()*6});
 }
 
 // ================= INPUT =================
@@ -219,6 +223,17 @@ cv.addEventListener('pointerdown',e=>{
     return;}}
 });
 $('buy').onclick=buyNext;
+// ================= CODES =================
+const CODES={'mylesays10425':25};
+function redeemCode(){
+  const raw=prompt('Enter a code:');if(raw==null)return;
+  const code=raw.trim().toLowerCase();
+  if(!CODES[code]){toast('❌ Invalid code');return;}
+  if(S.codes[code]){toast('Code already redeemed');return;}
+  S.codes[code]=true;S.codeMult=(S.codeMult||1)*CODES[code];
+  toast('🎁 Code redeemed! +'+CODES[code]+'× money');save();
+}
+$('codeBtn').onclick=redeemCode;
 
 // ================= UPDATE =================
 let last=performance.now();
