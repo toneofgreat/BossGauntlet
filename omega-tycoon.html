@@ -84,6 +84,7 @@ const TIER={
   rainbow: {a:'#ff5a72',b:'#46e0ff',glow:'#ffffff',        mult:30000000,nm:'Rainbow Glitch',rainbow:true},
 };
 function tmult(t){return TIER[t]?TIER[t].mult:1;}
+const DROP_MULT=80; // every dropper gives 80x as much money
 
 // ================= STATE =================
 let S;
@@ -204,7 +205,7 @@ function layoutUpgraders(){
 // ================= ORE =================
 function spawn(d){
   S.ore.push({x:d.bx, y:belt().y-70, vy:0, onbelt:false,
-    val:d.base*tmult(d.tier), tier:d.tier, size:11+Math.random()*4, spin:Math.random()*6, bob:Math.random()*6});
+    val:d.base*tmult(d.tier)*DROP_MULT, tier:d.tier, size:11+Math.random()*4, spin:Math.random()*6, bob:Math.random()*6});
 }
 
 // ================= INPUT =================
