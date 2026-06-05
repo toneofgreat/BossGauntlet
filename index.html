@@ -97,6 +97,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Mesopotamia card */
 .bg-mes{background:linear-gradient(135deg,#2a1e08 0%,#4a3a18 55%,#1c160a 100%)}
 .bg-mes canvas{width:100%;height:100%}
+/* Omega Tycoon card */
+.bg-omg{background:linear-gradient(135deg,#1a0a2e 0%,#3a1a5a 50%,#06080f 100%)}
+.bg-omg canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -270,6 +273,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>ROCK TYCOON</h2>
       <p>Click the green button on your dropper to send a rock down the conveyor — each one collected pays out cash. Unlock a manual 2x upgrader, a duplicator, automated droppers and upgraders, diamond machines, then REBIRTH for a permanent ore boost. Post-rebirth opens future tech: future droppers, faster conveyors, five triple droppers, a fire dropper, a mega illuminati dropper, and a final WIN at $100B. Gets way harder as you climb.</p>
       <span class="tag" style="background:#0a2a16;color:#3fd97a">IDLE · TYCOON · CLICK</span>
+    </div>
+  </a>
+  <a href="omega-tycoon.html" class="card">
+    <div class="card-img bg-omg"><canvas id="c24"></canvas></div>
+    <div class="card-body">
+      <h2>OMEGA DROPPER TYCOON</h2>
+      <p>An ultra-detailed dropper tycoon with a 52-step upgrade chain. Start with one manual rock dropper + upgrader, automate them, add mega droppers, then re-tier EVERYTHING through Ice ❄ → Fire 🔥 → Bronze → Iron → Gold → Diamond → Ω Omega → 👑 Supreme — each look cooler than the last. Finish with the Dark Matter, Black Hole, Heavenly, Godly and Rainbow Glitched droppers, then WIN. Ore drops onto a conveyor, runs through your upgraders, and pays out at the collector. Tap to drop early, then watch it automate. Saves your progress.</p>
+      <span class="tag" style="background:#1a0a2e;color:#c8a6ff">TYCOON · 52 UPGRADES · SAVES</span>
     </div>
   </a>
   <a href="mesopotamia.html" class="card">
@@ -1554,6 +1565,37 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
       // happy/sad dot
       ctx.fillStyle=(i+Math.floor(t))%3===0?'#ff6b6b':'#7fe09a';ctx.beginPath();ctx.arc(hx+6,hy+16,3,0,7);ctx.fill();}
     ctx.fillStyle='#3a2a10';ctx.font='bold 12px Arial';ctx.textAlign='left';ctx.fillText('☥ MESOPOTAMIA',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Omega Tycoon preview: tiered ore on a conveyor with glow ----
+(function(){
+  const c=document.getElementById('c24'); if(!c) return;
+  const ctx=c.getContext('2d');let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const tiers=[['#cdeeff','#5fb6e0'],['#ff9a3a','#d12a16'],['#ffe27a','#c79a1e'],['#bdf2ff','#52b8d8'],['#d3a6ff','#7a3ad0']];
+  function draw(){
+    t+=0.02;ctx.clearRect(0,0,w,h);
+    const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,'#1a0a2e');g.addColorStop(1,'#06080f');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    const by=h*0.62;
+    // belt
+    ctx.fillStyle='#2b2b32';ctx.fillRect(w*0.06,by,w*0.78,11);
+    // dropper
+    ctx.fillStyle='#7a3ad0';ctx.fillRect(w*0.12,by-36,w*0.12,26);
+    // collector
+    ctx.fillStyle='#27405a';ctx.fillRect(w*0.84,by-26,w*0.1,28);
+    ctx.fillStyle='#5cf09a';ctx.font='12px Arial';ctx.textAlign='center';ctx.fillText('$',w*0.89,by-8);
+    // glowing tiered ore
+    for(let i=0;i<6;i++){const ox=w*0.16+((t*46+i*60)%(w*0.66));
+      const col=tiers[(i+Math.floor(t*0.5))%tiers.length];
+      ctx.save();ctx.shadowColor=col[0];ctx.shadowBlur=10;
+      const grd=ctx.createLinearGradient(ox-6,by-12,ox+6,by);grd.addColorStop(0,col[0]);grd.addColorStop(1,col[1]);
+      ctx.fillStyle=grd;ctx.beginPath();ctx.arc(ox,by-4,6,0,7);ctx.fill();ctx.restore();}
+    ctx.fillStyle='#c8a6ff';ctx.font='bold 13px Arial';ctx.textAlign='left';ctx.fillText('Ω OMEGA TYCOON',6,16);
     requestAnimationFrame(draw);
   }
   draw();
