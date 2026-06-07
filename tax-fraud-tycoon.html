@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Tax Fraud Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#070a10;color:#e8eef7;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:12px 16px;pointer-events:none}
+  #money{font-size:32px;font-weight:800;color:#5cf09a;text-shadow:0 2px 14px rgba(60,217,122,.5),0 2px 2px #000}
+  #rate{font-size:13px;font-weight:700;color:#8aa0bd;text-shadow:0 1px 2px #000;margin-top:2px}
+  #prog{font-size:13px;font-weight:800;color:#ffce54;text-align:right;text-shadow:0 1px 4px #000}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;font-weight:700;text-decoration:none;pointer-events:auto}
+  #back:hover{color:#9aa7bd}
+  #hack{position:absolute;left:14px;bottom:16px;z-index:15;background:linear-gradient(180deg,#5cf09a,#2ecf63);color:#06140c;border:0;border-radius:14px;padding:14px 20px;font-weight:900;font-size:16px;cursor:pointer;box-shadow:0 6px 20px #0009}
+  #hack:active{transform:scale(.95)}
+  #shop{position:absolute;top:60px;right:10px;width:262px;max-height:calc(100% - 72px);display:flex;flex-direction:column;gap:8px;pointer-events:auto}
+  #next{background:linear-gradient(180deg,#1a2740,#111a2c);border:2px solid #ffce54;border-radius:14px;padding:12px;box-shadow:0 6px 24px #0008}
+  #next .lbl{font-size:11px;font-weight:800;color:#8aa0bd;letter-spacing:1px}
+  #next .ti{font-size:15px;font-weight:800;margin:4px 0;line-height:1.2}
+  #next .co{font-size:15px;font-weight:800;color:#ffce54}
+  #buy{margin-top:9px;width:100%;background:linear-gradient(180deg,#5cf09a,#2ecf63);color:#06140c;border:0;border-radius:10px;padding:11px;font-weight:800;font-size:15px;cursor:pointer}
+  #buy.cant{background:#3a4256;color:#8593a8;cursor:not-allowed}
+  #road{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding-right:2px;scrollbar-width:thin}
+  #road::-webkit-scrollbar{width:6px}#road::-webkit-scrollbar-thumb{background:#2a3344;border-radius:3px}
+  .rstep{background:#121a2a;border:1px solid #232f44;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:700;color:#7d8aa0;display:flex;justify-content:space-between;gap:6px}
+  .rstep.done{color:#3fd97a;border-color:#1d4a2e}.rstep .rc{color:#b8923a;white-space:nowrap}
+  #toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%) translateY(10px);background:#111a2cee;border:1px solid #5cf09a;border-radius:11px;padding:10px 18px;font-weight:700;color:#5cf09a;opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:70%}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #win{position:absolute;inset:0;background:#070a10ee;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;z-index:30;padding:24px}
+  #win h1{font-size:48px;font-weight:900;color:#5cf09a;text-shadow:0 0 30px #5cf09a}
+  #win p{color:#9aa7bd;max-width:440px;line-height:1.5}
+  #win button{background:linear-gradient(180deg,#5cf09a,#2ecf63);color:#06140c;border:0;border-radius:11px;padding:13px 26px;font-weight:800;font-size:16px;cursor:pointer}
+  @media (max-width:760px){#shop{width:188px;top:54px}#money{font-size:25px}#next .ti{font-size:13px}#hack{font-size:14px;padding:12px 16px}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud"><div><div id="money">$0</div><div id="rate"></div></div><div id="prog"></div></div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <button id="hack">💻 HACK</button>
+  <div id="shop">
+    <div id="next"><div class="lbl">NEXT PURCHASE</div><div class="ti" id="ntitle">—</div><div class="co" id="ncost"></div><button id="buy">BUY</button></div>
+    <div id="road"></div>
+  </div>
+  <div id="toast"></div>
+  <div id="win"><h1>TAX EVASION MASTERY!</h1><p id="winp"></p><button onclick="location.reload()">Play Again</button></div>
+</div>
+<script>
+"use strict";
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),$=id=>document.getElementById(id);
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ================= STATE =================
+let S;
+function newGame(){
+  S={money:5, stepIndex:0, gens:[], upgMult:0, office:false, officeMult:2,
+     vis:{}, roof:[], golden:false, shiny:false, supply:false, deco:false,
+     pops:[], earned:0, rate:0, rt:0};
+}
+const KEY='taxfraud_tycoon_v1';
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function load(){try{const r=localStorage.getItem(KEY);if(r){S=JSON.parse(r);
+  S.gens=S.gens||[];S.roof=S.roof||[];S.vis=S.vis||{};S.pops=S.pops||[];return true;}}catch(e){}return false;}
+if(!load())newGame();
+
+// ================= SHOP (linear) =================
+let _c=10;function PC(m){_c=Math.round(_c*m);return _c;}
+const STEPS=[
+  {t:'💻 Hacking Computer (click HACK!)',     c:PC(1.4), type:'computer'},
+  {t:'🤖 AI Hacker — automates hacking',      c:PC(1.7), type:'ai'},
+  {t:'🖨 Fraud Printer',                      c:PC(1.6), type:'gen'},
+  {t:'🤖 AI Printer Bot',                     c:PC(1.6), type:'gen'},
+  {t:'🌳 Outside Decorations',                c:PC(1.6), type:'gen', key:'deco'},
+  {t:'💻 Computer Dropper',                   c:PC(1.6), type:'gen', key:'drop'},
+  {t:'🖨 Printer Dropper',                    c:PC(1.6), type:'gen', key:'drop'},
+  {t:'🔋 Battery Upgrader',                   c:PC(1.8), type:'upg', mult:0.5},
+  {t:'⚡ Energy Upgrader',                    c:PC(1.8), type:'upg', mult:0.7},
+  {t:'🏢 BUY OFFICE BUILDING',               c:PC(2.6), type:'office'},
+  {t:'🪴 Company Plants',                     c:PC(1.5), type:'gen'},
+  {t:'👔 Company Workers',                    c:PC(1.6), type:'gen'},
+  {t:'💻 Company Computers',                  c:PC(1.6), type:'gen'},
+  {t:'🖨 Company Printers',                   c:PC(1.6), type:'gen'},
+  {t:'🛒 3rd-Floor Supply Shop',             c:PC(1.9), type:'gen', key:'supply'},
+  {t:'🍫 Supply: Snack Bar',                 c:PC(1.5), type:'gen'},
+  {t:'🎮 Supply: Gaming Setup',              c:PC(1.6), type:'gen'},
+  {t:'🗄 Supply: Server Rack',               c:PC(1.7), type:'gen'},
+  {t:'😎 PRO Workers Floor (full gear)',     c:PC(2.1), type:'gen'},
+  {t:'💻 Dropper Floor: Computer Droppers',  c:PC(1.7), type:'gen', key:'drop'},
+  {t:'🖨 Dropper Floor: Printer Droppers',   c:PC(1.7), type:'gen', key:'drop'},
+  {t:'✨ Shiny Dropper Upgrade (look+more)', c:PC(2.0), type:'upg', mult:1.5, key:'shiny'},
+  {t:'🔋 Battery Upgrader II',               c:PC(1.9), type:'upg', mult:1.5},
+  {t:'⚡ Energy Upgrader II',                c:PC(1.9), type:'upg', mult:2},
+  {t:'🏆 Golden Mega Computer',              c:PC(2.4), type:'gen', key:'golden'},
+  // ---- ROOF GADGET SHOP ----
+  {t:'⌚ Roof: Watch',                       c:PC(1.7), type:'gen', key:'roof', icon:'⌚'},
+  {t:'📟 Roof: Flip Phone',                  c:PC(1.7), type:'gen', key:'roof', icon:'📟'},
+  {t:'📱 Roof: Phone',                       c:PC(1.7), type:'gen', key:'roof', icon:'📱'},
+  {t:'📲 Roof: iPad',                        c:PC(1.8), type:'gen', key:'roof', icon:'📲'},
+  {t:'🖥 Roof: Computer',                    c:PC(1.8), type:'gen', key:'roof', icon:'🖥'},
+  {t:'🕶 Roof: VR Headset',                  c:PC(1.9), type:'gen', key:'roof', icon:'🕶'},
+  {t:'📺 Roof: TV',                          c:PC(1.9), type:'gen', key:'roof', icon:'📺'},
+  {t:'🖲 Roof: Super Computer',              c:PC(2.1), type:'gen', key:'roof', icon:'🖲'},
+  {t:'🔬 Roof: Computer Chip Wafer',         c:PC(2.3), type:'gen', key:'roof', icon:'🔬'},
+  {t:'🥉 Roof: Bronze Metal (a lot)',        c:PC(5.0), type:'gen', key:'roof', icon:'🥉'},
+  {t:'🥈 Roof: Silver (a lot more)',         c:PC(8.0), type:'gen', key:'roof', icon:'🥈'},
+  {t:'🥇 Roof: Gold (way too much)',         c:PC(15),  type:'gen', key:'roof', icon:'🥇'},
+  {t:'🎉 TAX EVASION MASTERY — WIN',         c:PC(3.0), type:'win'},
+];
+// derive incomes from cost
+STEPS.forEach(s=>{if(s.type==='gen'||s.type==='ai')s.inc=Math.max(1,Math.round(s.c*0.085));});
+
+// ================= ECONOMY =================
+function perSec(){let s=0;for(const g of S.gens)s+=g.inc;return s*(1+S.upgMult)*(S.office?S.officeMult:1);}
+function hackGain(){return Math.max(1, perSec()*0.6 + (1+S.upgMult));}
+
+function buyNext(){
+  const st=STEPS[S.stepIndex];if(!st)return;
+  if(S.money<st.c){toast('Need $'+fmt(st.c));return;}
+  S.money-=st.c;
+  if(st.type==='gen'||st.type==='ai')S.gens.push({name:st.t,inc:st.inc});
+  else if(st.type==='upg')S.upgMult+=st.mult;
+  else if(st.type==='computer'){S.vis.computer=true;}
+  else if(st.type==='office'){S.office=true;}
+  else if(st.type==='win'){winGame();}
+  if(st.key)S.vis[st.key]=true;
+  if(st.key==='roof'&&st.icon)S.roof.push(st.icon);
+  if(st.key==='golden')S.golden=true;
+  if(st.key==='shiny')S.shiny=true;
+  if(st.key==='supply')S.supply=true;
+  if(st.key==='deco')S.deco=true;
+  S.stepIndex++;toast('✓ '+st.t.replace(/^[^ ]+ /,''));renderShop();save();
+}
+function winGame(){$('winp').textContent='From a broke shack with one stolen laptop to a golden fraud empire with a roof full of gadgets and a vault of gold. The IRS will never catch you now. (It is a game — please pay your real taxes!)';$('win').style.display='flex';save();}
+$('buy').onclick=buyNext;
+$('hack').addEventListener('pointerdown',()=>{const g=hackGain();S.money+=g;S.earned+=g;
+  S.pops.push({x:hackX(),y:H-90,vy:-50,life:1,t:'+$'+fmt(g)});});
+
+// ================= HELPERS =================
+function fmt(n){n=Math.floor(n);if(n<1000)return ''+n;
+  const u=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','De'];
+  let i=Math.floor((Math.log10(n)+1e-9)/3);if(i>=u.length)i=u.length-1;if(i<1)i=1;
+  return (n/Math.pow(1000,i)).toFixed(2)+u[i];}
+let toastT=0;function toast(m){$('toast').textContent=m;$('toast').classList.add('show');toastT=2.2;}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function hackX(){return 70;}
+
+// ================= UPDATE =================
+let last=performance.now(),spawnAcc=0;
+function update(dt){
+  S.money+=perSec()*dt;S.earned+=perSec()*dt;
+  // floating cash from the building
+  if(perSec()>0){spawnAcc+=dt;const iv=Math.max(0.12,0.5-S.gens.length*0.02);
+    while(spawnAcc>=iv){spawnAcc-=iv;S.pops.push({x:buildCX()+(Math.random()*60-30),y:buildTopY(),vy:-34,life:1.2,t:'$'});}}
+  for(let i=S.pops.length-1;i>=0;i--){const p=S.pops[i];p.y+=p.vy*dt;p.vy*=0.96;p.life-=dt*0.8;if(p.life<=0)S.pops.splice(i,1);}
+  S.rt+=dt;if(S.rt>=1){S.rate=S.earned/S.rt;S.earned=0;S.rt=0;}
+  if(toastT>0){toastT-=dt;if(toastT<=0)$('toast').classList.remove('show');}
+}
+
+// ================= SCENE =================
+let T=0;
+function groundY(){return H-70;}
+function buildCX(){return W*0.40;}
+function buildTopY(){return S.office?Math.max(70,groundY()-90-Math.min(S.gens.length,9)*34):groundY()-120;}
+function drawSky(){
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0b1430');g.addColorStop(.55,'#10182c');g.addColorStop(1,'#070a10');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff';for(let i=0;i<40;i++){ctx.globalAlpha=.3+0.3*Math.sin(T+i);ctx.fillRect((i*97%W),(i*53%(H*0.5)),1.6,1.6);}ctx.globalAlpha=1;
+  ctx.fillStyle='#e8eaf0';ctx.beginPath();ctx.arc(W*0.85,80,30,0,7);ctx.fill();
+  ctx.fillStyle='#0b1430';ctx.beginPath();ctx.arc(W*0.83,72,26,0,7);ctx.fill();
+  // ground
+  ctx.fillStyle='#1a2230';ctx.fillRect(0,groundY(),W,H-groundY());
+  ctx.fillStyle='#243044';ctx.fillRect(0,groundY(),W,4);
+}
+function emoji(s,x,y,size){ctx.font=size+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(s,x,y);ctx.textBaseline='alphabetic';}
+
+function drawPoorHouse(){
+  const cx=buildCX(),gy=groundY(),w=200,h=120,x=cx-w/2,y=gy-h;
+  // body
+  ctx.fillStyle='#5a4632';roundRect(x,y,w,h,4);ctx.fill();
+  ctx.fillStyle='#3a2c1c';for(let i=0;i<h;i+=14)ctx.fillRect(x,y+i,w,1); // planks
+  // roof
+  ctx.fillStyle='#3a2418';ctx.beginPath();ctx.moveTo(x-12,y);ctx.lineTo(cx,y-46);ctx.lineTo(x+w+12,y);ctx.closePath();ctx.fill();
+  // door
+  ctx.fillStyle='#2a1c10';ctx.fillRect(cx-22,gy-58,44,58);
+  // window with computer
+  ctx.fillStyle='#0e1622';ctx.fillRect(x+24,y+26,58,44);
+  ctx.fillStyle=S.vis.computer?'#2ecf63':'#26303f';ctx.fillRect(x+30,y+32,46,30);
+  if(S.vis.computer){ctx.fillStyle='#0a2a16';ctx.font='bold 9px monospace';ctx.textAlign='left';
+    ctx.fillText('$ hack',x+33,y+45);ctx.fillText('>'+(Math.floor(T*4)%2?'_':' '),x+33,y+56);}
+  // decorations
+  if(S.deco){emoji('🌳',x-26,gy-22,34);emoji('🌷',x+w+24,gy-16,26);emoji('💡',cx,y-50,20);}
+  // sign
+  ctx.fillStyle='#cdd6e0';ctx.font='bold 12px Segoe UI';ctx.textAlign='center';ctx.fillText('🏚 POOR HOUSE',cx,gy+22);
+}
+function drawOffice(){
+  const cx=buildCX(),gy=groundY();
+  const floors=Math.min(Math.max(3,S.gens.length),9), fh=34, w=210, x=cx-w/2, top=gy-floors*fh-30;
+  // building
+  const g=ctx.createLinearGradient(x,top,x,gy);g.addColorStop(0,'#2a3850');g.addColorStop(1,'#161f30');
+  ctx.fillStyle=g;roundRect(x,top,w,gy-top,5);ctx.fill();
+  ctx.strokeStyle='#3a4a64';ctx.lineWidth=2;roundRect(x,top,w,gy-top,5);ctx.stroke();
+  // floors of windows
+  for(let f=0;f<floors;f++){
+    const fy=gy-(f+1)*fh+6;
+    for(let c=0;c<5;c++){const wx=x+12+c*((w-24)/5);
+      const lit=(f*5+c)%7!==0;
+      ctx.fillStyle=lit?(((f+c)%4===0)?'#2ecf63':'#9fd0ff'):'#0e1622';
+      ctx.fillRect(wx,fy,((w-24)/5)-8,fh-14);
+      if(lit&&(f+c)%3===0){ctx.fillStyle='#06140c';ctx.fillRect(wx+3,fy+3,6,5);} // tiny computer
+    }
+    // 3rd floor supply sign
+    if(f===2&&S.supply){ctx.fillStyle='#ffce54';ctx.font='bold 10px Segoe UI';ctx.textAlign='center';ctx.fillText('🛒 SUPPLY SHOP',cx,fy+fh/2);}
+  }
+  // golden mega computer glow window
+  if(S.golden){ctx.save();ctx.shadowColor='#ffd24d';ctx.shadowBlur=18;ctx.fillStyle='#ffd24d';ctx.fillRect(x+w/2-14,gy-fh+10,28,fh-18);ctx.restore();emoji('🖥',cx,gy-fh/2+2,16);}
+  // company sign
+  ctx.fillStyle='#0e1622';ctx.fillRect(x-6,top-26,w+12,24);
+  ctx.fillStyle='#5cf09a';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText('💼 FRAUD INC. LLC',cx,top-9);
+  // roof gadgets + antenna
+  ctx.strokeStyle='#9aa7bd';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,top-26);ctx.lineTo(cx,top-48);ctx.stroke();
+  ctx.fillStyle='#ff5a72';ctx.beginPath();ctx.arc(cx,top-50,4,0,7);ctx.fill();
+  if(S.roof.length){const rw=Math.min(w+20,S.roof.length*26),sx=cx-rw/2;
+    for(let i=0;i<S.roof.length;i++)emoji(S.roof[i],sx+i*26+13,top-40,20);
+    ctx.fillStyle='#8aa0bd';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('— ROOF SHOP —',cx,top-60);}
+  // a couple workers at the door
+  emoji('👔',cx-30,gy-14,22);emoji('😎',cx+30,gy-14,22);
+}
+
+function draw(){
+  drawSky();
+  if(S.office)drawOffice(); else drawPoorHouse();
+  // floating cash
+  for(const p of S.pops){ctx.globalAlpha=Math.max(0,Math.min(1,p.life));ctx.fillStyle='#5cf09a';
+    ctx.font='bold '+(p.t==='$'?16:14)+'px Segoe UI';ctx.textAlign='center';ctx.fillText(p.t,p.x,p.y);ctx.globalAlpha=1;}
+  // hint
+  if(S.stepIndex===0){ctx.fillStyle='#8aa0bd';ctx.font='14px Segoe UI';ctx.textAlign='center';
+    ctx.fillText('Buy the Hacking Computer, then tap HACK to make fraud money 💸',W*0.40,groundY()+46);}
+}
+
+// ================= SHOP UI =================
+function renderShop(){
+  const st=STEPS[S.stepIndex];
+  if(!st){$('ntitle').textContent='EMPIRE COMPLETE!';$('ncost').textContent='';$('buy').style.display='none';}
+  else{$('ntitle').textContent=st.t;$('ncost').textContent='$'+fmt(st.c)+(st.inc?(' · +$'+fmt(st.inc)+'/s'):(st.mult?(' · ×'+(1+st.mult)+' boost'):''));}
+  const road=$('road');road.innerHTML='';
+  const start=Math.max(0,S.stepIndex-1),end=Math.min(STEPS.length,S.stepIndex+10);
+  for(let i=start;i<end;i++){const s=STEPS[i];const el=document.createElement('div');
+    el.className='rstep'+(i<S.stepIndex?' done':'');
+    el.innerHTML='<span>'+(i<S.stepIndex?'✓ ':(i===S.stepIndex?'▶ ':''))+s.t+'</span><span class="rc">'+(i<S.stepIndex?'':'$'+fmt(s.c))+'</span>';
+    road.appendChild(el);}
+}
+renderShop();
+
+// ================= LOOP =================
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();
+  $('money').textContent='$'+fmt(S.money);
+  $('rate').textContent=perSec()>0?('+$'+fmt(perSec())+' /sec'):'tap HACK to earn';
+  $('prog').textContent='Step '+Math.min(S.stepIndex+1,STEPS.length)+' / '+STEPS.length;
+  $('hack').textContent='💻 HACK  +$'+fmt(hackGain());
+  const st=STEPS[S.stepIndex];$('buy').className=(st&&S.money>=st.c)?'':'cant';
+  if(now-(loop._s||0)>1500){loop._s=now;save();}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

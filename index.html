@@ -100,6 +100,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Omega Tycoon card */
 .bg-omg{background:linear-gradient(135deg,#1a0a2e 0%,#3a1a5a 50%,#06080f 100%)}
 .bg-omg canvas{width:100%;height:100%}
+/* Tax Fraud Tycoon card */
+.bg-tft{background:linear-gradient(135deg,#0b1430 0%,#10182c 55%,#070a10 100%)}
+.bg-tft canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -273,6 +276,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>ROCK TYCOON</h2>
       <p>Click the green button on your dropper to send a rock down the conveyor — each one collected pays out cash. Unlock a manual 2x upgrader, a duplicator, automated droppers and upgraders, diamond machines, then REBIRTH for a permanent ore boost. Post-rebirth opens future tech: future droppers, faster conveyors, five triple droppers, a fire dropper, a mega illuminati dropper, and a final WIN at $100B. Gets way harder as you climb.</p>
       <span class="tag" style="background:#0a2a16;color:#3fd97a">IDLE · TYCOON · CLICK</span>
+    </div>
+  </a>
+  <a href="tax-fraud-tycoon.html" class="card">
+    <div class="card-img bg-tft"><canvas id="c25"></canvas></div>
+    <div class="card-body">
+      <h2>TAX FRAUD TYCOON</h2>
+      <p>Start broke in a run-down shack with one stolen laptop — tap HACK to make fraud money. Buy an AI hacker to automate it, add fraud printers, computer &amp; printer droppers, battery and energy upgraders, then decorate the house. Buy a whole OFFICE BUILDING that grows floor by floor: plants, workers, company computers, a 3rd-floor supply shop, a PRO workers floor, dropper floors, a shiny dropper upgrade and a Golden Mega Computer. Finally hit the roof gadget shop — watch, phone, iPad, VR, TV, super computer, chip wafer, then bronze, silver and (way too expensive) gold. Idle income, auto-saves. (It's a game — pay your real taxes!)</p>
+      <span class="tag" style="background:#0a2a16;color:#5cf09a">IDLE TYCOON · 38 STEPS · SAVES</span>
     </div>
   </a>
   <a href="omega-tycoon.html" class="card">
@@ -1596,6 +1607,35 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
       const grd=ctx.createLinearGradient(ox-6,by-12,ox+6,by);grd.addColorStop(0,col[0]);grd.addColorStop(1,col[1]);
       ctx.fillStyle=grd;ctx.beginPath();ctx.arc(ox,by-4,6,0,7);ctx.fill();ctx.restore();}
     ctx.fillStyle='#c8a6ff';ctx.font='bold 13px Arial';ctx.textAlign='left';ctx.fillText('Ω OMEGA TYCOON',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Tax Fraud Tycoon preview: office building with money + $ floating up ----
+(function(){
+  const c=document.getElementById('c25'); if(!c) return;
+  const ctx=c.getContext('2d');let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.02;ctx.clearRect(0,0,w,h);
+    const g=ctx.createLinearGradient(0,0,0,h);g.addColorStop(0,'#0b1430');g.addColorStop(1,'#070a10');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#e8eaf0';ctx.beginPath();ctx.arc(w*0.82,h*0.24,h*0.1,0,7);ctx.fill();
+    ctx.fillStyle='#0b1430';ctx.beginPath();ctx.arc(w*0.80,h*0.21,h*0.085,0,7);ctx.fill();
+    // building
+    const bw=w*0.34,bx=w*0.33,by=h*0.32,gh=h*0.68;
+    ctx.fillStyle='#2a3850';ctx.fillRect(bx,by,bw,gh-by);
+    for(let f=0;f<5;f++)for(let cc=0;cc<4;cc++){
+      const lit=((f+cc+Math.floor(t))%4)!==0;
+      ctx.fillStyle=lit?(((f+cc)%3===0)?'#2ecf63':'#9fd0ff'):'#0e1622';
+      ctx.fillRect(bx+6+cc*(bw-12)/4,by+8+f*((gh-by-10)/5),(bw-12)/4-5,((gh-by-10)/5)-6);}
+    ctx.fillStyle='#5cf09a';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillText('💼 FRAUD INC',bx+bw/2,by-4);
+    // floating $
+    for(let i=0;i<6;i++){const yy=by-((t*30+i*40)%(by));ctx.globalAlpha=Math.max(0,yy/by);
+      ctx.fillStyle='#5cf09a';ctx.font='bold 13px Arial';ctx.fillText('$',bx+bw/2+Math.sin(t+i)*20,yy+10);ctx.globalAlpha=1;}
+    ctx.fillStyle='#5cf09a';ctx.font='bold 13px Arial';ctx.textAlign='left';ctx.fillText('💸 TAX FRAUD',6,16);
     requestAnimationFrame(draw);
   }
   draw();
