@@ -641,3 +641,17 @@ task.spawn(function()
 		for _, plot in pairs(plots) do save(plot) end
 	end
 end)
+
+-- save everyone before the server shuts down (otherwise the last progress is lost)
+game:BindToClose(function()
+	for _, plot in pairs(plots) do save(plot) end
+	task.wait(2)  -- give the DataStore writes time to finish
+end)
+
+-- warn players if saving is unavailable (Studio API access off, or unpublished place)
+if not STORE then
+	Players.PlayerAdded:Connect(function(p)
+		task.wait(3)
+		Notify:FireClient(p, "robbed", "⚠ Saving is OFF — publish the game & enable Studio API Services to save progress.")
+	end)
+end
