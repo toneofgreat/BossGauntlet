@@ -68,6 +68,8 @@ Config.buttons = {
   {floor=1, kind="upgrader", name="Size Ray (x3)",      baseCost=9000,   mult=3,    color=C(120,220,255)},
   {floor=1, kind="collector",name="Collector",          baseCost=1200},
   {floor=1, kind="cashcollector", name="Cash Collector",baseCost=900},
+  {floor=1, kind="bridge",   name="Left Bridge (half)",  baseCost=11000, side="left"},
+  {floor=1, kind="bridge",   name="Right Bridge (half)", baseCost=11000, side="right"},
   {floor=1, kind="floorslab",name="Build 2nd Floor",    baseCost=15000,  color=C(120,110,100)},
 
   -- ============ FLOOR 2 — Desert ============
@@ -99,7 +101,7 @@ Config.buttons = {
   {floor=3, kind="gear",     name="Hand Grenade",       baseCost=20000000, gear="grenade"},
   {floor=3, kind="gear",     name="Rocket Launcher",    baseCost=35000000, gear="rocket"},
   {floor=3, kind="gear",     name="Laser Gun",          baseCost=50000000, gear="laser"}, -- 2nd most expensive
-  {floor=3, kind="nuke",     name="LAUNCH NUKE",        baseCost=99000000},               -- most expensive
+  {floor=3, kind="nuke",     name="LAUNCH NUKE",        baseCost=1000000000},             -- most expensive (way more)
 }
 
 return Config
@@ -127,6 +129,7 @@ local RunService        = game:GetService("RunService")
 local DataStoreService  = game:GetService("DataStoreService")
 local InsertService     = game:GetService("InsertService")
 local ServerStorage     = game:GetService("ServerStorage")
+local Debris            = game:GetService("Debris")
 
 local Config = require(ReplicatedStorage:WaitForChild("TycoonConfig"))
 
@@ -312,6 +315,22 @@ local function applyButton(plot, idx, btn)
 			Color=btn.color or Color3.fromRGB(90,200,255), Material=Enum.Material.Neon,
 			Transparency=0.3, CanCollide=false}, plot.model)
 
+	elseif btn.kind == "bridge" then
+		-- builds YOUR half of a bridge toward the neighbor plot. Both you AND the
+		-- neighbor must build your facing halves before they meet at the midpoint.
+		local o = plot.origin
+		local dir = (btn.side == "right") and 1 or -1
+		local inner = o.X + dir * 66                       -- ~island edge
+		local mid   = o.X + dir * (Config.PLOT_SPACING / 2) -- meeting point between the two plots
+		local cx    = (inner + mid) / 2
+		local len   = math.abs(mid - inner)
+		part({Name="Bridge_"..btn.side, Size=Vector3.new(len, 1, 12), Position=Vector3.new(cx, 2.5, o.Z),
+			Color=Color3.fromRGB(120,108,92), Material=Enum.Material.WoodPlanks}, plot.model)
+		for _, dz in ipairs({-1, 1}) do
+			part({Name="BridgeRail", Size=Vector3.new(len, 3, 0.5), Position=Vector3.new(cx, 4.5, o.Z + dz*5.6),
+				Color=Color3.fromRGB(86,76,62), Material=Enum.Material.Wood}, plot.model)
+		end
+
 	elseif btn.kind == "upgrader" then
 		local k = #fs.upgraders
 		local ux = plot.origin.X + 20 + k*8
@@ -360,6 +379,74 @@ local function applyButton(plot, idx, btn)
 	end
 end
 
+-- ── Combat for built-in fallback gear (real Toolbox gear has its own scripts) ──
+local function explode(pos, radius, dmg, exclChar)
+	local e = Instance.new("Explosion"); e.Position = pos; e.BlastRadius = radius
+	e.BlastPressure = 0; e.DestroyJointRadiusPercent = 0; e.Parent = workspace
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local c = pl.Character
+		local h = c and c:FindFirstChildWhichIsA("Humanoid")
+		local r = c and c:FindFirstChild("HumanoidRootPart")
+		if h and r and c ~= exclChar and (r.Position - pos).Magnitude <= radius then
+			h:TakeDamage(dmg)
+		end
+	end
+end
+
+local function wireCombat(tool, key)
+	local handle = tool:FindFirstChild("Handle")
+	if key == "sword" then
+		local active, deb = false, {}
+		tool.Activated:Connect(function() active = true; task.delay(0.45, function() active = false end) end)
+		if handle then
+			handle.Touched:Connect(function(hit)
+				if not active then return end
+				local ch = hit.Parent
+				local hum = ch and ch:FindFirstChildWhichIsA("Humanoid")
+				if hum and ch ~= tool.Parent and not deb[ch] then
+					deb[ch] = true; hum:TakeDamage(35)
+					task.delay(0.6, function() deb[ch] = nil end)
+				end
+			end)
+		end
+	elseif key == "laser" then
+		tool.Activated:Connect(function()
+			local ch = tool.Parent
+			local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+			local params = RaycastParams.new()
+			params.FilterDescendantsInstances = {ch}; params.FilterType = Enum.RaycastFilterType.Exclude
+			local res = workspace:Raycast(hrp.Position, hrp.CFrame.LookVector * 400, params)
+			local hitPos = res and res.Position or (hrp.Position + hrp.CFrame.LookVector * 400)
+			local dist = (hrp.Position - hitPos).Magnitude
+			local beam = part({Name="Laser", Size=Vector3.new(0.4, 0.4, dist),
+				CFrame = CFrame.lookAt(hrp.Position, hitPos) * CFrame.new(0, 0, -dist/2),
+				Color = Color3.fromRGB(255,60,60), Material = Enum.Material.Neon, CanCollide=false}, workspace)
+			Debris:AddItem(beam, 0.12)
+			if res then
+				local h = res.Instance.Parent and res.Instance.Parent:FindFirstChildWhichIsA("Humanoid")
+				if h and res.Instance.Parent ~= ch then h:TakeDamage(45) end
+			end
+		end)
+	elseif key == "rocket" or key == "grenade" then
+		local fuse = (key == "grenade") and 2.5 or 6
+		local speed = (key == "rocket") and 130 or 60
+		tool.Activated:Connect(function()
+			local ch = tool.Parent
+			local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+			if not hrp then return end
+			local proj = part({Name="Proj", Size=Vector3.new(1.6,1.6,2.6),
+				Position = hrp.Position + hrp.CFrame.LookVector*4 + Vector3.new(0,1,0),
+				Color = Color3.fromRGB(70,70,80), Material = Enum.Material.Metal, Anchored=false, CanCollide=false}, workspace)
+			proj.AssemblyLinearVelocity = hrp.CFrame.LookVector * speed + Vector3.new(0, (key=="grenade") and 28 or 0, 0)
+			local done = false
+			local function boom(pos) if done then return end; done = true; explode(pos, 18, 70, ch); proj:Destroy() end
+			proj.Touched:Connect(function(hit) if hit.Parent ~= ch and not hit:IsDescendantOf(ch) then boom(proj.Position) end end)
+			task.delay(fuse, function() if proj.Parent then boom(proj.Position) end end)
+		end)
+	end
+end
+
 -- ── Gear effects (re-applied on respawn) ─────────────────────────────────
 function applyGear(plot)
 	local char = plot.player.Character
@@ -374,7 +461,7 @@ function applyGear(plot)
 		if not plot.gear[key] then return end
 		if (plot.player:FindFirstChild("Backpack") and plot.player.Backpack:FindFirstChild(displayName))
 			or (char and char:FindFirstChild(displayName)) then return end
-		local tool
+		local tool, usedFallback = nil, false
 		-- 1) a real Toolbox Tool the user dropped into ServerStorage.GearStorage
 		local store = ServerStorage:FindFirstChild("GearStorage")
 		if store then
@@ -390,13 +477,16 @@ function applyGear(plot)
 				model:Destroy()
 			end
 		end
-		-- 3) simple built fallback
+		-- 3) simple built fallback (we add our own combat to these)
 		if not tool then
+			usedFallback = true
 			tool = Instance.new("Tool"); tool.RequiresHandle = true; tool.CanBeDropped = false
-			local h = Instance.new("Part"); h.Name="Handle"; h.Size=Vector3.new(1,4,1)
+			local h = Instance.new("Part"); h.Name="Handle"
+			h.Size = (key=="sword") and Vector3.new(1,5,1) or Vector3.new(1.4,1.4,4)
 			h.Color = fallbackColor or Color3.fromRGB(200,200,210); h.Material=Enum.Material.Neon; h.Parent=tool
 		end
 		tool.Name = displayName
+		if usedFallback then wireCombat(tool, key) end
 		if plot.player:FindFirstChild("Backpack") then tool.Parent = plot.player.Backpack end
 	end
 	grant("sword",   "Sword",           A.sword,   Color3.fromRGB(200,200,210))

@@ -60,6 +60,8 @@ Config.buttons = {
   {floor=1, kind="upgrader", name="Size Ray (x3)",      baseCost=9000,   mult=3,    color=C(120,220,255)},
   {floor=1, kind="collector",name="Collector",          baseCost=1200},
   {floor=1, kind="cashcollector", name="Cash Collector",baseCost=900},
+  {floor=1, kind="bridge",   name="Left Bridge (half)",  baseCost=11000, side="left"},
+  {floor=1, kind="bridge",   name="Right Bridge (half)", baseCost=11000, side="right"},
   {floor=1, kind="floorslab",name="Build 2nd Floor",    baseCost=15000,  color=C(120,110,100)},
 
   -- ============ FLOOR 2 — Desert ============
@@ -91,7 +93,7 @@ Config.buttons = {
   {floor=3, kind="gear",     name="Hand Grenade",       baseCost=20000000, gear="grenade"},
   {floor=3, kind="gear",     name="Rocket Launcher",    baseCost=35000000, gear="rocket"},
   {floor=3, kind="gear",     name="Laser Gun",          baseCost=50000000, gear="laser"}, -- 2nd most expensive
-  {floor=3, kind="nuke",     name="LAUNCH NUKE",        baseCost=99000000},               -- most expensive
+  {floor=3, kind="nuke",     name="LAUNCH NUKE",        baseCost=1000000000},             -- most expensive (way more)
 }
 
 return Config
