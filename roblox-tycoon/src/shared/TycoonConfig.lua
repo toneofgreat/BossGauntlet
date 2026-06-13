@@ -57,6 +57,7 @@ Config.buttons = {
   {floor=1, kind="gear",     name="Sword",              baseCost=3500,   gear="sword"},
   {floor=1, kind="gear",     name="Gravity Coil",       baseCost=6000,   gear="gravity"},
   {floor=1, kind="convspeed",name="Conveyor Speed I",   baseCost=7000,   addspeed=16, color=C(90,200,255)},
+  {floor=1, kind="convwalls",name="Glass Conveyor Walls",baseCost=8500,  color=C(120,200,255)},
   {floor=1, kind="upgrader", name="Size Ray (x3)",      baseCost=9000,   mult=3,    color=C(120,220,255)},
   {floor=1, kind="collector",name="Collector",          baseCost=1200},
   {floor=1, kind="cashcollector", name="Cash Collector",baseCost=900},
@@ -77,6 +78,7 @@ Config.buttons = {
   {floor=2, kind="collector",name="Desert Collector",   baseCost=60000},
   {floor=2, kind="cashcollector", name="Desert Cash Collector", baseCost=55000},
   {floor=2, kind="convspeed",name="Conveyor Speed II",  baseCost=260000, addspeed=22, color=C(120,210,255)},
+  {floor=2, kind="convwalls",name="Glass Conveyor Walls II",baseCost=300000, color=C(150,210,255)},
   {floor=2, kind="floorslab",name="Build 3rd Floor",    baseCost=600000, color=C(40,40,55)},
 
   -- ============ FLOOR 3 — Glowing Hearts ============
@@ -89,6 +91,7 @@ Config.buttons = {
   {floor=3, kind="collector",name="Heart Collector",    baseCost=1500000},
   {floor=3, kind="cashcollector", name="Heart Cash Collector", baseCost=1400000},
   {floor=3, kind="convspeed",name="Conveyor Speed III", baseCost=8000000,  addspeed=30, color=C(180,120,255)},
+  {floor=3, kind="convwalls",name="Glass Conveyor Walls III",baseCost=9000000, color=C(190,150,255)},
   {floor=3, kind="gear",     name="Flying Carpet",      baseCost=12000000, gear="carpet"},
   {floor=3, kind="gear",     name="Hand Grenade",       baseCost=20000000, gear="grenade"},
   {floor=3, kind="gear",     name="Rocket Launcher",    baseCost=35000000, gear="rocket"},

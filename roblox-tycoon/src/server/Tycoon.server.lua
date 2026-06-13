@@ -76,12 +76,33 @@ local function buildFloor(plot, f)
 	local startX, endX = o.X - 35, o.X + 45
 	local z = o.Z + 18   -- the conveyor's z
 
-	-- detailed floor slab + neon trim
+	-- detailed floor slab(s) + neon trim
 	local floorCol = (f==1 and Color3.fromRGB(95,105,120)) or (f==2 and Color3.fromRGB(225,205,140)) or Color3.fromRGB(22,22,30)
-	part({Name="Floor"..f, Size=Vector3.new(110, 1, 90), Position=Vector3.new(o.X+5, y-0.5, o.Z),
-		Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+	if f == 1 then
+		part({Name="Floor1", Size=Vector3.new(110, 1, 90), Position=Vector3.new(o.X+5, y-0.5, o.Z),
+			Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+	else
+		-- new floor: slab built with a stairwell hole at (o.X+38, o.Z-22)
+		part({Name="Floor"..f.."L", Size=Vector3.new(80,1,90), Position=Vector3.new(o.X-10, y-0.5, o.Z), Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+		part({Name="Floor"..f.."R", Size=Vector3.new(14,1,90), Position=Vector3.new(o.X+53, y-0.5, o.Z), Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+		part({Name="Floor"..f.."F", Size=Vector3.new(16,1,15), Position=Vector3.new(o.X+38, y-0.5, o.Z-37.5), Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+		part({Name="Floor"..f.."B", Size=Vector3.new(16,1,59), Position=Vector3.new(o.X+38, y-0.5, o.Z+15.5), Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+		-- AUTO staircase up through the hole + a climbable ladder at the back
+		local lowerTop, rise, steps = 3 + (f-2)*Config.FLOOR_HEIGHT, Config.FLOOR_HEIGHT, 16
+		for s = 1, steps do
+			local sy = lowerTop + (rise/steps) * s
+			part({Name="Step", Size=Vector3.new(12,1,2.4), Position=Vector3.new(o.X+38, sy-0.5, o.Z-30 + s*(15/steps)),
+				Color=Color3.fromRGB(120,122,138), Material=Enum.Material.SmoothPlastic}, plot.model)
+		end
+		local truss = Instance.new("TrussPart")
+		truss.Anchored = true; truss.Size = Vector3.new(2, rise+2, 2)
+		truss.Position = Vector3.new(o.X-54, lowerTop + rise/2 + 1, o.Z+40)
+		truss.Color = Color3.fromRGB(90,92,104); truss.Parent = plot.model
+		part({Name="LadderLanding", Size=Vector3.new(10,1,10), Position=Vector3.new(o.X-50, y-0.5, o.Z+38),
+			Color=Color3.fromRGB(110,112,128), Material=Enum.Material.SmoothPlastic}, plot.model)
+	end
 	part({Name="FloorTrim"..f, Size=Vector3.new(112, 0.4, 92), Position=Vector3.new(o.X+5, y+0.05, o.Z),
-		Color=Color3.fromRGB(90,200,255), Material=Enum.Material.Neon, Transparency=0.3}, plot.model)
+		Color=Color3.fromRGB(90,200,255), Material=Enum.Material.Neon, Transparency=0.5, CanCollide=false}, plot.model)
 
 	-- conveyor belt (diamond plate) + end rollers
 	part({Name="Belt"..f, Size=Vector3.new(endX-startX, 1, 8),
@@ -93,15 +114,7 @@ local function buildFloor(plot, f)
 		roll.Shape = Enum.PartType.Cylinder; roll.Orientation = Vector3.new(0, 0, 90)
 	end
 
-	-- TALL conveyor side walls (containment) with glowing neon tops
-	for _, dz in ipairs({-1, 1}) do
-		part({Name="ConvWall"..f, Size=Vector3.new(endX-startX, 12, 0.8),
-			Position=Vector3.new((startX+endX)/2, y+6.5, z + dz*4.4), Color=Color3.fromRGB(55,62,78),
-			Material=Enum.Material.Metal}, plot.model)
-		part({Name="ConvWallTop"..f, Size=Vector3.new(endX-startX, 0.5, 1.1),
-			Position=Vector3.new((startX+endX)/2, y+12.7, z + dz*4.4), Color=Color3.fromRGB(90,200,255),
-			Material=Enum.Material.Neon}, plot.model)
-	end
+	-- (Conveyor side walls are now a purchasable "Glass Conveyor Walls" upgrade.)
 
 	-- collector wall at the end of the belt (solid + glowing)
 	local collX = endX - 1
@@ -195,6 +208,18 @@ local function applyButton(plot, idx, btn)
 		part({Name=btn.name, Size=Vector3.new(2.5, 3, 9), Position=Vector3.new(sx, fs.y+1.8, fs.z),
 			Color=btn.color or Color3.fromRGB(90,200,255), Material=Enum.Material.Neon,
 			Transparency=0.3, CanCollide=false}, plot.model)
+
+	elseif btn.kind == "convwalls" then
+		-- translucent glass containment walls along the belt
+		for _, dz in ipairs({-1, 1}) do
+			part({Name="GlassConvWall", Size=Vector3.new(fs.endX-fs.startX, 12, 0.6),
+				Position=Vector3.new((fs.startX+fs.endX)/2, fs.y+6.5, fs.z + dz*4.4),
+				Color=(btn.color or Color3.fromRGB(120,200,255)), Material=Enum.Material.Glass,
+				Transparency=0.55, Reflectance=0.1, CanCollide=true}, plot.model)
+			part({Name="GlassConvWallTop", Size=Vector3.new(fs.endX-fs.startX, 0.5, 1.0),
+				Position=Vector3.new((fs.startX+fs.endX)/2, fs.y+12.7, fs.z + dz*4.4),
+				Color=Color3.fromRGB(90,200,255), Material=Enum.Material.Neon}, plot.model)
+		end
 
 	elseif btn.kind == "bridge" then
 		-- builds YOUR half of a bridge toward the neighbor plot. Both you AND the
