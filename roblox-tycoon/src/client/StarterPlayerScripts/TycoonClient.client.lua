@@ -24,8 +24,8 @@ end
 
 local cashLbl = label("$0", UDim2.fromOffset(360, 46), UDim2.fromOffset(16, 14), Color3.fromRGB(90,240,150))
 local uncLbl  = label("Un-banked: $0", UDim2.fromOffset(360, 26), UDim2.fromOffset(18, 60), Color3.fromRGB(255,210,90))
-local hintLbl = label("Step on a green BUY pad to build. Bank cash before robbers steal it (every 20s)!",
-	UDim2.fromOffset(620, 22), UDim2.fromOffset(18, 86), Color3.fromRGB(170,185,205), Enum.Font.Gotham)
+local hintLbl = label("Step on a green BUY pad to build. Collect your cash before OTHER PLAYERS step on your cash collector and steal it!",
+	UDim2.fromOffset(680, 22), UDim2.fromOffset(18, 86), Color3.fromRGB(170,185,205), Enum.Font.Gotham)
 
 -- toast
 local toast = Instance.new("TextLabel")

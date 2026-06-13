@@ -90,19 +90,36 @@ local function buildFloor(plot, f)
 	local cashPad = part({Name="CashPad"..f, Size=Vector3.new(10, 1, 10),
 		Position=Vector3.new(o.X-30, y+0.5, z-22), Color=Color3.fromRGB(60,200,110),
 		Material=Enum.Material.Neon}, plot.model)
-	billboard(cashPad, "💰 BANK CASH", "step here", Color3.fromRGB(120,255,170))
+	billboard(cashPad, "💰 CASH COLLECTOR", "you collect · others can steal", Color3.fromRGB(120,255,170))
 	local bankDeb = false
+	local lastSteal = -math.huge
 	cashPad.Touched:Connect(function(hit)
 		local plr = Players:GetPlayerFromCharacter(hit.Parent)
-		if not plr or plr.UserId ~= plot.userId then return end
-		if bankDeb then return end; bankDeb = true
-		local u = plot.uncollected.Value
-		if u > 0 then
-			plot.cash.Value += u
-			plot.uncollected.Value = 0
-			Notify:FireClient(plot.player, "banked", "Banked $"..money(u).."!")
+		if not plr then return end
+		if plr.UserId == plot.userId then
+			-- OWNER collects their own cash safely
+			if bankDeb then return end; bankDeb = true
+			local u = plot.uncollected.Value
+			if u > 0 then
+				plot.cash.Value += u
+				plot.uncollected.Value = 0
+				Notify:FireClient(plot.player, "banked", "Collected $"..money(u).."!")
+			end
+			task.wait(0.4); bankDeb = false
+		else
+			-- ANOTHER PLAYER steals a cut (once per cooldown) — they ARE the robbers
+			local now = os.clock()
+			if now - lastSteal < Config.STEAL_COOLDOWN then return end
+			local u = plot.uncollected.Value
+			if u <= 0 then return end
+			lastSteal = now
+			local stolen = math.max(1, math.floor(u * Config.STEAL_PERCENT))
+			plot.uncollected.Value = u - stolen
+			local thief = plots[plr.UserId]
+			if thief then thief.cash.Value += stolen end
+			Notify:FireClient(plot.player, "robbed", "🚨 "..plr.Name.." stole $"..money(stolen).." from you! Collect faster!")
+			Notify:FireClient(plr, "banked", "💸 You stole $"..money(stolen).." from "..plot.player.Name.."!")
 		end
-		task.wait(0.4); bankDeb = false
 	end)
 
 	local fs = {y=y, z=z+18, startX=startX, endX=endX, collectorX=collX,
@@ -387,22 +404,8 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 
--- ── Robbers: steal a % of UN-banked cash every 20s ───────────────────────
-task.spawn(function()
-	while true do
-		task.wait(Config.ROB_INTERVAL)
-		for _, plot in pairs(plots) do
-			local u = plot.uncollected.Value
-			if u > 0 then
-				local stolen = math.floor(u * Config.ROB_PERCENT)
-				if stolen > 0 then
-					plot.uncollected.Value = u - stolen
-					Notify:FireClient(plot.player, "robbed", "🚨 A robber stole $"..money(stolen).."! Bank your cash faster!")
-				end
-			end
-		end
-	end
-end)
+-- (No NPC robbers — other PLAYERS are the robbers: they steal by stepping on
+--  your cash collector, handled in buildFloor, on a per-collector 20s cooldown.)
 
 -- periodic autosave
 task.spawn(function()

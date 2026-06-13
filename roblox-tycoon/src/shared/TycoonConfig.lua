@@ -5,8 +5,8 @@
 local Config = {}
 
 Config.FLOOR_MULT      = 1.5    -- each floor is ~1.5x more expensive (progress ~1.5x slower)
-Config.ROB_INTERVAL    = 20     -- seconds between robber raids
-Config.ROB_PERCENT     = 0.25   -- fraction of UN-banked cash a robber steals
+Config.STEAL_COOLDOWN  = 20     -- another PLAYER can steal from your cash collector once per 20s
+Config.STEAL_PERCENT   = 0.5    -- fraction of un-banked cash a thieving player grabs
 Config.DROP_INTERVAL   = 1.2    -- seconds between drops per dropper
 Config.PLOT_SPACING    = 220    -- studs between player plots
 Config.FLOOR_HEIGHT    = 28     -- vertical gap between floors
