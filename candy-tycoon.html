@@ -13,10 +13,8 @@
        padding:12px 16px;pointer-events:none}
   #money{font-size:32px;font-weight:900;color:#fff8b8;
          text-shadow:0 0 16px rgba(255,180,80,.7),0 3px 0 #d65a9a,0 3px 6px #000}
-  #banked{font-size:14px;font-weight:800;color:#9cf5d0;text-shadow:0 1px 4px #000;margin-top:3px}
   #sub{font-size:12px;font-weight:700;color:#ffd1ec;margin-top:2px}
   #rb{font-size:14px;font-weight:900;color:#ffe27a;text-shadow:0 1px 4px #000;text-align:right}
-  #warn{font-size:14px;font-weight:900;color:#ff7d7d;text-shadow:0 1px 5px #000;text-align:right;margin-top:4px;min-height:18px}
   #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#e3a8ff;font-size:12px;
         font-weight:800;text-decoration:none;pointer-events:auto;letter-spacing:.5px;text-shadow:0 1px 3px #000}
   #back:hover{color:#fff}
@@ -38,13 +36,13 @@
   <canvas id="cv"></canvas>
   <div id="flash"></div>
   <div id="hud">
-    <div><div id="money">$0</div><div id="banked">Banked: $0</div><div id="sub"></div></div>
-    <div><div id="rb"></div><div id="warn"></div></div>
+    <div><div id="money">$0</div><div id="sub"></div></div>
+    <div><div id="rb"></div></div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
   <button id="reset">Reset</button>
   <div id="toast"></div>
-  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; step on a pad to BUY &nbsp;•&nbsp; bank cash at the COLLECTOR before robbers!</div>
+  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; step on a pad to BUY &nbsp;•&nbsp; candy rides the conveyor to the COLLECTOR for cash!</div>
 </div>
 <script>
 "use strict";
@@ -122,14 +120,13 @@ PARTS=[
 initParts();
 
 // ---------- State ----------
-const G={money:0, banked:0, rebirth:0, candies:[], pops:[], sparks:[],
-         part:null, buyT:0, robTimer:20, robber:null, won:false};
+const G={money:0, rebirth:0, candies:[], pops:[], sparks:[],
+         part:null, buyT:0, won:false};
 function rbMult(){return 1+G.rebirth*0.5;}
 
 function ownPart(id){const p=PARTS.find(x=>x.id===id);return p&&p.bought;}
 function hasGear(g){return PARTS.some(p=>p.gear===g&&p.bought);}
 function beltSpeed(){return 150;}
-function activeCollectors(){return PARTS.filter(p=>p.type==='collector'&&(p.bought||p.owned2));}
 
 // ---------- Player ----------
 const pl={x:380, y:0, vx:0, vy:0, fl:0, face:1, anim:0, jumpFx:0};
@@ -162,7 +159,7 @@ function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
 // ---------- Save / Load ----------
 const SKEY='candyTycoon_v1';
 function save(){
-  const d={money:G.money,banked:G.banked,rebirth:G.rebirth,won:G.won,
+  const d={money:G.money,rebirth:G.rebirth,won:G.won,
     bought:PARTS.filter(p=>p.bought).map(p=>p.id),
     px:pl.x,py:pl.y};
   try{localStorage.setItem(SKEY,JSON.stringify(d));}catch(e){}
@@ -170,14 +167,14 @@ function save(){
 function load(){
   let d;try{d=JSON.parse(localStorage.getItem(SKEY));}catch(e){}
   if(!d)return;
-  G.money=d.money||0;G.banked=d.banked||0;G.rebirth=d.rebirth||0;G.won=!!d.won;
+  G.money=(d.money||0)+(d.banked||0);G.rebirth=d.rebirth||0;G.won=!!d.won;
   if(d.bought)for(const id of d.bought){const p=PARTS.find(x=>x.id===id);if(p)p.bought=true;}
   if(typeof d.px==='number'){pl.x=d.px;pl.y=d.py;}
 }
 function reset(){
   if(!confirm('Reset ALL candy progress?'))return;
   try{localStorage.removeItem(SKEY);}catch(e){}
-  G.money=0;G.banked=0;G.rebirth=0;G.won=false;G.candies=[];G.pops=[];G.robber=null;G.robTimer=20;
+  G.money=0;G.rebirth=0;G.won=false;G.candies=[];G.pops=[];
   initParts();PARTS.find(p=>p.id==='f1_d1').bought=true;
   pl.x=380;pl.y=groundY(0);pl.fl=0;
   toast('Reset complete!');
@@ -216,45 +213,6 @@ function burst(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*7,s=40+Math
   G.sparks.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-60,life:0.6+Math.random()*0.6,col});}}
 const flashEl=document.getElementById('flash');let flashT=0;
 function flashScreen(){flashT=1.0;}
-
-// ---------- Robber system ----------
-function spawnRobber(){
-  if(G.money<5){G.robTimer=20;return;}
-  // approach from the side of player's current floor
-  const fromLeft=Math.random()<0.5;
-  G.robber={x:fromLeft?camX-60:camX+W+60, y:groundY(pl.fl)-30, fl:pl.fl,
-    state:'incoming', t:0, fromLeft, anim:0};
-}
-function updateRobber(dt){
-  if(!G.robber){
-    G.robTimer-=dt;
-    if(G.robTimer<=3 && G.robTimer>0){ // warning window
-      document.getElementById('warn').textContent='⚠ ROBBER INCOMING in '+Math.ceil(G.robTimer)+'! Bank your cash!';
-    } else if(G.robTimer<=0){ spawnRobber(); }
-    return;
-  }
-  document.getElementById('warn').textContent='🍭 CANDY THIEF! Run to a Cash Collector!';
-  const rb=G.robber;rb.t+=dt;rb.anim+=dt*12;
-  // target: the un-banked cash, represented by the collector position (steals as it passes/reaches center)
-  const targetX = WLD/2; // robber rushes toward the middle then leaves
-  if(rb.state==='incoming'){
-    const dir = rb.x < targetX ? 1 : -1;
-    rb.x += dir*230*dt;
-    if(Math.abs(rb.x-targetX)<20){
-      // STEAL
-      const stolen=Math.floor(G.money*0.30);
-      if(stolen>0){G.money-=stolen;
-        G.pops.push({x:rb.x,y:rb.y-40,vy:-50,life:1.4,t:'-$'+fmt(stolen),col:'#ff7d7d'});
-        toast('Robber stole $'+fmt(stolen)+'!',['#ff7d7d','#c22a2a']);}
-      else toast('Robber found nothing — all banked!',['#9cf5d0','#2aa87e']);
-      rb.state='leaving';rb.dir=rb.fromLeft?-1:1;
-    }
-  } else {
-    rb.x += rb.dir*300*dt;
-    if(rb.x<camX-120||rb.x>camX+W+120||rb.x<-200||rb.x>WLD+200){G.robber=null;G.robTimer=20;
-      document.getElementById('warn').textContent='';}
-  }
-}
 
 // ---------- Floor & stairs navigation ----------
 // Player can change floor only near stairs (slot of stairs part) if built.
@@ -325,18 +283,6 @@ function update(dt){
   }
   if(!G.part)G.buyT=0;
 
-  // BANKING: walk into any active collector to bank money safely
-  for(const c of activeCollectors()){
-    const cx=collectorX, cy=groundY(c.fl)-30;
-    if(c.fl===pl.fl && Math.abs(pl.x-cx)<70 && Math.abs(pl.y-cy)<80){
-      if(G.money>0.5){
-        const amt=G.money;G.banked+=amt;G.money=0;
-        G.pops.push({x:cx,y:cy-30,vy:-50,life:1.2,t:'BANKED $'+fmt(amt),col:'#9cf5d0'});
-        if(amt>1)burst(cx,cy-20,'#9cf5d0',12);
-      }
-    }
-  }
-
   // droppers spawn candies onto their floor's belt
   for(const p of PARTS){
     if(p.type!=='dropper'||!p.bought)continue;
@@ -370,8 +316,6 @@ function update(dt){
   // pops & sparks
   for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
   for(let i=G.sparks.length-1;i>=0;i--){const s=G.sparks[i];s.vy+=420*dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;if(s.life<=0)G.sparks.splice(i,1);}
-
-  updateRobber(dt);
 
   if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
   if(flashT>0){flashT-=dt*1.2;flashEl.style.opacity=Math.max(0,flashT*0.7);}
@@ -563,7 +507,7 @@ function drawCollector(c){
   ctx.fillStyle='#0e3a2a';roundRect(x,y-72,70,34,7);ctx.fill();
   ctx.fillStyle='#fff8b8';ctx.font='900 24px Segoe UI';ctx.fillText('💰',x+35,y-48);
   ctx.fillStyle='#ffffff';ctx.font='900 9px Segoe UI';ctx.fillText('CASH COLLECTOR',x+35,y-22);
-  // banked glow indicator
+  // active glow indicator
   if(owned && G.money>0){ctx.save();ctx.globalAlpha=0.4+0.3*Math.sin(T*5);
     ctx.fillStyle='#9cf5d0';roundRect(x-12,y-84,94,100,14);ctx.fill();ctx.restore();}
   ctx.fillStyle='#1a0e22';ctx.fillRect(x-8,y+2,20,12);
@@ -687,28 +631,6 @@ function drawPad(p){
     ctx.fillText(p.free?'FREE':'$'+fmt(p.cost),x,sy+15);}
 }
 
-function drawRobber(){
-  if(!G.robber)return;const rb=G.robber;
-  const x=wx(rb.x), y=wy(rb.y);
-  if(rb.fl!==pl.fl)return;
-  const sw=Math.sin(rb.anim)*5;
-  // shadow
-  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x,y+20,18,7,0,0,7);ctx.fill();
-  // legs
-  ctx.fillStyle='#222';ctx.fillRect(x-9,y+6+sw,7,16);ctx.fillRect(x+2,y+6-sw,7,16);
-  // body (dark robber)
-  ctx.fillStyle='#3a2a4a';roundRect(x-14,y-16,28,24,5);ctx.fill();
-  // sack
-  ctx.fillStyle='#7a5a2a';ctx.beginPath();ctx.arc(x+16,y-4,12,0,7);ctx.fill();
-  ctx.fillStyle='#fff8b8';ctx.font='900 12px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x+16,y);
-  // head + mask
-  ctx.fillStyle='#ffd9b0';roundRect(x-11,y-38,22,22,6);ctx.fill();
-  ctx.fillStyle='#111';ctx.fillRect(x-11,y-32,22,8);
-  ctx.fillStyle='#fff';ctx.fillRect(x-7,y-31,5,5);ctx.fillRect(x+2,y-31,5,5);
-  // label
-  ctx.fillStyle='#ff7d7d';ctx.font='900 11px Segoe UI';ctx.fillText('ROBBER!',x,y-46+Math.sin(T*8)*2);
-}
-
 function drawPlayer(){
   const x=wx(pl.x), y=wy(pl.y)-pl.jumpFx;
   ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x,wy(pl.y)+18,18,7,0,0,7);ctx.fill();
@@ -763,8 +685,7 @@ function draw(){
   for(const p of PARTS)if(p.type==='rush')drawRushButton(p);
   // pads
   for(const p of PARTS)drawPad(p);
-  // robber & player
-  drawRobber();
+  // player
   drawPlayer();
   // pops
   for(const q of G.pops){const x=wx(q.x),y=wy(q.y);ctx.globalAlpha=Math.max(0,q.life);
@@ -780,11 +701,9 @@ function loop(now){
   const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
   update(dt);draw();
   document.getElementById('money').textContent='$'+fmt(G.money);
-  document.getElementById('banked').textContent='Banked: $'+fmt(G.banked);
   const owned=PARTS.filter(p=>p.bought).length;
   document.getElementById('sub').textContent=owned+' / '+PARTS.length+' built  •  Floor '+(pl.fl+1);
   document.getElementById('rb').textContent=G.rebirth>0?('🍬 Sugar Rush ×'+G.rebirth+'  (+'+(G.rebirth*50)+'%)'):'';
-  if(!G.robber && G.robTimer>3)document.getElementById('warn').textContent='';
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

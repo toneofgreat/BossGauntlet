@@ -13,9 +13,7 @@
        padding:12px 16px;pointer-events:none}
   #money{font-size:32px;font-weight:900;color:#ffb347;text-shadow:0 0 16px rgba(255,120,20,.7),0 2px 2px #000}
   #sub{font-size:13px;font-weight:700;color:#ff8a5c;margin-top:2px;text-shadow:0 1px 3px #000}
-  #banked{font-size:13px;font-weight:800;color:#7fe0ff;margin-top:1px;text-shadow:0 1px 3px #000}
   #rb{font-size:14px;font-weight:800;color:#ffd86b;text-shadow:0 1px 4px #000;text-align:right;max-width:46%}
-  #robwarn{font-size:14px;font-weight:900;color:#ff5a4a;text-shadow:0 0 8px #ff2a1a,0 1px 3px #000;text-align:right;margin-top:4px}
   #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#9a5a3a;font-size:12px;
         font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
   #back:hover{color:#ffb347}
@@ -36,13 +34,13 @@
   <canvas id="cv"></canvas>
   <div id="flash"></div>
   <div id="hud">
-    <div><div id="money">$0</div><div id="sub"></div><div id="banked"></div></div>
-    <div><div id="rb"></div><div id="robwarn"></div></div>
+    <div><div id="money">$0</div><div id="sub"></div></div>
+    <div><div id="rb"></div></div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
   <button id="reset">RESET</button>
   <div id="toast"></div>
-  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; step on an orange PAD to buy &nbsp;•&nbsp; walk into the CASH COLLECTOR to bank &nbsp;•&nbsp; robbers steal un-banked cash!</div>
+  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; step on an orange PAD to buy &nbsp;•&nbsp; ore rides the conveyor into the CASH COLLECTOR for money</div>
 </div>
 <script>
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
@@ -127,8 +125,8 @@ initParts();
 const PAD_COUNT=PARTS.length; // number of buy pads
 
 // ============ STATE ============
-const G={money:0, banked:0, rebirth:0, bricks:[], pops:[], embers:[], part:null, buyT:0,
-  robTimer:20, robActive:null, lavaParts:[], eruptT:0, won:false};
+const G={money:0, rebirth:0, bricks:[], pops:[], embers:[], part:null, buyT:0,
+  lavaParts:[], eruptT:0, won:false};
 
 function gearOwned(g){const p=PARTS.find(x=>x.gear===g);return p&&p.bought;}
 function floorBuilt(fi){ if(fi===0)return true; const p=PARTS.find(x=>x.type==='floor'&&x.fl===fi);return p&&p.bought; }
@@ -163,20 +161,20 @@ function flash(){flashEl.style.opacity='1';setTimeout(()=>flashEl.style.opacity=
 const SAVEK='lavaTycoon_v1';
 function save(){
   try{localStorage.setItem(SAVEK,JSON.stringify({
-    money:G.money,banked:G.banked,rebirth:G.rebirth,won:G.won,
+    money:G.money,rebirth:G.rebirth,won:G.won,
     bought:PARTS.filter(p=>p.bought).map(p=>p.id)
   }));}catch(e){}
 }
 function load(){
   try{const s=JSON.parse(localStorage.getItem(SAVEK));if(!s)return;
-    G.money=s.money||0;G.banked=s.banked||0;G.rebirth=s.rebirth||0;G.won=!!s.won;
+    G.money=(s.money||0)+(s.banked||0);G.rebirth=s.rebirth||0;G.won=!!s.won;
     if(s.bought)for(const id of s.bought){const p=PARTS.find(x=>x.id===id);if(p)p.bought=true;}
   }catch(e){}
 }
 function resetGame(){
   if(!confirm('Reset all progress?'))return;
   try{localStorage.removeItem(SAVEK);}catch(e){}
-  G.money=0;G.banked=0;G.rebirth=0;G.won=false;G.bricks=[];G.pops=[];G.robActive=null;G.robTimer=20;G.eruptT=0;
+  G.money=0;G.rebirth=0;G.won=false;G.bricks=[];G.pops=[];G.eruptT=0;
   initParts();
   pl.fl=0;pl.wy=floorBaseY(0)-30;pl.x=300;
   toast('Progress reset');
@@ -217,16 +215,6 @@ function doErupt(){
   save();
 }
 
-// ============ ROBBER ============
-function spawnRobber(){
-  // robber comes from off-screen on the player's floor
-  G.robActive={x:pl.x>WLD/2?-60:WLD+60, wy:floorBaseY(pl.fl)-26, fl:pl.fl,
-    targetX:collectorX(pl.fl)-260, phase:'enter', timer:0, took:0};
-}
-function bankCash(){
-  if(G.money<=0)return;
-  G.banked+=G.money; G.money=0;
-}
 
 // ============ UPDATE ============
 let last=performance.now();
@@ -284,13 +272,6 @@ function update(dt){
   }
   if(!G.part)G.buyT=0;
 
-  // ---- bank when on cash collector ----
-  const bank=PARTS.find(p=>p.id==='f0_bank');
-  if(bank&&bank.bought){
-    const bx=bank.slot, by=floorBaseY(0)-30;
-    if(pl.fl===0 && Math.abs(pl.x-bx)<54 && Math.abs(pl.wy-by)<60){ bankCash(); }
-  }
-
   // ---- droppers spawn ore ----
   for(const p of PARTS){
     if(p.type!=='dropper'||!p.bought)continue;
@@ -325,34 +306,6 @@ function update(dt){
     }
   }
   if(G.bricks.length>700)G.bricks.splice(0,G.bricks.length-700);
-
-  // ---- robber loop ----
-  G.robTimer-=dt;
-  if(!G.robActive && G.robTimer<=4 && G.robTimer>0 && G.money>0){
-    // warning handled in HUD
-  }
-  if(!G.robActive && G.robTimer<=0){
-    if(G.money>0){spawnRobber();}
-    G.robTimer=20;
-  }
-  if(G.robActive){
-    const rb=G.robActive;
-    if(rb.phase==='enter'){
-      rb.x+=(rb.targetX-rb.x)*Math.min(1,dt*3.5);
-      if(Math.abs(rb.x-rb.targetX)<14){rb.phase='steal';rb.timer=0;}
-    }else if(rb.phase==='steal'){
-      rb.timer+=dt;
-      if(rb.timer>0.5){
-        const steal=Math.floor(G.money*0.20);
-        G.money-=steal; rb.took=steal;
-        toast('💰 Robber stole $'+fmt(steal)+'! Bank your cash!','#ff5a4a');
-        rb.phase='flee';
-      }
-    }else if(rb.phase==='flee'){
-      rb.x+=(rb.x<WLD/2?-1:1)*420*dt;
-      if(rb.x<-80||rb.x>WLD+80)G.robActive=null;
-    }
-  }
 
   // ---- particles ----
   for(let i=G.embers.length-1;i>=0;i--){const e=G.embers[i];
@@ -583,7 +536,7 @@ function drawBank(p){
   ctx.fillStyle='#0a2a3a';ctx.beginPath();ctx.arc(x,top+52,28,0,7);ctx.fill();
   ctx.strokeStyle='#7fe0ff';ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,top+52,18,T*1.5,T*1.5+5);ctx.stroke();
   ctx.fillStyle='#fff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText('CASH',x,top+18);
-  ctx.fillStyle='#bff0ff';ctx.font='bold 9px Segoe UI';ctx.fillText('BANK SAFE',x,gy-8);
+  ctx.fillStyle='#bff0ff';ctx.font='bold 9px Segoe UI';ctx.fillText('COLLECTOR',x,gy-8);
   // pulsing safe glow
   ctx.save();ctx.globalAlpha=0.3+0.2*Math.sin(T*3);ctx.shadowColor='#7fe0ff';ctx.shadowBlur=20;
   ctx.strokeStyle='#7fe0ff';ctx.lineWidth=2;roundRect(x-44,top,88,100,10);ctx.stroke();ctx.restore();
@@ -708,29 +661,6 @@ function drawPlayer(){
   ctx.fillRect(x-6+pl.face*3,y-26,3,4);ctx.fillRect(x+3+pl.face*3,y-26,3,4);
 }
 
-function drawRobber(){
-  if(!G.robActive)return;
-  const rb=G.robActive;
-  const x=sx(rb.x), y=sy(rb.wy);
-  if(x<-60||x>W+60)return;
-  const gsh=sy(floorBaseY(rb.fl)-2);
-  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(x,gsh,16,6,0,0,7);ctx.fill();
-  const sw=Math.sin(T*16)*4;
-  // legs
-  ctx.fillStyle='#0a0a14';ctx.fillRect(x-8,y+6+sw,6,14);ctx.fillRect(x+2,y+6-sw,6,14);
-  // body (dark hoodie)
-  ctx.fillStyle='#1a1a26';roundRect(x-12,y-14,24,22,4);ctx.fill();
-  // sack of cash
-  ctx.fillStyle='#3a2a14';ctx.beginPath();ctx.arc(x-16,y-4,8,0,7);ctx.fill();
-  ctx.fillStyle='#ffd86b';ctx.font='bold 8px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x-16,y-1);
-  // head + mask
-  ctx.fillStyle='#caa';roundRect(x-10,y-32,20,18,5);ctx.fill();
-  ctx.fillStyle='#0a0a14';ctx.fillRect(x-10,y-28,20,7);
-  ctx.fillStyle='#ff5a4a';ctx.fillRect(x-6,y-26,3,3);ctx.fillRect(x+3,y-26,3,3);
-  // alert mark
-  ctx.fillStyle='#ff5a4a';ctx.font='bold 18px Segoe UI';ctx.fillText('!',x,y-40);
-}
-
 function drawEruptOverlay(){
   if(G.eruptT<=0)return;
   const a=Math.min(1,G.eruptT/2);
@@ -778,7 +708,6 @@ function draw(){
   drawFlag(PARTS.find(p=>p.id==='f2_flag'));
   // pads
   for(const p of PARTS)drawPad(p);
-  drawRobber();
   drawPlayer();
   drawParticles();
   // money pops
@@ -789,7 +718,7 @@ function draw(){
 
 // ============ HUD ============
 const moneyEl=document.getElementById('money'),subEl=document.getElementById('sub'),
-  bankedEl=document.getElementById('banked'),rbEl=document.getElementById('rb'),warnEl=document.getElementById('robwarn');
+  rbEl=document.getElementById('rb');
 
 // ============ LOOP ============
 function loop(now){
@@ -798,12 +727,7 @@ function loop(now){
   moneyEl.textContent='$'+fmt(G.money);
   const built=PARTS.filter(p=>p.bought&&!p.free).length;
   subEl.textContent='🌋 '+built+' machines • Floor '+(pl.fl+1);
-  bankedEl.textContent='🏦 Banked: $'+fmt(G.banked);
   rbEl.textContent=(G.rebirth>0?('✅ Erupted ×'+G.rebirth+'  (+'+(G.rebirth*50)+'% ore)'):'');
-  // robber warning
-  if(G.robActive){warnEl.textContent='🚨 ROBBER! Bank your cash!';}
-  else if(G.robTimer<=5&&G.money>0){warnEl.textContent='⚠ Robber in '+Math.ceil(G.robTimer)+'s — BANK CASH!';}
-  else warnEl.textContent='';
   // autosave every 5s
   lastSave+=dt;if(lastSave>5){lastSave=0;save();}
   requestAnimationFrame(loop);

@@ -13,10 +13,8 @@
        padding:12px 16px;pointer-events:none}
   #money{font-size:32px;font-weight:800;color:#ffd25c;text-shadow:0 2px 14px rgba(255,170,60,.55),0 2px 2px #000}
   #sub{font-size:13px;font-weight:700;color:#c89b6e;margin-top:2px}
-  #banked{font-size:14px;font-weight:800;color:#7ee0ff;text-shadow:0 1px 4px #000}
   #right{text-align:right}
   #floorLbl{font-size:14px;font-weight:800;color:#ff7a8a;text-shadow:0 1px 4px #000}
-  #raid{font-size:14px;font-weight:800;color:#ff5566;text-shadow:0 0 10px #ff2244,0 1px 3px #000;margin-top:3px;display:none}
   #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#8a6f57;font-size:12px;
         font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
   #back:hover{color:#d8b88f}
@@ -41,13 +39,13 @@
 <div id="wrap">
   <canvas id="cv"></canvas>
   <div id="hud">
-    <div><div id="money">$0</div><div id="sub"></div><div id="banked"></div></div>
-    <div id="right"><div id="floorLbl"></div><div id="raid"></div></div>
+    <div><div id="money">$0</div><div id="sub"></div></div>
+    <div id="right"><div id="floorLbl"></div></div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
   <div id="toast"></div>
   <button id="reset">Reset</button>
-  <div id="help">WASD / Arrows to walk &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; step on a pad to BUY &nbsp;•&nbsp; bank cash at the 💰 collector before raids!</div>
+  <div id="help">WASD / Arrows to walk &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; step on a pad to BUY &nbsp;•&nbsp; ore rides the conveyor to the 💰 collector for cash</div>
   <div id="win">
     <h1>🐉 THE DRAGON AWAKENS 🐉</h1>
     <p>You have mastered the Shadow Temple and summoned the ancient dragon. The dojo is legend. You win, Shadow Master.</p>
@@ -137,7 +135,7 @@ initParts();
 const PAD_COUNT=PARTS.length;
 
 // ===================== STATE =====================
-const G={cash:0, banked:0, drops:[], pops:[], part:null, buyT:0, builtFloor:0, raidT:20, raiding:false, won:false};
+const G={cash:0, drops:[], pops:[], part:null, buyT:0, builtFloor:0, won:false};
 function partById(id){return PARTS.find(p=>p.id===id);}
 function ownedGear(g){const p=PARTS.find(x=>x.gear===g);return p&&p.bought;}
 function floorUnlocked(fi){return G.builtFloor>=fi;}
@@ -183,7 +181,7 @@ function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
 const SKEY='ninjaDojoTycoon_v1';
 function save(){
   try{
-    const o={cash:G.cash,banked:G.banked,builtFloor:G.builtFloor,won:G.won,
+    const o={cash:G.cash,builtFloor:G.builtFloor,won:G.won,
       bought:PARTS.filter(p=>p.bought).map(p=>p.id)};
     localStorage.setItem(SKEY,JSON.stringify(o));
   }catch(e){}
@@ -192,13 +190,13 @@ function load(){
   try{
     const s=localStorage.getItem(SKEY);if(!s)return;
     const o=JSON.parse(s);
-    G.cash=o.cash||0;G.banked=o.banked||0;G.builtFloor=o.builtFloor||0;G.won=!!o.won;
+    G.cash=(o.cash||0)+(o.banked||0);G.builtFloor=o.builtFloor||0;G.won=!!o.won;
     if(o.bought)for(const id of o.bought){const p=partById(id);if(p)p.bought=true;}
   }catch(e){}
 }
 function resetGame(){
   try{localStorage.removeItem(SKEY);}catch(e){}
-  G.cash=0;G.banked=0;G.builtFloor=0;G.raidT=20;G.raiding=false;G.won=false;
+  G.cash=0;G.builtFloor=0;G.won=false;
   G.drops=[];G.pops=[];
   initParts();
   ensureFree();
@@ -215,11 +213,8 @@ document.getElementById('winReset').onclick=resetGame;
 // ===================== PURCHASE =====================
 function buyPart(p){
   if(p.bought&&p.type!=='rebirth')return;
-  if(G.cash+G.banked<p.cost){toast('Need $'+fmt(p.cost));p.cool=.7;return;}
-  // spend banked first, then cash
-  let need=p.cost;
-  const fromBank=Math.min(G.banked,need);G.banked-=fromBank;need-=fromBank;
-  G.cash-=need;
+  if(G.cash<p.cost){toast('Need $'+fmt(p.cost));p.cool=.7;return;}
+  G.cash-=p.cost;
   if(p.type==='rebirth'){doSummon();return;}
   p.bought=true;
   if(p.type==='build'){G.builtFloor=Math.max(G.builtFloor,p.buildFi);toast('▲ Built Floor '+(p.buildFi+1)+'!');}
@@ -300,7 +295,7 @@ function update(dt){
     const px=p.x, py=floorBaseYStack(p.fi)+8;
     if(Math.abs(pl.x-px)<48 && Math.abs(pl.y-py)<60){
       if(p.type==='collector'){
-        // banking happens by standing on collector
+        // collectors are always-on; nothing to do when stepping on them
         continue;
       }
       G.part=p;G.buyT+=dt;
@@ -308,19 +303,6 @@ function update(dt){
     }
   }
   if(!G.part)G.buyT=0;
-
-  // ---- banking: walk onto any owned cash collector on this floor ----
-  for(const p of PARTS){
-    if(p.type!=='collector'||!p.bought)continue;
-    if(p.fi!==pl.fi)continue;
-    if(Math.abs(pl.x-p.x)<54){
-      if(G.cash>0){
-        G.banked+=G.cash;
-        G.pops.push({x:p.x,y:floorBaseYStack(p.fi)-70,wy:floorBaseYStack(p.fi)-70,vx:0,vy:-50,life:1.1,t:'BANKED +$'+fmt(G.cash)});
-        G.cash=0;save();
-      }
-    }
-  }
 
   // ---- droppers ----
   for(const p of PARTS){
@@ -364,28 +346,7 @@ function update(dt){
   }
   if(G.drops.length>700)G.drops.splice(0,G.drops.length-700);
 
-  // ---- RAID system: rival ninjas steal un-banked cash every 20s ----
-  G.raidT-=dt;
-  const raidEl=document.getElementById('raid');
-  if(G.raidT<=5 && G.raidT>0 && !G.raiding){
-    raidEl.style.display='block';
-    raidEl.textContent='⚠ RAID IN '+Math.ceil(G.raidT)+'s — BANK YOUR CASH!';
-  }
-  if(G.raidT<=0){
-    G.raiding=true;
-    const steal=Math.floor(G.cash*0.30);
-    if(steal>0){
-      G.cash-=steal;
-      ninjaRaid(steal);
-      toast('🥷 Rival ninjas stole $'+fmt(steal)+'!');
-    }
-    G.raidT=20;G.raiding=false;
-    raidEl.style.display='none';
-  }
-  if(G.raidT>5)raidEl.style.display='none';
-
   updatePops(dt);
-  for(let i=raiders.length-1;i>=0;i--){const n=raiders[i];n.x+=n.vx*dt;n.life-=dt;if(n.life<=0)raiders.splice(i,1);}
   if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
   dragonFX+=dt;
 }
@@ -393,13 +354,6 @@ function updatePops(dt){
   for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];
     q.y+=q.vy*dt;if(q.vx)q.x+=q.vx*dt;q.vy*=0.96;q.vy+=q.big?260*dt:0;q.life-=dt;
     if(q.life<=0)G.pops.splice(i,1);}
-}
-let raiders=[];
-function ninjaRaid(amt){
-  const fi=pl.fi, base=floorBaseYStack(fi);
-  for(let i=0;i<5;i++){
-    raiders.push({x:beltCollectorX()+200,y:base+8-Math.random()*20,vx:-260-Math.random()*120,life:1.4,fi:fi});
-  }
 }
 
 // ===================== STACK-Y HELPERS (world coords) =====================
@@ -581,7 +535,7 @@ function drawCollector(p){
   if(owned){ctx.save();ctx.shadowColor='#ffd25c';ctx.shadowBlur=14;}
   ctx.fillStyle='#ffd25c';ctx.font='bold 22px Segoe UI';ctx.textAlign='center';ctx.fillText('💰',x+31,by-42);
   if(owned)ctx.restore();
-  ctx.fillStyle='#c89b6e';ctx.font='bold 9px Segoe UI';ctx.fillText(owned?'BANK HERE':'CASH',x+31,by-16);
+  ctx.fillStyle='#c89b6e';ctx.font='bold 9px Segoe UI';ctx.fillText('CASH',x+31,by-16);
   ctx.fillStyle='#0a0a06';ctx.fillRect(x-8,by-2,18,12);
 }
 
@@ -660,7 +614,7 @@ function drawPad(p){
   const x=p.x-camX, base=floorBaseY(p.fi)-camY, y=base+8;
   if(x<-110||x>W+110)return;
   if(p.fi>0 && !floorUnlocked(p.fi))return; // hide pads on unbuilt floors
-  const can=G.cash+G.banked>=p.cost;
+  const can=G.cash>=p.cost;
   const here=G.part===p;
   const isDragon=p.type==='rebirth';
   // pad
@@ -727,19 +681,6 @@ function drawPlayer(){
     ctx.beginPath();ctx.arc(x,y-4,22,0,7);ctx.stroke();}
 }
 
-function drawRaiders(){
-  for(const n of raiders){
-    const x=n.x-camX,y=floorBaseY(n.fi)-camY+(n.y-floorBaseY(n.fi));
-    ctx.globalAlpha=Math.min(1,n.life);
-    ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x,y+18,14,5,0,0,7);ctx.fill();
-    ctx.fillStyle='#3a1a26';roundRect(x-10,y-12,20,22,4);ctx.fill();
-    ctx.fillStyle='#15121c';roundRect(x-9,y-30,18,18,4);ctx.fill();
-    ctx.fillStyle='#ff5a6a';ctx.fillRect(x-9,y-25,18,5);
-    ctx.fillStyle='#ffd25c';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x,y+2);
-    ctx.globalAlpha=1;
-  }
-}
-
 function drawPetals(){
   for(const p of petals){
     const x=p.x-camX*0.7, y=p.y-camY*0.7;
@@ -782,11 +723,10 @@ function draw(){
   drawSakura();
   // pads
   for(const p of PARTS)drawPad(p);
-  drawRaiders();
   drawPlayer();
   // pops
   for(const q of G.pops){const x=q.x-camX,y=q.y-camY;ctx.globalAlpha=Math.max(0,Math.min(1,q.life));
-    ctx.fillStyle=q.t.indexOf('BANK')>=0?'#7ee0ff':(q.big?'#ff8a3c':'#ffd25c');
+    ctx.fillStyle=q.big?'#ff8a3c':'#ffd25c';
     ctx.font='bold '+(q.big?22:14)+'px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
 }
 
@@ -820,7 +760,6 @@ function loop(now){
   document.getElementById('money').textContent='$'+fmt(G.cash);
   const owned=PARTS.filter(p=>p.bought&&p.type!=='rebirth'&&!p.free).length;
   document.getElementById('sub').textContent=owned+' machines built · Floor '+(pl.fi+1);
-  document.getElementById('banked').textContent='🏦 Banked: $'+fmt(G.banked);
   document.getElementById('floorLbl').textContent=FLOOR_THEME[pl.fi].name;
   saveT+=dt;if(saveT>5){saveT=0;save();}
   requestAnimationFrame(loop);

@@ -14,9 +14,7 @@
   .panel{background:linear-gradient(160deg,#121d33ee,#0a1322ee);border:1px solid #2a3c5e;border-radius:14px;
          padding:8px 14px;box-shadow:0 8px 26px #000a, inset 0 1px 0 #ffffff15}
   #money{font-size:30px;font-weight:900;color:#5cf09a;text-shadow:0 2px 18px rgba(60,217,122,.55),0 2px 2px #000;line-height:1}
-  #bank{font-size:14px;font-weight:800;color:#ffd34d;text-shadow:0 1px 4px #000;margin-top:3px}
   #sub{font-size:11px;font-weight:700;color:#7e93b5;margin-top:2px}
-  #rb{font-size:13px;font-weight:800;color:#ff7a9c;text-shadow:0 1px 6px #000;text-align:right;line-height:1.4}
   #flr{font-size:11px;font-weight:800;color:#9ad0ff;text-align:right;margin-top:4px}
   #back{position:absolute;top:16px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;
         font-weight:800;text-decoration:none;pointer-events:auto;letter-spacing:.6px;z-index:6;
@@ -32,11 +30,6 @@
          padding:11px 20px;font-weight:800;color:#7df0aa;opacity:0;transition:.28s;pointer-events:none;
          text-align:center;max-width:90%;box-shadow:0 8px 26px #000c;z-index:7}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-  #warn{position:absolute;left:50%;top:74px;transform:translateX(-50%) scale(.9);
-        background:linear-gradient(160deg,#3a0f17ee,#240910ee);border:1px solid #ff5a6e;border-radius:13px;
-        padding:9px 18px;font-weight:900;color:#ff9aa8;opacity:0;transition:.25s;pointer-events:none;
-        text-align:center;box-shadow:0 0 28px #ff2a4a55;z-index:7;font-size:13px}
-  #warn.show{opacity:1;transform:translateX(-50%) scale(1)}
   #crash{position:absolute;inset:0;background:#0008cf;color:#fff;z-index:30;display:none;
          flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
          font-family:Consolas,monospace}
@@ -53,19 +46,16 @@
   <div id="hud">
     <div class="panel">
       <div id="money">$0</div>
-      <div id="bank">🏦 Banked: $0</div>
       <div id="sub"></div>
     </div>
     <div class="panel" style="text-align:right">
-      <div id="rb"></div>
       <div id="flr"></div>
     </div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
   <button id="reset">RESET</button>
   <div id="toast"></div>
-  <div id="warn"></div>
-  <div id="help">WASD / Arrows or tap to walk &nbsp;•&nbsp; step on a glowing pad to BUY &nbsp;•&nbsp; bank cash at 🏦 before robbers strike</div>
+  <div id="help">WASD / Arrows or tap to walk &nbsp;•&nbsp; step on a glowing pad to BUY &nbsp;•&nbsp; collect ore for cash</div>
   <div id="crash">
     <h1>:( SERVER CRASHED</h1>
     <p>FATAL_NUKE_EXCEPTION 0x00DEAD. The MEGA BASE TYCOON server encountered a problem and needs to restart.
@@ -258,8 +248,8 @@ const NUM_PADS=PADS.length;
 
 // ============================================================ STATE ============
 const SAVE='megaBaseTycoon_v1';
-const G={cash:0, banked:0, bought:{}, gear:{}, ores:[], pops:[], lasers:[],
-         buyPad:null, buyT:0, robTimer:20, robWarn:0, robbing:0, obbyRemoved:false};
+const G={cash:0, bought:{}, gear:{}, ores:[], pops:[], lasers:[],
+         buyPad:null, buyT:0, obbyRemoved:false};
 
 function ownedCount(){return PADS.filter(p=>p.bought).length;}
 function isBought(id){return !!G.bought[id];}
@@ -279,7 +269,7 @@ function isActive(p){
 function save(){
   try{
     const b={};for(const p of PADS)if(p.bought)b[p.id]=1;
-    localStorage.setItem(SAVE,JSON.stringify({cash:G.cash,banked:G.banked,bought:b,
+    localStorage.setItem(SAVE,JSON.stringify({cash:G.cash,bought:b,
       gear:G.gear,obbyRemoved:G.obbyRemoved}));
   }catch(e){}
 }
@@ -287,7 +277,7 @@ function load(){
   try{
     const s=JSON.parse(localStorage.getItem(SAVE)||'null');
     if(!s)return;
-    G.cash=s.cash||0;G.banked=s.banked||0;G.gear=s.gear||{};G.obbyRemoved=!!s.obbyRemoved;
+    G.cash=(s.cash||0)+(s.banked||0);G.gear=s.gear||{};G.obbyRemoved=!!s.obbyRemoved;
     const b=s.bought||{};
     for(const p of PADS){if(b[p.id]){p.bought=true;G.bought[p.id]=1;}}
   }catch(e){}
@@ -373,39 +363,9 @@ function collect(o){
   G.pops.push({x:o.x,y:o.y,vy:-50,life:1.1,t:'+$'+fmt(v),col:'#7df0aa'});
 }
 
-// ============================================================ ROBBERS ==========
-const robber={active:false,x:0,y:0,tx:0,ty:0,carry:0,phase:0};
-function startRob(){
-  if(G.cash<5){G.robTimer=20;return;}
-  robber.active=true;robber.phase=0;robber.carry=0;
-  robber.x=pl.x+ (Math.random()<.5?-1:1)*900; robber.y=pl.y;
-  robber.tx=pl.x;robber.ty=pl.y;
-}
-function updateRobber(dt){
-  if(!robber.active)return;
-  const sp=260;
-  if(robber.phase===0){ // approach the cash pile (player area)
-    const dx=robber.tx-robber.x,dy=robber.ty-robber.y,d=Math.hypot(dx,dy)||1;
-    robber.x+=dx/d*sp*dt;robber.y+=dy/d*sp*dt;
-    if(d<60){ // steal 30% of un-banked
-      const stolen=Math.floor(G.cash*0.30);
-      G.cash-=stolen;robber.carry=stolen;robber.phase=1;
-      robber.tx=robber.x+ (Math.random()<.5?-1:1)*1100;
-      G.pops.push({x:robber.x,y:robber.y-20,vy:-50,life:1.4,t:'-$'+fmt(stolen),col:'#ff7a8c'});
-      toast('💸 Robber stole $'+fmt(stolen)+'! Bank your cash!');
-    }
-  }else{ // flee
-    const dx=robber.tx-robber.x,dy=robber.ty-robber.y,d=Math.hypot(dx,dy)||1;
-    robber.x+=dx/d*sp*1.2*dt;robber.y+=dy/d*sp*1.2*dt;
-    if(d<40){robber.active=false;G.robTimer=20;}
-  }
-}
-
-// ============================================================ TOAST/WARN =======
+// ============================================================ TOAST =======
 let toastT=0;const toastEl=document.getElementById('toast');
 function toast(m){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.4;}
-const warnEl=document.getElementById('warn');
-function showWarn(m){warnEl.textContent=m;warnEl.classList.add('show');G.robWarn=Math.max(G.robWarn,2.5);}
 
 // ============================================================ BUY ==============
 function buyPad(p){
@@ -492,25 +452,8 @@ function update(dt){
   // ---- pops ----
   for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.94;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
 
-  // ---- robbers ----
-  G.robTimer-=dt;
-  if(G.robTimer<=3 && G.robTimer>0 && !robber.active && G.robWarn<=0 && G.cash>=5){
-    showWarn('⚠ A ROBBER IS COMING IN '+Math.ceil(G.robTimer)+'s — BANK YOUR CASH!');
-  }
-  if(G.robTimer<=0 && !robber.active){startRob();}
-  updateRobber(dt);
-
-  // ---- banking: walk into any owned cash collector ----
-  for(const cc of cashCollectors()){
-    if(Math.abs(pl.x-cc.x)<70 && Math.abs(pl.y-cc.y)<70 && G.cash>0){
-      const amt=G.cash; G.banked+=amt; G.cash=0;
-      G.pops.push({x:pl.x,y:pl.y-30,vy:-60,life:1.2,t:'🏦 +$'+fmt(amt),col:'#ffd34d'});
-    }
-  }
-
   // ---- timers ----
   if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
-  if(G.robWarn>0){G.robWarn-=dt;if(G.robWarn<=0)warnEl.classList.remove('show');}
   saveT+=dt;if(saveT>3){saveT=0;save();}
 }
 
@@ -748,7 +691,7 @@ function drawCashCollector(cc,name){
   ctx.fillStyle=g;roundRect(x-40,y-56,80,72,12);ctx.fill();ctx.restore();
   ctx.fillStyle='#1a1404';roundRect(x-32,y-48,64,30,6);ctx.fill();
   ctx.font='22px Segoe UI';ctx.textAlign='center';ctx.fillText('🏦',x,y-26);
-  ctx.fillStyle='#ffe08a';ctx.font='bold 9px Segoe UI';ctx.fillText('BANK CASH',x,y-6);
+  ctx.fillStyle='#ffe08a';ctx.font='bold 9px Segoe UI';ctx.fillText('CASH',x,y-6);
 }
 
 // ---- decorations ----
@@ -1026,18 +969,6 @@ function drawPlayer(){
     sword:G.gear.sword, laser:G.gear.laser
   });
 }
-function drawRobber(){
-  if(!robber.active)return;
-  const wob=Math.sin(T*12)*4;
-  drawCharacter(robber.x,robber.y,{anim:T*12,face:robber.tx>robber.x?1:-1,
-    shirt:'#3a2a44',skin:'#caa', hair:'#1a1a1a', legCol:'#1a1a22', hop:Math.abs(wob)});
-  // mask + bag
-  const x=sx(robber.x),y=sy(robber.y);
-  ctx.fillStyle='#1a1a22';ctx.fillRect(x-12,y-30,24,8);
-  if(robber.carry>0){ctx.fillStyle='#caa23a';roundRect(x+8,y-8,16,16,3);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='10px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x+16,y+4);}
-}
-
 // ---- depth-sorted scene ----
 function draw(){
   drawBg();
@@ -1062,7 +993,6 @@ function draw(){
   }
   // entities sorted by y for depth
   const ents=[{y:pl.y,fn:drawPlayer}];
-  if(robber.active)ents.push({y:robber.y,fn:drawRobber});
   ents.sort((a,b)=>a.y-b.y);
   for(const e of ents)e.fn();
   // buy pads on top
@@ -1073,15 +1003,13 @@ function draw(){
 }
 
 // ============================================================ LOOP =============
-const moneyEl=document.getElementById('money'),bankEl=document.getElementById('bank'),
-      subEl=document.getElementById('sub'),rbEl=document.getElementById('rb'),flrEl=document.getElementById('flr');
+const moneyEl=document.getElementById('money'),
+      subEl=document.getElementById('sub'),flrEl=document.getElementById('flr');
 function loop(now){
   const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
   update(dt);draw();
   moneyEl.textContent='$'+fmt(G.cash);
-  bankEl.textContent='🏦 Banked: $'+fmt(G.banked);
   subEl.textContent=ownedCount()+' / '+NUM_PADS+' pads bought';
-  rbEl.textContent='💸 Robber in '+Math.max(0,Math.ceil(G.robTimer))+'s';
   const cur=PADS.find(p=>!p.bought);
   flrEl.textContent=cur?('Next: Floor '+cur.floor):'★ COMPLETE ★';
   requestAnimationFrame(loop);

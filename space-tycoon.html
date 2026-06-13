@@ -12,7 +12,6 @@
   #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
        padding:12px 16px;pointer-events:none}
   #money{font-size:32px;font-weight:800;color:#5cf0c0;text-shadow:0 2px 16px rgba(60,240,180,.6),0 2px 2px #000;letter-spacing:.5px}
-  #banked{font-size:14px;font-weight:800;color:#7fd0ff;margin-top:2px;text-shadow:0 1px 6px rgba(80,180,255,.5)}
   #sub{font-size:12px;font-weight:700;color:#7d92b8;margin-top:2px}
   #rb{font-size:13px;font-weight:800;color:#ff9be0;text-shadow:0 1px 6px rgba(255,120,210,.5);text-align:right;line-height:1.5}
   #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#5a6b95;font-size:12px;
@@ -28,10 +27,6 @@
   #reset{position:absolute;bottom:12px;right:14px;pointer-events:auto;background:#16203aee;border:1px solid #33405e;
          color:#8398c0;font-size:11px;font-weight:700;border-radius:8px;padding:7px 12px;cursor:pointer}
   #reset:hover{border-color:#ff6b6b;color:#ff8a8a}
-  #raid{position:absolute;top:54px;left:50%;transform:translateX(-50%);background:#2a0a14ee;border:1px solid #ff3a5c;
-        color:#ff8a9a;font-weight:800;font-size:14px;padding:8px 16px;border-radius:10px;opacity:0;transition:.25s;
-        pointer-events:none;box-shadow:0 0 24px #ff3a5c66;text-align:center}
-  #raid.show{opacity:1}
   #win{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,#0a1e3a 0%,#03060f 80%);
        display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50;text-align:center;padding:20px}
   #win.show{display:flex}
@@ -45,14 +40,13 @@
 <div id="wrap">
   <canvas id="cv"></canvas>
   <div id="hud">
-    <div><div id="money">$0</div><div id="banked">Banked: $0</div><div id="sub"></div></div>
+    <div><div id="money">$0</div><div id="sub"></div></div>
     <div id="rb"></div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
-  <div id="raid"></div>
   <div id="toast"></div>
   <button id="reset">RESET</button>
-  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; stand on a pad to BUY &nbsp;•&nbsp; bank cash at the CASH COLLECTOR before pirates raid</div>
+  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; stand on a pad to BUY &nbsp;•&nbsp; ore flows to the CASH COLLECTOR and pays you automatically</div>
   <div id="win">
     <h1>🚀 STARSHIP LAUNCHED</h1>
     <p>The orbital station fires its engines and breaks free toward deep space. You won Space Station Tycoon!</p>
@@ -133,7 +127,7 @@ initParts();
 
 // ===================== STATE =====================
 const SAVE_KEY='spaceStationTycoon_v1';
-const G={money:0, banked:0, rebirth:0, ore:[], pops:[], part:null, buyT:0, fx:[]};
+const G={money:0, rebirth:0, ore:[], pops:[], part:null, buyT:0, fx:[]};
 function rbMult(){return 1+G.rebirth*0.5;}
 function part(id){return PARTS.find(p=>p.id===id);}
 function owned(id){const p=part(id);return p&&p.bought;}
@@ -197,22 +191,6 @@ function spawnBuildFX(x,y){ for(let i=0;i<14;i++){G.fx.push({x:x+(Math.random()-
 // auto-own free starter
 part('h_scrap').bought=true;
 
-// ===================== RAID (space pirates) =====================
-let raidTimer=20, raidWarn=false; const raidEl=document.getElementById('raid');
-function tickRaid(dt){
-  raidTimer-=dt;
-  if(raidTimer<=4 && !raidWarn && G.money>0){ raidWarn=true; raidEl.textContent='⚠ PIRATE RAID INCOMING — bank your cash!'; raidEl.classList.add('show'); }
-  if(raidTimer<=0){
-    if(G.money>0){
-      const stolen=Math.floor(G.money*0.30);
-      G.money-=stolen;
-      toast('🏴‍☠️ Pirates stole $'+fmt(stolen)+'!',true);
-      for(let i=0;i<24;i++)G.fx.push({x:pl.x+(Math.random()-.5)*200,y:pl.y-100-Math.random()*120,vx:(Math.random()-.5)*200,vy:(Math.random()-.5)*120,life:.9,c:'#ff5a72'});
-    }
-    raidTimer=20; raidWarn=false; raidEl.classList.remove('show');
-  }
-}
-
 // ===================== UPDATE =====================
 let last=performance.now();
 function currentDeck(){
@@ -258,8 +236,7 @@ function update(dt){
     if(!canShow(p))continue;
     const px=p.x, py=deckPadY(p.deck);
     if(Math.abs(pl.x-px)<48 && Math.abs(pl.y-py)<52){
-      if(p.type==='cash'&&p.bought){ // banking action
-        if(G.money>0){ G.banked+=G.money; toast('🏦 Banked $'+fmt(G.money)+' safely'); G.money=0; raidWarn=false; raidEl.classList.remove('show'); save(); }
+      if(p.type==='cash'&&p.bought){ // collector is passive: ore auto-pays the player
         continue;
       }
       G.part=p; G.buyT+=dt;
@@ -303,7 +280,6 @@ function update(dt){
   for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
   for(let i=G.fx.length-1;i>=0;i--){const f=G.fx[i];f.x+=f.vx*dt;f.y+=f.vy*dt;f.vy+=260*dt;f.life-=dt;if(f.life<=0)G.fx.splice(i,1);}
 
-  if(hasCash())tickRaid(dt);
   if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
   saveTick-=dt; if(saveTick<=0){saveTick=5;save();}
 }
@@ -492,8 +468,8 @@ function drawCashCollector(p){
   ctx.fillStyle=g;roundRect(x-44,top,88,120,12);ctx.fill();ctx.restore();
   ctx.fillStyle='#06120e';roundRect(x-34,top+12,68,40,6);ctx.fill();
   ctx.fillStyle='#5cf0c0';ctx.font='bold 26px Segoe UI';ctx.textAlign='center';ctx.fillText('🏦',x,top+40);
-  ctx.fillStyle='#aef0d8';ctx.font='bold 10px Segoe UI';ctx.fillText('BANK CASH',x,top+72);
-  ctx.fillStyle='#7fd0ff';ctx.font='bold 9px Segoe UI';ctx.fillText('walk in to bank',x,top+88);
+  ctx.fillStyle='#aef0d8';ctx.font='bold 10px Segoe UI';ctx.fillText('CASH COLLECTOR',x,top+72);
+  ctx.fillStyle='#7fd0ff';ctx.font='bold 9px Segoe UI';ctx.fillText('ore pays you',x,top+88);
   // safe glow ring
   ctx.strokeStyle='#5cf0c0';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,fy-6,40,Math.PI,0);ctx.stroke();
 }
@@ -566,7 +542,7 @@ function drawPad(p){
   ctx.strokeStyle=ownedP?'#3fe0c0':(launch?'#e0a818':'#2a3a52');ctx.lineWidth=1.5;roundRect(x-w/2,sy-22,w,44,9);ctx.stroke();
   ctx.fillStyle=launch?'#ffd84a':'#e6f0ff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText(p.name,x,sy-4);
   let label;
-  if(isCash&&p.bought) label='WALK IN TO BANK';
+  if(isCash&&p.bought) label='COLLECTING';
   else if(ownedP) label='OWNED';
   else if(p.free) label='FREE';
   else label='$'+fmt(p.cost);
@@ -681,7 +657,7 @@ function showWin(){ document.getElementById('win').classList.add('show'); }
 let saveTick=5;
 function save(){
   try{
-    const d={money:G.money,banked:G.banked,rebirth:G.rebirth,
+    const d={money:G.money,rebirth:G.rebirth,
       bought:PARTS.filter(p=>p.bought).map(p=>p.id), px:pl.x, py:pl.y};
     localStorage.setItem(SAVE_KEY,JSON.stringify(d));
   }catch(e){}
@@ -690,7 +666,7 @@ function load(){
   try{
     const s=localStorage.getItem(SAVE_KEY); if(!s)return;
     const d=JSON.parse(s);
-    G.money=d.money||0; G.banked=d.banked||0; G.rebirth=d.rebirth||0;
+    G.money=(d.money||0)+(d.banked||0); G.rebirth=d.rebirth||0;
     if(d.bought)for(const id of d.bought){const p=part(id);if(p)p.bought=true;}
     part('h_scrap').bought=true;
     if(d.px){pl.x=d.px;pl.y=d.py;}
@@ -699,7 +675,7 @@ function load(){
 function reset(){
   if(!confirm('Reset all progress? This wipes your station.'))return;
   localStorage.removeItem(SAVE_KEY);
-  G.money=0;G.banked=0;G.rebirth=0;G.ore=[];G.pops=[];G.fx=[];
+  G.money=0;G.rebirth=0;G.ore=[];G.pops=[];G.fx=[];
   initParts();part('h_scrap').bought=true;
   launching=false;launchLift=0;
   pl.x=360;pl.y=deckFloorY(0);
@@ -715,9 +691,8 @@ function loop(now){
   const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
   update(dt); tickLaunch(dt); draw();
   document.getElementById('money').textContent='$'+fmt(G.money);
-  document.getElementById('banked').textContent='Banked: $'+fmt(G.banked)+'  •  Total: $'+fmt(G.money+G.banked);
   const built=PARTS.filter(p=>p.bought&&p.type!=='cash').length;
-  document.getElementById('sub').textContent=built+' modules built  •  Deck '+(pl.deck+1)+(hasCash()?('  •  Raid in '+Math.ceil(raidTimer)+'s'):'');
+  document.getElementById('sub').textContent=built+' modules built  •  Deck '+(pl.deck+1);
   document.getElementById('rb').textContent=G.rebirth>0?('⭐ Rebirth '+G.rebirth+'  (+'+(G.rebirth*50)+'% ore)'):'';
   requestAnimationFrame(loop);
 }

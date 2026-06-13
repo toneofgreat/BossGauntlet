@@ -37,13 +37,13 @@
 <div id="wrap">
   <canvas id="cv"></canvas>
   <div id="hud">
-    <div><div id="money">$0</div><div id="banked">Banked: $0</div><div id="sub"></div></div>
+    <div><div id="money">$0</div><div id="banked"></div><div id="sub"></div></div>
     <div><div id="rb"></div><div id="floorTag"></div></div>
   </div>
   <a id="back" href="index.html">&larr; Platyfy</a>
   <div id="toast"></div>
   <button id="reset">RESET</button>
-  <div id="help">WASD / Arrows to swim &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; stand on a pad to BUY &nbsp;•&nbsp; reach 🏦 to BANK cash before robbers strike</div>
+  <div id="help">WASD / Arrows to swim &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; stand on a pad to BUY &nbsp;•&nbsp; ore flows down the conveyor to the 🏦 collector and becomes your cash</div>
   <div id="flash"></div>
 </div>
 <script>
@@ -125,9 +125,9 @@ function initParts(){
 initParts();
 
 // ---------- State ----------
-const G={cash:0, banked:0, bricks:[], pops:[], part:null, buyT:0,
+const G={cash:0, bricks:[], pops:[], part:null, buyT:0,
          topFloor:0,          // highest floor whose room is built (0..2)
-         robberT:18, robberWarn:0, robber:null, win:false};
+         win:false};
 function collectorX(){return collectorXfor();}
 
 // ---------- gear helpers ----------
@@ -184,7 +184,7 @@ function buyPart(p){
   if(p.type==='stair'){G.topFloor=Math.max(G.topFloor,p.tf);
     toast('🌊 New floor built: '+(p.tf===1?'Sunken Ship':'Atlantis Throne')+'!');}
   else if(p.type==='gear'){toast('⚙ Equipped: '+p.name);}
-  else if(p.type==='bank'){toast('🏦 Cash Collector online — bank your cash here!');}
+  else if(p.type==='bank'){toast('🏦 Cash Collector online — ore now turns into cash!');}
   else if(p.type==='kraken'){summonKraken();}
   else toast('✓ Built: '+p.name);
   refreshGating();save();
@@ -198,26 +198,11 @@ function summonKraken(){
 PARTS.find(p=>p.id==='f1d1').bought=true;
 refreshGating();
 
-// ---------- Robbers ----------
-function spawnRobber(){
-  // rival diver swims from edge toward player's floor toward collector area
-  const f=Math.floor(Math.random()*(G.topFloor+1));
-  G.robber={x:-60,y:floorFloorY(f)-20,f:f,vx:230,phase:'in',t:0};
-}
-function robberSteal(){
-  if(G.cash<=0)return;
-  const pct=0.20+Math.random()*0.08;
-  const stolen=G.cash*pct;
-  G.cash-=stolen;
-  G.pops.push({x:G.robber?G.robber.x:collectorX(),y:floorFloorY(G.robber?G.robber.f:0)-60,vy:-50,life:1.4,t:'-$'+fmt(stolen),col:'#ff7a7a'});
-  toast('🦈 A rival diver stole $'+fmt(stolen)+' of un-banked cash!',true);
-}
-
 // ---------- Save / Load ----------
 const KEY='atlantis_ocean_tycoon_v1';
 function save(){
   try{
-    const d={cash:G.cash,banked:G.banked,topFloor:G.topFloor,win:G.win,
+    const d={cash:G.cash,topFloor:G.topFloor,win:G.win,
       bought:PARTS.filter(p=>p.bought).map(p=>p.id)};
     localStorage.setItem(KEY,JSON.stringify(d));
   }catch(e){}
@@ -226,7 +211,8 @@ function load(){
   try{
     const raw=localStorage.getItem(KEY);if(!raw)return;
     const d=JSON.parse(raw);
-    G.cash=d.cash||0;G.banked=d.banked||0;G.topFloor=d.topFloor||0;G.win=!!d.win;
+    // fold any old "banked" cash back into spendable cash (no more theft split)
+    G.cash=(d.cash||0)+(d.banked||0);G.topFloor=d.topFloor||0;G.win=!!d.win;
     const set=new Set(d.bought||[]);
     for(const p of PARTS)p.bought=set.has(p.id);
     PARTS.find(p=>p.id==='f1d1').bought=true;
@@ -238,7 +224,7 @@ let saveT=0;
 document.getElementById('reset').onclick=()=>{
   if(!confirm('Reset all Atlantis progress?'))return;
   localStorage.removeItem(KEY);
-  G.cash=0;G.banked=0;G.topFloor=0;G.win=false;G.bricks=[];G.pops=[];G.robber=null;G.robberT=18;
+  G.cash=0;G.topFloor=0;G.win=false;G.bricks=[];G.pops=[];
   initParts();PARTS.find(p=>p.id==='f1d1').bought=true;refreshGating();
   toast('Progress reset.');
 };
@@ -287,16 +273,6 @@ function update(dt){
   }
   if(!G.part)G.buyT=0;
 
-  // BANK: stand on cash collector to bank un-banked cash
-  const bank=PARTS.find(p=>p.id==='f1cl');
-  if(bank&&bank.bought){
-    const bx=bank.slot,by=floorFloorY(bank.f)-6;
-    if(Math.abs(pl.x-bx)<58&&Math.abs(pl.y-by)<58&&G.cash>0){
-      const amt=G.cash;G.banked+=amt;G.cash=0;
-      G.pops.push({x:bx,y:by-60,vy:-50,life:1.2,t:'🏦 Banked $'+fmt(amt),col:'#ffe27a'});
-    }
-  }
-
   // droppers spawn bricks
   for(const p of PARTS){
     if((p.type!=='dropper'&&p.type!=='throne')||!p.bought)continue;
@@ -329,20 +305,6 @@ function update(dt){
   }
   if(G.bricks.length>700)G.bricks.splice(0,G.bricks.length-700);
   for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
-
-  // ---- Robbers (every 20s) ----
-  if(!G.win){
-    G.robberT-=dt;
-    if(G.robberT<=3.2&&G.robberWarn<=0&&!G.robber){G.robberWarn=3.2;toast('⚠ A rival diver is approaching! Bank your cash!',true);}
-    if(G.robberWarn>0)G.robberWarn-=dt;
-    if(G.robberT<=0&&!G.robber){spawnRobber();G.robberT=20;}
-  }
-  if(G.robber){
-    const rb=G.robber;rb.t+=dt;
-    if(rb.phase==='in'){rb.x+=rb.vx*dt;
-      if(rb.x>=collectorX()-260){rb.phase='grab';robberSteal();rb.phase='out';}
-    } else if(rb.phase==='out'){rb.x+=rb.vx*1.3*dt;if(rb.x>WLD+80)G.robber=null;}
-  }
 
   if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.className='';}
   if(G.win){G.krakenT=(G.krakenT||0)+dt;}
@@ -564,7 +526,7 @@ function drawBank(p){
   ctx.fillStyle=g;roundRect(x-46,fl-80,92,80,10);ctx.fill();
   ctx.fillStyle='#3a2a08';roundRect(x-36,fl-66,72,30,5);ctx.fill();
   ctx.shadowBlur=0;ctx.fillStyle='#ffe27a';ctx.font='bold 24px Segoe UI';ctx.textAlign='center';ctx.fillText('🏦',x,fl-44);
-  ctx.fillStyle='#fff7d0';ctx.font='bold 10px Segoe UI';ctx.fillText('BANK CASH',x,fl-16);
+  ctx.fillStyle='#fff7d0';ctx.font='bold 10px Segoe UI';ctx.fillText('COLLECTOR',x,fl-16);
   ctx.restore();
 }
 function drawFlag(p){
@@ -685,27 +647,6 @@ function drawKrakenFX(){
   ctx.fillStyle='#fff';ctx.font='bold 16px Segoe UI';ctx.fillText('ATLANTIS IS YOURS — YOU WIN! (RESET to play again)',W/2,98);
 }
 
-function drawRobber(){
-  if(!G.robber)return;
-  const rb=G.robber;const x=rb.x-camX,y=floorFloorY(rb.f)-camY-22;
-  if(x<-60||x>W+60)return;
-  const f=rb.vx>0?1:1;
-  ctx.save();ctx.translate(x,y);
-  // shadow
-  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(0,40,18,6,0,0,7);ctx.fill();
-  // wetsuit body
-  ctx.fillStyle='#2a2a35';roundRect(-12,-10,24,30,5);ctx.fill();
-  // head + mask
-  ctx.fillStyle='#1a1a22';roundRect(-11,-34,22,22,6);ctx.fill();
-  ctx.fillStyle='#7fe0ff';roundRect(-8,-30,16,9,3);ctx.fill();
-  // snorkel/fin
-  ctx.fillStyle='#ff5a5a';ctx.fillRect(10,-34,5,12);
-  // bag of loot
-  ctx.save();ctx.shadowColor='#ffe27a';ctx.shadowBlur=10;ctx.fillStyle='#caa23a';ctx.beginPath();ctx.arc(-16,6,9,0,7);ctx.fill();ctx.restore();
-  ctx.fillStyle='#fff';ctx.font='bold 16px Segoe UI';ctx.textAlign='center';ctx.fillText('🦈',0,-40);
-  ctx.restore();
-}
-
 function drawPlayer(){
   const x=pl.x-camX, y=pl.y-camY;
   ctx.fillStyle='rgba(0,0,0,.32)';ctx.beginPath();ctx.ellipse(x,y+20,18,7,0,0,7);ctx.fill();
@@ -758,7 +699,6 @@ function draw(){
   }
   for(let f=0;f<FLOORS;f++)drawCollector(f);
   for(const p of PARTS)drawPad(p);
-  drawRobber();
   drawPlayer();
   for(const q of G.pops){const x=q.x-camX,y=q.y-camY;ctx.globalAlpha=Math.max(0,q.life);
     ctx.fillStyle=q.col||'#7af0d2';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
@@ -769,18 +709,12 @@ function draw(){
 // ---------- HUD update ----------
 function updHUD(){
   document.getElementById('money').textContent='$'+fmt(G.cash);
-  document.getElementById('banked').textContent='Banked: $'+fmt(G.banked)+'  (safe)';
+  document.getElementById('banked').textContent='';
   const owned=PARTS.filter(p=>p.bought&&!p.free).length;
   document.getElementById('sub').textContent=owned+' built · '+(PARTS.length)+' pads';
   const fl=['Coral Reef','Sunken Ship','Atlantis'][pl.f]||'';
   document.getElementById('floorTag').textContent='Floor '+(pl.f+1)+' · '+fl+(G.topFloor<2?'  ('+(G.topFloor+1)+'/3 built)':'  (all built)');
-  // robber warn countdown
-  let rb='';
-  if(G.win)rb='👑 ATLANTIS CONQUERED';
-  else if(G.robber)rb='🦈 ROBBER ACTIVE!';
-  else if(G.robberT<=4)rb='⚠ Robber in '+Math.ceil(G.robberT)+'s — BANK!';
-  else rb='Next robber: '+Math.ceil(G.robberT)+'s';
-  document.getElementById('rb').textContent=rb;
+  document.getElementById('rb').textContent=G.win?'👑 ATLANTIS CONQUERED':'';
 }
 
 // ---------- Loop ----------
