@@ -4,10 +4,28 @@
 
 local Config = {}
 
-Config.FLOOR_MULT      = 1.5    -- each floor is ~1.5x more expensive (progress ~1.5x slower)
+Config.FLOOR_MULT      = 1.6    -- each floor is ~1.6x more expensive (progress slower per floor)
+Config.COST_MULT       = 5      -- global cost scale — everything is harder to get
 Config.STEAL_COOLDOWN  = 20     -- another PLAYER can steal from your cash collector once per 20s
 Config.STEAL_PERCENT   = 0.5    -- fraction of un-banked cash a thieving player grabs
-Config.DROP_INTERVAL   = 1.2    -- seconds between drops per dropper
+Config.DROP_INTERVAL   = 1.3    -- seconds between drops per dropper
+
+-- REAL Roblox gear (classic Toolbox / catalog items). The server grants gear in
+-- this priority order: (1) a Tool of the same display name placed in
+-- ServerStorage.GearStorage (drag it in from the Toolbox in Studio), (2)
+-- InsertService:LoadAsset(assetId) below, (3) a simple built-in fallback tool.
+-- NOTE: nil ids fall through to GearStorage/fallback. Set ids you own, or just
+-- drop the Toolbox tools into ServerStorage.GearStorage (most reliable).
+Config.gearAssets = {
+  speed   = 16688561,    -- Speed Coil
+  gravity = 16688968,    -- Gravity Coil
+  jump    = nil,         -- (uses a built-in jump boost)
+  sword   = 125013769,   -- Linked Sword
+  carpet  = nil,         -- Flying Carpet  -> set your assetId or use GearStorage
+  grenade = nil,         -- Hand Grenade   -> "
+  laser   = nil,         -- Laser Gun      -> "
+  rocket  = nil,         -- Rocket Launcher-> "
+}
 Config.PLOT_SPACING    = 220    -- studs between player plots
 Config.FLOOR_HEIGHT    = 28     -- vertical gap between floors
 
@@ -37,6 +55,8 @@ Config.buttons = {
   {floor=1, kind="gear",     name="Speed Coil",         baseCost=2500,   gear="speed"},
   {floor=1, kind="gear",     name="Jump Coil",          baseCost=2800,   gear="jump"},
   {floor=1, kind="gear",     name="Sword",              baseCost=3500,   gear="sword"},
+  {floor=1, kind="gear",     name="Gravity Coil",       baseCost=6000,   gear="gravity"},
+  {floor=1, kind="convspeed",name="Conveyor Speed I",   baseCost=7000,   addspeed=16, color=C(90,200,255)},
   {floor=1, kind="upgrader", name="Size Ray (x3)",      baseCost=9000,   mult=3,    color=C(120,220,255)},
   {floor=1, kind="collector",name="Collector",          baseCost=1200},
   {floor=1, kind="cashcollector", name="Cash Collector",baseCost=900},
@@ -54,6 +74,7 @@ Config.buttons = {
   {floor=2, kind="deco",     name="Mummy",              baseCost=90000,  color=C(220,215,190), shape="mummy"},
   {floor=2, kind="collector",name="Desert Collector",   baseCost=60000},
   {floor=2, kind="cashcollector", name="Desert Cash Collector", baseCost=55000},
+  {floor=2, kind="convspeed",name="Conveyor Speed II",  baseCost=260000, addspeed=22, color=C(120,210,255)},
   {floor=2, kind="floorslab",name="Build 3rd Floor",    baseCost=600000, color=C(40,40,55)},
 
   -- ============ FLOOR 3 — Glowing Hearts ============
@@ -65,6 +86,10 @@ Config.buttons = {
   {floor=3, kind="upgrader", name="Mega Smasher (x8)",  baseCost=5000000,mult=8,    color=C(255,80,160)},
   {floor=3, kind="collector",name="Heart Collector",    baseCost=1500000},
   {floor=3, kind="cashcollector", name="Heart Cash Collector", baseCost=1400000},
+  {floor=3, kind="convspeed",name="Conveyor Speed III", baseCost=8000000,  addspeed=30, color=C(180,120,255)},
+  {floor=3, kind="gear",     name="Flying Carpet",      baseCost=12000000, gear="carpet"},
+  {floor=3, kind="gear",     name="Hand Grenade",       baseCost=20000000, gear="grenade"},
+  {floor=3, kind="gear",     name="Rocket Launcher",    baseCost=35000000, gear="rocket"},
   {floor=3, kind="gear",     name="Laser Gun",          baseCost=50000000, gear="laser"}, -- 2nd most expensive
   {floor=3, kind="nuke",     name="LAUNCH NUKE",        baseCost=99000000},               -- most expensive
 }

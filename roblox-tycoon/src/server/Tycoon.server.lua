@@ -8,6 +8,8 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService        = game:GetService("RunService")
 local DataStoreService  = game:GetService("DataStoreService")
+local InsertService     = game:GetService("InsertService")
+local ServerStorage     = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("TycoonConfig"))
 
@@ -62,7 +64,7 @@ local function money(n)
 end
 
 local function costOf(btn)
-	return math.floor(btn.baseCost * (Config.FLOOR_MULT ^ (btn.floor - 1)))
+	return math.floor(btn.baseCost * (Config.COST_MULT or 1) * (Config.FLOOR_MULT ^ (btn.floor - 1)))
 end
 
 -- ── Floor (conveyor + collector + cash collector) ────────────────────────
@@ -71,26 +73,44 @@ local function buildFloor(plot, f)
 	local o = plot.origin
 	local y = 3 + (f-1) * Config.FLOOR_HEIGHT
 	local startX, endX = o.X - 35, o.X + 45
-	local z = o.Z
+	local z = o.Z + 18   -- the conveyor's z
 
-	-- floor slab
-	part({Name="Floor"..f, Size=Vector3.new(110, 1, 90), Position=Vector3.new(o.X+5, y-0.5, z),
-		Color = (f==1 and Color3.fromRGB(95,105,120)) or (f==2 and Color3.fromRGB(225,205,140)) or Color3.fromRGB(22,22,30),
-		Material = Enum.Material.SmoothPlastic}, plot.model)
+	-- detailed floor slab + neon trim
+	local floorCol = (f==1 and Color3.fromRGB(95,105,120)) or (f==2 and Color3.fromRGB(225,205,140)) or Color3.fromRGB(22,22,30)
+	part({Name="Floor"..f, Size=Vector3.new(110, 1, 90), Position=Vector3.new(o.X+5, y-0.5, o.Z),
+		Color=floorCol, Material=Enum.Material.SmoothPlastic}, plot.model)
+	part({Name="FloorTrim"..f, Size=Vector3.new(112, 0.4, 92), Position=Vector3.new(o.X+5, y+0.05, o.Z),
+		Color=Color3.fromRGB(90,200,255), Material=Enum.Material.Neon, Transparency=0.3}, plot.model)
 
-	-- conveyor
-	local belt = part({Name="Belt"..f, Size=Vector3.new(endX-startX, 1, 6),
-		Position=Vector3.new((startX+endX)/2, y+0.5, z+18), Color=Color3.fromRGB(45,45,52),
-		Material=Enum.Material.Metal}, plot.model)
+	-- conveyor belt (diamond plate) + end rollers
+	part({Name="Belt"..f, Size=Vector3.new(endX-startX, 1, 8),
+		Position=Vector3.new((startX+endX)/2, y+0.5, z), Color=Color3.fromRGB(35,35,42),
+		Material=Enum.Material.DiamondPlate}, plot.model)
+	for _, rx in ipairs({startX, endX}) do
+		local roll = part({Name="Roller", Size=Vector3.new(1.6, 9, 1.6), Position=Vector3.new(rx, y+0.6, z),
+			Color=Color3.fromRGB(120,120,135), Material=Enum.Material.Metal}, plot.model)
+		roll.Shape = Enum.PartType.Cylinder; roll.Orientation = Vector3.new(0, 0, 90)
+	end
 
-	-- collector at the end of the belt
-	local collX = endX - 2
-	part({Name="Collector"..f, Size=Vector3.new(4, 6, 10), Position=Vector3.new(collX+3, y+3, z+18),
-		Color=Color3.fromRGB(40,90,140), Material=Enum.Material.Neon}, plot.model)
+	-- TALL conveyor side walls (containment) with glowing neon tops
+	for _, dz in ipairs({-1, 1}) do
+		part({Name="ConvWall"..f, Size=Vector3.new(endX-startX, 12, 0.8),
+			Position=Vector3.new((startX+endX)/2, y+6.5, z + dz*4.4), Color=Color3.fromRGB(55,62,78),
+			Material=Enum.Material.Metal}, plot.model)
+		part({Name="ConvWallTop"..f, Size=Vector3.new(endX-startX, 0.5, 1.1),
+			Position=Vector3.new((startX+endX)/2, y+12.7, z + dz*4.4), Color=Color3.fromRGB(90,200,255),
+			Material=Enum.Material.Neon}, plot.model)
+	end
 
-	-- cash collector pad (step on it to BANK)
-	local cashPad = part({Name="CashPad"..f, Size=Vector3.new(10, 1, 10),
-		Position=Vector3.new(o.X-30, y+0.5, z-22), Color=Color3.fromRGB(60,200,110),
+	-- collector wall at the end of the belt (solid + glowing)
+	local collX = endX - 1
+	local coll = part({Name="Collector"..f, Size=Vector3.new(4, 13, 12), Position=Vector3.new(collX+3, y+6, z),
+		Color=Color3.fromRGB(40,90,140), Material=Enum.Material.Neon, Transparency=0.12}, plot.model)
+	local pl = Instance.new("PointLight"); pl.Color = Color3.fromRGB(90,200,255); pl.Range = 16; pl.Parent = coll
+
+	-- cash collector pad (you collect here; other players can steal from it)
+	local cashPad = part({Name="CashPad"..f, Size=Vector3.new(11, 1, 11),
+		Position=Vector3.new(o.X-30, y+0.6, o.Z-4), Color=Color3.fromRGB(60,200,110),
 		Material=Enum.Material.Neon}, plot.model)
 	billboard(cashPad, "💰 CASH COLLECTOR", "you collect · others can steal", Color3.fromRGB(120,255,170))
 	local bankDeb = false
@@ -124,7 +144,7 @@ local function buildFloor(plot, f)
 		end
 	end)
 
-	local fs = {y=y, z=z+18, startX=startX, endX=endX, collectorX=collX,
+	local fs = {y=y, z=z, startX=startX, endX=endX, collectorX=collX, speed=24,
 		collectorMult=1, upgraders={}, dropperCount=0}
 	plot.floors[f] = fs
 	return fs
@@ -136,24 +156,44 @@ local function applyButton(plot, idx, btn)
 	local fs = plot.floors[f] or buildFloor(plot, f)
 
 	if btn.kind == "dropper" then
-		local x = fs.startX + 4 + fs.dropperCount * 6
+		local x = fs.startX + 5 + fs.dropperCount * 6.5
 		fs.dropperCount += 1
-		local d = part({Name=btn.name, Size=Vector3.new(4,5,4), Position=Vector3.new(x, fs.y+5, fs.z),
+		-- detailed dropper machine: base + funnel + spout + legs + light + sign
+		local base = part({Name=btn.name, Size=Vector3.new(5,2,5), Position=Vector3.new(x, fs.y+13, fs.z),
+			Color=btn.color, Material=Enum.Material.Metal}, plot.model)
+		part({Name="Funnel", Size=Vector3.new(4.2,3,4.2), Position=Vector3.new(x, fs.y+15.2, fs.z),
 			Color=btn.color, Material=Enum.Material.SmoothPlastic}, plot.model)
-		billboard(d, btn.name, "$"..money(btn.value).."/drop", btn.color)
+		part({Name="Spout", Size=Vector3.new(1.8,3,1.8), Position=Vector3.new(x, fs.y+11, fs.z),
+			Color=Color3.fromRGB(38,38,46), Material=Enum.Material.Metal}, plot.model)
+		part({Name="Leg", Size=Vector3.new(0.6,11,0.6), Position=Vector3.new(x-2, fs.y+6.5, fs.z-2),
+			Color=Color3.fromRGB(60,62,74), Material=Enum.Material.Metal}, plot.model)
+		part({Name="Leg", Size=Vector3.new(0.6,11,0.6), Position=Vector3.new(x+2, fs.y+6.5, fs.z+2),
+			Color=Color3.fromRGB(60,62,74), Material=Enum.Material.Metal}, plot.model)
+		local lt = Instance.new("PointLight"); lt.Color = btn.color; lt.Range = 11; lt.Parent = base
+		billboard(base, btn.name, "$"..money(btn.value).."/drop", btn.color)
 		task.spawn(function()
-			while d.Parent do
+			while base.Parent do
 				task.wait(Config.DROP_INTERVAL)
-				if #activeOre < 250 then
-					local ore = part({Name="Ore", Size=Vector3.new(2,2,2),
-						Position=Vector3.new(x, fs.y+2, fs.z), Color=btn.color,
-						Material=(btn.shape=="heart" and Enum.Material.Neon or Enum.Material.SmoothPlastic),
-						CanCollide=false}, plot.model)
+				if #activeOre < 140 then
+					local sz = (btn.shape=="heart") and 2.4 or 2.0
+					-- ore is REAL physics: unanchored + collidable, so drops collide
+					local ore = part({Name="Ore", Size=Vector3.new(sz,sz,sz),
+						Position=Vector3.new(x, fs.y+9, fs.z), Color=btn.color,
+						Material=(btn.shape=="heart" and Enum.Material.Neon or Enum.Material.Glass),
+						Anchored=false, CanCollide=true}, plot.model)
 					if btn.shape=="heart" then ore.Shape=Enum.PartType.Ball end
-					table.insert(activeOre, {part=ore, value=btn.value, plot=plot, fs=fs, x=x, applied={}})
+					ore.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.25, 0.5)
+					table.insert(activeOre, {part=ore, value=btn.value, plot=plot, fs=fs, applied={}})
 				end
 			end
 		end)
+
+	elseif btn.kind == "convspeed" then
+		fs.speed = fs.speed + (btn.addspeed or 12)
+		local sx = plot.origin.X + 12
+		part({Name=btn.name, Size=Vector3.new(2.5, 3, 9), Position=Vector3.new(sx, fs.y+1.8, fs.z),
+			Color=btn.color or Color3.fromRGB(90,200,255), Material=Enum.Material.Neon,
+			Transparency=0.3, CanCollide=false}, plot.model)
 
 	elseif btn.kind == "upgrader" then
 		local k = #fs.upgraders
@@ -208,19 +248,48 @@ function applyGear(plot)
 	local char = plot.player.Character
 	local hum = char and char:FindFirstChildWhichIsA("Humanoid")
 	if hum then
-		hum.WalkSpeed  = plot.gear.speed and 32 or 16
-		hum.JumpPower  = plot.gear.jump and 90 or 50
+		hum.WalkSpeed   = plot.gear.speed and 34 or 16
 		hum.UseJumpPower = true
+		hum.JumpPower   = plot.gear.jump and 95 or 50
 	end
-	local function giveTool(name, color)
-		if plot.player.Backpack:FindFirstChild(name) or (char and char:FindFirstChild(name)) then return end
-		local tool = Instance.new("Tool"); tool.Name = name; tool.RequiresHandle = true; tool.CanBeDropped = false
-		local h = Instance.new("Part"); h.Name="Handle"; h.Size=Vector3.new(1,5,1); h.Color=color
-		h.Material=Enum.Material.Neon; h.Parent=tool
-		tool.Parent = plot.player.Backpack
+	local A = Config.gearAssets or {}
+	local function grant(key, displayName, assetId, fallbackColor)
+		if not plot.gear[key] then return end
+		if (plot.player:FindFirstChild("Backpack") and plot.player.Backpack:FindFirstChild(displayName))
+			or (char and char:FindFirstChild(displayName)) then return end
+		local tool
+		-- 1) a real Toolbox Tool the user dropped into ServerStorage.GearStorage
+		local store = ServerStorage:FindFirstChild("GearStorage")
+		if store then
+			local t = store:FindFirstChild(displayName)
+			if t and t:IsA("Tool") then tool = t:Clone() end
+		end
+		-- 2) load the real catalog gear by asset id
+		if not tool and assetId then
+			local ok, model = pcall(function() return InsertService:LoadAsset(assetId) end)
+			if ok and model then
+				local t = model:FindFirstChildWhichIsA("Tool")
+				if t then tool = t:Clone() end
+				model:Destroy()
+			end
+		end
+		-- 3) simple built fallback
+		if not tool then
+			tool = Instance.new("Tool"); tool.RequiresHandle = true; tool.CanBeDropped = false
+			local h = Instance.new("Part"); h.Name="Handle"; h.Size=Vector3.new(1,4,1)
+			h.Color = fallbackColor or Color3.fromRGB(200,200,210); h.Material=Enum.Material.Neon; h.Parent=tool
+		end
+		tool.Name = displayName
+		if plot.player:FindFirstChild("Backpack") then tool.Parent = plot.player.Backpack end
 	end
-	if plot.gear.sword then giveTool("Sword", Color3.fromRGB(200,200,210)) end
-	if plot.gear.laser then giveTool("Laser Gun", Color3.fromRGB(255,60,60)) end
+	grant("sword",   "Sword",           A.sword,   Color3.fromRGB(200,200,210))
+	grant("speed",   "Speed Coil",      A.speed,   Color3.fromRGB(90,200,255))
+	grant("gravity", "Gravity Coil",    A.gravity, Color3.fromRGB(150,255,150))
+	grant("jump",    "Jump Coil",       A.jump,    Color3.fromRGB(255,230,90))
+	grant("carpet",  "Flying Carpet",   A.carpet,  Color3.fromRGB(200,80,80))
+	grant("grenade", "Hand Grenade",    A.grenade, Color3.fromRGB(80,120,60))
+	grant("laser",   "Laser Gun",       A.laser,   Color3.fromRGB(255,60,60))
+	grant("rocket",  "Rocket Launcher", A.rocket,  Color3.fromRGB(120,120,120))
 end
 
 -- ── Buy buttons ──────────────────────────────────────────────────────────
@@ -314,6 +383,15 @@ local function buildIslands()
 			Color=Color3.fromRGB(70,80,100), Material=Enum.Material.Slate}, PlotsFolder)
 		part({Name="Rim"..i, Size=Vector3.new(136, 1, 108), Position=Vector3.new(o.X+5, 2.1, o.Z),
 			Color=Color3.fromRGB(90,200,255), Material=Enum.Material.Neon, Transparency=0.25}, PlotsFolder)
+		-- tapered rock underside + corner pillars (floating-island look)
+		part({Name="UnderRock"..i, Size=Vector3.new(96, 22, 72), Position=Vector3.new(o.X+5, -13, o.Z),
+			Color=Color3.fromRGB(48,54,68), Material=Enum.Material.Slate}, PlotsFolder)
+		part({Name="UnderTip"..i, Size=Vector3.new(40, 24, 28), Position=Vector3.new(o.X+5, -32, o.Z),
+			Color=Color3.fromRGB(40,46,58), Material=Enum.Material.Slate}, PlotsFolder)
+		for _, c in ipairs({{-58,-44},{72,-44},{-58,44},{72,44}}) do
+			part({Name="Pillar", Size=Vector3.new(4, 40, 4), Position=Vector3.new(o.X+c[1], -20, o.Z+c[2]),
+				Color=Color3.fromRGB(58,64,80), Material=Enum.Material.Metal}, PlotsFolder)
+		end
 		-- floating claim sign
 		local post = part({Name="Sign"..i, Size=Vector3.new(2, 14, 2), Position=Vector3.new(o.X-48, 9, o.Z-40),
 			Color=Color3.fromRGB(55,60,72), Material=Enum.Material.Metal}, PlotsFolder)
@@ -417,21 +495,24 @@ RunService.Heartbeat:Connect(function(dt)
 		local p = ore.part
 		if not p or not p.Parent then table.remove(activeOre, i)
 		else
-			ore.x = ore.x + 22 * dt
-			p.CFrame = CFrame.new(ore.x, ore.fs.y + 2, ore.fs.z)
-			-- upgraders
+			local pos = p.Position
+			-- push along the belt (+X); keep ore centered on the belt's z; preserve gravity (Y)
+			local v = p.AssemblyLinearVelocity
+			p.AssemblyLinearVelocity = Vector3.new(ore.fs.speed, v.Y, (ore.fs.z - pos.Z) * 3)
+			-- upgraders (smasher shrinks, size ray grows) — multiply value once each
 			for ui, up in ipairs(ore.fs.upgraders) do
-				if not ore.applied[ui] and ore.x >= up.x then
+				if not ore.applied[ui] and pos.X >= up.x then
 					ore.applied[ui] = true
 					ore.value = ore.value * up.mult
-					local s = up.grow and 3.2 or 1.2
-					p.Size = Vector3.new(s,s,s)
+					local s = up.grow and 3.6 or 1.2
+					p.Size = Vector3.new(s, s, s)
 				end
 			end
-			-- reached collector
-			if ore.x >= ore.fs.collectorX then
+			if pos.X >= ore.fs.collectorX then
 				ore.plot.uncollected.Value += math.floor(ore.value * ore.fs.collectorMult)
 				p:Destroy(); table.remove(activeOre, i)
+			elseif pos.Y < ore.fs.y - 30 then
+				p:Destroy(); table.remove(activeOre, i)   -- fell off the belt
 			end
 		end
 	end
