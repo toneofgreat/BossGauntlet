@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Atlantis Ocean Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;background:#03121f;color:#e6f6ff;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none}
+  #money{font-size:30px;font-weight:800;color:#7af0d2;text-shadow:0 2px 16px rgba(80,240,210,.55),0 2px 2px #001}
+  #banked{font-size:14px;font-weight:800;color:#ffe27a;text-shadow:0 1px 6px #000;margin-top:2px}
+  #sub{font-size:12px;font-weight:700;color:#6fb8d8;margin-top:2px}
+  #rb{font-size:13px;font-weight:800;color:#ff9ad0;text-shadow:0 1px 4px #000;text-align:right;max-width:46%}
+  #floorTag{font-size:12px;font-weight:800;color:#9ad8ff;text-align:right;margin-top:4px}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#4f7e9c;font-size:12px;
+        font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
+  #back:hover{color:#bfe6ff}
+  #help{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);color:#4f7e9c;font-size:12px;
+        font-weight:600;text-align:center;pointer-events:none;width:96%}
+  #toast{position:absolute;left:50%;bottom:54px;transform:translateX(-50%) translateY(10px);background:#06202fee;
+         border:1px solid #36e0c2;border-radius:12px;padding:10px 18px;font-weight:700;color:#7af0d2;
+         opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%;box-shadow:0 6px 24px #000b}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.warn{border-color:#ff6b6b;color:#ff9a9a}
+  #reset{position:absolute;bottom:12px;right:14px;pointer-events:auto;background:#0a2434;border:1px solid #1d4459;
+         color:#6fb8d8;font-size:11px;font-weight:700;border-radius:8px;padding:6px 10px;cursor:pointer}
+  #reset:hover{color:#ff9a9a;border-color:#ff6b6b}
+  #flash{position:absolute;inset:0;background:radial-gradient(circle at 50% 45%,rgba(120,255,230,.0),rgba(0,40,60,.0));
+         pointer-events:none;opacity:0;transition:opacity .2s}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div><div id="money">$0</div><div id="banked">Banked: $0</div><div id="sub"></div></div>
+    <div><div id="rb"></div><div id="floorTag"></div></div>
+  </div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <div id="toast"></div>
+  <button id="reset">RESET</button>
+  <div id="help">WASD / Arrows to swim &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; stand on a pad to BUY &nbsp;•&nbsp; reach 🏦 to BANK cash before robbers strike</div>
+  <div id="flash"></div>
+</div>
+<script>
+"use strict";
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ---------- World layout ----------
+const WLD=2600;                       // world width (scrolls horizontally)
+const FLOORS=3;
+const FLOOR_H=560;                    // vertical span per floor
+function worldTop(){return 60;}
+// y for floor f (0..2): higher floor index = visually HIGHER (smaller y)
+function floorBaseY(f){return worldTop()+ (FLOORS-1-f)*FLOOR_H;}  // top of that floor's room
+function floorFloorY(f){return floorBaseY(f)+FLOOR_H-110;}        // where player stands
+function beltY(f){return floorBaseY(f)+150;}                      // conveyor height
+function beltStart(){return 360;}
+function collectorXfor(){return WLD-220;}
+
+// ---------- Ore tiers (theme) ----------
+const TIER={
+  sand:   {a:'#f0e2b8',b:'#c9b27e',glow:null,shape:'rock'},
+  shell:  {a:'#ffd9e6',b:'#e08fb0',glow:null,shape:'shell'},
+  coral:  {a:'#ff8a6b',b:'#d6452f',glow:'#ff6a4a',shape:'rock'},
+  pearl:  {a:'#ffffff',b:'#bcd6e6',glow:'#dff4ff',shape:'gem'},
+  gold:   {a:'#ffe06a',b:'#c79a1e',glow:'#ffd84d',shape:'coin'},
+  ruby:   {a:'#ff5a72',b:'#b01838',glow:'#ff3a5c',shape:'gem'},
+  treasure:{a:'#ffcf57',b:'#9a6a14',glow:'#ffd884',shape:'chest'},
+  sapphire:{a:'#7ab8ff',b:'#2a55c0',glow:'#7ab8ff',shape:'gem'},
+  crystal:{a:'#9af7ff',b:'#2fb9d8',glow:'#bff8ff',shape:'gem'},
+  throne: {a:'#d6b3ff',b:'#7a3aa0',glow:'#e0b0ff',shape:'gem'},
+};
+
+// ---------- Parts (buyable tycoon items) ----------
+// type: dropper | smasher(upgrader) | sizeray | conveyor | gear | wall | window | stair | floor | flag | throne | bank | kraken
+function P(o){return Object.assign({bought:false,cool:0,t:0},o);}
+let PARTS=[];
+const C={ // base costs (scale 1.5x per floor handled by authoring)
+};
+function initParts(){
+  PARTS=[
+  // ===== FLOOR 1 : REEF =====
+  P({id:'f1d1',f:0,type:'dropper',name:'Sand-Pearl Dropper',cost:0,slot:420,kind:'sand',val:1,rate:1.2,free:true}),
+  P({id:'f1d2',f:0,type:'dropper',name:'Shell Dropper',cost:90,slot:560,kind:'shell',val:3,rate:1.1}),
+  P({id:'f1sp',f:0,type:'gear',name:'Speed Coil',cost:240,slot:700,gear:'speed'}),
+  P({id:'f1d3',f:0,type:'dropper',name:'Coral Dropper',cost:520,slot:840,kind:'coral',val:8,rate:1.05}),
+  P({id:'f1sm',f:0,type:'smasher',name:'Clam Smasher ×2',cost:1300,slot:980,mult:2}),
+  P({id:'f1jp',f:0,type:'gear',name:'Jump Coil',cost:2600,slot:1120,gear:'jump'}),
+  P({id:'f1d4',f:0,type:'dropper',name:'Pearl Dropper',cost:6000,slot:1260,kind:'pearl',val:42,rate:1.0}),
+  P({id:'f1wl',f:0,type:'wall',name:'Coral Walls',cost:14000,slot:1420}),
+  P({id:'f1cl',f:0,type:'bank',name:'Cash Collector 🏦',cost:30000,slot:1640}),
+  // stair up to floor 2 (unlocks building above)
+  P({id:'st2',f:0,type:'stair',name:'Build Sunken Ship ↑',cost:70000,slot:1900,tf:1}),
+
+  // ===== FLOOR 2 : SUNKEN SHIP =====  (~1.5x progression vs F1)
+  P({id:'f2d1',f:1,type:'dropper',name:'Gold-Coin Dropper',cost:140000,slot:420,kind:'gold',val:140,rate:1.0}),
+  P({id:'f2d2',f:1,type:'dropper',name:'Ruby Dropper',cost:300000,slot:560,kind:'ruby',val:300,rate:1.0}),
+  P({id:'f2sm',f:1,type:'smasher',name:'Anchor Smasher ×3',cost:620000,slot:700,mult:3}),
+  P({id:'f2sr',f:1,type:'sizeray',name:'Current Size-Ray',cost:1300000,slot:840,sizemul:1.6}),
+  P({id:'f2d3',f:1,type:'dropper',name:'Treasure Dropper',cost:2700000,slot:980,kind:'treasure',val:1400,rate:0.95}),
+  P({id:'f2cv',f:1,type:'conveyor',name:'2nd Fast Conveyor',cost:5500000,slot:1120}),
+  P({id:'f2sw',f:1,type:'gear',name:'Trident (Sword)',cost:11000000,slot:1260,gear:'sword'}),
+  P({id:'f2wd',f:1,type:'window',name:'Ship Windows',cost:22000000,slot:1420}),
+  P({id:'f2gw',f:1,type:'wall',name:'Glowing Walls',cost:44000000,slot:1640,glow:true}),
+  P({id:'st3',f:1,type:'stair',name:'Build Atlantis ↑',cost:90000000,slot:1900,tf:2}),
+
+  // ===== FLOOR 3 : ATLANTIS THRONE =====  (~1.5x again)
+  P({id:'f3d1',f:2,type:'dropper',name:'Sapphire Dropper',cost:180000000,slot:420,kind:'sapphire',val:9000,rate:0.95}),
+  P({id:'f3d2',f:2,type:'dropper',name:'Atlantean-Crystal Dropper',cost:380000000,slot:600,kind:'crystal',val:24000,rate:0.9}),
+  P({id:'f3th',f:2,type:'throne',name:'Glowing Throne Dropper',cost:820000000,slot:820,kind:'throne',val:90000,rate:0.85}),
+  P({id:'f3sm',f:2,type:'smasher',name:'Mega Smasher ×6',cost:1800000000,slot:1040,mult:6}),
+  P({id:'f3fl',f:2,type:'flag',name:'Atlantis Flag',cost:3600000000,slot:1240}),
+  P({id:'f3kr',f:2,type:'kraken',name:'☠ SUMMON THE KRAKEN',cost:50000000000,slot:1560}),
+  ];
+}
+initParts();
+
+// ---------- State ----------
+const G={cash:0, banked:0, bricks:[], pops:[], part:null, buyT:0,
+         topFloor:0,          // highest floor whose room is built (0..2)
+         robberT:18, robberWarn:0, robber:null, win:false};
+function collectorX(){return collectorXfor();}
+
+// ---------- gear helpers ----------
+function hasGear(g){const p=PARTS.find(x=>x.gear===g);return p&&p.bought;}
+function ownedConveyorFast(){const c=PARTS.find(p=>p.id==='f2cv');return c&&c.bought;}
+function beltSpeed(){return ownedConveyorFast()?300:150;}
+function sizeRayOn(){const s=PARTS.find(p=>p.id==='f2sr');return s&&s.bought;}
+
+// ---------- Player ----------
+const pl={x:420, y:0, vx:0, vy:0, face:1, anim:0, f:0};
+let camX=0,camY=0;
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+let target=null;
+cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();
+  target={x:e.clientX-r.left+camX, y:e.clientY-r.top+camY};});
+
+// ---------- Helpers ----------
+function fmt(n){
+  if(n>=1e15)return (n/1e15).toFixed(2)+'Q';
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return Math.floor(n).toString();
+}
+let toastT=0;const toastEl=document.getElementById('toast');
+function toast(m,warn){toastEl.textContent=m;toastEl.className='show'+(warn?' warn':'');toastT=2.6;}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+const flashEl=document.getElementById('flash');
+function fxFlash(){flashEl.style.background='radial-gradient(circle at 50% 45%,rgba(140,255,235,.6),rgba(0,40,70,.2))';
+  flashEl.style.opacity='1';setTimeout(()=>{flashEl.style.opacity='0';},220);}
+
+// ---------- Gating: which pads are active ----------
+// A pad is active if it's the first un-bought pad in authoring order whose floor is built.
+function refreshGating(){
+  let activated=0;
+  for(const p of PARTS){
+    p.active=false;
+    if(p.bought){continue;}
+    if(p.f>G.topFloor){continue;}          // its room not built yet
+    if(activated<2){p.active=true;activated++;} // next up to 2 active
+  }
+}
+
+// ---------- Purchase ----------
+function buyPart(p){
+  if(p.bought||!p.active)return;
+  if(G.cash<p.cost){toast('Need $'+fmt(p.cost),true);p.cool=.8;return;}
+  G.cash-=p.cost;p.bought=true;p.appear=1;
+  if(p.type==='stair'){G.topFloor=Math.max(G.topFloor,p.tf);
+    toast('🌊 New floor built: '+(p.tf===1?'Sunken Ship':'Atlantis Throne')+'!');}
+  else if(p.type==='gear'){toast('⚙ Equipped: '+p.name);}
+  else if(p.type==='bank'){toast('🏦 Cash Collector online — bank your cash here!');}
+  else if(p.type==='kraken'){summonKraken();}
+  else toast('✓ Built: '+p.name);
+  refreshGating();save();
+}
+function summonKraken(){
+  G.win=true;G.krakenT=0;fxFlash();
+  toast('☠ THE KRAKEN RISES! Atlantis is yours. You WIN!');
+}
+
+// auto-own free starter
+PARTS.find(p=>p.id==='f1d1').bought=true;
+refreshGating();
+
+// ---------- Robbers ----------
+function spawnRobber(){
+  // rival diver swims from edge toward player's floor toward collector area
+  const f=Math.floor(Math.random()*(G.topFloor+1));
+  G.robber={x:-60,y:floorFloorY(f)-20,f:f,vx:230,phase:'in',t:0};
+}
+function robberSteal(){
+  if(G.cash<=0)return;
+  const pct=0.20+Math.random()*0.08;
+  const stolen=G.cash*pct;
+  G.cash-=stolen;
+  G.pops.push({x:G.robber?G.robber.x:collectorX(),y:floorFloorY(G.robber?G.robber.f:0)-60,vy:-50,life:1.4,t:'-$'+fmt(stolen),col:'#ff7a7a'});
+  toast('🦈 A rival diver stole $'+fmt(stolen)+' of un-banked cash!',true);
+}
+
+// ---------- Save / Load ----------
+const KEY='atlantis_ocean_tycoon_v1';
+function save(){
+  try{
+    const d={cash:G.cash,banked:G.banked,topFloor:G.topFloor,win:G.win,
+      bought:PARTS.filter(p=>p.bought).map(p=>p.id)};
+    localStorage.setItem(KEY,JSON.stringify(d));
+  }catch(e){}
+}
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);if(!raw)return;
+    const d=JSON.parse(raw);
+    G.cash=d.cash||0;G.banked=d.banked||0;G.topFloor=d.topFloor||0;G.win=!!d.win;
+    const set=new Set(d.bought||[]);
+    for(const p of PARTS)p.bought=set.has(p.id);
+    PARTS.find(p=>p.id==='f1d1').bought=true;
+    refreshGating();
+  }catch(e){}
+}
+load();
+let saveT=0;
+document.getElementById('reset').onclick=()=>{
+  if(!confirm('Reset all Atlantis progress?'))return;
+  localStorage.removeItem(KEY);
+  G.cash=0;G.banked=0;G.topFloor=0;G.win=false;G.bricks=[];G.pops=[];G.robber=null;G.robberT=18;
+  initParts();PARTS.find(p=>p.id==='f1d1').bought=true;refreshGating();
+  toast('Progress reset.');
+};
+
+// ---------- Update ----------
+let last=performance.now();
+function playerSpeed(){return 320*(hasGear('speed')?1.5:1);}
+function update(dt){
+  if(pl.y===0)pl.y=floorFloorY(0)-10;
+  // input
+  let ax=0,ay=0;
+  if(keys['a']||keys['arrowleft'])ax-=1;
+  if(keys['d']||keys['arrowright'])ax+=1;
+  if(keys['w']||keys['arrowup'])ay-=1;
+  if(keys['s']||keys['arrowdown'])ay+=1;
+  if(ax||ay)target=null;
+  if(target){const dx=target.x-pl.x,dy=target.y-pl.y,d=Math.hypot(dx,dy);
+    if(d>8){ax=dx/d;ay=dy/d;}else target=null;}
+  const sp=playerSpeed()*(hasGear('jump')?1.0:1.0);
+  pl.x+=ax*sp*dt;pl.y+=ay*sp*dt;
+  if(ax)pl.face=ax>0?1:-1;
+  pl.anim+=(Math.abs(ax)+Math.abs(ay))*dt*10;
+  // bounds: can roam across all BUILT floors vertically
+  const minY=floorBaseY(G.topFloor)+70;
+  const maxY=floorFloorY(0)+30;
+  pl.x=Math.max(70,Math.min(WLD-70,pl.x));
+  pl.y=Math.max(minY,Math.min(maxY,pl.y));
+  // determine current floor
+  for(let f=0;f<=G.topFloor;f++){if(pl.y<floorFloorY(f)+40 && pl.y>floorBaseY(f)-10){pl.f=f;break;}}
+  // camera (follow x+y, clamp)
+  camX=Math.max(0,Math.min(WLD-W,pl.x-W/2));
+  const worldH=floorFloorY(0)+120;
+  camY=Math.max(worldTop()-20,Math.min(Math.max(worldTop()-20,worldH-H),pl.y-H*0.58));
+
+  // buy pad detection
+  G.part=null;
+  for(const p of PARTS){
+    if(p.appear>0)p.appear-=dt*2;
+    if(p.cool>0)p.cool-=dt;
+    if(p.bought)continue;
+    const px=p.slot, py=floorFloorY(p.f)-6;
+    if(Math.abs(pl.x-px)<48 && Math.abs(pl.y-py)<52){
+      G.part=p;
+      if(p.active){G.buyT+=dt; if(G.buyT>0.5){G.buyT=0;buyPart(p);}}
+    }
+  }
+  if(!G.part)G.buyT=0;
+
+  // BANK: stand on cash collector to bank un-banked cash
+  const bank=PARTS.find(p=>p.id==='f1cl');
+  if(bank&&bank.bought){
+    const bx=bank.slot,by=floorFloorY(bank.f)-6;
+    if(Math.abs(pl.x-bx)<58&&Math.abs(pl.y-by)<58&&G.cash>0){
+      const amt=G.cash;G.banked+=amt;G.cash=0;
+      G.pops.push({x:bx,y:by-60,vy:-50,life:1.2,t:'🏦 Banked $'+fmt(amt),col:'#ffe27a'});
+    }
+  }
+
+  // droppers spawn bricks
+  for(const p of PARTS){
+    if((p.type!=='dropper'&&p.type!=='throne')||!p.bought)continue;
+    p.t-=dt;
+    if(p.t<=0){p.t=p.rate;
+      const by=beltY(p.f);
+      G.bricks.push({x:Math.max(p.slot,beltStart()), y:by-46, vy:0, onbelt:false, f:p.f,
+        value:p.val, kind:p.kind, size:(13+Math.random()*4)*(sizeRayOn()&&p.f>=1?1.5:1),
+        spin:Math.random()*6, boost:0, bob:Math.random()*6, sized:sizeRayOn()&&p.f>=1});
+    }
+  }
+  // move bricks (each on its own floor's belt, all flow to collectorX)
+  const spd=beltSpeed();
+  for(let i=G.bricks.length-1;i>=0;i--){
+    const r=G.bricks[i];const by=beltY(r.f);
+    if(!r.onbelt){r.vy+=900*dt;r.y+=r.vy*dt;if(r.y>=by-2){r.y=by-2;r.onbelt=true;}}
+    else{
+      const px=r.x;r.x+=spd*dt;r.spin+=dt*3;r.bob+=dt*5;
+      for(const u of PARTS){
+        if(u.bought&&u.f===r.f&&px<u.slot&&r.x>=u.slot){
+          if(u.type==='smasher'){r.value*=u.mult;r.boost=.4;}
+          if(u.type==='sizeray'){r.size*=1.4;r.value*=u.sizemul;r.boost=.3;}
+        }
+      }
+      if(r.boost>0)r.boost-=dt;
+      if(r.x>=collectorX()){G.cash+=r.value;
+        G.pops.push({x:collectorX(),y:by-30,vy:-44,life:1,t:'+$'+fmt(r.value),col:'#7af0d2'});
+        G.bricks.splice(i,1);}
+    }
+  }
+  if(G.bricks.length>700)G.bricks.splice(0,G.bricks.length-700);
+  for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
+
+  // ---- Robbers (every 20s) ----
+  if(!G.win){
+    G.robberT-=dt;
+    if(G.robberT<=3.2&&G.robberWarn<=0&&!G.robber){G.robberWarn=3.2;toast('⚠ A rival diver is approaching! Bank your cash!',true);}
+    if(G.robberWarn>0)G.robberWarn-=dt;
+    if(G.robberT<=0&&!G.robber){spawnRobber();G.robberT=20;}
+  }
+  if(G.robber){
+    const rb=G.robber;rb.t+=dt;
+    if(rb.phase==='in'){rb.x+=rb.vx*dt;
+      if(rb.x>=collectorX()-260){rb.phase='grab';robberSteal();rb.phase='out';}
+    } else if(rb.phase==='out'){rb.x+=rb.vx*1.3*dt;if(rb.x>WLD+80)G.robber=null;}
+  }
+
+  if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.className='';}
+  if(G.win){G.krakenT=(G.krakenT||0)+dt;}
+  saveT+=dt;if(saveT>4){saveT=0;save();}
+}
+
+// ---------- Draw helpers ----------
+let T=0;
+function drawBackground(){
+  // deep ocean vertical gradient across whole visible area
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0a3a5c');g.addColorStop(0.45,'#072c47');g.addColorStop(1,'#031824');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // caustics (animated light bands)
+  ctx.save();ctx.globalAlpha=0.10;ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<6;i++){
+    const cx=((i*260 - (T*40))%(W+400))-200;
+    const grd=ctx.createLinearGradient(cx,0,cx+160,H);
+    grd.addColorStop(0,'rgba(120,230,255,0)');grd.addColorStop(.5,'rgba(140,240,255,.5)');grd.addColorStop(1,'rgba(120,230,255,0)');
+    ctx.fillStyle=grd;ctx.save();ctx.translate(cx,0);ctx.rotate(0.25);ctx.fillRect(-60,-100,120,H+260);ctx.restore();
+  }
+  ctx.restore();
+  // distant glow
+  const r=ctx.createRadialGradient(W*0.5,-40,40,W*0.5,-40,H*0.9);
+  r.addColorStop(0,'rgba(120,220,255,.18)');r.addColorStop(1,'rgba(120,220,255,0)');
+  ctx.fillStyle=r;ctx.fillRect(0,0,W,H);
+}
+// bubbles (screen space, drift up)
+const bubbles=[];for(let i=0;i<70;i++)bubbles.push({x:Math.random()*1,y:Math.random(),r:1+Math.random()*4,s:.04+Math.random()*.12});
+function drawBubbles(){
+  ctx.save();ctx.globalAlpha=.5;
+  for(const b of bubbles){
+    b.y-=b.s*0.01; if(b.y<-0.02){b.y=1.04;b.x=Math.random();}
+    const x=(b.x*W + Math.sin((T+b.x*10))*8), y=b.y*H;
+    ctx.beginPath();ctx.strokeStyle='rgba(180,240,255,.5)';ctx.lineWidth=1;
+    ctx.arc(x,y,b.r,0,7);ctx.stroke();
+    ctx.beginPath();ctx.fillStyle='rgba(220,250,255,.6)';ctx.arc(x-b.r*.3,y-b.r*.3,b.r*.35,0,7);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFloorRoom(f){
+  const top=floorBaseY(f)-camY;
+  const fl=floorFloorY(f)-camY;
+  if(top>H||fl< -40)return;
+  const built=f<=G.topFloor;
+  // room background tint per theme
+  let c0,c1,trim;
+  if(f===0){c0='#0e3a52';c1='#072233';trim='#1f6e7a';}        // reef
+  else if(f===1){c0='#2a2415';c1='#15110a';trim='#7a5a2a';}    // sunken ship (wood)
+  else{c0='#241a3a';c1='#120c20';trim='#7a4ab0';}              // atlantis
+  if(!built){
+    // ghost outline for not-yet-built floor
+    ctx.save();ctx.globalAlpha=.18;
+    ctx.strokeStyle='#3a6a8a';ctx.lineWidth=2;ctx.setLineDash([10,10]);
+    ctx.strokeRect(20-camX,top,WLD-40,FLOOR_H-90);ctx.setLineDash([]);ctx.restore();
+    return;
+  }
+  // floor slab
+  const fg=ctx.createLinearGradient(0,fl,0,fl+70);
+  fg.addColorStop(0,c0);fg.addColorStop(1,c1);
+  ctx.fillStyle=fg;ctx.fillRect(0-camX,fl,WLD,70);
+  // floor surface grid
+  ctx.strokeStyle='rgba(180,240,255,.06)';ctx.lineWidth=1;
+  const gs=72;
+  for(let x=0;x<WLD;x+=gs){const sx=x-camX;ctx.beginPath();ctx.moveTo(sx,fl);ctx.lineTo(sx,fl+70);ctx.stroke();}
+  ctx.beginPath();ctx.moveTo(-camX,fl);ctx.lineTo(WLD-camX,fl);ctx.stroke();
+  // trim line
+  ctx.fillStyle=trim;ctx.fillRect(0-camX,fl-5,WLD,5);
+
+  // walls behind (if owned)
+  const wall=PARTS.find(p=>p.f===f&&p.type==='wall'&&p.bought);
+  if(wall){
+    const wy=top+30;
+    ctx.save();
+    if(wall.glow){ctx.shadowColor='#6af0ff';ctx.shadowBlur=24;}
+    ctx.fillStyle=wall.glow?'rgba(60,200,230,.12)':(f===0?'rgba(255,120,90,.10)':'rgba(120,90,50,.14)');
+    ctx.fillRect(0-camX,wy,WLD,fl-wy-2);
+    // coral / planks pattern
+    ctx.globalAlpha=.5;
+    if(f===0){ // coral bumps
+      ctx.fillStyle='rgba(255,120,90,.5)';
+      for(let x=40;x<WLD;x+=120){const sx=x-camX;
+        ctx.beginPath();ctx.arc(sx,fl-4,18+Math.sin(x)*6,Math.PI,0);ctx.fill();}
+    }
+    ctx.restore();
+  }
+  // windows (floor 2)
+  const win=PARTS.find(p=>p.f===f&&p.type==='window'&&p.bought);
+  if(win){
+    for(let x=200;x<WLD-200;x+=420){const sx=x-camX,wy=top+90;
+      ctx.save();ctx.shadowColor='#7fe6ff';ctx.shadowBlur=18;
+      ctx.fillStyle='#0a3a52';ctx.beginPath();ctx.arc(sx,wy,42,0,7);ctx.fill();
+      ctx.strokeStyle=trim;ctx.lineWidth=6;ctx.stroke();
+      const wg=ctx.createRadialGradient(sx-10,wy-10,4,sx,wy,42);
+      wg.addColorStop(0,'rgba(150,240,255,.7)');wg.addColorStop(1,'rgba(40,140,180,.2)');
+      ctx.fillStyle=wg;ctx.beginPath();ctx.arc(sx,wy,36,0,7);ctx.fill();
+      ctx.restore();}
+  }
+  // floor label
+  ctx.fillStyle='rgba(180,240,255,.35)';ctx.font='bold 13px Segoe UI';ctx.textAlign='left';
+  const lbl=f===0?'FLOOR 1 · CORAL REEF':f===1?'FLOOR 2 · SUNKEN SHIP':'FLOOR 3 · ATLANTIS THRONE';
+  ctx.fillText(lbl, 30-camX, top+24);
+}
+
+function drawBelt(f){
+  if(f>G.topFloor)return;
+  const by=beltY(f)-camY,x0=beltStart()-camX,x1=collectorX()-camX;
+  if(by> H+40||by<-40)return;
+  // supports
+  ctx.fillStyle='rgba(0,0,0,.4)';
+  for(let x=x0;x<x1;x+=150){ctx.fillRect(x,by+22,9,(floorFloorY(f)-camY)-(by+22));}
+  // belt
+  const fast=ownedConveyorFast()&&f>=1;
+  const g=ctx.createLinearGradient(0,by,0,by+24);
+  g.addColorStop(0,fast?'#2f6a8a':'#234a5e');g.addColorStop(1,'#0c1c26');
+  ctx.fillStyle=g;roundRect(x0-16,by,x1-x0+32,24,12);ctx.fill();
+  ctx.save();roundRect(x0-16,by,x1-x0+32,24,12);ctx.clip();
+  ctx.strokeStyle=fast?'#6ad0ff':'#3f7a92';ctx.lineWidth=3;
+  const off=(T*(fast?170:90))%22;
+  for(let x=x0-30;x<x1+30;x+=22){ctx.beginPath();ctx.moveTo(x+off,by);ctx.lineTo(x+off-13,by+24);ctx.stroke();}
+  ctx.restore();
+  for(const rx of [x0-16,x1+16]){const rg=ctx.createRadialGradient(rx-3,by+10,2,rx,by+12,14);
+    rg.addColorStop(0,'#7fd0e0');rg.addColorStop(1,'#173040');ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(rx,by+12,13,0,7);ctx.fill();}
+}
+
+function drawDropper(p){
+  const x=p.slot-camX, by=beltY(p.f)-camY;
+  if(x<-90||x>W+90)return;
+  const t=TIER[p.kind],top=by-126;
+  const sc=p.appear>0?(0.5+(1-p.appear)*0.5):1;
+  ctx.save();ctx.translate(x,top+30);ctx.scale(sc,sc);ctx.translate(-x,-(top+30));
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=18;}
+  // funnel
+  ctx.fillStyle=t.b;ctx.beginPath();
+  ctx.moveTo(x-32,top);ctx.lineTo(x+32,top);ctx.lineTo(x+21,top-17);ctx.lineTo(x-21,top-17);ctx.closePath();ctx.fill();
+  // body
+  const bg=ctx.createLinearGradient(0,top,0,top+60);bg.addColorStop(0,t.a);bg.addColorStop(1,t.b);
+  ctx.fillStyle=bg;roundRect(x-32,top,64,60,9);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(0,0,0,.32)';roundRect(x-26,top+9,52,20,5);ctx.fill();
+  ctx.fillStyle='#eaffff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(p.name.replace(' Dropper','').toUpperCase(),x,top+22);
+  // glass tube to belt
+  ctx.fillStyle='rgba(120,220,255,.18)';ctx.fillRect(x-8,top+60,16,by-(top+60)-4);
+  ctx.strokeStyle=t.b;ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x-24,top+60);ctx.lineTo(x-24,by-2);ctx.moveTo(x+24,top+60);ctx.lineTo(x+24,by-2);ctx.stroke();
+  ctx.restore();
+}
+function drawThrone(p){
+  // glowing throne centerpiece that also drops ore
+  const x=p.slot-camX, fl=floorFloorY(p.f)-camY;
+  if(x<-120||x>W+120)return;
+  const by=beltY(p.f)-camY;
+  ctx.save();ctx.shadowColor='#e0b0ff';ctx.shadowBlur=30;
+  const h=110;
+  const g=ctx.createLinearGradient(0,fl-h,0,fl);g.addColorStop(0,'#c9a0ff');g.addColorStop(1,'#6a2a9a');
+  ctx.fillStyle=g;
+  roundRect(x-44,fl-h,88,h,8);ctx.fill();          // throne back
+  roundRect(x-54,fl-46,108,46,6);ctx.fill();        // seat
+  // spikes
+  ctx.fillStyle='#e0b0ff';
+  for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(x+i*30-10,fl-h);ctx.lineTo(x+i*30,fl-h-22);ctx.lineTo(x+i*30+10,fl-h);ctx.closePath();ctx.fill();}
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#fff';ctx.font='bold 10px Segoe UI';ctx.textAlign='center';ctx.fillText('THRONE',x,fl-h/2);
+  // dropping tube
+  ctx.strokeStyle='#9a5ad0';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x,fl-46);ctx.lineTo(x,by);ctx.stroke();
+  ctx.restore();
+}
+
+function drawSmasher(p){
+  const x=p.slot-camX, by=beltY(p.f)-camY;
+  if(x<-90||x>W+90)return;
+  const on=p.bought, h=128, top=by-h;
+  // arch (clam/anchor styling)
+  ctx.fillStyle=on?(p.mult>=6?'#9a3ad0':(p.f===0?'#1f8a8a':'#7a5a2a')):'#2a4a5e';
+  roundRect(x-38,top,12,h,4);ctx.fill();roundRect(x+26,top,12,h,4);ctx.fill();
+  roundRect(x-38,top,76,18,6);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText('×'+p.mult,x,top+13);
+  if(on){
+    const c=p.mult>=6?'rgba(180,120,255,.20)':'rgba(80,230,210,.16)';
+    ctx.fillStyle=c;ctx.fillRect(x-26,top+18,52,h-18);
+    // smash bar
+    const yy=top+22+Math.abs(Math.sin(T*4+p.slot))*(h-50);
+    ctx.fillStyle=p.mult>=6?'#c98aff':'#7af0d2';ctx.fillRect(x-26,yy,52,5);
+  }
+}
+function drawSizeRay(p){
+  const x=p.slot-camX, by=beltY(p.f)-camY;
+  if(x<-90||x>W+90)return;
+  const top=by-118;
+  ctx.fillStyle=p.bought?'#2a6a8a':'#2a4a5e';roundRect(x-34,top,68,44,8);ctx.fill();
+  ctx.fillStyle='#cfeeff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('SIZE-RAY',x,top+18);ctx.fillText('CURRENT',x,top+30);
+  if(p.bought){ctx.save();ctx.globalAlpha=.5+Math.sin(T*6)*.2;
+    const rg=ctx.createLinearGradient(0,top+44,0,by);rg.addColorStop(0,'rgba(120,240,255,.7)');rg.addColorStop(1,'rgba(120,240,255,0)');
+    ctx.fillStyle=rg;ctx.beginPath();ctx.moveTo(x-28,by);ctx.lineTo(x-14,top+44);ctx.lineTo(x+14,top+44);ctx.lineTo(x+28,by);ctx.closePath();ctx.fill();ctx.restore();}
+}
+
+function drawCollector(f){
+  if(f>G.topFloor)return;
+  const x=collectorX()-camX, by=beltY(f)-camY;
+  if(by>H+60||by<-60)return;
+  const g=ctx.createLinearGradient(0,by-74,0,by+10);g.addColorStop(0,'#1a4a5e');g.addColorStop(1,'#0a1c26');
+  ctx.fillStyle=g;roundRect(x-6,by-74,84,84,11);ctx.fill();
+  ctx.fillStyle='#06151e';roundRect(x+2,by-66,64,32,6);ctx.fill();
+  ctx.save();ctx.shadowColor='#7af0d2';ctx.shadowBlur=14;
+  ctx.fillStyle='#7af0d2';ctx.font='bold 22px Segoe UI';ctx.textAlign='center';ctx.fillText('🪙',x+34,by-42);ctx.restore();
+  ctx.fillStyle='#8fd0e6';ctx.font='bold 9px Segoe UI';ctx.fillText('COLLECTOR',x+34,by-18);
+  ctx.fillStyle='#05121a';ctx.fillRect(x-6,by-2,18,12);
+}
+
+// the cash collector / bank pad (where you bank)
+function drawBank(p){
+  const x=p.slot-camX, fl=floorFloorY(p.f)-camY;
+  if(x<-120||x>W+120)return;
+  ctx.save();ctx.shadowColor='#ffe27a';ctx.shadowBlur=20;
+  const g=ctx.createLinearGradient(0,fl-80,0,fl);g.addColorStop(0,'#caa23a');g.addColorStop(1,'#6a4a10');
+  ctx.fillStyle=g;roundRect(x-46,fl-80,92,80,10);ctx.fill();
+  ctx.fillStyle='#3a2a08';roundRect(x-36,fl-66,72,30,5);ctx.fill();
+  ctx.shadowBlur=0;ctx.fillStyle='#ffe27a';ctx.font='bold 24px Segoe UI';ctx.textAlign='center';ctx.fillText('🏦',x,fl-44);
+  ctx.fillStyle='#fff7d0';ctx.font='bold 10px Segoe UI';ctx.fillText('BANK CASH',x,fl-16);
+  ctx.restore();
+}
+function drawFlag(p){
+  const x=p.slot-camX, fl=floorFloorY(p.f)-camY;
+  if(x<-90||x>W+90)return;
+  ctx.fillStyle='#d6c2a0';ctx.fillRect(x-3,fl-150,6,150);
+  ctx.save();ctx.shadowColor='#e0b0ff';ctx.shadowBlur=14;
+  const w=1+Math.sin(T*3)*0.1;
+  ctx.fillStyle='#9a3ad0';ctx.beginPath();ctx.moveTo(x+3,fl-150);
+  ctx.quadraticCurveTo(x+50,fl-138+Math.sin(T*4)*6,x+70*w,fl-132);
+  ctx.quadraticCurveTo(x+50,fl-118,x+3,fl-110);ctx.closePath();ctx.fill();ctx.restore();
+  ctx.fillStyle='#fff';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText('🔱',x+36,fl-126);
+}
+
+function drawStair(p){
+  // visual ladder/stairs to next floor
+  const x=p.slot-camX, fl=floorFloorY(p.f)-camY, top=floorFloorY(p.tf)-camY;
+  if(x<-90||x>W+90)return;
+  if(!p.bought)return;
+  ctx.strokeStyle='#5a8aa0';ctx.lineWidth=6;
+  ctx.beginPath();ctx.moveTo(x-16,fl);ctx.lineTo(x-16,top);ctx.moveTo(x+16,fl);ctx.lineTo(x+16,top);ctx.stroke();
+  ctx.lineWidth=4;ctx.strokeStyle='#7fd0e0';
+  for(let y=fl;y>top;y-=22){ctx.beginPath();ctx.moveTo(x-16,y);ctx.lineTo(x+16,y);ctx.stroke();}
+}
+
+function drawBrick(r){
+  const x=r.x-camX,y=r.y-camY;if(x<-40||x>W+40||y<-40||y>H+40)return;
+  const t=TIER[r.kind], s=r.size*(r.boost>0?1.3:1);
+  const yy=y-(r.onbelt?Math.abs(Math.sin(r.bob))*2:0);
+  ctx.save();ctx.translate(x,yy);ctx.rotate(r.spin);
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=10;}
+  const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.a);g.addColorStop(1,t.b);ctx.fillStyle=g;
+  if(t.shape==='gem'){ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s*.8,0);ctx.lineTo(0,s);ctx.lineTo(-s*.8,0);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=1;ctx.stroke();}
+  else if(t.shape==='coin'){ctx.beginPath();ctx.arc(0,0,s*.8,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='bold '+Math.round(s)+'px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,1);}
+  else if(t.shape==='shell'){ctx.beginPath();ctx.arc(0,s*.3,s*.9,Math.PI,0);ctx.fill();
+    ctx.strokeStyle='rgba(180,80,120,.6)';ctx.lineWidth=1;
+    for(let a=-2;a<=2;a++){ctx.beginPath();ctx.moveTo(0,s*.3);ctx.lineTo(a*s*.4,s*.3-s*.85);ctx.stroke();}}
+  else if(t.shape==='chest'){roundRect(-s*.8,-s*.4,s*1.6,s*1.0,2);ctx.fill();
+    ctx.fillStyle='#5a3a10';ctx.fillRect(-s*.8,-s*.05,s*1.6,3);
+    ctx.fillStyle='#ffe27a';ctx.fillRect(-2,-s*.1,4,s*.4);}
+  else{roundRect(-s*.7,-s*.6,s*1.4,s*1.2,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.2)';ctx.fillRect(-s*.7,-s*.6,s*1.4,3);
+    ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(-s*.7,s*.4,s*1.4,2);}
+  ctx.restore();
+}
+
+function drawPad(p){
+  if(p.bought)return;
+  if(p.f>G.topFloor)return;
+  const x=p.slot-camX, fl=floorFloorY(p.f)-camY, y=fl-6;
+  if(x<-100||x>W+100||y<-60||y>H+80)return;
+  const active=p.active;
+  const can=active&&G.cash>=p.cost;
+  const here=G.part===p;
+  const kraken=p.type==='kraken';
+  // pad on floor
+  ctx.save();
+  let col;
+  if(!active)col='#2a3b48';
+  else if(p.cool>0)col='#b03a3a';
+  else if(can)col=kraken?'#b03ad0':'#2ecf9a';
+  else col=kraken?'#5a2a6a':'#2a6a55';
+  if(here&&active){ctx.shadowColor=can?(kraken?'#e0b0ff':'#7af0d2'):'#ff6b6b';ctx.shadowBlur=24;}
+  ctx.fillStyle=col;roundRect(x-44,y-22,88,46,11);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(180,240,255,.28)';ctx.lineWidth=2;roundRect(x-44,y-22,88,46,11);ctx.stroke();
+  // arrows / hatch
+  if(active&&!can&&p.cool<=0){ctx.fillStyle='rgba(0,0,0,.15)';
+    for(let i=-1;i<=1;i++)ctx.fillText('',0,0);}
+  // buy fill ring
+  if(here&&can){ctx.strokeStyle='#fff';ctx.lineWidth=3.5;
+    ctx.beginPath();ctx.arc(x,y,28,-Math.PI/2,-Math.PI/2+Math.PI*2*(G.buyT/0.5));ctx.stroke();}
+  // floating sign
+  const baseSy=fl-126;
+  const sy=baseSy+Math.sin(T*2+p.slot)*3;
+  const w=kraken?170:142;
+  ctx.fillStyle=kraken?'#2a0c2eee':'#06202fee';roundRect(x-w/2,sy-22,w,44,9);ctx.fill();
+  ctx.strokeStyle=!active?'#2a3b48':(kraken?'#e0b0ff':'#1f5a52');ctx.lineWidth=1.5;roundRect(x-w/2,sy-22,w,44,9);ctx.stroke();
+  ctx.fillStyle=active?'#eaffff':'#5f87a0';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  ctx.fillText(p.name,x,sy-4);
+  ctx.fillStyle=!active?'#5f87a0':(can?(kraken?'#e0b0ff':'#ffe27a'):'#ff9a9a');ctx.font='bold 12px Segoe UI';
+  ctx.fillText(active?(p.free?'FREE':'$'+fmt(p.cost)):'🔒 LOCKED',x,sy+14);
+  // post
+  ctx.fillStyle='#244a5a';ctx.fillRect(x-3,sy+22,6,(y-22)-(sy+22));
+}
+
+function drawKrakenFX(){
+  if(!G.win)return;
+  const t=G.krakenT||0;
+  // dark tint
+  ctx.save();ctx.globalAlpha=Math.min(.55,t*0.3);ctx.fillStyle='#04101a';ctx.fillRect(0,0,W,H);ctx.restore();
+  // rising tentacles
+  ctx.save();ctx.strokeStyle='#3a8a6a';ctx.lineWidth=18;ctx.lineCap='round';
+  const rise=Math.min(1,t/2.2);
+  for(let i=0;i<6;i++){
+    const bx=W*(0.12+i*0.16);
+    const baseY=H+40;
+    const tipY=H - rise*(H*0.6) - Math.sin(T*1.5+i)*20;
+    ctx.beginPath();ctx.moveTo(bx,baseY);
+    ctx.quadraticCurveTo(bx+Math.sin(T*1.2+i)*60,(baseY+tipY)/2,bx+Math.sin(T*2+i)*40,tipY);
+    ctx.stroke();
+    // suckers
+    ctx.fillStyle='#bce0c0';
+    for(let s=0;s<6;s++){const yy=baseY-(baseY-tipY)*(s/6);ctx.beginPath();ctx.arc(bx+Math.sin(T*1.5+i+s)*20,yy,4,0,7);ctx.fill();}
+  }
+  ctx.restore();
+  // eye
+  ctx.save();ctx.globalAlpha=Math.min(1,t/1.5);ctx.shadowColor='#ff5a5a';ctx.shadowBlur=40;
+  ctx.fillStyle='#1a3a2a';ctx.beginPath();ctx.arc(W*0.5,H*0.4,60,0,7);ctx.fill();
+  ctx.fillStyle='#ffd23a';ctx.beginPath();ctx.arc(W*0.5,H*0.4,40,0,7);ctx.fill();
+  ctx.fillStyle='#100';ctx.beginPath();ctx.ellipse(W*0.5,H*0.4,12,34,0,0,7);ctx.fill();ctx.restore();
+  // banner
+  ctx.fillStyle='#e0b0ff';ctx.font='bold 30px Segoe UI';ctx.textAlign='center';ctx.shadowColor='#000';ctx.shadowBlur=8;
+  ctx.fillText('☠ THE KRAKEN IS SUMMONED ☠',W/2,70);ctx.shadowBlur=0;
+  ctx.fillStyle='#fff';ctx.font='bold 16px Segoe UI';ctx.fillText('ATLANTIS IS YOURS — YOU WIN! (RESET to play again)',W/2,98);
+}
+
+function drawRobber(){
+  if(!G.robber)return;
+  const rb=G.robber;const x=rb.x-camX,y=floorFloorY(rb.f)-camY-22;
+  if(x<-60||x>W+60)return;
+  const f=rb.vx>0?1:1;
+  ctx.save();ctx.translate(x,y);
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(0,40,18,6,0,0,7);ctx.fill();
+  // wetsuit body
+  ctx.fillStyle='#2a2a35';roundRect(-12,-10,24,30,5);ctx.fill();
+  // head + mask
+  ctx.fillStyle='#1a1a22';roundRect(-11,-34,22,22,6);ctx.fill();
+  ctx.fillStyle='#7fe0ff';roundRect(-8,-30,16,9,3);ctx.fill();
+  // snorkel/fin
+  ctx.fillStyle='#ff5a5a';ctx.fillRect(10,-34,5,12);
+  // bag of loot
+  ctx.save();ctx.shadowColor='#ffe27a';ctx.shadowBlur=10;ctx.fillStyle='#caa23a';ctx.beginPath();ctx.arc(-16,6,9,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='#fff';ctx.font='bold 16px Segoe UI';ctx.textAlign='center';ctx.fillText('🦈',0,-40);
+  ctx.restore();
+}
+
+function drawPlayer(){
+  const x=pl.x-camX, y=pl.y-camY;
+  ctx.fillStyle='rgba(0,0,0,.32)';ctx.beginPath();ctx.ellipse(x,y+20,18,7,0,0,7);ctx.fill();
+  const sw=Math.sin(pl.anim)*4;
+  // flippers/legs
+  ctx.fillStyle='#1a6a8a';
+  ctx.fillRect(x-9,y+6+sw,7,15);ctx.fillRect(x+2,y+6-sw,7,15);
+  ctx.fillStyle='#2a9ac0';ctx.fillRect(x-12,y+18+sw,12,4);ctx.fillRect(x+2,y+18-sw,12,4);
+  // diver torso
+  const bg=ctx.createLinearGradient(0,y-14,0,y+8);bg.addColorStop(0,'#2fe0c2');bg.addColorStop(1,'#1a9a8a');
+  ctx.fillStyle=bg;roundRect(x-13,y-14,26,22,5);ctx.fill();
+  // tank
+  ctx.fillStyle='#cfe9f2';ctx.fillRect(x-15+(pl.face<0?28:0)-2,y-12,4,16);
+  // arms
+  ctx.fillStyle='#ffd9a8';
+  ctx.fillRect(x-18,y-12+sw,6,16);ctx.fillRect(x+12,y-12-sw,6,16);
+  // sword (trident) gear
+  if(hasGear('sword')){ctx.save();ctx.translate(x+pl.face*20,y-2);ctx.scale(pl.face,1);
+    ctx.strokeStyle='#ffe27a';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,16);ctx.lineTo(0,-18);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(-7,-12);ctx.lineTo(-7,-24);ctx.moveTo(0,-14);ctx.lineTo(0,-28);ctx.moveTo(7,-12);ctx.lineTo(7,-24);ctx.stroke();ctx.restore();}
+  // head + mask
+  ctx.fillStyle='#ffd9a8';roundRect(x-11,y-34,22,20,6);ctx.fill();
+  ctx.fillStyle='#9af0ff';roundRect(x-9,y-31,18,11,4);ctx.fill();
+  ctx.fillStyle='#1a1a1a';
+  ctx.fillRect(x-5+pl.face*3,y-28,3,4);ctx.fillRect(x+3+pl.face*3,y-28,3,4);
+  // speed coil aura
+  if(hasGear('speed')){ctx.save();ctx.globalAlpha=.4+Math.sin(T*8)*.2;ctx.strokeStyle='#7af0d2';ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(x,y-2,22,26,0,0,7);ctx.stroke();ctx.restore();}
+  // jump coil glow at feet
+  if(hasGear('jump')){ctx.save();ctx.globalAlpha=.5;ctx.fillStyle='#ffe27a';ctx.beginPath();ctx.arc(x,y+20,5,0,7);ctx.fill();ctx.restore();}
+}
+
+function draw(){
+  drawBackground();
+  // floors back-to-front: highest (top) first so lower rooms overlap correctly is fine since separated
+  for(let f=FLOORS-1;f>=0;f--)drawFloorRoom(f);
+  for(let f=0;f<FLOORS;f++){
+    drawBelt(f);
+  }
+  // machines
+  for(const p of PARTS)if(p.type==='smasher')drawSmasher(p);
+  for(const p of PARTS)if(p.type==='sizeray')drawSizeRay(p);
+  for(const r of G.bricks)drawBrick(r);
+  for(const p of PARTS){
+    if(p.bought&&(p.type==='dropper'))drawDropper(p);
+    if(p.bought&&p.type==='throne')drawThrone(p);
+    if(p.bought&&p.type==='bank')drawBank(p);
+    if(p.bought&&p.type==='flag')drawFlag(p);
+    if(p.bought&&p.type==='stair')drawStair(p);
+  }
+  for(let f=0;f<FLOORS;f++)drawCollector(f);
+  for(const p of PARTS)drawPad(p);
+  drawRobber();
+  drawPlayer();
+  for(const q of G.pops){const x=q.x-camX,y=q.y-camY;ctx.globalAlpha=Math.max(0,q.life);
+    ctx.fillStyle=q.col||'#7af0d2';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
+  drawBubbles();
+  drawKrakenFX();
+}
+
+// ---------- HUD update ----------
+function updHUD(){
+  document.getElementById('money').textContent='$'+fmt(G.cash);
+  document.getElementById('banked').textContent='Banked: $'+fmt(G.banked)+'  (safe)';
+  const owned=PARTS.filter(p=>p.bought&&!p.free).length;
+  document.getElementById('sub').textContent=owned+' built · '+(PARTS.length)+' pads';
+  const fl=['Coral Reef','Sunken Ship','Atlantis'][pl.f]||'';
+  document.getElementById('floorTag').textContent='Floor '+(pl.f+1)+' · '+fl+(G.topFloor<2?'  ('+(G.topFloor+1)+'/3 built)':'  (all built)');
+  // robber warn countdown
+  let rb='';
+  if(G.win)rb='👑 ATLANTIS CONQUERED';
+  else if(G.robber)rb='🦈 ROBBER ACTIVE!';
+  else if(G.robberT<=4)rb='⚠ Robber in '+Math.ceil(G.robberT)+'s — BANK!';
+  else rb='Next robber: '+Math.ceil(G.robberT)+'s';
+  document.getElementById('rb').textContent=rb;
+}
+
+// ---------- Loop ----------
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();updHUD();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

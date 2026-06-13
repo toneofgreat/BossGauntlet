@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lava Volcano Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#0a0604;color:#ffe9d6;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;touch-action:none}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none}
+  #money{font-size:32px;font-weight:900;color:#ffb347;text-shadow:0 0 16px rgba(255,120,20,.7),0 2px 2px #000}
+  #sub{font-size:13px;font-weight:700;color:#ff8a5c;margin-top:2px;text-shadow:0 1px 3px #000}
+  #banked{font-size:13px;font-weight:800;color:#7fe0ff;margin-top:1px;text-shadow:0 1px 3px #000}
+  #rb{font-size:14px;font-weight:800;color:#ffd86b;text-shadow:0 1px 4px #000;text-align:right;max-width:46%}
+  #robwarn{font-size:14px;font-weight:900;color:#ff5a4a;text-shadow:0 0 8px #ff2a1a,0 1px 3px #000;text-align:right;margin-top:4px}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#9a5a3a;font-size:12px;
+        font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
+  #back:hover{color:#ffb347}
+  #help{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);color:#9a5a3a;font-size:11px;
+        font-weight:600;text-align:center;pointer-events:none;width:96%}
+  #reset{position:absolute;bottom:10px;right:12px;background:#2a120a;border:1px solid #5a2a18;color:#ff8a5c;
+         font-size:11px;font-weight:700;border-radius:8px;padding:6px 10px;pointer-events:auto;cursor:pointer}
+  #reset:hover{background:#3a160a}
+  #toast{position:absolute;left:50%;bottom:54px;transform:translateX(-50%) translateY(10px);background:#1a0c06ee;
+         border:1px solid #ff7a2a;border-radius:11px;padding:10px 18px;font-weight:800;color:#ffb347;
+         opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%;box-shadow:0 6px 24px #000a}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #flash{position:absolute;inset:0;background:radial-gradient(circle,#fff6,#ff5a0000);opacity:0;pointer-events:none;transition:opacity .15s}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="flash"></div>
+  <div id="hud">
+    <div><div id="money">$0</div><div id="sub"></div><div id="banked"></div></div>
+    <div><div id="rb"></div><div id="robwarn"></div></div>
+  </div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <button id="reset">RESET</button>
+  <div id="toast"></div>
+  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; step on an orange PAD to buy &nbsp;•&nbsp; walk into the CASH COLLECTOR to bank &nbsp;•&nbsp; robbers steal un-banked cash!</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ============ WORLD LAYOUT ============
+// Vertical floors stacked: floor 0 (cavern) at bottom, floor 2 (summit) at top.
+const WLD=2400;            // world width (scrolls horizontally)
+const FLOOR_H=560;         // pixel height of each floor band in world space
+const NFLOORS=3;
+const WORLD_H=FLOOR_H*NFLOORS;
+// world Y grows downward; floor index 0 is the LOWEST band (largest worldY)
+function floorBaseY(fi){ return WORLD_H - fi*FLOOR_H; }      // ground line of a floor
+function floorTopY(fi){ return WORLD_H - (fi+1)*FLOOR_H; }   // ceiling of a floor
+function beltY(fi){ return floorBaseY(fi)-FLOOR_H*0.46; }    // conveyor height in floor
+
+// ============ OUTPUT FORMAT ============
+function fmt(n){
+  if(n>=1e15)return (n/1e15).toFixed(2)+'Q';
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return Math.floor(n).toString();
+}
+
+// ============ ORE TIERS ============
+const TIER={
+  coal:   {a:'#5a5a62',b:'#26262c',glow:null},
+  ember:  {a:'#ff8a3a',b:'#b03a10',glow:'#ff6a1a'},
+  magma:  {a:'#ff5a2a',b:'#8a1606',glow:'#ff4a10'},
+  lava:   {a:'#ff9a3a',b:'#ff3a06',glow:'#ff7a1a'},
+  basalt: {a:'#4a4452',b:'#1e1a26',glow:null},
+  sulfur: {a:'#ffe24a',b:'#c79a10',glow:'#ffe24a'},
+  gold:   {a:'#ffd84d',b:'#b07a10',glow:'#ffd84d'},
+  diamond:{a:'#ffb6d6',b:'#ff4a8a',glow:'#ff7ab0'},
+  plasma: {a:'#9affff',b:'#3a8aff',glow:'#7affff'},
+  core:   {a:'#fff2a0','b':'#ff5a10',glow:'#ffd24a'},
+};
+
+// ============ PARTS (buyable tycoon items) ============
+// type: dropper | smasher | conveyor | sizeray | floor | gear | bank | flag | erupt
+function P(o){return Object.assign({bought:false,cool:0,t:0},o);}
+let PARTS=[];
+function initParts(){
+  // base cost reference; per-floor multiply ~1.5^floor handled in numbers below
+  PARTS=[
+    // ---------- FLOOR 0 : CAVERN ----------
+    P({id:'f0_coal', fl:0,type:'dropper',name:'Coal Dropper',  free:true,cost:0,    slot:300, kind:'coal',  val:1,   rate:1.1}),
+    P({id:'f0_ember',fl:0,type:'dropper',name:'Ember Dropper', cost:90,   slot:470, kind:'ember', val:3,   rate:1.05}),
+    P({id:'f0_magma',fl:0,type:'dropper',name:'Magma Dropper', cost:380,  slot:640, kind:'magma', val:8,   rate:1.0}),
+    P({id:'f0_smash',fl:0,type:'smasher',name:'Obsidian Smasher ×2',cost:950, slot:810, mult:2}),
+    P({id:'f0_lava', fl:0,type:'dropper',name:'Lava Dropper',  cost:2600, slot:980, kind:'lava',  val:22,  rate:0.95}),
+    P({id:'f0_speed',fl:0,type:'gear',  name:'Speed Coil',     cost:4200, slot:1150,gear:'speed'}),
+    P({id:'f0_jump', fl:0,type:'gear',  name:'Jump Coil',      cost:6500, slot:1320,gear:'jump'}),
+    P({id:'f0_bank', fl:0,type:'bank',  name:'Cash Collector', cost:0, free:true, slot:1560}),
+
+    // ---------- FLOOR 1 : VOLCANO CORE (x1.5) ----------
+    P({id:'f1_build',fl:1,type:'floor', name:'Build Volcano Core', cost:12000, slot:300}),
+    P({id:'f1_basalt',fl:1,type:'dropper',name:'Basalt Dropper', cost:18000, slot:470, kind:'basalt',val:55,  rate:1.0,need:'f1_build'}),
+    P({id:'f1_sulfur',fl:1,type:'dropper',name:'Sulfur Dropper', cost:34000, slot:640, kind:'sulfur',val:120, rate:0.95,need:'f1_build'}),
+    P({id:'f1_gold', fl:1,type:'dropper',name:'Molten-Gold Dropper',cost:70000,slot:810,kind:'gold',  val:280, rate:0.9,need:'f1_build'}),
+    P({id:'f1_smash',fl:1,type:'smasher',name:'Lava Smasher ×3', cost:150000,slot:980, mult:3,need:'f1_build'}),
+    P({id:'f1_ray',  fl:1,type:'sizeray',name:'Fire Size-Ray',   cost:320000,slot:1150,need:'f1_build'}),
+    P({id:'f1_sword',fl:1,type:'gear',  name:'Sword',            cost:520000,slot:1320,gear:'sword',need:'f1_build'}),
+    P({id:'f1_conv', fl:1,type:'conveyor',name:'2nd Conveyor+Collector',cost:900000,slot:1560,need:'f1_build'}),
+
+    // ---------- FLOOR 2 : ERUPTION SUMMIT (x1.5 again) ----------
+    P({id:'f2_build',fl:2,type:'floor', name:'Build Eruption Summit',cost:2200000, slot:300}),
+    P({id:'f2_diam', fl:2,type:'dropper',name:'Diamond-Lava Dropper',cost:3600000, slot:480,kind:'diamond',val:1400,rate:0.9,need:'f2_build'}),
+    P({id:'f2_plasma',fl:2,type:'dropper',name:'Plasma Dropper',cost:7800000, slot:680,kind:'plasma',val:4200,rate:0.85,need:'f2_build'}),
+    P({id:'f2_volc', fl:2,type:'dropper',name:'Erupting Volcano Dropper',cost:18000000,slot:900,kind:'core',val:13000,rate:0.8,need:'f2_build',volc:true}),
+    P({id:'f2_smash',fl:2,type:'smasher',name:'Mega Lava Smasher ×6',cost:42000000,slot:1120,mult:6,need:'f2_build'}),
+    P({id:'f2_flag', fl:2,type:'flag',  name:'Summit Flag',     cost:90000000, slot:1340,need:'f2_build'}),
+    P({id:'f2_erupt',fl:2,type:'erupt', name:'ERUPT THE VOLCANO',cost:750000000,slot:1620,need:'f2_flag'}),
+  ];
+}
+initParts();
+const PAD_COUNT=PARTS.length; // number of buy pads
+
+// ============ STATE ============
+const G={money:0, banked:0, rebirth:0, bricks:[], pops:[], embers:[], part:null, buyT:0,
+  robTimer:20, robActive:null, lavaParts:[], eruptT:0, won:false};
+
+function gearOwned(g){const p=PARTS.find(x=>x.gear===g);return p&&p.bought;}
+function floorBuilt(fi){ if(fi===0)return true; const p=PARTS.find(x=>x.type==='floor'&&x.fl===fi);return p&&p.bought; }
+
+// conveyor speeds per floor
+function convFast(fi){ if(fi>=1){const c=PARTS.find(p=>p.id==='f1_conv');return c&&c.bought;} return false; }
+function beltSpeed(fi){ return convFast(fi)?280:150; }
+function beltStart(){return 200;}
+function collectorX(fi){ return WLD-220; }
+
+// ============ PLAYER ============
+const pl={x:300, wy:0, vy:0, onGround:true, fl:0, face:1, anim:0, jumpHold:0};
+pl.wy=floorBaseY(0)-30;
+let camX=0, camY=0;
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true; if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(e.key.toLowerCase()))e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+let target=null;
+function screenToWorld(sx,sy){return {x:sx+camX, wy:sy+camY};}
+cv.addEventListener('pointerdown',e=>{const w=screenToWorld(e.clientX,e.clientY);target={x:w.x};});
+
+// ============ HELPERS ============
+let toastT=0;const toastEl=document.getElementById('toast');
+function toast(m,col){toastEl.textContent=m;toastEl.style.color=col||'#ffb347';toastEl.style.borderColor=col||'#ff7a2a';toastEl.classList.add('show');toastT=2.4;}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+const flashEl=document.getElementById('flash');
+function flash(){flashEl.style.opacity='1';setTimeout(()=>flashEl.style.opacity='0',140);}
+
+// ============ SAVE / LOAD ============
+const SAVEK='lavaTycoon_v1';
+function save(){
+  try{localStorage.setItem(SAVEK,JSON.stringify({
+    money:G.money,banked:G.banked,rebirth:G.rebirth,won:G.won,
+    bought:PARTS.filter(p=>p.bought).map(p=>p.id)
+  }));}catch(e){}
+}
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(SAVEK));if(!s)return;
+    G.money=s.money||0;G.banked=s.banked||0;G.rebirth=s.rebirth||0;G.won=!!s.won;
+    if(s.bought)for(const id of s.bought){const p=PARTS.find(x=>x.id===id);if(p)p.bought=true;}
+  }catch(e){}
+}
+function resetGame(){
+  if(!confirm('Reset all progress?'))return;
+  try{localStorage.removeItem(SAVEK);}catch(e){}
+  G.money=0;G.banked=0;G.rebirth=0;G.won=false;G.bricks=[];G.pops=[];G.robActive=null;G.robTimer=20;G.eruptT=0;
+  initParts();
+  pl.fl=0;pl.wy=floorBaseY(0)-30;pl.x=300;
+  toast('Progress reset');
+}
+document.getElementById('reset').onclick=resetGame;
+load();
+let lastSave=0;
+
+// ============ PURCHASE ============
+function padActive(p){
+  if(p.bought)return false;
+  if(p.need){const n=PARTS.find(x=>x.id===p.need);if(!n||!n.bought)return false;}
+  return true;
+}
+function buyPart(p){
+  if(p.bought||!padActive(p))return;
+  if(p.free){p.bought=true;toast('✓ '+p.name);save();return;}
+  if(G.money<p.cost){toast('Need $'+fmt(p.cost),'#ff6b6b');p.cool=.8;return;}
+  G.money-=p.cost;p.bought=true;
+  if(p.type==='erupt'){doErupt();return;}
+  if(p.type==='floor')toast('🌋 '+p.name+' complete!');
+  else if(p.type==='gear')toast('⚙ Equipped: '+p.name,'#7fe0ff');
+  else toast('✓ Built: '+p.name);
+  flash();
+  save();
+}
+// auto own free items
+PARTS.filter(p=>p.free).forEach(p=>p.bought=true);
+
+function doErupt(){
+  G.eruptT=4.2; G.won=true; G.rebirth++;
+  toast('🌋🌋 ERUPTION! VOLCANO TYCOON COMPLETE! 🌋🌋','#ff5a2a');
+  // spawn lava burst particles
+  for(let i=0;i<260;i++){
+    G.embers.push({x:900+Math.random()*200,wy:floorTopY(2)+120,vx:(Math.random()-0.5)*420,
+      vy:-220-Math.random()*520,life:2.5+Math.random()*2,big:Math.random()<0.4});
+  }
+  save();
+}
+
+// ============ ROBBER ============
+function spawnRobber(){
+  // robber comes from off-screen on the player's floor
+  G.robActive={x:pl.x>WLD/2?-60:WLD+60, wy:floorBaseY(pl.fl)-26, fl:pl.fl,
+    targetX:collectorX(pl.fl)-260, phase:'enter', timer:0, took:0};
+}
+function bankCash(){
+  if(G.money<=0)return;
+  G.banked+=G.money; G.money=0;
+}
+
+// ============ UPDATE ============
+let last=performance.now();
+function update(dt){
+  // ---- input / movement (side-scroller per floor with jumping) ----
+  let ax=0;
+  if(keys['a']||keys['arrowleft'])ax-=1;
+  if(keys['d']||keys['arrowright'])ax+=1;
+  if(ax)target=null;
+  if(target){const dx=target.x-pl.x;if(Math.abs(dx)>8)ax=dx>0?1:-1;else target=null;}
+  const baseSp=300*(gearOwned('speed')?1.7:1);
+  pl.x+=ax*baseSp*dt;
+  if(ax)pl.face=ax>0?1:-1;
+  pl.anim+=Math.abs(ax)*dt*11;
+  pl.x=Math.max(60,Math.min(WLD-60,pl.x));
+
+  // gravity / floor collision
+  const ground=floorBaseY(pl.fl)-30;
+  const jumpUp=keys['w']||keys['arrowup']||keys[' '];
+  if(pl.onGround && jumpUp){
+    pl.vy=-(gearOwned('jump')?760:520); pl.onGround=false;
+  }
+  pl.vy+=1600*dt; pl.wy+=pl.vy*dt;
+  if(pl.wy>=ground){pl.wy=ground;pl.vy=0;pl.onGround=true;}
+
+  // floor transitions via stairs near right edge / left edge if built
+  // climb up: stand near right ladder zone of current floor and floor above built
+  const ladderX=WLD-110;
+  if(Math.abs(pl.x-ladderX)<70){
+    if((keys['w']||keys['arrowup']) && floorBuilt(pl.fl+1) && pl.fl<NFLOORS-1 && pl.onGround){
+      pl.fl++; pl.wy=floorBaseY(pl.fl)-30; pl.vy=0; pl.x=ladderX-30;
+    }
+    if((keys['s']||keys['arrowdown']) && pl.fl>0 && pl.onGround){
+      pl.fl--; pl.wy=floorBaseY(pl.fl)-30; pl.vy=0; pl.x=ladderX-30;
+    }
+  }
+
+  // ---- camera follows player ----
+  camX=Math.max(0,Math.min(WLD-W, pl.x-W/2));
+  const camTarget=floorTopY(pl.fl);
+  camY += (camTarget-camY)*Math.min(1,dt*6);
+
+  // ---- buy pad detection ----
+  G.part=null;
+  for(const p of PARTS){
+    if(p.cool>0)p.cool-=dt;
+    if(p.bought&&p.type!=='erupt')continue;
+    if(p.fl!==pl.fl)continue;
+    const px=p.slot, py=floorBaseY(p.fl)-30;
+    if(Math.abs(pl.x-px)<46 && Math.abs(pl.wy-py)<60 && pl.onGround){
+      if(!padActive(p))continue;
+      G.part=p; G.buyT+=dt;
+      if(G.buyT>0.4){G.buyT=0;buyPart(p);}
+    }
+  }
+  if(!G.part)G.buyT=0;
+
+  // ---- bank when on cash collector ----
+  const bank=PARTS.find(p=>p.id==='f0_bank');
+  if(bank&&bank.bought){
+    const bx=bank.slot, by=floorBaseY(0)-30;
+    if(pl.fl===0 && Math.abs(pl.x-bx)<54 && Math.abs(pl.wy-by)<60){ bankCash(); }
+  }
+
+  // ---- droppers spawn ore ----
+  for(const p of PARTS){
+    if(p.type!=='dropper'||!p.bought)continue;
+    p.t-=dt;
+    if(p.t<=0){p.t=p.rate;
+      const fi=p.fl, by=beltY(fi);
+      let sz=12+Math.random()*4;
+      // size-ray makes floor1+ drops bigger/hotter
+      const ray=PARTS.find(x=>x.id==='f1_ray');
+      const rayOn=ray&&ray.bought&&fi>=1;
+      let v=p.val*(1+G.rebirth*0.5);
+      if(rayOn){v*=1.8;sz*=1.45;}
+      G.bricks.push({x:Math.max(p.slot,beltStart()), wy:by-50, vy:0, onbelt:false, fl:fi,
+        value:v, kind:p.kind, size:sz, spin:Math.random()*6, boost:0, bob:Math.random()*6, hot:rayOn});
+    }
+  }
+  // ---- move ore along belts ----
+  for(let i=G.bricks.length-1;i>=0;i--){
+    const r=G.bricks[i], fi=r.fl, by=beltY(fi);
+    if(!r.onbelt){r.vy+=1200*dt;r.wy+=r.vy*dt;if(r.wy>=by-2){r.wy=by-2;r.onbelt=true;}}
+    else{
+      const px=r.x;r.x+=beltSpeed(fi)*dt;r.spin+=dt*3;r.bob+=dt*5;
+      for(const u of PARTS){
+        if((u.type==='smasher')&&u.bought&&u.fl===fi&&px<u.slot&&r.x>=u.slot){r.value*=u.mult;r.boost=.4;}
+      }
+      if(r.boost>0)r.boost-=dt;
+      if(r.x>=collectorX(fi)){G.money+=r.value;
+        G.pops.push({x:collectorX(fi),wy:by-30,vy:-45,life:1,t:'+$'+fmt(r.value)});
+        // collector spark embers
+        for(let k=0;k<3;k++)G.embers.push({x:collectorX(fi),wy:by-30,vx:(Math.random()-.5)*120,vy:-60-Math.random()*120,life:.6+Math.random()*.4});
+        G.bricks.splice(i,1);}
+    }
+  }
+  if(G.bricks.length>700)G.bricks.splice(0,G.bricks.length-700);
+
+  // ---- robber loop ----
+  G.robTimer-=dt;
+  if(!G.robActive && G.robTimer<=4 && G.robTimer>0 && G.money>0){
+    // warning handled in HUD
+  }
+  if(!G.robActive && G.robTimer<=0){
+    if(G.money>0){spawnRobber();}
+    G.robTimer=20;
+  }
+  if(G.robActive){
+    const rb=G.robActive;
+    if(rb.phase==='enter'){
+      rb.x+=(rb.targetX-rb.x)*Math.min(1,dt*3.5);
+      if(Math.abs(rb.x-rb.targetX)<14){rb.phase='steal';rb.timer=0;}
+    }else if(rb.phase==='steal'){
+      rb.timer+=dt;
+      if(rb.timer>0.5){
+        const steal=Math.floor(G.money*0.20);
+        G.money-=steal; rb.took=steal;
+        toast('💰 Robber stole $'+fmt(steal)+'! Bank your cash!','#ff5a4a');
+        rb.phase='flee';
+      }
+    }else if(rb.phase==='flee'){
+      rb.x+=(rb.x<WLD/2?-1:1)*420*dt;
+      if(rb.x<-80||rb.x>WLD+80)G.robActive=null;
+    }
+  }
+
+  // ---- particles ----
+  for(let i=G.embers.length-1;i>=0;i--){const e=G.embers[i];
+    e.vy+=380*dt;e.x+=(e.vx||0)*dt;e.wy+=e.vy*dt;e.life-=dt;if(e.life<=0)G.embers.splice(i,1);}
+  // ambient lava embers
+  if(Math.random()<0.5){const fi=pl.fl;G.embers.push({x:camX+Math.random()*W,wy:floorBaseY(fi)+20,vx:(Math.random()-.5)*30,vy:-30-Math.random()*60,life:1.4+Math.random(),ambient:true});}
+
+  for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.wy+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
+  if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
+  if(G.eruptT>0)G.eruptT-=dt;
+}
+
+// ============ DRAW HELPERS (world -> screen) ============
+function sx(x){return x-camX;}
+function sy(wy){return wy-camY;}
+
+let T=0;
+
+function drawFloorBand(fi){
+  const built=floorBuilt(fi);
+  const topY=sy(floorTopY(fi)), baseY=sy(floorBaseY(fi));
+  if(baseY<-20||topY>H+20)return;
+  if(!built){
+    // ghost outline for un-built floors
+    ctx.strokeStyle='rgba(255,120,40,.25)';ctx.setLineDash([10,8]);ctx.lineWidth=2;
+    ctx.strokeRect(0,topY+6,W,baseY-topY-6);ctx.setLineDash([]);
+    ctx.fillStyle='rgba(255,140,60,.4)';ctx.font='bold 20px Segoe UI';ctx.textAlign='center';
+    ctx.fillText(['','VOLCANO CORE — locked','ERUPTION SUMMIT — locked'][fi],W/2,topY+(baseY-topY)/2);
+    return;
+  }
+  // back wall gradient (dark rock with lava glow tint by floor)
+  const wallTint=[['#2a120a','#10070a'],['#3a1408','#1a0a08'],['#4a1606','#220a06']][fi];
+  const wg=ctx.createLinearGradient(0,topY,0,baseY);
+  wg.addColorStop(0,wallTint[1]);wg.addColorStop(1,wallTint[0]);
+  ctx.fillStyle=wg;ctx.fillRect(0,topY,W,baseY-topY);
+  // rock-brick wall texture
+  ctx.strokeStyle='rgba(0,0,0,.30)';ctx.lineWidth=2;
+  const bw=90,bh=46,ox=-(camX%bw);
+  for(let ry=0,row=0;topY+ry<baseY;ry+=bh,row++){
+    const shift=(row%2)?bw/2:0;
+    for(let x=ox-bw+shift;x<W+bw;x+=bw){
+      ctx.strokeRect(x,topY+ry,bw,bh);
+    }
+  }
+  // glowing lava cracks (floor 1+: glowing walls; floor2 brighter)
+  if(fi>=1){
+    ctx.save();ctx.globalAlpha=0.5+0.2*Math.sin(T*3);
+    ctx.strokeStyle=fi>=2?'#ff5a1a':'#ff7a2a';ctx.lineWidth=2.5;ctx.shadowColor='#ff6a1a';ctx.shadowBlur=12;
+    const cseed=Math.floor(camX/200);
+    for(let k=0;k<6;k++){const cx=((k*380 - camX)%(W+400))-200;ctx.beginPath();
+      ctx.moveTo(cx,topY+30);ctx.lineTo(cx+24,topY+90);ctx.lineTo(cx-14,topY+150);ctx.lineTo(cx+30,topY+220);ctx.stroke();}
+    ctx.restore();
+    // windows (glowing portals)
+    for(let k=0;k<5;k++){const wx=((k*420 - camX)%(W+500))-150;const wyp=topY+60;
+      const rg=ctx.createRadialGradient(wx,wyp+30,4,wx,wyp+30,40);
+      rg.addColorStop(0,fi>=2?'#fff2a0':'#ffb347');rg.addColorStop(1,'rgba(255,90,20,0)');
+      ctx.fillStyle=rg;ctx.beginPath();ctx.arc(wx,wyp+30,40,0,7);ctx.fill();
+      ctx.strokeStyle='#1a0a06';ctx.lineWidth=4;ctx.beginPath();ctx.arc(wx,wyp+30,22,0,7);ctx.stroke();}
+  }
+  // floor slab
+  const fgY=baseY;
+  ctx.fillStyle='#1a0e08';ctx.fillRect(0,fgY,W,8);
+  const fg=ctx.createLinearGradient(0,fgY,0,fgY+50);
+  fg.addColorStop(0,'#2a160c');fg.addColorStop(1,'#160a06');
+  ctx.fillStyle=fg;ctx.fillRect(0,fgY+8,W,50);
+  // obsidian floor sheen lines
+  ctx.strokeStyle='rgba(255,120,40,.10)';ctx.lineWidth=1;
+  const gs=70,oxx=-(camX%gs);
+  for(let x=oxx;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,fgY+8);ctx.lineTo(x,fgY+50);ctx.stroke();}
+  // glowing lava trim line under floor
+  ctx.fillStyle='rgba(255,90,20,'+(0.5+0.3*Math.sin(T*4))+')';
+  ctx.fillRect(0,fgY+4,W,3);
+}
+
+function drawLavaFloorGlow(fi){
+  // molten lava pool seam at bottom of floor 0
+  if(fi!==0)return;
+  const y=sy(floorBaseY(0))+30;
+  if(y<-40||y>H+40)return;
+  const g=ctx.createLinearGradient(0,y,0,y+60);
+  g.addColorStop(0,'#ff6a1a');g.addColorStop(0.5,'#ff3a06');g.addColorStop(1,'#7a1404');
+  ctx.fillStyle=g;ctx.fillRect(0,y,W,80);
+  ctx.fillStyle='rgba(255,220,120,'+(0.3+0.2*Math.sin(T*3))+')';
+  for(let i=0;i<8;i++){const bx=((i*340 - camX*0.6)%(W+400))-200;
+    ctx.beginPath();ctx.ellipse(bx,y+18+Math.sin(T*2+i)*6,30,8,0,0,7);ctx.fill();}
+}
+
+function drawLadder(){
+  // ladder/stairs at right side connecting built floors
+  const lx=sx(WLD-110);
+  if(lx<-40||lx>W+40)return;
+  for(let fi=0;fi<NFLOORS;fi++){
+    if(!floorBuilt(fi))continue;
+    if(fi>0&&!floorBuilt(fi))continue;
+    const top=sy(floorTopY(fi)), bot=sy(floorBaseY(fi));
+    if(bot<-40||top>H+40)continue;
+    // only draw ladder up if floor above built
+    if(fi<NFLOORS-1 && floorBuilt(fi+1)){
+      ctx.fillStyle='#3a1e10';ctx.fillRect(lx-22,top,8,bot-top);ctx.fillRect(lx+14,top,8,bot-top);
+      ctx.fillStyle='#ff8a3a';
+      for(let ry=top+14;ry<bot;ry+=26){ctx.fillRect(lx-22,ry,44,7);}
+      ctx.fillStyle='#ffce8a';ctx.font='bold 10px Segoe UI';ctx.textAlign='center';
+      ctx.fillText('▲ W: UP',lx,top+12);
+    }
+  }
+}
+
+function drawBelt(fi){
+  if(!floorBuilt(fi))return;
+  const by=sy(beltY(fi)),x0=sx(beltStart())-14,x1=sx(collectorX(fi))+14;
+  if(by<-40||by>H+40)return;
+  const fast=convFast(fi);
+  // supports
+  ctx.fillStyle='#160a06';
+  for(let x=x0;x<x1;x+=140){ctx.fillRect(x,by+22,10,sy(floorBaseY(fi))-by-22);}
+  // belt body
+  const g=ctx.createLinearGradient(0,by,0,by+24);
+  g.addColorStop(0,fast?'#6a3a1a':'#3a2418');g.addColorStop(1,'#100805');
+  ctx.fillStyle=g;roundRect(x0,by,x1-x0,24,12);ctx.fill();
+  ctx.save();roundRect(x0,by,x1-x0,24,12);ctx.clip();
+  ctx.strokeStyle=fast?'#ff9a4a':'#5a3a24';ctx.lineWidth=3;
+  const off=(T*(fast?160:90))%22;
+  for(let x=x0-30;x<x1+30;x+=22){ctx.beginPath();ctx.moveTo(x+off,by);ctx.lineTo(x+off-13,by+24);ctx.stroke();}
+  ctx.restore();
+  for(const rx of [x0,x1]){const rg=ctx.createRadialGradient(rx-3,by+9,2,rx,by+12,14);
+    rg.addColorStop(0,'#8a5a3a');rg.addColorStop(1,'#2a1208');ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(rx,by+12,13,0,7);ctx.fill();}
+}
+
+function drawDropper(p){
+  if(!p.bought)return;
+  const x=sx(p.slot), by=sy(beltY(p.fl));
+  if(x<-90||x>W+90)return;
+  const t=TIER[p.kind],top=by-130;
+  ctx.save();
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=18;}
+  // volcano-shaped dropper for the centerpiece
+  if(p.volc){
+    // erupting volcano cone
+    const cg=ctx.createLinearGradient(0,top-10,0,by);cg.addColorStop(0,'#5a2a14');cg.addColorStop(1,'#1a0a06');
+    ctx.fillStyle=cg;ctx.beginPath();ctx.moveTo(x-58,by);ctx.lineTo(x-22,top-6);ctx.lineTo(x+22,top-6);ctx.lineTo(x+58,by);ctx.closePath();ctx.fill();
+    // crater glow
+    const rg=ctx.createRadialGradient(x,top,2,x,top,30);rg.addColorStop(0,'#fff2a0');rg.addColorStop(1,'rgba(255,80,10,0)');
+    ctx.fillStyle=rg;ctx.beginPath();ctx.arc(x,top-4,30,0,7);ctx.fill();
+    ctx.fillStyle='#ff5a10';ctx.beginPath();ctx.ellipse(x,top-4,20,7,0,0,7);ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='#fff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('VOLCANO',x,by+34);
+    return;
+  }
+  // funnel
+  ctx.fillStyle=t.b;ctx.beginPath();
+  ctx.moveTo(x-32,top);ctx.lineTo(x+32,top);ctx.lineTo(x+20,top-18);ctx.lineTo(x-20,top-18);ctx.closePath();ctx.fill();
+  // body
+  const bg=ctx.createLinearGradient(0,top,0,top+62);bg.addColorStop(0,t.a);bg.addColorStop(1,t.b);
+  ctx.fillStyle=bg;roundRect(x-32,top,64,62,8);ctx.fill();
+  ctx.restore();
+  // dark machine band + lava window
+  ctx.fillStyle='#0a0504';roundRect(x-26,top+10,52,20,4);ctx.fill();
+  if(t.glow){ctx.fillStyle=t.glow;ctx.globalAlpha=0.6+0.3*Math.sin(T*5+p.slot);roundRect(x-22,top+13,44,14,3);ctx.fill();ctx.globalAlpha=1;}
+  ctx.fillStyle='#fff';ctx.font='bold 8px Segoe UI';ctx.textAlign='center';ctx.fillText(p.name.toUpperCase().slice(0,16),x,top+24);
+  // chute + legs
+  ctx.fillStyle='#0a0504';ctx.fillRect(x-9,by-50,18,14);
+  ctx.strokeStyle=t.b;ctx.lineWidth=5;
+  ctx.beginPath();ctx.moveTo(x-24,top+62);ctx.lineTo(x-24,by-2);ctx.moveTo(x+24,top+62);ctx.lineTo(x+24,by-2);ctx.stroke();
+}
+
+function drawSmasher(p){
+  if(!p.bought)return;
+  const x=sx(p.slot), by=sy(beltY(p.fl));
+  if(x<-90||x>W+90)return;
+  const h=130, top=by-h;
+  const big=p.mult>=6;
+  ctx.fillStyle=big?'#aa2a06':'#7a1c06';
+  roundRect(x-40,top,14,h,4);ctx.fill();roundRect(x+26,top,14,h,4);ctx.fill();
+  roundRect(x-40,top,80,18,5);ctx.fill();
+  // glowing hammer slot
+  ctx.fillStyle='#ff6a1a';ctx.globalAlpha=0.5+0.3*Math.sin(T*6);ctx.fillRect(x-26,top+18,52,h-18);ctx.globalAlpha=1;
+  // animated hammer
+  const drop=Math.abs(Math.sin(T*4))*30;
+  ctx.fillStyle='#2a1208';roundRect(x-20,top+18+drop,40,26,4);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 12px Segoe UI';ctx.textAlign='center';ctx.fillText('×'+p.mult,x,top+13);
+}
+
+function drawSizeRay(p){
+  if(!p.bought)return;
+  const x=sx(p.slot), by=sy(beltY(p.fl));
+  if(x<-90||x>W+90)return;
+  const top=by-120;
+  ctx.fillStyle='#5a1a06';roundRect(x-30,top,60,40,6);ctx.fill();
+  ctx.fillStyle='#ff8a3a';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('SIZE-RAY',x,top+24);
+  // beam cone down to belt
+  ctx.save();ctx.globalAlpha=0.35+0.2*Math.sin(T*8);
+  const bg=ctx.createLinearGradient(0,top+40,0,by);bg.addColorStop(0,'#ffce4a');bg.addColorStop(1,'rgba(255,90,20,0)');
+  ctx.fillStyle=bg;ctx.beginPath();ctx.moveTo(x-14,top+40);ctx.lineTo(x+14,top+40);ctx.lineTo(x+34,by);ctx.lineTo(x-34,by);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function drawConveyorTag(p){
+  if(!p.bought)return;
+  const x=sx(p.slot), by=sy(beltY(p.fl));
+  if(x<-90||x>W+90)return;
+  ctx.fillStyle='#ff9a4a';ctx.font='bold 10px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('⚡ FAST BELT',x,by-30);
+}
+
+function drawCollector(fi){
+  if(!floorBuilt(fi))return;
+  const x=sx(collectorX(fi)), by=sy(beltY(fi));
+  if(x<-90||x>W+90)return;
+  const g=ctx.createLinearGradient(0,by-78,0,by+10);g.addColorStop(0,'#5a2a10');g.addColorStop(1,'#1a0a06');
+  ctx.fillStyle=g;roundRect(x-6,by-78,80,86,10);ctx.fill();
+  ctx.fillStyle='#0a0504';roundRect(x+2,by-70,62,32,6);ctx.fill();
+  ctx.fillStyle='#ffb347';ctx.font='bold 22px Segoe UI';ctx.textAlign='center';ctx.fillText('⛏',x+34,by-46);
+  ctx.fillStyle='#ff8a5c';ctx.font='bold 9px Segoe UI';ctx.fillText('COLLECTOR',x+34,by-22);
+  ctx.fillStyle='#0a0504';ctx.fillRect(x-6,by-2,18,12);
+}
+
+function drawBank(p){
+  if(!p.bought)return;
+  const x=sx(p.slot), gy=sy(floorBaseY(0));
+  if(x<-90||x>W+90)return;
+  const top=gy-100;
+  // vault
+  const g=ctx.createLinearGradient(0,top,0,gy);g.addColorStop(0,'#7fe0ff');g.addColorStop(1,'#1a5a7a');
+  ctx.fillStyle=g;roundRect(x-44,top,88,100,10);ctx.fill();
+  ctx.strokeStyle='#bff0ff';ctx.lineWidth=3;roundRect(x-44,top,88,100,10);ctx.stroke();
+  // vault door
+  ctx.fillStyle='#0a2a3a';ctx.beginPath();ctx.arc(x,top+52,28,0,7);ctx.fill();
+  ctx.strokeStyle='#7fe0ff';ctx.lineWidth=4;ctx.beginPath();ctx.arc(x,top+52,18,T*1.5,T*1.5+5);ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText('CASH',x,top+18);
+  ctx.fillStyle='#bff0ff';ctx.font='bold 9px Segoe UI';ctx.fillText('BANK SAFE',x,gy-8);
+  // pulsing safe glow
+  ctx.save();ctx.globalAlpha=0.3+0.2*Math.sin(T*3);ctx.shadowColor='#7fe0ff';ctx.shadowBlur=20;
+  ctx.strokeStyle='#7fe0ff';ctx.lineWidth=2;roundRect(x-44,top,88,100,10);ctx.stroke();ctx.restore();
+}
+
+function drawFlag(p){
+  if(!p.bought)return;
+  const x=sx(p.slot), gy=sy(floorBaseY(2));
+  if(x<-90||x>W+90)return;
+  ctx.fillStyle='#3a1e10';ctx.fillRect(x-3,gy-130,6,130);
+  const wave=Math.sin(T*5)*6;
+  ctx.fillStyle='#ff3a06';ctx.beginPath();
+  ctx.moveTo(x+3,gy-130);ctx.lineTo(x+60,gy-118+wave);ctx.lineTo(x+3,gy-104);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 10px Segoe UI';ctx.textAlign='left';ctx.fillText('🌋',x+18,gy-114);
+}
+
+function drawVolcanoCenterpiece(){
+  // small erupting volcano centerpiece on summit floor when its dropper bought
+  const vp=PARTS.find(p=>p.id==='f2_volc');
+  if(!vp||!vp.bought)return;
+  // already drawn as dropper; add rising lava spurts
+  const x=sx(vp.slot), top=sy(beltY(2))-134;
+  if(x<-90||x>W+90)return;
+  if(Math.random()<0.4)G.embers.push({x:vp.slot,wy:beltY(2)-138,vx:(Math.random()-.5)*100,vy:-160-Math.random()*120,life:1.0+Math.random()});
+}
+
+function drawBrick(r){
+  const x=sx(r.x);if(x<-40||x>W+40)return;
+  const y=sy(r.wy)-(r.onbelt?Math.abs(Math.sin(r.bob))*2:0);
+  if(y<-40||y>H+40)return;
+  const t=TIER[r.kind], s=r.size*(r.boost>0?1.4:1);
+  ctx.save();ctx.translate(x,y);ctx.rotate(r.spin);
+  if(t.glow||r.hot){ctx.shadowColor=t.glow||'#ff6a1a';ctx.shadowBlur=r.hot?16:10;}
+  const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.a);g.addColorStop(1,t.b);ctx.fillStyle=g;
+  if(r.kind==='diamond'||r.kind==='plasma'){
+    ctx.beginPath();ctx.moveTo(0,-s);ctx.lineTo(s*.8,0);ctx.lineTo(0,s);ctx.lineTo(-s*.8,0);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.stroke();
+  } else if(r.kind==='core'){
+    ctx.beginPath();ctx.arc(0,0,s,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.arc(-s*.3,-s*.3,s*.35,0,7);ctx.fill();
+  } else {
+    roundRect(-s*.7,-s*.6,s*1.4,s*1.2,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(-s*.7,-s*.6,s*1.4,3);
+    ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(-s*.7,s*.4,s*1.4,2);
+  }
+  ctx.restore();
+}
+
+function drawPad(p){
+  if(p.bought&&p.type!=='erupt')return;
+  if(p.fl!==undefined && Math.abs(sy(floorBaseY(p.fl)))>H+200 && Math.abs(sy(floorBaseY(p.fl)))<-200)return;
+  const x=sx(p.slot), gy=sy(floorBaseY(p.fl)), y=gy-16;
+  if(x<-110||x>W+110)return;
+  if(y<-60||y>H+60)return;
+  const active=padActive(p);
+  const can=active&&(p.free||G.money>=p.cost);
+  const here=G.part===p;
+  const isFinal=p.type==='erupt';
+  // pad
+  ctx.save();
+  let col;
+  if(!active)col='#3a2418';
+  else if(p.cool>0)col='#aa2a18';
+  else if(isFinal)col=can?'#ff3a06':'#7a2a10';
+  else col=can?'#ff7a2a':'#8a4a24';
+  if(here&&active){ctx.shadowColor=can?'#ffb347':'#ff5a4a';ctx.shadowBlur=26;}
+  ctx.fillStyle=col;roundRect(x-44,y-12,88,40,10);ctx.fill();
+  // 3d edge
+  ctx.fillStyle='rgba(0,0,0,.35)';roundRect(x-44,y+18,88,10,6);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,220,160,.3)';ctx.lineWidth=2;roundRect(x-44,y-12,88,40,10);ctx.stroke();
+  // buy fill ring
+  if(here&&can){ctx.strokeStyle='#fff';ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(x,y+6,26,-Math.PI/2,-Math.PI/2+Math.PI*2*(G.buyT/0.4));ctx.stroke();}
+  // floating sign
+  const sgY=y-86+Math.sin(T*2+p.slot)*3;
+  const sw=isFinal?170:140;
+  ctx.fillStyle=isFinal?'#2a0a06ee':'#1a0c06ee';roundRect(x-sw/2,sgY-22,sw,44,8);ctx.fill();
+  ctx.strokeStyle=active?(isFinal?'#ff3a06':'#ff7a2a'):'#3a2418';ctx.lineWidth=isFinal?2.5:1.5;roundRect(x-sw/2,sgY-22,sw,44,8);ctx.stroke();
+  if(isFinal){ctx.save();ctx.shadowColor='#ff3a06';ctx.shadowBlur=14;ctx.strokeRect(x-sw/2,sgY-22,sw,44);ctx.restore();}
+  ctx.fillStyle=active?'#ffe9d6':'#7a5a48';ctx.font='bold '+(isFinal?12:11)+'px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(p.name,x,sgY-4);
+  ctx.fillStyle=!active?'#8a5a40':(can?'#ffd86b':'#ff8a8a');ctx.font='bold 13px Segoe UI';
+  ctx.fillText(!active?'🔒 LOCKED':(p.free?'FREE':'$'+fmt(p.cost)),x,sgY+14);
+  // post
+  ctx.fillStyle='#2a1208';ctx.fillRect(x-3,sgY+22,6,(y-12)-(sgY+22));
+}
+
+function drawPlayer(){
+  const x=sx(pl.x), y=sy(pl.wy);
+  if(x<-60||x>W+60)return;
+  // shadow on ground
+  const gsh=sy(floorBaseY(pl.fl)-2);
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(x,gsh,18,7,0,0,7);ctx.fill();
+  const air=!pl.onGround;
+  const sw=air?6:Math.sin(pl.anim)*4;
+  // legs
+  ctx.fillStyle='#3a1a3a';
+  ctx.fillRect(x-9,y+6+sw,7,14);ctx.fillRect(x+2,y+6-sw,7,14);
+  // torso (lava-miner orange suit)
+  const bg=ctx.createLinearGradient(0,y-14,0,y+8);bg.addColorStop(0,'#ff8a3a');bg.addColorStop(1,'#c74a10');
+  ctx.fillStyle=bg;roundRect(x-13,y-14,26,22,4);ctx.fill();
+  // chest glow stripe
+  ctx.fillStyle='#ffd86b';ctx.fillRect(x-3,y-12,6,18);
+  // speed coil aura
+  if(gearOwned('speed')){ctx.strokeStyle='rgba(127,224,255,.6)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y-2,20+Math.sin(T*8)*2,0,7);ctx.stroke();}
+  // jump coil aura
+  if(gearOwned('jump')&&air){ctx.strokeStyle='rgba(180,255,140,.7)';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x,gsh,16,5,0,0,7);ctx.stroke();}
+  // arms
+  ctx.fillStyle='#ffcf9a';
+  ctx.fillRect(x-18,y-12+sw,6,16);ctx.fillRect(x+12,y-12-sw,6,16);
+  // sword gear
+  if(gearOwned('sword')){ctx.save();ctx.translate(x+15*pl.face,y-4);ctx.rotate(pl.face>0?-0.5:0.5);
+    ctx.fillStyle='#dfe6ee';ctx.fillRect(-2,-18,4,18);ctx.fillStyle='#8a5a2a';ctx.fillRect(-4,0,8,4);ctx.restore();}
+  // head
+  ctx.fillStyle='#ffcf9a';roundRect(x-11,y-34,22,20,5);ctx.fill();
+  // miner helmet
+  ctx.fillStyle='#ffb347';roundRect(x-12,y-36,24,8,4);ctx.fill();
+  ctx.fillStyle='#fff2a0';ctx.beginPath();ctx.arc(x,y-32,3,0,7);ctx.fill();
+  // face
+  ctx.fillStyle='#1a1a1a';
+  ctx.fillRect(x-6+pl.face*3,y-26,3,4);ctx.fillRect(x+3+pl.face*3,y-26,3,4);
+}
+
+function drawRobber(){
+  if(!G.robActive)return;
+  const rb=G.robActive;
+  const x=sx(rb.x), y=sy(rb.wy);
+  if(x<-60||x>W+60)return;
+  const gsh=sy(floorBaseY(rb.fl)-2);
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(x,gsh,16,6,0,0,7);ctx.fill();
+  const sw=Math.sin(T*16)*4;
+  // legs
+  ctx.fillStyle='#0a0a14';ctx.fillRect(x-8,y+6+sw,6,14);ctx.fillRect(x+2,y+6-sw,6,14);
+  // body (dark hoodie)
+  ctx.fillStyle='#1a1a26';roundRect(x-12,y-14,24,22,4);ctx.fill();
+  // sack of cash
+  ctx.fillStyle='#3a2a14';ctx.beginPath();ctx.arc(x-16,y-4,8,0,7);ctx.fill();
+  ctx.fillStyle='#ffd86b';ctx.font='bold 8px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x-16,y-1);
+  // head + mask
+  ctx.fillStyle='#caa';roundRect(x-10,y-32,20,18,5);ctx.fill();
+  ctx.fillStyle='#0a0a14';ctx.fillRect(x-10,y-28,20,7);
+  ctx.fillStyle='#ff5a4a';ctx.fillRect(x-6,y-26,3,3);ctx.fillRect(x+3,y-26,3,3);
+  // alert mark
+  ctx.fillStyle='#ff5a4a';ctx.font='bold 18px Segoe UI';ctx.fillText('!',x,y-40);
+}
+
+function drawEruptOverlay(){
+  if(G.eruptT<=0)return;
+  const a=Math.min(1,G.eruptT/2);
+  ctx.fillStyle='rgba(255,80,20,'+(a*0.6)+')';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,240,160,'+(a*0.3)+')';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff';ctx.font='900 '+Math.min(60,W*0.08)+'px Segoe UI';ctx.textAlign='center';
+  ctx.shadowColor='#ff3a06';ctx.shadowBlur=30;
+  ctx.fillText('🌋 ERUPTION! 🌋',W/2,H*0.4);ctx.shadowBlur=0;
+}
+
+function drawParticles(){
+  for(const e of G.embers){const x=sx(e.x),y=sy(e.wy);
+    if(x<-20||x>W+20||y<-20||y>H+20)continue;
+    const al=Math.min(1,e.life);
+    ctx.fillStyle='rgba(255,'+(120+Math.random()*100|0)+',40,'+al+')';
+    const r=e.big?5:(e.ambient?2:3);
+    ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();}
+}
+
+function draw(){
+  // sky / cavern backdrop
+  const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#1a0a08');bg.addColorStop(1,'#0a0504');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  // draw all floors (far to near doesn't matter much; draw 2->0)
+  for(let fi=NFLOORS-1;fi>=0;fi--)drawFloorBand(fi);
+  for(let fi=0;fi<NFLOORS;fi++)drawLavaFloorGlow(fi);
+  drawLadder();
+  // machines per floor
+  for(let fi=0;fi<NFLOORS;fi++){
+    if(!floorBuilt(fi))continue;
+    drawBelt(fi);
+    for(const p of PARTS)if(p.fl===fi&&p.type==='smasher')drawSmasher(p);
+    for(const p of PARTS)if(p.fl===fi&&p.type==='sizeray')drawSizeRay(p);
+  }
+  for(const r of G.bricks)drawBrick(r);
+  for(let fi=0;fi<NFLOORS;fi++){
+    if(!floorBuilt(fi))continue;
+    for(const p of PARTS)if(p.fl===fi&&p.type==='dropper')drawDropper(p);
+    drawCollector(fi);
+    for(const p of PARTS)if(p.fl===fi&&p.type==='conveyor')drawConveyorTag(p);
+  }
+  drawVolcanoCenterpiece();
+  drawBank(PARTS.find(p=>p.id==='f0_bank'));
+  drawFlag(PARTS.find(p=>p.id==='f2_flag'));
+  // pads
+  for(const p of PARTS)drawPad(p);
+  drawRobber();
+  drawPlayer();
+  drawParticles();
+  // money pops
+  for(const q of G.pops){const x=sx(q.x),y=sy(q.wy);ctx.globalAlpha=Math.max(0,q.life);
+    ctx.fillStyle='#ffd86b';ctx.font='bold 14px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
+  drawEruptOverlay();
+}
+
+// ============ HUD ============
+const moneyEl=document.getElementById('money'),subEl=document.getElementById('sub'),
+  bankedEl=document.getElementById('banked'),rbEl=document.getElementById('rb'),warnEl=document.getElementById('robwarn');
+
+// ============ LOOP ============
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();
+  moneyEl.textContent='$'+fmt(G.money);
+  const built=PARTS.filter(p=>p.bought&&!p.free).length;
+  subEl.textContent='🌋 '+built+' machines • Floor '+(pl.fl+1);
+  bankedEl.textContent='🏦 Banked: $'+fmt(G.banked);
+  rbEl.textContent=(G.rebirth>0?('✅ Erupted ×'+G.rebirth+'  (+'+(G.rebirth*50)+'% ore)'):'');
+  // robber warning
+  if(G.robActive){warnEl.textContent='🚨 ROBBER! Bank your cash!';}
+  else if(G.robTimer<=5&&G.money>0){warnEl.textContent='⚠ Robber in '+Math.ceil(G.robTimer)+'s — BANK CASH!';}
+  else warnEl.textContent='';
+  // autosave every 5s
+  lastSave+=dt;if(lastSave>5){lastSave=0;save();}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+addEventListener('beforeunload',save);
+</script>
+</body>
+</html>

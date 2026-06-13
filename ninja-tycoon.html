@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Ninja Dojo Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#0c0a12;color:#f2e9dd;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none}
+  #money{font-size:32px;font-weight:800;color:#ffd25c;text-shadow:0 2px 14px rgba(255,170,60,.55),0 2px 2px #000}
+  #sub{font-size:13px;font-weight:700;color:#c89b6e;margin-top:2px}
+  #banked{font-size:14px;font-weight:800;color:#7ee0ff;text-shadow:0 1px 4px #000}
+  #right{text-align:right}
+  #floorLbl{font-size:14px;font-weight:800;color:#ff7a8a;text-shadow:0 1px 4px #000}
+  #raid{font-size:14px;font-weight:800;color:#ff5566;text-shadow:0 0 10px #ff2244,0 1px 3px #000;margin-top:3px;display:none}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#8a6f57;font-size:12px;
+        font-weight:700;text-decoration:none;pointer-events:auto;letter-spacing:.5px}
+  #back:hover{color:#d8b88f}
+  #help{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);color:#7a6450;font-size:12px;
+        font-weight:600;text-align:center;pointer-events:none;padding:0 10px}
+  #reset{position:absolute;bottom:10px;right:12px;pointer-events:auto;background:#1c1622cc;border:1px solid #4a3242;
+        color:#c98b8b;font-size:11px;font-weight:700;border-radius:8px;padding:6px 10px;cursor:pointer}
+  #reset:hover{background:#2a1c28}
+  #toast{position:absolute;left:50%;bottom:54px;transform:translateX(-50%) translateY(10px);background:#1a1018ee;
+         border:1px solid #ffb347;border-radius:11px;padding:10px 18px;font-weight:700;color:#ffd25c;
+         opacity:0;transition:.3s;pointer-events:none;text-align:center;max-width:90%;box-shadow:0 6px 20px #000a}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #win{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;
+       background:radial-gradient(circle at 50% 40%,#3a0b12cc,#0c0a12ee);pointer-events:auto;z-index:5;text-align:center;padding:20px}
+  #win h1{font-size:42px;color:#ffd25c;text-shadow:0 0 26px #ff5a3c;letter-spacing:2px}
+  #win p{margin-top:14px;color:#ffb6a0;font-size:16px;max-width:480px}
+  #win button{margin-top:24px;background:#ff5a3c;border:0;color:#1a0a08;font-weight:800;font-size:16px;
+       border-radius:12px;padding:12px 26px;cursor:pointer;box-shadow:0 6px 22px #ff3a1c88}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div><div id="money">$0</div><div id="sub"></div><div id="banked"></div></div>
+    <div id="right"><div id="floorLbl"></div><div id="raid"></div></div>
+  </div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <div id="toast"></div>
+  <button id="reset">Reset</button>
+  <div id="help">WASD / Arrows to walk &nbsp;•&nbsp; tap to move &nbsp;•&nbsp; step on a pad to BUY &nbsp;•&nbsp; bank cash at the 💰 collector before raids!</div>
+  <div id="win">
+    <h1>🐉 THE DRAGON AWAKENS 🐉</h1>
+    <p>You have mastered the Shadow Temple and summoned the ancient dragon. The dojo is legend. You win, Shadow Master.</p>
+    <button id="winReset">Begin Anew</button>
+  </div>
+</div>
+<script>
+"use strict";
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ===================== WORLD LAYOUT =====================
+// A vertically stacked dojo: 3 floors. Player walks left/right within a floor,
+// and uses ladders/stairs to move between floors. Camera follows in 2D.
+const WLD=2400;                 // world width
+const FLOORH=520;               // pixel height of each floor
+const NFLOOR=3;
+const WORLDH=FLOORH*NFLOOR;     // total world height
+// floor 0 = top (Shadow Temple), floor 2 = bottom (Dojo). We index from bottom up for cost gating.
+// floorIndex 0 = ground Dojo, 1 = Training, 2 = Shadow Temple.
+function floorBaseY(fi){ // y of the FLOOR (where feet stand) for floor index fi (0=bottom)
+  return WORLDH - fi*FLOORH - 90;
+}
+function floorCeil(fi){ return WORLDH - (fi+1)*FLOORH; }
+
+// ===================== ORE / DROP TIERS =====================
+const TIER={
+  wood:    {a:'#c99a5b',b:'#8a5e2a',glow:null,  shape:'box'},
+  stone:   {a:'#a9a29a',b:'#6b645c',glow:null,  shape:'box'},
+  bronze:  {a:'#e0954a',b:'#9c5a22',glow:null,  shape:'star'},
+  iron:    {a:'#cfd6dd',b:'#828b95',glow:null,  shape:'star'},
+  steel:   {a:'#dfe6ee',b:'#9aa4b2',glow:null,  shape:'blade'},
+  jade:    {a:'#5be0a0',b:'#239a64',glow:'#5be0a0',shape:'box'},
+  goldsh:  {a:'#ffd84d',b:'#c79a1e',glow:'#ffd84d',shape:'star'},
+  obsidian:{a:'#8a78c8',b:'#3a2c66',glow:'#9a7aff',shape:'star'},
+  dragonsc:{a:'#ff6a5c',b:'#a01828',glow:'#ff5a3c',shape:'box'},
+  dragon:  {a:'#ffc24d',b:'#c7401e',glow:'#ff8a3c',shape:'box'},
+};
+
+// ===================== PARTS (buyable tycoon) =====================
+// types: dropper | smasher | conveyor | collector | gear | size | wall | build | rebirth
+// fi = floor index it belongs to. x = world x for the pad.
+function P(o){return Object.assign({bought:false,cool:0,t:0},o);}
+let PARTS=[];
+function initParts(){
+PARTS=[
+  // ---------- FLOOR 1 : DOJO (fi 0) ----------
+  P({id:'cash0',type:'collector',name:'Cash Collector',cost:0,free:true,fi:0,x:2180,bank:true}),
+  P({id:'belt0',type:'conveyor',name:'Dojo Conveyor',cost:0,free:true,fi:0,x:200,beltId:0,auto:true}),
+  P({id:'wood', type:'dropper', name:'Wood Dropper',     cost:0,   free:true, fi:0,x:300,  kind:'wood', val:1,   rate:1.1, beltId:0}),
+  P({id:'stone',type:'dropper', name:'Stone Dropper',    cost:90,  fi:0,x:470, kind:'stone',val:3,   rate:1.05,beltId:0}),
+  P({id:'bron', type:'dropper', name:'Bronze Shuriken',  cost:340, fi:0,x:640, kind:'bronze',val:8,  rate:1.0, beltId:0}),
+  P({id:'anvil',type:'smasher', name:'Anvil Smasher 2x', cost:900, fi:0,x:830, mult:2,beltId:0}),
+  P({id:'iron', type:'dropper', name:'Iron Shuriken',    cost:2600,fi:0,x:1020,kind:'iron',val:22,  rate:0.95,beltId:0}),
+  P({id:'pwall',type:'wall',    name:'Paper Walls',      cost:6500,fi:0,x:1240,wallFi:0}),
+  P({id:'speed',type:'gear',    name:'Speed Coil',       cost:14000,fi:0,x:1460,gear:'speed'}),
+  P({id:'jump', type:'gear',    name:'Jump Coil',        cost:30000,fi:0,x:1680,gear:'jump'}),
+  P({id:'up1',  type:'build',   name:'Build 2nd Floor ▲',cost:60000,fi:0,x:1920,buildFi:1}),
+
+  // ---------- FLOOR 2 : TRAINING HALL (fi 1) ----------
+  P({id:'cash1',type:'collector',name:'Cash Collector II',cost:90000,fi:1,x:2180,bank:true}),
+  P({id:'belt1',type:'conveyor', name:'Training Conveyor',cost:120000,fi:1,x:200,beltId:1,auto:false}),
+  P({id:'steel',type:'dropper',  name:'Steel Katana Drop',cost:160000,fi:1,x:330,kind:'steel',val:70,rate:1.0,beltId:1}),
+  P({id:'jade', type:'dropper',  name:'Jade Dropper',     cost:300000,fi:1,x:500,kind:'jade',val:140,rate:1.0,beltId:1}),
+  P({id:'forge',type:'smasher',  name:'Forge Smasher 3x', cost:560000,fi:1,x:680,mult:3,beltId:1}),
+  P({id:'goldsh',type:'dropper', name:'Gold Shuriken',    cost:1100000,fi:1,x:870,kind:'goldsh',val:320,rate:0.95,beltId:1}),
+  P({id:'chi',  type:'size',     name:'Chi Size-Ray',     cost:2400000,fi:1,x:1080,sizeAdd:1.6,beltId:1}),
+  P({id:'lant', type:'wall',     name:'Lantern Walls',    cost:4800000,fi:1,x:1300,wallFi:1,lantern:true}),
+  P({id:'katana',type:'gear',    name:'Katana (Sword)',   cost:9000000,fi:1,x:1540,gear:'sword'}),
+  P({id:'up2',  type:'build',    name:'Build Top Floor ▲',cost:18000000,fi:1,x:1920,buildFi:2}),
+
+  // ---------- FLOOR 3 : SHADOW TEMPLE (fi 2) ----------
+  P({id:'cash2',type:'collector',name:'Shadow Bank',      cost:30000000,fi:2,x:2180,bank:true}),
+  P({id:'belt2',type:'conveyor', name:'Shadow Conveyor',  cost:48000000,fi:2,x:200,beltId:2,auto:true}),
+  P({id:'obsid',type:'dropper',  name:'Obsidian Shuriken',cost:80000000,fi:2,x:360,kind:'obsidian',val:1400,rate:0.95,beltId:2}),
+  P({id:'scale',type:'dragon',   name:'Dragon-Scale Drop',cost:200000000,fi:2,x:560,kind:'dragonsc',val:4200,rate:0.9,beltId:2}),
+  P({id:'mega', type:'smasher',  name:'Mega Smasher 6x',  cost:520000000,fi:2,x:780,mult:6,beltId:2}),
+  P({id:'statue',type:'dropper', name:'Dragon Statue',    cost:1400000000,fi:2,x:1020,kind:'dragon',val:16000,rate:0.85,beltId:2,statue:true}),
+  P({id:'flag', type:'wall',     name:'Shadow Flag',      cost:4000000000,fi:2,x:1280,wallFi:2,flag:true}),
+  P({id:'dragon',type:'rebirth', name:'🐉 SUMMON THE DRAGON',cost:50000000000,fi:2,x:1700}),
+];
+}
+initParts();
+const PAD_COUNT=PARTS.length;
+
+// ===================== STATE =====================
+const G={cash:0, banked:0, drops:[], pops:[], part:null, buyT:0, builtFloor:0, raidT:20, raiding:false, won:false};
+function partById(id){return PARTS.find(p=>p.id===id);}
+function ownedGear(g){const p=PARTS.find(x=>x.gear===g);return p&&p.bought;}
+function floorUnlocked(fi){return G.builtFloor>=fi;}
+
+// per-belt config
+function beltOwned(id){const c=PARTS.find(p=>p.beltId===id&&p.type==='conveyor');return c&&c.bought;}
+function beltCollectorX(){return 2180;} // collectors sit at right edge each floor
+function beltStartX(){return 230;}
+function beltSpeed(belt){return belt&&belt.auto?260:160;}
+
+// ===================== PLAYER =====================
+const pl={x:300,y:0,vx:0,vy:0,fi:0,face:1,anim:0,onLadder:false};
+pl.y=floorBaseY(0);
+let camX=0,camY=0;
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+let target=null;
+cv.addEventListener('pointerdown',e=>{
+  if(G.won)return;
+  target={x:e.clientX+camX, y:e.clientY+camY};
+});
+
+// ladders connect floors at fixed x positions
+const LADX=2300; // a ladder column near the right used to climb
+function nearLadder(){ return Math.abs(pl.x-LADX)<60; }
+
+// ===================== HELPERS =====================
+function fmt(n){
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return Math.floor(n).toString();
+}
+let toastT=0;const toastEl=document.getElementById('toast');
+function toast(m){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.4;}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// ===================== SAVE / LOAD =====================
+const SKEY='ninjaDojoTycoon_v1';
+function save(){
+  try{
+    const o={cash:G.cash,banked:G.banked,builtFloor:G.builtFloor,won:G.won,
+      bought:PARTS.filter(p=>p.bought).map(p=>p.id)};
+    localStorage.setItem(SKEY,JSON.stringify(o));
+  }catch(e){}
+}
+function load(){
+  try{
+    const s=localStorage.getItem(SKEY);if(!s)return;
+    const o=JSON.parse(s);
+    G.cash=o.cash||0;G.banked=o.banked||0;G.builtFloor=o.builtFloor||0;G.won=!!o.won;
+    if(o.bought)for(const id of o.bought){const p=partById(id);if(p)p.bought=true;}
+  }catch(e){}
+}
+function resetGame(){
+  try{localStorage.removeItem(SKEY);}catch(e){}
+  G.cash=0;G.banked=0;G.builtFloor=0;G.raidT=20;G.raiding=false;G.won=false;
+  G.drops=[];G.pops=[];
+  initParts();
+  ensureFree();
+  pl.fi=0;pl.x=300;pl.y=floorBaseY(0);
+  document.getElementById('win').style.display='none';
+  toast('Dojo reset.');
+}
+function ensureFree(){for(const p of PARTS)if(p.free)p.bought=true;}
+
+load();ensureFree();
+document.getElementById('reset').onclick=()=>{if(confirm('Reset all dojo progress?'))resetGame();};
+document.getElementById('winReset').onclick=resetGame;
+
+// ===================== PURCHASE =====================
+function buyPart(p){
+  if(p.bought&&p.type!=='rebirth')return;
+  if(G.cash+G.banked<p.cost){toast('Need $'+fmt(p.cost));p.cool=.7;return;}
+  // spend banked first, then cash
+  let need=p.cost;
+  const fromBank=Math.min(G.banked,need);G.banked-=fromBank;need-=fromBank;
+  G.cash-=need;
+  if(p.type==='rebirth'){doSummon();return;}
+  p.bought=true;
+  if(p.type==='build'){G.builtFloor=Math.max(G.builtFloor,p.buildFi);toast('▲ Built Floor '+(p.buildFi+1)+'!');}
+  else toast('✓ Built: '+p.name);
+  save();
+}
+function doSummon(){
+  G.won=true;
+  // FX burst
+  for(let i=0;i<60;i++){
+    G.pops.push({x:1700+(Math.random()-0.5)*200,y:floorBaseY(2)-120,wy:floorBaseY(2)-120,
+      vx:(Math.random()-0.5)*300,vy:-200-Math.random()*200,life:2.5,t:'🔥',big:true});
+  }
+  toast('🐉 THE DRAGON IS SUMMONED!');
+  document.getElementById('win').style.display='flex';
+  save();
+}
+
+// ===================== UPDATE =====================
+let last=performance.now();
+let dragonFX=0;
+function update(dt){
+  if(G.won){updatePops(dt);return;}
+  // ---- input ----
+  let ax=0,ay=0;
+  if(keys['a']||keys['arrowleft'])ax-=1;
+  if(keys['d']||keys['arrowright'])ax+=1;
+  const climbUp=keys['w']||keys['arrowup'];
+  const climbDn=keys['s']||keys['arrowdown'];
+  if(ax||climbUp||climbDn)target=null;
+
+  // tap-to-move (only horizontal within floor + ladder climb if target on another floor band)
+  if(target){
+    const dx=target.x-pl.x;
+    if(Math.abs(dx)>8)ax=dx>0?1:-1; else target=null;
+    // if tapped well above current floor and near ladder, climb
+    const myBase=floorBaseYStack(pl.fi);
+    if(target.y<myBase-FLOORH*0.4 && nearLadder() && floorUnlocked(pl.fi+1)){ /* handled below */ }
+  }
+
+  // ---- ladder climbing ----
+  pl.onLadder=nearLadder();
+  const baseY=floorBaseYStack(pl.fi);
+  if(pl.onLadder){
+    if(climbUp && floorUnlocked(pl.fi+1) && pl.fi<NFLOOR-1){
+      pl.fi++;pl.x=LADX;pl.y=floorBaseYStack(pl.fi);toast('Climbed to Floor '+(pl.fi+1));
+    }else if(climbDn && pl.fi>0){
+      pl.fi--;pl.x=LADX;pl.y=floorBaseYStack(pl.fi);
+    }
+    // auto-climb via tap target above
+    if(target && target.y<baseY-FLOORH*0.45 && floorUnlocked(pl.fi+1) && pl.fi<NFLOOR-1){
+      pl.fi++;pl.x=LADX;pl.y=floorBaseYStack(pl.fi);target=null;
+    }else if(target && target.y>baseY+FLOORH*0.45 && pl.fi>0){
+      pl.fi--;pl.x=LADX;pl.y=floorBaseYStack(pl.fi);target=null;
+    }
+  }
+
+  // ---- horizontal move ----
+  const sp=(ownedGear('speed')?500:330);
+  pl.x+=ax*sp*dt;
+  if(ax)pl.face=ax>0?1:-1;
+  pl.anim+=Math.abs(ax)*dt*12;
+  pl.x=Math.max(70,Math.min(WLD+120,pl.x));
+  pl.y=floorBaseYStack(pl.fi);
+
+  // ---- camera (2D follow) ----
+  camX=Math.max(0,Math.min(Math.max(0,WLD+260-W),pl.x-W/2));
+  const targetCamY=pl.y-H*0.62;
+  camY=Math.max(0,Math.min(WORLDH-H>0?WORLDH-H:0,targetCamY));
+  if(WORLDH<H)camY=WORLDH-H; // small screens see bottom
+
+  // ---- buy pad detection ----
+  G.part=null;
+  for(const p of PARTS){
+    if(p.fi!==pl.fi)continue;
+    if(p.bought&&p.type!=='rebirth'&&p.type!=='collector')continue;
+    if(p.cool>0)p.cool-=dt;
+    const px=p.x, py=floorBaseYStack(p.fi)+8;
+    if(Math.abs(pl.x-px)<48 && Math.abs(pl.y-py)<60){
+      if(p.type==='collector'){
+        // banking happens by standing on collector
+        continue;
+      }
+      G.part=p;G.buyT+=dt;
+      if(G.buyT>0.4){G.buyT=0;buyPart(p);}
+    }
+  }
+  if(!G.part)G.buyT=0;
+
+  // ---- banking: walk onto any owned cash collector on this floor ----
+  for(const p of PARTS){
+    if(p.type!=='collector'||!p.bought)continue;
+    if(p.fi!==pl.fi)continue;
+    if(Math.abs(pl.x-p.x)<54){
+      if(G.cash>0){
+        G.banked+=G.cash;
+        G.pops.push({x:p.x,y:floorBaseYStack(p.fi)-70,wy:floorBaseYStack(p.fi)-70,vx:0,vy:-50,life:1.1,t:'BANKED +$'+fmt(G.cash)});
+        G.cash=0;save();
+      }
+    }
+  }
+
+  // ---- droppers ----
+  for(const p of PARTS){
+    if(p.type!=='dropper'&&p.type!=='dragon')continue;
+    if(!p.bought)continue;
+    const belt=PARTS.find(b=>b.beltId===p.beltId&&b.type==='conveyor');
+    if(!belt||!belt.bought)continue;
+    p.t-=dt;
+    if(p.t<=0){p.t=p.rate;
+      const by=beltYStack(p.fi);
+      G.drops.push({x:Math.max(p.x,beltStartX()),y:by-44,wy:by-44,vy:0,onbelt:false,
+        value:p.val, kind:p.kind, size:13+Math.random()*4, spin:Math.random()*6,
+        beltId:p.beltId, fi:p.fi, boost:0, bob:Math.random()*6});
+    }
+  }
+
+  // ---- size ray applies to drops crossing it ----
+  // ---- move drops along their belt ----
+  for(let i=G.drops.length-1;i>=0;i--){
+    const r=G.drops[i];
+    const belt=PARTS.find(b=>b.beltId===r.beltId&&b.type==='conveyor');
+    const by=beltYStack(r.fi);
+    if(!r.onbelt){r.vy+=1100*dt;r.y+=r.vy*dt;if(r.y>=by-2){r.y=by-2;r.onbelt=true;}}
+    else{
+      const px=r.x;r.x+=beltSpeed(belt)*dt;r.spin+=dt*3;r.bob+=dt*5;
+      // smashers
+      for(const u of PARTS){
+        if(u.type==='smasher'&&u.bought&&u.beltId===r.beltId&&px<u.x&&r.x>=u.x){r.value*=u.mult;r.boost=.4;}
+      }
+      // size ray
+      for(const u of PARTS){
+        if(u.type==='size'&&u.bought&&u.beltId===r.beltId&&px<u.x&&r.x>=u.x){r.size*=u.sizeAdd;r.value*=1.5;r.boost=.4;}
+      }
+      if(r.boost>0)r.boost-=dt;
+      if(r.x>=beltCollectorX()){
+        G.cash+=r.value;
+        G.pops.push({x:beltCollectorX(),y:by-30,wy:by-30,vx:0,vy:-45,life:1,t:'+$'+fmt(r.value)});
+        G.drops.splice(i,1);
+      }
+    }
+  }
+  if(G.drops.length>700)G.drops.splice(0,G.drops.length-700);
+
+  // ---- RAID system: rival ninjas steal un-banked cash every 20s ----
+  G.raidT-=dt;
+  const raidEl=document.getElementById('raid');
+  if(G.raidT<=5 && G.raidT>0 && !G.raiding){
+    raidEl.style.display='block';
+    raidEl.textContent='⚠ RAID IN '+Math.ceil(G.raidT)+'s — BANK YOUR CASH!';
+  }
+  if(G.raidT<=0){
+    G.raiding=true;
+    const steal=Math.floor(G.cash*0.30);
+    if(steal>0){
+      G.cash-=steal;
+      ninjaRaid(steal);
+      toast('🥷 Rival ninjas stole $'+fmt(steal)+'!');
+    }
+    G.raidT=20;G.raiding=false;
+    raidEl.style.display='none';
+  }
+  if(G.raidT>5)raidEl.style.display='none';
+
+  updatePops(dt);
+  for(let i=raiders.length-1;i>=0;i--){const n=raiders[i];n.x+=n.vx*dt;n.life-=dt;if(n.life<=0)raiders.splice(i,1);}
+  if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
+  dragonFX+=dt;
+}
+function updatePops(dt){
+  for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];
+    q.y+=q.vy*dt;if(q.vx)q.x+=q.vx*dt;q.vy*=0.96;q.vy+=q.big?260*dt:0;q.life-=dt;
+    if(q.life<=0)G.pops.splice(i,1);}
+}
+let raiders=[];
+function ninjaRaid(amt){
+  const fi=pl.fi, base=floorBaseYStack(fi);
+  for(let i=0;i<5;i++){
+    raiders.push({x:beltCollectorX()+200,y:base+8-Math.random()*20,vx:-260-Math.random()*120,life:1.4,fi:fi});
+  }
+}
+
+// ===================== STACK-Y HELPERS (world coords) =====================
+function floorBaseYStack(fi){return floorBaseY(fi);}      // feet line
+function beltYStack(fi){return floorBaseY(fi)-160;}        // belt height above floor
+
+// ===================== DRAW =====================
+let T=0;
+let petals=[];
+function initPetals(){petals=[];for(let i=0;i<70;i++)petals.push({
+  x:Math.random()*WLD,y:Math.random()*WORLDH,vx:-14-Math.random()*22,vy:18+Math.random()*26,
+  r:3+Math.random()*4,rot:Math.random()*6,vr:(Math.random()-0.5)*3,sw:Math.random()*6});}
+initPetals();
+
+function drawBg(){
+  // overall dim background
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#170f1c');g.addColorStop(1,'#0c0a12');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+}
+
+const FLOOR_THEME=[
+  {name:'DOJO',           wallA:'#3a2418',wallB:'#23150d',floorA:'#5a3a22',floorB:'#3a2414',accent:'#c98b4a'},
+  {name:'TRAINING HALL',  wallA:'#2c2240',wallB:'#1a1428',floorA:'#4a3a5e',floorB:'#2c2440',accent:'#b48ad8'},
+  {name:'SHADOW TEMPLE',  wallA:'#3a1620',wallB:'#1c0c12',floorA:'#4a1c26',floorB:'#280e16',accent:'#ff5a6a'},
+];
+
+function drawFloor(fi){
+  const unlocked=floorUnlocked(fi);
+  const base=floorBaseY(fi)-camY;        // feet line on screen
+  const ceil=floorCeil(fi)-camY;         // ceiling on screen
+  const th=FLOOR_THEME[fi];
+  if(base<-50||ceil>H+50)return;
+  // back wall
+  const wg=ctx.createLinearGradient(0,ceil,0,base);
+  if(unlocked){wg.addColorStop(0,th.wallA);wg.addColorStop(1,th.wallB);}
+  else{wg.addColorStop(0,'#15121a');wg.addColorStop(1,'#0e0c14');}
+  ctx.fillStyle=wg;ctx.fillRect(0,ceil,W,base-ceil);
+
+  if(unlocked){
+    // wood plank wall lines
+    ctx.strokeStyle='rgba(0,0,0,.22)';ctx.lineWidth=2;
+    const ps=46,ox=-(camX*0.6%ps);
+    for(let x=ox;x<W;x+=ps){ctx.beginPath();ctx.moveTo(x,ceil);ctx.lineTo(x,base);ctx.stroke();}
+    // paper panel band
+    ctx.fillStyle='rgba(255,240,210,0.05)';
+    ctx.fillRect(0,ceil+24,W,(base-ceil)*0.4);
+    // floor planks
+    const fg=ctx.createLinearGradient(0,base,0,base+90);
+    fg.addColorStop(0,th.floorA);fg.addColorStop(1,th.floorB);
+    ctx.fillStyle=fg;ctx.fillRect(0,base,W,90);
+    ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=2;
+    const gs=80,oy=-(camX%gs);
+    for(let x=oy;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,base);ctx.lineTo(x,base+90);ctx.stroke();}
+    ctx.beginPath();ctx.moveTo(0,base+44);ctx.lineTo(W,base+44);ctx.stroke();
+    // accent trim
+    ctx.fillStyle=th.accent;ctx.fillRect(0,base-5,W,5);
+    // floor label banner on the wall
+    ctx.fillStyle='rgba(0,0,0,.35)';roundRect(20,ceil+14,150,28,6);ctx.fill();
+    ctx.fillStyle=th.accent;ctx.font='bold 13px Segoe UI';ctx.textAlign='left';
+    ctx.fillText('FLOOR '+(fi+1)+' · '+th.name,30,ceil+33);
+  }else{
+    // not built yet — show ghost / construction
+    ctx.fillStyle='rgba(255,255,255,.04)';ctx.fillRect(0,base,W,90);
+    ctx.fillStyle='#5a4a5a';ctx.font='bold 16px Segoe UI';ctx.textAlign='center';
+    ctx.fillText('▲ FLOOR '+(fi+1)+' NOT BUILT — buy "Build" pad below',W/2,(ceil+base)/2);
+  }
+}
+
+function drawLantern(x,y,col){
+  ctx.save();ctx.shadowColor=col;ctx.shadowBlur=16;
+  ctx.fillStyle=col;roundRect(x-12,y,24,30,8);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(0,0,0,.4)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(x-12,y+10);ctx.lineTo(x+12,y+10);
+  ctx.moveTo(x-12,y+20);ctx.lineTo(x+12,y+20);ctx.stroke();
+  ctx.fillStyle='#2a1a10';ctx.fillRect(x-4,y-8,8,8);
+  ctx.strokeStyle='#3a2a1a';ctx.beginPath();ctx.moveTo(x,y-30);ctx.lineTo(x,y-8);ctx.stroke();
+}
+
+function drawBelt(fi){
+  const belt=PARTS.find(b=>b.fi===fi&&b.type==='conveyor');
+  if(!belt||!belt.bought)return;
+  const by=beltYStack(fi)-camY, x0=beltStartX()-camX, x1=beltCollectorX()-camX;
+  // supports
+  ctx.fillStyle='rgba(0,0,0,.4)';
+  for(let x=x0;x<x1;x+=160){ctx.fillRect(x,by+22,10,floorBaseY(fi)-camY-(by)-22);}
+  const fast=belt.auto;
+  const g=ctx.createLinearGradient(0,by,0,by+24);
+  g.addColorStop(0,fast?'#4a3a2a':'#3a3a3f');g.addColorStop(1,'#15110d');
+  ctx.fillStyle=g;roundRect(x0-14,by,x1-x0+28,24,12);ctx.fill();
+  ctx.save();roundRect(x0-14,by,x1-x0+28,24,12);ctx.clip();
+  ctx.strokeStyle=fast?'#a07a4a':'#4a4a52';ctx.lineWidth=3;
+  const off=(T*(fast?150:90))%22;
+  for(let x=x0-30;x<x1+30;x+=22){ctx.beginPath();ctx.moveTo(x+off,by);ctx.lineTo(x+off-13,by+24);ctx.stroke();}
+  ctx.restore();
+  for(const rx of [x0-14,x1+14]){const rg=ctx.createRadialGradient(rx-3,by+9,2,rx,by+12,14);
+    rg.addColorStop(0,'#6a5a4a');rg.addColorStop(1,'#241c14');ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(rx,by+12,13,0,7);ctx.fill();}
+}
+
+function drawDropper(p){
+  const x=p.x-camX, by=beltYStack(p.fi)-camY;
+  if(x<-90||x>W+90)return;
+  const t=TIER[p.kind],top=by-122;
+  if(p.statue){drawDragonStatue(x,by);return;}
+  if(t.glow){ctx.save();ctx.shadowColor=t.glow;ctx.shadowBlur=16;}
+  // roof funnel (pagoda-ish)
+  ctx.fillStyle=t.b;ctx.beginPath();
+  ctx.moveTo(x-34,top);ctx.lineTo(x+34,top);ctx.lineTo(x+22,top-18);ctx.lineTo(x-22,top-18);ctx.closePath();ctx.fill();
+  ctx.fillStyle=t.a;ctx.fillRect(x-40,top-2,80,5);
+  // body
+  const bg=ctx.createLinearGradient(0,top,0,top+58);bg.addColorStop(0,t.a);bg.addColorStop(1,t.b);
+  ctx.fillStyle=bg;roundRect(x-30,top,60,58,8);ctx.fill();
+  if(t.glow)ctx.restore();
+  ctx.fillStyle='rgba(0,0,0,.35)';roundRect(x-25,top+9,50,18,4);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(p.name.toUpperCase().slice(0,12),x,top+22);
+  // chute + legs
+  ctx.fillStyle='#1a120c';ctx.fillRect(x-8,by-42,16,12);
+  ctx.strokeStyle=t.b;ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x-22,top+58);ctx.lineTo(x-22,by-2);ctx.moveTo(x+22,top+58);ctx.lineTo(x+22,by-2);ctx.stroke();
+}
+
+function drawDragonStatue(x,by){
+  const top=by-150;
+  ctx.save();ctx.shadowColor='#ff8a3c';ctx.shadowBlur=22+Math.sin(T*3)*8;
+  // pedestal
+  ctx.fillStyle='#3a1c10';roundRect(x-40,by-30,80,30,6);ctx.fill();
+  // dragon body (coiled)
+  const g=ctx.createLinearGradient(0,top,0,by);g.addColorStop(0,'#ffd24d');g.addColorStop(1,'#c7401e');
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.arc(x,top+70,40,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(x+10,top+30,26,0,7);ctx.fill();
+  // head
+  ctx.fillStyle='#ffe07a';ctx.beginPath();ctx.moveTo(x-4,top);ctx.lineTo(x+34,top+14);ctx.lineTo(x+6,top+30);ctx.closePath();ctx.fill();
+  // eye
+  ctx.fillStyle='#1a0a08';ctx.beginPath();ctx.arc(x+12,top+12,3,0,7);ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#ffd24d';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('DRAGON STATUE',x,by-4);
+}
+
+function drawSmasher(p){
+  const x=p.x-camX, by=beltYStack(p.fi)-camY;
+  if(x<-90||x>W+90)return;
+  const on=p.bought,h=124,top=by-h;
+  const col=on?(p.mult>=6?'#a03a4a':p.mult>=3?'#a05a2a':'#7a4a22'):'#3a3242';
+  ctx.fillStyle=col;
+  roundRect(x-38,top,12,h,4);ctx.fill();roundRect(x+26,top,12,h,4);ctx.fill();
+  roundRect(x-38,top,76,18,5);ctx.fill();
+  // hammer head
+  ctx.fillStyle=on?'#c8c0b8':'#5a5258';
+  const hy=top+18+(on?Math.abs(Math.sin(T*5))*8:0);
+  roundRect(x-20,hy,40,18,4);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText('×'+p.mult,x,top+13);
+  if(on){ctx.fillStyle=p.mult>=6?'rgba(255,90,110,.18)':'rgba(255,160,90,.16)';ctx.fillRect(x-24,top+18,48,h-18);}
+}
+
+function drawSizeRay(p){
+  const x=p.x-camX, by=beltYStack(p.fi)-camY;
+  if(x<-90||x>W+90)return;
+  const on=p.bought,h=120,top=by-h;
+  ctx.fillStyle=on?'#2c8a6a':'#3a3242';
+  roundRect(x-34,top,12,h,4);ctx.fill();roundRect(x+22,top,12,h,4);ctx.fill();
+  roundRect(x-34,top,68,16,5);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('CHI',x,top+12);
+  if(on){ctx.save();ctx.shadowColor='#5be0ff';ctx.shadowBlur=14;
+    ctx.fillStyle='rgba(90,224,255,.22)';ctx.fillRect(x-22,top+16,44,h-16);ctx.restore();}
+}
+
+function drawCollector(p){
+  const x=p.x-camX, by=beltYStack(p.fi)-camY;
+  if(x<-90||x>W+90)return;
+  const owned=p.bought;
+  const g=ctx.createLinearGradient(0,by-72,0,by+10);
+  g.addColorStop(0,owned?'#2a5a3a':'#3a2c2c');g.addColorStop(1,'#13130d');
+  ctx.fillStyle=g;roundRect(x-8,by-72,80,82,10);ctx.fill();
+  ctx.fillStyle='#0e1010';roundRect(x,by-64,62,32,6);ctx.fill();
+  if(owned){ctx.save();ctx.shadowColor='#ffd25c';ctx.shadowBlur=14;}
+  ctx.fillStyle='#ffd25c';ctx.font='bold 22px Segoe UI';ctx.textAlign='center';ctx.fillText('💰',x+31,by-42);
+  if(owned)ctx.restore();
+  ctx.fillStyle='#c89b6e';ctx.font='bold 9px Segoe UI';ctx.fillText(owned?'BANK HERE':'CASH',x+31,by-16);
+  ctx.fillStyle='#0a0a06';ctx.fillRect(x-8,by-2,18,12);
+}
+
+function drawWall(p){
+  const x=p.x-camX, by=floorBaseY(p.fi)-camY, ceil=floorCeil(p.fi)-camY;
+  if(x<-120||x>W+120)return;
+  if(p.flag){
+    // tall shadow flag
+    ctx.fillStyle='#3a2a1a';ctx.fillRect(x-3,ceil+30,6,by-ceil-30);
+    ctx.save();ctx.shadowColor='#ff3a4a';ctx.shadowBlur=12;
+    ctx.fillStyle='#c01828';
+    const f=Math.sin(T*3)*6;
+    ctx.beginPath();ctx.moveTo(x+3,ceil+34);ctx.lineTo(x+70,ceil+40+f);ctx.lineTo(x+70,ceil+78+f);ctx.lineTo(x+3,ceil+84);ctx.closePath();ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='#ffd25c';ctx.font='bold 20px Segoe UI';ctx.textAlign='center';ctx.fillText('忍',x+38,ceil+66+f);
+    return;
+  }
+  if(p.lantern){
+    for(let i=0;i<3;i++)drawLantern(x-50+i*50, ceil+50, ['#ff8a3c','#ffce5c','#ff5a6a'][i]);
+    return;
+  }
+  // paper walls (shoji)
+  ctx.fillStyle='rgba(245,238,220,0.16)';
+  for(let i=0;i<3;i++){
+    const wx=x-66+i*46;
+    ctx.fillRect(wx,ceil+30,40,by-ceil-50);
+    ctx.strokeStyle='rgba(60,40,20,.6)';ctx.lineWidth=3;ctx.strokeRect(wx,ceil+30,40,by-ceil-50);
+    ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(wx+20,ceil+30);ctx.lineTo(wx+20,by-20);
+    ctx.moveTo(wx,(ceil+by)/2);ctx.lineTo(wx+40,(ceil+by)/2);ctx.stroke();
+  }
+}
+
+function drawDrop(r){
+  const x=r.x-camX, y=r.y-camY;if(x<-40||x>W+40||y<-40||y>H+40)return;
+  const t=TIER[r.kind], s=r.size*(r.boost>0?1.3:1);
+  const yy=y-(r.onbelt?Math.abs(Math.sin(r.bob))*2:0);
+  ctx.save();ctx.translate(x,yy);ctx.rotate(r.spin);
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=10;}
+  const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.a);g.addColorStop(1,t.b);ctx.fillStyle=g;
+  if(t.shape==='star'){ // shuriken
+    ctx.beginPath();
+    for(let i=0;i<4;i++){const a=i*Math.PI/2;
+      ctx.lineTo(Math.cos(a)*s,Math.sin(a)*s);
+      ctx.lineTo(Math.cos(a+0.785)*s*0.4,Math.sin(a+0.785)*s*0.4);}
+    ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.arc(0,0,s*0.18,0,7);ctx.fill();
+  }else if(t.shape==='blade'){ // katana blade chunk
+    ctx.beginPath();ctx.moveTo(-s,s*0.4);ctx.lineTo(s,-s*0.4);ctx.lineTo(s*0.8,-s*0.7);ctx.lineTo(-s*1.1,s*0.1);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.stroke();
+  }else{ // box / ingot
+    roundRect(-s*.7,-s*.6,s*1.4,s*1.2,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.2)';ctx.fillRect(-s*.7,-s*.6,s*1.4,3);
+    ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(-s*.7,s*.4,s*1.4,2);
+  }
+  ctx.restore();
+}
+
+function drawLadder(){
+  for(let fi=0;fi<NFLOOR-1;fi++){
+    if(!floorUnlocked(fi+1))continue;
+    const x=LADX-camX;
+    const yTop=floorBaseY(fi+1)-camY;
+    const yBot=floorBaseY(fi)-camY;
+    if(x<-60||x>W+60)continue;
+    ctx.strokeStyle='#7a5a2a';ctx.lineWidth=6;
+    ctx.beginPath();ctx.moveTo(x-12,yTop);ctx.lineTo(x-12,yBot);
+    ctx.moveTo(x+12,yTop);ctx.lineTo(x+12,yBot);ctx.stroke();
+    ctx.lineWidth=5;ctx.strokeStyle='#9a7a3a';
+    for(let yy=yBot-14;yy>yTop;yy-=26){ctx.beginPath();ctx.moveTo(x-12,yy);ctx.lineTo(x+12,yy);ctx.stroke();}
+  }
+}
+
+function drawPad(p){
+  if(p.bought&&p.type!=='rebirth')return;
+  const x=p.x-camX, base=floorBaseY(p.fi)-camY, y=base+8;
+  if(x<-110||x>W+110)return;
+  if(p.fi>0 && !floorUnlocked(p.fi))return; // hide pads on unbuilt floors
+  const can=G.cash+G.banked>=p.cost;
+  const here=G.part===p;
+  const isDragon=p.type==='rebirth';
+  // pad
+  ctx.save();
+  let col=p.cool>0?'#a03030':(can?(isDragon?'#ff5a3c':'#2ecf63'):'#7a4a3a');
+  if(isDragon){col=can?'#ff5a3c':'#7a3a2a';ctx.shadowColor='#ff5a3c';ctx.shadowBlur=18+Math.sin(T*4)*8;}
+  else if(here){ctx.shadowColor=can?'#5cf09a':'#ff6b6b';ctx.shadowBlur=22;}
+  ctx.fillStyle=col;roundRect(x-44,y-12,88,40,10);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=2;roundRect(x-44,y-12,88,40,10);ctx.stroke();
+  // buy fill ring
+  if(here&&can){ctx.strokeStyle='#fff';ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(x,y+8,28,-Math.PI/2,-Math.PI/2+Math.PI*2*(G.buyT/0.4));ctx.stroke();}
+  // floating sign
+  const sy=base-118+Math.sin(T*2+p.x)*3;
+  const w=isDragon?180:140;
+  ctx.fillStyle='#160e16ee';roundRect(x-w/2,sy-20,w,42,8);ctx.fill();
+  ctx.strokeStyle=isDragon?'#ff5a3c':'#3a2a32';ctx.lineWidth=isDragon?2.5:1.5;roundRect(x-w/2,sy-20,w,42,8);ctx.stroke();
+  ctx.fillStyle=isDragon?'#ffd25c':'#f2e9dd';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText(p.name,x,sy-3);
+  ctx.fillStyle=can?'#ffd25c':'#ff8a8a';ctx.font='bold 12px Segoe UI';
+  ctx.fillText(p.free?'FREE':'$'+fmt(p.cost),x,sy+15);
+  // post
+  ctx.fillStyle='#2a1c20';ctx.fillRect(x-3,sy+22,6,(y-12)-(sy+22));
+}
+
+function drawPlayer(){
+  const x=pl.x-camX, y=pl.y-camY;
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(x,y+20,18,7,0,0,7);ctx.fill();
+  const sw=Math.sin(pl.anim)*4;
+  // legs
+  ctx.fillStyle='#1a1620';
+  ctx.fillRect(x-9,y+6+sw,7,16);ctx.fillRect(x+2,y+6-sw,7,16);
+  // torso (ninja gi - dark)
+  const bg=ctx.createLinearGradient(0,y-14,0,y+8);bg.addColorStop(0,'#2a2636');bg.addColorStop(1,'#15121c');
+  ctx.fillStyle=bg;roundRect(x-13,y-14,26,22,4);ctx.fill();
+  // belt sash
+  ctx.fillStyle='#c0392b';ctx.fillRect(x-13,y-2,26,5);
+  // arms
+  ctx.fillStyle='#1a1620';
+  ctx.fillRect(x-18,y-12+sw,6,16);ctx.fillRect(x+12,y-12-sw,6,16);
+  // hands
+  ctx.fillStyle='#e8c79a';ctx.fillRect(x-18,y+2+sw,6,5);ctx.fillRect(x+12,y+2-sw,6,5);
+  // head wrap
+  ctx.fillStyle='#1a1620';roundRect(x-11,y-34,22,20,5);ctx.fill();
+  // eye band (skin)
+  ctx.fillStyle='#e8c79a';ctx.fillRect(x-11,y-28,22,7);
+  // eyes
+  ctx.fillStyle='#1a1a1a';
+  ctx.fillRect(x-6+pl.face*3,y-27,3,4);ctx.fillRect(x+3+pl.face*3,y-27,3,4);
+  // headband tails
+  ctx.fillStyle='#c0392b';
+  ctx.fillRect(x-11,y-31,22,3);
+  ctx.fillRect(x-15-pl.face*2,y-30,5,9);
+  // katana on back if owned
+  if(ownedGear('sword')){
+    ctx.save();ctx.translate(x,y-8);ctx.rotate(-0.7*pl.face);
+    ctx.fillStyle='#caa';ctx.fillRect(-2,-26,4,30);
+    ctx.fillStyle='#dfe6ee';ctx.fillRect(-2,-26,4,22);
+    ctx.fillStyle='#8a5a2a';ctx.fillRect(-3,2,6,8);
+    ctx.restore();
+  }
+  // speed coil aura
+  if(ownedGear('speed')){ctx.strokeStyle='rgba(120,200,255,.5)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(x,y-4,22,0,7);ctx.stroke();}
+}
+
+function drawRaiders(){
+  for(const n of raiders){
+    const x=n.x-camX,y=floorBaseY(n.fi)-camY+(n.y-floorBaseY(n.fi));
+    ctx.globalAlpha=Math.min(1,n.life);
+    ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x,y+18,14,5,0,0,7);ctx.fill();
+    ctx.fillStyle='#3a1a26';roundRect(x-10,y-12,20,22,4);ctx.fill();
+    ctx.fillStyle='#15121c';roundRect(x-9,y-30,18,18,4);ctx.fill();
+    ctx.fillStyle='#ff5a6a';ctx.fillRect(x-9,y-25,18,5);
+    ctx.fillStyle='#ffd25c';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x,y+2);
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawPetals(){
+  for(const p of petals){
+    const x=p.x-camX*0.7, y=p.y-camY*0.7;
+    let sx=((x%(WLD))+WLD)%WLD; // wrap with parallax
+    if(sx<-20||sx>W+20)continue;
+    ctx.save();ctx.translate(sx,((y%WORLDH)+WORLDH)%WORLDH - (camY*0.3%WORLDH));
+    // simpler: just draw at screen-ish position
+    ctx.restore();
+  }
+}
+
+function draw(){
+  drawBg();
+  // floors back to front: draw top floor first (further) then down
+  for(let fi=NFLOOR-1;fi>=0;fi--){
+    drawFloor(fi);
+  }
+  drawLadder();
+  // belts + machines per unlocked floor
+  for(let fi=0;fi<NFLOOR;fi++){
+    if(!floorUnlocked(fi))continue;
+    drawBelt(fi);
+    for(const p of PARTS){if(p.fi!==fi)continue;
+      if(p.type==='smasher')drawSmasher(p);
+      else if(p.type==='size')drawSizeRay(p);
+    }
+  }
+  // drops
+  for(const r of G.drops)drawDrop(r);
+  // droppers, walls, collectors (owned)
+  for(let fi=0;fi<NFLOOR;fi++){
+    if(!floorUnlocked(fi))continue;
+    for(const p of PARTS){if(p.fi!==fi)continue;
+      if((p.type==='dropper'||p.type==='dragon')&&p.bought)drawDropper(p);
+      else if(p.type==='wall'&&p.bought)drawWall(p);
+      else if(p.type==='collector')drawCollector(p);
+    }
+  }
+  // sakura petals (screen-space falling)
+  drawSakura();
+  // pads
+  for(const p of PARTS)drawPad(p);
+  drawRaiders();
+  drawPlayer();
+  // pops
+  for(const q of G.pops){const x=q.x-camX,y=q.y-camY;ctx.globalAlpha=Math.max(0,Math.min(1,q.life));
+    ctx.fillStyle=q.t.indexOf('BANK')>=0?'#7ee0ff':(q.big?'#ff8a3c':'#ffd25c');
+    ctx.font='bold '+(q.big?22:14)+'px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
+}
+
+// simple screen-space sakura
+let sakura=[];
+function initSakura(){sakura=[];for(let i=0;i<60;i++)sakura.push({
+  x:Math.random()*innerWidth,y:Math.random()*innerHeight,
+  vx:-12-Math.random()*20,vy:20+Math.random()*30,r:3+Math.random()*4,
+  rot:Math.random()*6,vr:(Math.random()-0.5)*3,sw:Math.random()*6});}
+initSakura();
+function drawSakura(){
+  for(const p of sakura){
+    p.x+=p.vx*0.016;p.y+=p.vy*0.016;p.rot+=p.vr*0.016;p.sw+=0.05;
+    p.x+=Math.sin(p.sw)*0.4;
+    if(p.y>H+10){p.y=-10;p.x=Math.random()*W+50;}
+    if(p.x<-10){p.x=W+10;}
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+    ctx.fillStyle='rgba(255,180,205,0.85)';
+    ctx.beginPath();ctx.ellipse(0,0,p.r,p.r*0.55,0,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,210,225,0.6)';
+    ctx.beginPath();ctx.ellipse(p.r*0.5,0,p.r*0.5,p.r*0.4,0,0,7);ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ===================== LOOP =====================
+let saveT=0;
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();
+  document.getElementById('money').textContent='$'+fmt(G.cash);
+  const owned=PARTS.filter(p=>p.bought&&p.type!=='rebirth'&&!p.free).length;
+  document.getElementById('sub').textContent=owned+' machines built · Floor '+(pl.fi+1);
+  document.getElementById('banked').textContent='🏦 Banked: $'+fmt(G.banked);
+  document.getElementById('floorLbl').textContent=FLOOR_THEME[pl.fi].name;
+  saveT+=dt;if(saveT>5){saveT=0;save();}
+  requestAnimationFrame(loop);
+}
+addEventListener('resize',()=>{initSakura();});
+requestAnimationFrame(loop);
+addEventListener('beforeunload',save);
+</script>
+</body>
+</html>

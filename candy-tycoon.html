@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Candy Land Tycoon</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;background:#2a1640;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%;touch-action:none}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none}
+  #money{font-size:32px;font-weight:900;color:#fff8b8;
+         text-shadow:0 0 16px rgba(255,180,80,.7),0 3px 0 #d65a9a,0 3px 6px #000}
+  #banked{font-size:14px;font-weight:800;color:#9cf5d0;text-shadow:0 1px 4px #000;margin-top:3px}
+  #sub{font-size:12px;font-weight:700;color:#ffd1ec;margin-top:2px}
+  #rb{font-size:14px;font-weight:900;color:#ffe27a;text-shadow:0 1px 4px #000;text-align:right}
+  #warn{font-size:14px;font-weight:900;color:#ff7d7d;text-shadow:0 1px 5px #000;text-align:right;margin-top:4px;min-height:18px}
+  #back{position:absolute;top:14px;left:50%;transform:translateX(-50%);color:#e3a8ff;font-size:12px;
+        font-weight:800;text-decoration:none;pointer-events:auto;letter-spacing:.5px;text-shadow:0 1px 3px #000}
+  #back:hover{color:#fff}
+  #help{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);color:#e7b7ff;font-size:12px;
+        font-weight:700;text-align:center;pointer-events:none;text-shadow:0 1px 3px #000;max-width:96%}
+  #reset{position:absolute;bottom:10px;right:12px;pointer-events:auto;background:#ffffff22;border:1px solid #ffffff40;
+        color:#ffd1ec;font-size:11px;font-weight:800;border-radius:8px;padding:6px 10px;cursor:pointer}
+  #reset:hover{background:#ffffff33}
+  #toast{position:absolute;left:50%;bottom:54px;transform:translateX(-50%) translateY(10px);
+         background:linear-gradient(180deg,#ff8fcf,#d65a9a);border:2px solid #fff8b8;border-radius:14px;
+         padding:10px 20px;font-weight:900;color:#fff;opacity:0;transition:.3s;pointer-events:none;
+         text-align:center;max-width:90%;box-shadow:0 8px 26px #0008,0 0 18px #ff8fcf80}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #flash{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle,#fff,#ff8fcf 60%,transparent);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="flash"></div>
+  <div id="hud">
+    <div><div id="money">$0</div><div id="banked">Banked: $0</div><div id="sub"></div></div>
+    <div><div id="rb"></div><div id="warn"></div></div>
+  </div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <button id="reset">Reset</button>
+  <div id="toast"></div>
+  <div id="help">WASD / Arrows or tap to move &nbsp;•&nbsp; step on a pad to BUY &nbsp;•&nbsp; bank cash at the COLLECTOR before robbers!</div>
+</div>
+<script>
+"use strict";
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ---------- World layout ----------
+const WLD=2600;              // world width (scrolls horizontally)
+const FLOORS=3;
+const FLOOR_H=560;          // vertical span per floor
+// Floor 0 is bottom (Candy shop), floor 2 is top (Rainbow palace).
+// World Y grows downward; floor i occupies a vertical band.
+function floorBaseY(i){ return (FLOORS-1-i)*FLOOR_H; }   // top edge (world Y) of floor band
+function beltY(i){ return floorBaseY(i)+200; }            // conveyor height in that floor
+function groundY(i){ return floorBaseY(i)+FLOOR_H-60; }   // player walking ground line
+
+const beltStartX=300;
+const collectorX=WLD-210;
+
+// ---------- Candy tiers ----------
+const TIER={
+  gumball:{a:'#ff9ec7',b:'#e0438c',hi:'#ffd9ec',shape:'ball'},
+  jelly:  {a:'#9be86b',b:'#4fae34',hi:'#e6ffcf',shape:'bean'},
+  lolli:  {a:'#ff6f91',b:'#ff3d6e',hi:'#ffd0db',shape:'lolli'},
+  choc:   {a:'#a9744a',b:'#6b3d22',hi:'#d8a878',shape:'block'},
+  caramel:{a:'#f3b85c',b:'#c2812a',hi:'#ffe6b0',shape:'block'},
+  fudge:  {a:'#7c4a2d',b:'#4a2916',hi:'#b07a52',shape:'block'},
+  goldchoc:{a:'#ffe27a',b:'#caa01e',hi:'#fffbe0',shape:'block',glow:'#ffe27a'},
+  rainbow:{a:'#ff8fcf',b:'#7ad0ff',hi:'#fff',shape:'rainbow',glow:'#ffffff'},
+  cosmic: {a:'#b388ff',b:'#5e3ac7',hi:'#e6d6ff',shape:'ball',glow:'#c0a0ff'},
+  giant:  {a:'#ff5fa2',b:'#a01e6e',hi:'#ffd0e6',shape:'lolli',glow:'#ff8fcf'},
+};
+
+// ---------- Parts ----------
+function P(o){return Object.assign({bought:false,cool:0,t:0},o);}
+let PARTS=[];
+function initParts(){
+PARTS=[
+  // ---- FLOOR 1: Candy Shop ----
+  P({id:'f1_d1',fl:0,type:'dropper',name:'Gumball Dropper',cost:0,slot:380,kind:'gumball',val:1,rate:1.1,free:true}),
+  P({id:'f1_d2',fl:0,type:'dropper',name:'Jelly-Bean Dropper',cost:60,slot:560,kind:'jelly',val:3,rate:1.05}),
+  P({id:'f1_sm',fl:0,type:'upgrader',name:'Candy-Press',cost:240,slot:740,mult:2,tag:'SMASH'}),
+  P({id:'f1_d3',fl:0,type:'dropper',name:'Lollipop Dropper',cost:600,slot:920,kind:'lolli',val:8,rate:1.0}),
+  P({id:'f1_d4',fl:0,type:'dropper',name:'Chocolate Dropper',cost:1500,slot:1100,kind:'choc',val:18,rate:0.95}),
+  P({id:'f1_wall',fl:0,type:'deco',name:'Candy Walls',cost:3200,slot:1280,deco:'walls'}),
+  P({id:'f1_speed',fl:0,type:'gear',name:'Speed Coil',cost:5000,slot:1460,gear:'speed'}),
+  P({id:'f1_jump',fl:0,type:'gear',name:'Jump Coil',cost:8000,slot:1640,gear:'jump'}),
+  P({id:'f1_col',fl:0,type:'collector',name:'Cash Collector',cost:0,slot:collectorX,free:true,owned2:true}),
+
+  // ---- FLOOR 2: Chocolate Factory ----
+  P({id:'f2_build',fl:1,type:'build',name:'Build 2nd Floor',cost:12000,slot:340}),
+  P({id:'f2_stairs',fl:1,type:'stairs',name:'Stairs Up',cost:18000,slot:520,req:'f2_build'}),
+  P({id:'f2_d1',fl:1,type:'dropper',name:'Caramel Dropper',cost:27000,slot:700,kind:'caramel',val:55,rate:1.0,req:'f2_build'}),
+  P({id:'f2_d2',fl:1,type:'dropper',name:'Fudge Dropper',cost:41000,slot:880,kind:'fudge',val:120,rate:0.95,req:'f2_build'}),
+  P({id:'f2_sm',fl:1,type:'upgrader',name:'Melter',cost:62000,slot:1060,mult:3,tag:'MELT',req:'f2_build'}),
+  P({id:'f2_d3',fl:1,type:'dropper',name:'Gold-Chocolate Dropper',cost:94000,slot:1240,kind:'goldchoc',val:380,rate:0.9,req:'f2_build'}),
+  P({id:'f2_ray',fl:1,type:'upgrader',name:'Sugar Size-Ray',cost:140000,slot:1420,mult:4,tag:'SIZE+',sizeray:true,req:'f2_build'}),
+  P({id:'f2_sword',fl:1,type:'gear',name:'Candy-Cane Sword',cost:210000,slot:1600,gear:'sword',req:'f2_build'}),
+  P({id:'f2_win',fl:1,type:'deco',name:'Frosting Walls + Windows',cost:320000,slot:1780,deco:'frost',req:'f2_build'}),
+  P({id:'f2_col',fl:1,type:'collector',name:'Cash Collector II',cost:480000,slot:collectorX,req:'f2_build'}),
+
+  // ---- FLOOR 3: Rainbow Palace ----
+  P({id:'f3_build',fl:2,type:'build',name:'Build Top Floor',cost:720000,slot:340}),
+  P({id:'f3_d1',fl:2,type:'dropper',name:'Rainbow-Candy Dropper',cost:1100000,slot:560,kind:'rainbow',val:1200,rate:0.95,req:'f3_build'}),
+  P({id:'f3_d2',fl:2,type:'dropper',name:'Cosmic-Gummy Dropper',cost:1700000,slot:760,kind:'cosmic',val:3000,rate:0.9,req:'f3_build'}),
+  P({id:'f3_sm',fl:2,type:'upgrader',name:'MEGA Smasher',cost:2600000,slot:960,mult:6,tag:'MEGA',req:'f3_build'}),
+  P({id:'f3_d3',fl:2,type:'dropper',name:'Giant Lollipop Centerpiece',cost:4000000,slot:1180,kind:'giant',val:9000,rate:0.8,req:'f3_build'}),
+  P({id:'f3_flag',fl:2,type:'deco',name:'Palace Flag',cost:6000000,slot:1400,deco:'flag',req:'f3_build'}),
+  P({id:'f3_rush',fl:2,type:'rush',name:'SUGAR RUSH OVERLOAD',cost:50000000,slot:1640,req:'f3_build'}),
+];
+}
+initParts();
+
+// ---------- State ----------
+const G={money:0, banked:0, rebirth:0, candies:[], pops:[], sparks:[],
+         part:null, buyT:0, robTimer:20, robber:null, won:false};
+function rbMult(){return 1+G.rebirth*0.5;}
+
+function ownPart(id){const p=PARTS.find(x=>x.id===id);return p&&p.bought;}
+function hasGear(g){return PARTS.some(p=>p.gear===g&&p.bought);}
+function beltSpeed(){return 150;}
+function activeCollectors(){return PARTS.filter(p=>p.type==='collector'&&(p.bought||p.owned2));}
+
+// ---------- Player ----------
+const pl={x:380, y:0, vx:0, vy:0, fl:0, face:1, anim:0, jumpFx:0};
+pl.y=groundY(0);
+let camX=0,camY=0;
+const keys={};
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;
+  if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+let target=null;
+cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();
+  target={x:e.clientX-r.left+camX, y:e.clientY-r.top+camY};});
+
+// ---------- Helpers ----------
+function fmt(n){
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return Math.floor(n).toString();
+}
+let toastT=0;const toastEl=document.getElementById('toast');
+function toast(m,col){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.4;
+  if(col)toastEl.style.background='linear-gradient(180deg,'+col[0]+','+col[1]+')';
+  else toastEl.style.background='linear-gradient(180deg,#ff8fcf,#d65a9a)';}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// ---------- Save / Load ----------
+const SKEY='candyTycoon_v1';
+function save(){
+  const d={money:G.money,banked:G.banked,rebirth:G.rebirth,won:G.won,
+    bought:PARTS.filter(p=>p.bought).map(p=>p.id),
+    px:pl.x,py:pl.y};
+  try{localStorage.setItem(SKEY,JSON.stringify(d));}catch(e){}
+}
+function load(){
+  let d;try{d=JSON.parse(localStorage.getItem(SKEY));}catch(e){}
+  if(!d)return;
+  G.money=d.money||0;G.banked=d.banked||0;G.rebirth=d.rebirth||0;G.won=!!d.won;
+  if(d.bought)for(const id of d.bought){const p=PARTS.find(x=>x.id===id);if(p)p.bought=true;}
+  if(typeof d.px==='number'){pl.x=d.px;pl.y=d.py;}
+}
+function reset(){
+  if(!confirm('Reset ALL candy progress?'))return;
+  try{localStorage.removeItem(SKEY);}catch(e){}
+  G.money=0;G.banked=0;G.rebirth=0;G.won=false;G.candies=[];G.pops=[];G.robber=null;G.robTimer=20;
+  initParts();PARTS.find(p=>p.id==='f1_d1').bought=true;
+  pl.x=380;pl.y=groundY(0);pl.fl=0;
+  toast('Reset complete!');
+}
+document.getElementById('reset').onclick=reset;
+
+PARTS.find(p=>p.id==='f1_d1').bought=true;   // free starter dropper
+load();
+setInterval(save,4000);
+addEventListener('beforeunload',save);
+
+// ---------- Purchase ----------
+function buyPart(p){
+  if(p.bought)return;
+  if(p.req&&!ownPart(p.req)){toast('Build the floor first!',['#ff9a5a','#d65a2a']);p.cool=.8;return;}
+  if(G.money<p.cost){toast('Need $'+fmt(p.cost));p.cool=.8;return;}
+  G.money-=p.cost;p.bought=true;
+  burst(p.slot,groundY(p.fl)-30,'#fff8b8',26);
+  if(p.type==='rush'){doSugarRush();return;}
+  if(p.gear==='speed')toast('Speed Coil equipped! Zoom!',['#7ad0ff','#2a86d6']);
+  else if(p.gear==='jump')toast('Jump Coil equipped! Bounce!',['#9be86b','#4fae34']);
+  else if(p.gear==='sword')toast('Candy-Cane Sword equipped!',['#ff6f91','#d63d6e']);
+  else if(p.type==='collector')toast('New Cash Collector online!',['#9cf5d0','#2aa87e']);
+  else if(p.type==='build')toast('New floor built! Take the stairs up.',['#ffd9a8','#d68a3a']);
+  else toast('Built: '+p.name);
+}
+function doSugarRush(){
+  G.won=true;G.rebirth++;
+  toast('SUGAR RUSH OVERLOAD!! Candyverse reborn! +50% candy value',['#ff8fcf','#9c2ad6']);
+  flashScreen();
+  for(let i=0;i<160;i++)burst(pl.x,pl.y,['#ff8fcf','#7ad0ff','#9be86b','#ffe27a','#b388ff'][i%5],1);
+}
+
+// ---------- FX ----------
+function burst(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*7,s=40+Math.random()*180;
+  G.sparks.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-60,life:0.6+Math.random()*0.6,col});}}
+const flashEl=document.getElementById('flash');let flashT=0;
+function flashScreen(){flashT=1.0;}
+
+// ---------- Robber system ----------
+function spawnRobber(){
+  if(G.money<5){G.robTimer=20;return;}
+  // approach from the side of player's current floor
+  const fromLeft=Math.random()<0.5;
+  G.robber={x:fromLeft?camX-60:camX+W+60, y:groundY(pl.fl)-30, fl:pl.fl,
+    state:'incoming', t:0, fromLeft, anim:0};
+}
+function updateRobber(dt){
+  if(!G.robber){
+    G.robTimer-=dt;
+    if(G.robTimer<=3 && G.robTimer>0){ // warning window
+      document.getElementById('warn').textContent='⚠ ROBBER INCOMING in '+Math.ceil(G.robTimer)+'! Bank your cash!';
+    } else if(G.robTimer<=0){ spawnRobber(); }
+    return;
+  }
+  document.getElementById('warn').textContent='🍭 CANDY THIEF! Run to a Cash Collector!';
+  const rb=G.robber;rb.t+=dt;rb.anim+=dt*12;
+  // target: the un-banked cash, represented by the collector position (steals as it passes/reaches center)
+  const targetX = WLD/2; // robber rushes toward the middle then leaves
+  if(rb.state==='incoming'){
+    const dir = rb.x < targetX ? 1 : -1;
+    rb.x += dir*230*dt;
+    if(Math.abs(rb.x-targetX)<20){
+      // STEAL
+      const stolen=Math.floor(G.money*0.30);
+      if(stolen>0){G.money-=stolen;
+        G.pops.push({x:rb.x,y:rb.y-40,vy:-50,life:1.4,t:'-$'+fmt(stolen),col:'#ff7d7d'});
+        toast('Robber stole $'+fmt(stolen)+'!',['#ff7d7d','#c22a2a']);}
+      else toast('Robber found nothing — all banked!',['#9cf5d0','#2aa87e']);
+      rb.state='leaving';rb.dir=rb.fromLeft?-1:1;
+    }
+  } else {
+    rb.x += rb.dir*300*dt;
+    if(rb.x<camX-120||rb.x>camX+W+120||rb.x<-200||rb.x>WLD+200){G.robber=null;G.robTimer=20;
+      document.getElementById('warn').textContent='';}
+  }
+}
+
+// ---------- Floor & stairs navigation ----------
+// Player can change floor only near stairs (slot of stairs part) if built.
+function stairsAvailable(fl){
+  // stairs to go UP from fl to fl+1 require the build of fl+1 (which includes stairs concept).
+  // Floor 1->2 uses f2_stairs; Floor2->3 uses being built (f3_build implies access)
+  if(fl===0)return ownPart('f2_stairs')?{slot:520,to:1}:null;
+  if(fl===1)return ownPart('f3_build')?{slot:520,to:2}:null;
+  return null;
+}
+
+// ---------- Update ----------
+let last=performance.now();
+function update(dt){
+  // input
+  let ax=0,ay=0;
+  if(keys['a']||keys['arrowleft'])ax-=1;
+  if(keys['d']||keys['arrowright'])ax+=1;
+  if(keys['w']||keys['arrowup'])ay-=1;
+  if(keys['s']||keys['arrowdown'])ay+=1;
+  if(ax||ay)target=null;
+  if(target){const dx=target.x-pl.x,dy=target.y-pl.y,d=Math.hypot(dx,dy);
+    if(d>8){ax=dx/d;ay=dy/d;}else target=null;}
+
+  let sp=300;
+  if(hasGear('speed'))sp*=1.7;
+  if(hasGear('jump'))pl.jumpFx=Math.abs(Math.sin(performance.now()/140))*6;else pl.jumpFx*=0.9;
+  pl.x+=ax*sp*dt;pl.y+=ay*sp*dt;
+  if(ax)pl.face=ax>0?1:-1;
+  pl.anim+=(Math.abs(ax)+Math.abs(ay))*dt*10;
+
+  // determine current floor band the player is in (by Y), but only allow being on built floors
+  pl.x=Math.max(70,Math.min(WLD-70,pl.x));
+
+  // vertical movement gated by stairs: clamp player's Y to current floor unless near stairs
+  const top=floorBaseY(pl.fl), botGround=groundY(pl.fl), topLimit=floorBaseY(pl.fl)+110;
+  // allow stepping up/down if near a stairs slot
+  const up=stairsAvailable(pl.fl);
+  if(up && Math.abs(pl.x-up.slot)<70 && pl.y < topLimit+30 && ay<0){
+    pl.fl=up.to; pl.y=groundY(pl.fl)-8;
+    toast('Up to '+['Candy Shop','Chocolate Factory','Rainbow Palace'][pl.fl]+'!',['#ffd9a8','#d68a3a']);
+  }
+  const down = pl.fl>0 ? stairsAvailable(pl.fl-1):null;
+  if(down && Math.abs(pl.x-down.slot)<70 && pl.y > botGround-12 && ay>0){
+    pl.fl=pl.fl-1; pl.y=floorBaseY(pl.fl)+120;
+  }
+  // clamp y to floor band
+  pl.y=Math.max(topLimit,Math.min(botGround,pl.y));
+
+  // camera follows (centered, clamped to world & floor band)
+  camX=Math.max(0,Math.min(WLD-W,pl.x-W/2));
+  const bandTop=floorBaseY(pl.fl), bandBot=floorBaseY(pl.fl)+FLOOR_H;
+  let desiredCamY=pl.y-H*0.55;
+  camY=Math.max(bandTop-40,Math.min(bandBot-H+40, desiredCamY));
+  if(bandBot-bandTop<H){camY=bandTop+(FLOOR_H-H)/2;}
+
+  // buy pad detection (only pads on current floor & reachable)
+  G.part=null;
+  for(const p of PARTS){
+    if(p.cool>0)p.cool-=dt;
+    if(p.bought||p.owned2)continue;
+    if(p.fl!==pl.fl)continue;
+    const px=p.slot, py=groundY(p.fl)-2;
+    if(Math.abs(pl.x-px)<48 && Math.abs(pl.y-py)<60){
+      G.part=p;G.buyT+=dt;
+      if(G.buyT>0.4){G.buyT=0;buyPart(p);}
+    }
+  }
+  if(!G.part)G.buyT=0;
+
+  // BANKING: walk into any active collector to bank money safely
+  for(const c of activeCollectors()){
+    const cx=collectorX, cy=groundY(c.fl)-30;
+    if(c.fl===pl.fl && Math.abs(pl.x-cx)<70 && Math.abs(pl.y-cy)<80){
+      if(G.money>0.5){
+        const amt=G.money;G.banked+=amt;G.money=0;
+        G.pops.push({x:cx,y:cy-30,vy:-50,life:1.2,t:'BANKED $'+fmt(amt),col:'#9cf5d0'});
+        if(amt>1)burst(cx,cy-20,'#9cf5d0',12);
+      }
+    }
+  }
+
+  // droppers spawn candies onto their floor's belt
+  for(const p of PARTS){
+    if(p.type!=='dropper'||!p.bought)continue;
+    p.t-=dt;
+    if(p.t<=0){p.t=p.rate;
+      const by=beltY(p.fl);
+      G.candies.push({x:Math.max(p.slot,beltStartX), y:by-46, vy:0, onbelt:false, fl:p.fl,
+        value:p.val*rbMult(), kind:p.kind, size:11+Math.random()*4, spin:Math.random()*6, boost:0, bob:Math.random()*6, sz:1});
+    }
+  }
+  // move candies
+  const spd=beltSpeed();
+  for(let i=G.candies.length-1;i>=0;i--){
+    const r=G.candies[i];const by=beltY(r.fl);
+    if(!r.onbelt){r.vy+=1000*dt;r.y+=r.vy*dt;if(r.y>=by-4){r.y=by-4;r.onbelt=true;}}
+    else{
+      const px=r.x;r.x+=spd*dt;r.spin+=dt*3;r.bob+=dt*5;
+      for(const u of PARTS){if(u.type==='upgrader'&&u.bought&&u.fl===r.fl&&px<u.slot&&r.x>=u.slot){
+        r.value*=u.mult;r.boost=.4;if(u.sizeray)r.sz*=1.5;}}
+      if(r.boost>0)r.boost-=dt;
+      // collector for this floor must be owned; else funnel to floor-1 collector concept -> just collect at collectorX
+      if(r.x>=collectorX){
+        G.money+=r.value;
+        G.pops.push({x:collectorX,y:by-30,vy:-44,life:1,t:'+$'+fmt(r.value),col:'#fff8b8'});
+        G.candies.splice(i,1);
+      }
+    }
+  }
+  if(G.candies.length>700)G.candies.splice(0,G.candies.length-700);
+
+  // pops & sparks
+  for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.95;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
+  for(let i=G.sparks.length-1;i>=0;i--){const s=G.sparks[i];s.vy+=420*dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;if(s.life<=0)G.sparks.splice(i,1);}
+
+  updateRobber(dt);
+
+  if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
+  if(flashT>0){flashT-=dt*1.2;flashEl.style.opacity=Math.max(0,flashT*0.7);}
+}
+
+// ---------- Draw ----------
+let T=0;
+function wx(x){return x-camX;}
+function wy(y){return y-camY;}
+
+const FLOOR_THEME=[
+  {sky1:'#ffd6ec',sky2:'#ffb3d9',floor1:'#ffe9c7',floor2:'#ffcf9e',name:'CANDY SHOP'},
+  {sky1:'#e6c7a8',sky2:'#c9a06e',floor1:'#caa074',floor2:'#8c5e34',name:'CHOCOLATE FACTORY'},
+  {sky1:'#d8c0ff',sky2:'#b39bff',floor1:'#e8d6ff',floor2:'#c0a0ff',name:'RAINBOW PALACE'},
+];
+
+function drawBackground(){
+  // draw the floor band the player is in + neighbors visible
+  for(let i=0;i<FLOORS;i++){
+    const top=floorBaseY(i),h=FLOOR_H;
+    const sy=wy(top), sh=h;
+    if(sy>H||sy+sh<0)continue;
+    const th=FLOOR_THEME[i];
+    const built = i===0 || ownPart(i===1?'f2_build':'f3_build');
+    // sky/wall
+    const g=ctx.createLinearGradient(0,sy,0,sy+sh*0.7);
+    if(built){g.addColorStop(0,th.sky1);g.addColorStop(1,th.sky2);}
+    else{g.addColorStop(0,'#3a2a4f');g.addColorStop(1,'#241634');}
+    ctx.fillStyle=g;ctx.fillRect(0,sy,W,sh*0.72);
+    // decorative back pattern (candy stripes / sprinkles)
+    if(built)drawWallDeco(i,sy,sh*0.72);
+    // floor
+    const groundTop=floorBaseY(i)+FLOOR_H-150;
+    const fy=wy(groundTop);
+    const fg=ctx.createLinearGradient(0,fy,0,fy+150);
+    if(built){fg.addColorStop(0,th.floor1);fg.addColorStop(1,th.floor2);}
+    else{fg.addColorStop(0,'#2a1d3a');fg.addColorStop(1,'#160e22');}
+    ctx.fillStyle=fg;ctx.fillRect(0,fy,W,150+40);
+    // checker floor tiles
+    if(built){
+      const ts=64,ox=-(camX%(ts*2));
+      for(let row=0;row<3;row++){
+        for(let x=ox-ts*2;x<W+ts*2;x+=ts){
+          const col=(Math.floor((x+camX)/ts)+row)%2===0;
+          ctx.fillStyle=col?'rgba(255,255,255,.18)':'rgba(255,255,255,.05)';
+          ctx.fillRect(x,fy+row*40,ts,40);
+        }
+      }
+    }
+    // floor edge trim
+    ctx.fillStyle=built?'#ff8fcf':'#3a2a4f';ctx.fillRect(0,fy-8,W,8);
+    // floor label sign (fixed-ish to left)
+    if(built){
+      ctx.save();ctx.globalAlpha=0.9;
+      ctx.fillStyle='#ffffff';ctx.font='900 26px Segoe UI';ctx.textAlign='left';
+      ctx.shadowColor='#d65a9a';ctx.shadowBlur=8;
+      ctx.fillText(th.name, 24, wy(floorBaseY(i)+50));
+      ctx.restore();
+    } else {
+      ctx.fillStyle='#9c7ad6';ctx.font='900 22px Segoe UI';ctx.textAlign='center';
+      ctx.fillText('▲ '+th.name+' — not built yet ▲', W/2, wy(floorBaseY(i)+FLOOR_H/2));
+    }
+  }
+}
+
+function drawWallDeco(i,sy,sh){
+  if(i===0){ // candy shop: diagonal stripes if walls bought
+    if(ownPart('f1_wall')){
+      ctx.save();ctx.globalAlpha=0.25;
+      const sp=46,ox=-(camX%(sp*2));
+      for(let x=ox-sh;x<W+sp;x+=sp){
+        ctx.fillStyle=Math.floor((x+camX)/sp)%2?'#ff6f91':'#fff';
+        ctx.beginPath();ctx.moveTo(x,sy);ctx.lineTo(x+sp,sy);ctx.lineTo(x+sp-sh,sy+sh);ctx.lineTo(x-sh,sy+sh);ctx.closePath();ctx.fill();
+      }
+      ctx.restore();
+    }
+    // sprinkles
+    drawSprinkles(sy,sh,'#ff9ec7');
+  } else if(i===1){ // chocolate: frosting walls + windows
+    if(ownPart('f2_win')){
+      ctx.save();ctx.globalAlpha=0.5;ctx.fillStyle='#fff3f9';
+      // frosting drips along top
+      const sp=70,ox=-(camX%sp);
+      ctx.beginPath();ctx.moveTo(0,sy);
+      for(let x=ox-sp;x<W+sp;x+=sp){ctx.lineTo(x,sy);ctx.arc(x+sp/2,sy+24,sp/2,Math.PI,0,true);}
+      ctx.lineTo(W,sy);ctx.lineTo(W,sy);ctx.closePath();ctx.fill();
+      ctx.restore();
+      // windows
+      const wsp=260,wox=-(camX%wsp);
+      for(let x=wox;x<W+wsp;x+=wsp){
+        const wx0=x,wy0=sy+sh*0.32;
+        ctx.fillStyle='#bfe6ff';roundRect(wx0,wy0,90,110,10);ctx.fill();
+        ctx.strokeStyle='#7a4a2a';ctx.lineWidth=6;roundRect(wx0,wy0,90,110,10);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(wx0+45,wy0);ctx.lineTo(wx0+45,wy0+110);ctx.moveTo(wx0,wy0+55);ctx.lineTo(wx0+90,wy0+55);ctx.stroke();
+        ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(wx0+8,wy0+8,30,40);
+      }
+    }
+    drawSprinkles(sy,sh,'#caa074');
+  } else { // rainbow palace
+    ctx.save();ctx.globalAlpha=0.3;
+    const cols=['#ff5fa2','#ff9a5a','#ffe27a','#9be86b','#7ad0ff','#b388ff'];
+    const bw=W/cols.length;
+    for(let c=0;c<cols.length;c++){ctx.fillStyle=cols[c];ctx.fillRect(c*bw,sy,bw+1,sh);}
+    ctx.restore();
+    // stars
+    drawSprinkles(sy,sh,'#ffffff');
+  }
+}
+function drawSprinkles(sy,sh,col){
+  ctx.save();ctx.globalAlpha=0.5;
+  for(let k=0;k<40;k++){
+    const sx=((k*173+ (camX*0.6))%W);
+    const yy=sy+ ((k*97)%sh);
+    ctx.save();ctx.translate(sx,yy);ctx.rotate(k);
+    ctx.fillStyle=k%3?col:'#fff';ctx.fillRect(-2,-5,4,10);ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawBelt(fl){
+  const by=beltY(fl), y=wy(by), x0=wx(beltStartX-14), x1=wx(collectorX+14);
+  if(y<-60||y>H+60)return;
+  // supports
+  ctx.fillStyle='#b06a9a';
+  for(let x=x0;x<x1;x+=150){ctx.fillRect(x,y+24,9,wy(groundY(fl))-y-24);}
+  // belt body (candy striped)
+  const g=ctx.createLinearGradient(0,y,0,y+26);g.addColorStop(0,'#ff8fcf');g.addColorStop(1,'#c2407e');
+  ctx.fillStyle=g;roundRect(x0,y,x1-x0,26,13);ctx.fill();
+  ctx.save();roundRect(x0,y,x1-x0,26,13);ctx.clip();
+  ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.globalAlpha=0.6;
+  const off=(T*90)%24;
+  for(let x=x0-30;x<x1+30;x+=24){ctx.beginPath();ctx.moveTo(x+off,y);ctx.lineTo(x+off-14,y+26);ctx.stroke();}
+  ctx.restore();
+  // rollers
+  for(const rx of [x0,x1]){const rg=ctx.createRadialGradient(rx-3,y+10,2,rx,y+13,15);
+    rg.addColorStop(0,'#fff');rg.addColorStop(1,'#d65a9a');ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(rx,y+13,14,0,7);ctx.fill();}
+}
+
+function drawDropper(p){
+  const x=wx(p.slot), by=beltY(p.fl), top=wy(by-130);
+  if(x<-90||x>W+90)return;
+  const t=TIER[p.kind];
+  if(t.glow){ctx.save();ctx.shadowColor=t.glow;ctx.shadowBlur=20;}
+  // funnel
+  ctx.fillStyle=t.b;ctx.beginPath();
+  ctx.moveTo(x-32,top);ctx.lineTo(x+32,top);ctx.lineTo(x+20,top-18);ctx.lineTo(x-20,top-18);ctx.closePath();ctx.fill();
+  // glossy body
+  const bg=ctx.createLinearGradient(0,top,0,top+62);bg.addColorStop(0,t.hi);bg.addColorStop(0.5,t.a);bg.addColorStop(1,t.b);
+  ctx.fillStyle=bg;roundRect(x-32,top,64,62,10);ctx.fill();
+  if(t.glow)ctx.restore();
+  // gloss highlight
+  ctx.fillStyle='rgba(255,255,255,.4)';roundRect(x-26,top+6,20,10,5);ctx.fill();
+  // label
+  ctx.fillStyle='rgba(0,0,0,.28)';roundRect(x-27,top+30,54,16,4);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='900 8px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(p.name.split(' ')[0].toUpperCase(),x,top+42);
+  // chute + legs
+  ctx.fillStyle='#7a3a5a';ctx.fillRect(x-8,wy(by-42),16,12);
+  ctx.strokeStyle=t.b;ctx.lineWidth=5;
+  ctx.beginPath();ctx.moveTo(x-24,top+62);ctx.lineTo(x-24,wy(by-2));ctx.moveTo(x+24,top+62);ctx.lineTo(x+24,wy(by-2));ctx.stroke();
+}
+
+function drawUpgrader(p){
+  if(!p.bought)return;
+  const x=wx(p.slot), by=beltY(p.fl), h=128, top=wy(by-h);
+  if(x<-90||x>W+90)return;
+  const cols={SMASH:'#ff6f91',MELT:'#a9744a','SIZE+':'#7ad0ff',MEGA:'#b388ff'};
+  const c=cols[p.tag]||'#ff6f91';
+  ctx.fillStyle=c;
+  roundRect(x-38,top,12,h,5);ctx.fill();roundRect(x+26,top,12,h,5);ctx.fill();
+  roundRect(x-38,top,76,18,6);ctx.fill();
+  // glossy
+  ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(x-34,top+3,68,4);
+  ctx.fillStyle='#fff';ctx.font='900 11px Segoe UI';ctx.textAlign='center';ctx.fillText(p.tag+' ×'+p.mult,x,top+13);
+  // energy field
+  ctx.fillStyle=c+'40';ctx.fillRect(x-26,top+18,52,h-18);
+  for(let k=0;k<3;k++){ctx.fillStyle=c+'88';const yy=top+18+((T*60+k*30)%(h-18));ctx.fillRect(x-26,yy,52,3);}
+}
+
+function drawCollector(c){
+  const x=wx(collectorX), by=beltY(c.fl), y=wy(by);
+  if(x<-120||x>W+120)return;
+  const owned=c.bought||c.owned2;
+  // machine
+  const g=ctx.createLinearGradient(0,y-80,0,y+14);g.addColorStop(0,'#9cf5d0');g.addColorStop(1,'#2aa87e');
+  ctx.fillStyle=owned?g:'#5a5a6a';roundRect(x-8,y-80,86,92,12);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='900 11px Segoe UI';ctx.textAlign='center';
+  ctx.fillStyle='#0e3a2a';roundRect(x,y-72,70,34,7);ctx.fill();
+  ctx.fillStyle='#fff8b8';ctx.font='900 24px Segoe UI';ctx.fillText('💰',x+35,y-48);
+  ctx.fillStyle='#ffffff';ctx.font='900 9px Segoe UI';ctx.fillText('CASH COLLECTOR',x+35,y-22);
+  // banked glow indicator
+  if(owned && G.money>0){ctx.save();ctx.globalAlpha=0.4+0.3*Math.sin(T*5);
+    ctx.fillStyle='#9cf5d0';roundRect(x-12,y-84,94,100,14);ctx.fill();ctx.restore();}
+  ctx.fillStyle='#1a0e22';ctx.fillRect(x-8,y+2,20,12);
+}
+
+function drawCandy(r){
+  const x=wx(r.x), y=wy(r.y);if(x<-40||x>W+40)return;
+  const t=TIER[r.kind], base=r.size*r.sz*(r.boost>0?1.3:1);
+  const s=base;
+  const yy=y-(r.onbelt?Math.abs(Math.sin(r.bob))*2:0);
+  ctx.save();ctx.translate(x,yy);ctx.rotate(r.spin);
+  if(t.glow){ctx.shadowColor=t.glow;ctx.shadowBlur=12;}
+  if(t.shape==='ball'||t.shape==='lolli'){
+    const g=ctx.createRadialGradient(-s*.3,-s*.3,1,0,0,s);g.addColorStop(0,t.hi);g.addColorStop(.6,t.a);g.addColorStop(1,t.b);
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,s,0,7);ctx.fill();
+    if(t.shape==='lolli'){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();
+      ctx.arc(0,0,s*.6,T*3,T*3+Math.PI*1.4);ctx.stroke();
+      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,s);ctx.lineTo(0,s+s*0.8);ctx.stroke();}
+    ctx.fillStyle='rgba(255,255,255,.6)';ctx.beginPath();ctx.arc(-s*.35,-s*.35,s*.22,0,7);ctx.fill();
+  } else if(t.shape==='bean'){
+    const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.hi);g.addColorStop(1,t.b);ctx.fillStyle=g;
+    ctx.beginPath();ctx.ellipse(0,0,s*1.1,s*.7,0,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.ellipse(-s*.3,-s*.25,s*.3,s*.18,0,0,7);ctx.fill();
+  } else if(t.shape==='rainbow'){
+    const cols=['#ff5fa2','#ff9a5a','#ffe27a','#9be86b','#7ad0ff','#b388ff'];
+    for(let k=0;k<cols.length;k++){ctx.fillStyle=cols[k];
+      ctx.beginPath();ctx.arc(0,0,s*(1-k*0.13),0,7);ctx.fill();}
+    ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.arc(-s*.3,-s*.3,s*.2,0,7);ctx.fill();
+  } else { // block / choc
+    const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,t.hi);g.addColorStop(.5,t.a);g.addColorStop(1,t.b);ctx.fillStyle=g;
+    roundRect(-s*.8,-s*.7,s*1.6,s*1.4,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(-s*.8,-s*.7,s*1.6,3);
+    ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,-s*.7);ctx.lineTo(0,s*.7);
+    ctx.moveTo(-s*.8,0);ctx.lineTo(s*.8,0);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDeco(p){
+  if(!p.bought)return;
+  if(p.deco==='flag'){
+    const x=wx(p.slot),y=wy(groundY(p.fl));
+    ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-140);ctx.stroke();
+    const wave=Math.sin(T*4)*6;
+    const g=ctx.createLinearGradient(x,0,x+70,0);g.addColorStop(0,'#ff5fa2');g.addColorStop(.5,'#ffe27a');g.addColorStop(1,'#7ad0ff');
+    ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(x,y-140);ctx.lineTo(x+70,y-130+wave);ctx.lineTo(x,y-110);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='900 10px Segoe UI';ctx.textAlign='left';ctx.fillText('🍭',x+18,y-122);
+  }
+}
+
+function drawStairs(p){
+  if(!p.bought)return;
+  const x=wx(p.slot);
+  const yBot=wy(groundY(p.fl)), yTop=wy(floorBaseY(p.fl)+110);
+  const steps=7,sh=(yBot-yTop)/steps,sw=80;
+  for(let s=0;s<steps;s++){
+    const sy=yBot-s*sh;
+    ctx.fillStyle=s%2?'#ff8fcf':'#fff8b8';
+    ctx.fillRect(x-sw/2+s*4, sy-sh, sw-s*8, sh);
+    ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(x-sw/2+s*4, sy-3, sw-s*8, 3);
+  }
+  ctx.fillStyle='#fff';ctx.font='900 18px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('⬆',x,yTop-6);
+}
+
+function drawRushButton(p){
+  const x=wx(p.slot), y=wy(groundY(p.fl)-2);
+  if(p.bought||x<-120||x>W+120)return;
+  // big glowing podium
+  const pulse=0.5+0.5*Math.sin(T*4);
+  ctx.save();ctx.shadowColor='#ff8fcf';ctx.shadowBlur=30+pulse*20;
+  const g=ctx.createRadialGradient(x,y-40,4,x,y-40,60);
+  g.addColorStop(0,'#fff');g.addColorStop(.4,'#ffe27a');g.addColorStop(1,'#ff5fa2');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y-40,46,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='#fff';ctx.font='900 12px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('SUGAR',x,y-46);ctx.fillText('RUSH',x,y-32);
+}
+
+function drawPad(p){
+  if(p.bought||p.owned2)return;
+  if(p.type==='collector'&&p.owned2)return;
+  const x=wx(p.slot), y=wy(groundY(p.fl)-2);
+  if(x<-110||x>W+110)return;
+  const locked=p.req&&!ownPart(p.req);
+  const can=!locked && G.money>=p.cost;
+  const here=G.part===p;
+  // pad disc (glossy)
+  ctx.save();
+  let col1,col2;
+  if(locked){col1='#7a6a8a';col2='#4a3a5a';}
+  else if(p.cool>0){col1='#ff7d7d';col2='#c22a2a';}
+  else if(can){col1='#9be86b';col2='#3f9e2a';}
+  else{col1='#ffd1ec';col2='#d68aae';}
+  if(here&&!locked){ctx.shadowColor=can?'#9be86b':'#ff9ec7';ctx.shadowBlur=26;}
+  const g=ctx.createLinearGradient(0,y-30,0,y+30);g.addColorStop(0,col1);g.addColorStop(1,col2);
+  ctx.fillStyle=g;
+  ctx.beginPath();ctx.ellipse(x,y,46,22,0,0,7);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.ellipse(x,y,46,22,0,0,7);ctx.stroke();
+  // fill ring while buying
+  if(here&&can){ctx.strokeStyle='#fff';ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(x,y,30,-Math.PI/2,-Math.PI/2+Math.PI*2*(G.buyT/0.4));ctx.stroke();}
+  // floating sign on a candy-cane post
+  const sy=y-120+Math.sin(T*2+p.slot)*4;
+  // post (striped)
+  ctx.save();ctx.lineWidth=7;ctx.lineCap='round';
+  ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(x,y-20);ctx.lineTo(x,sy+24);ctx.stroke();
+  ctx.strokeStyle='#ff5fa2';ctx.setLineDash([8,8]);ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x,y-20);ctx.lineTo(x,sy+24);ctx.stroke();
+  ctx.restore();
+  // sign board
+  const w=140;
+  const sg=ctx.createLinearGradient(0,sy-24,0,sy+24);sg.addColorStop(0,'#fff');sg.addColorStop(1,'#ffe2f1');
+  ctx.fillStyle=sg;roundRect(x-w/2,sy-24,w,48,12);ctx.fill();
+  ctx.strokeStyle=can?'#3f9e2a':(locked?'#7a6a8a':'#d65a9a');ctx.lineWidth=3;roundRect(x-w/2,sy-24,w,48,12);ctx.stroke();
+  ctx.fillStyle='#7a2a5a';ctx.font='900 11px Segoe UI';ctx.textAlign='center';
+  // wrap name
+  ctx.fillText(p.name, x, sy-4);
+  if(locked){ctx.fillStyle='#7a6a8a';ctx.font='900 12px Segoe UI';ctx.fillText('🔒 LOCKED',x,sy+15);}
+  else{ctx.fillStyle=can?'#3f9e2a':'#d65a9a';ctx.font='900 13px Segoe UI';
+    ctx.fillText(p.free?'FREE':'$'+fmt(p.cost),x,sy+15);}
+}
+
+function drawRobber(){
+  if(!G.robber)return;const rb=G.robber;
+  const x=wx(rb.x), y=wy(rb.y);
+  if(rb.fl!==pl.fl)return;
+  const sw=Math.sin(rb.anim)*5;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x,y+20,18,7,0,0,7);ctx.fill();
+  // legs
+  ctx.fillStyle='#222';ctx.fillRect(x-9,y+6+sw,7,16);ctx.fillRect(x+2,y+6-sw,7,16);
+  // body (dark robber)
+  ctx.fillStyle='#3a2a4a';roundRect(x-14,y-16,28,24,5);ctx.fill();
+  // sack
+  ctx.fillStyle='#7a5a2a';ctx.beginPath();ctx.arc(x+16,y-4,12,0,7);ctx.fill();
+  ctx.fillStyle='#fff8b8';ctx.font='900 12px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x+16,y);
+  // head + mask
+  ctx.fillStyle='#ffd9b0';roundRect(x-11,y-38,22,22,6);ctx.fill();
+  ctx.fillStyle='#111';ctx.fillRect(x-11,y-32,22,8);
+  ctx.fillStyle='#fff';ctx.fillRect(x-7,y-31,5,5);ctx.fillRect(x+2,y-31,5,5);
+  // label
+  ctx.fillStyle='#ff7d7d';ctx.font='900 11px Segoe UI';ctx.fillText('ROBBER!',x,y-46+Math.sin(T*8)*2);
+}
+
+function drawPlayer(){
+  const x=wx(pl.x), y=wy(pl.y)-pl.jumpFx;
+  ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(x,wy(pl.y)+18,18,7,0,0,7);ctx.fill();
+  const sw=Math.sin(pl.anim)*4;
+  // legs
+  ctx.fillStyle='#7a3a9a';ctx.fillRect(x-9,y+6+sw,7,14);ctx.fillRect(x+2,y+6-sw,7,14);
+  // speed coil shoes
+  if(hasGear('speed')){ctx.fillStyle='#7ad0ff';ctx.fillRect(x-10,y+18+sw,9,4);ctx.fillRect(x+1,y+18-sw,9,4);}
+  // jump coil spring
+  if(hasGear('jump')){ctx.strokeStyle='#9be86b';ctx.lineWidth=2;
+    ctx.beginPath();for(let s=0;s<3;s++)ctx.arc(x,y+22+s*3,4,0,Math.PI);ctx.stroke();}
+  // torso candy-colored
+  const bg=ctx.createLinearGradient(0,y-14,0,y+8);bg.addColorStop(0,'#ff8fcf');bg.addColorStop(1,'#d6438c');
+  ctx.fillStyle=bg;roundRect(x-13,y-14,26,22,5);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.3)';ctx.fillRect(x-13,y-14,26,4);
+  // arms
+  ctx.fillStyle='#ffd9b0';ctx.fillRect(x-18,y-12+sw,6,16);ctx.fillRect(x+12,y-12-sw,6,16);
+  // candy-cane sword
+  if(hasGear('sword')){ctx.save();ctx.translate(x+18,y-6);ctx.rotate(-0.5+Math.sin(pl.anim)*0.2);
+    ctx.lineWidth=5;ctx.lineCap='round';
+    ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-26);ctx.stroke();
+    ctx.strokeStyle='#ff3d6e';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,-26);ctx.stroke();
+    ctx.setLineDash([]);ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.beginPath();ctx.arc(5,-26,5,Math.PI,Math.PI*2);ctx.stroke();
+    ctx.restore();}
+  // head
+  ctx.fillStyle='#ffd9b0';roundRect(x-11,y-34,22,20,6);ctx.fill();
+  ctx.fillStyle='#1a1a1a';ctx.fillRect(x-6+pl.face*3,y-27,3,4);ctx.fillRect(x+3+pl.face*3,y-27,3,4);
+  ctx.fillStyle='#d6438c';ctx.fillRect(x-4+pl.face*3,y-21,8,2);
+  // candy hat
+  ctx.fillStyle='#ff5fa2';roundRect(x-12,y-38,24,6,3);ctx.fill();
+  ctx.fillStyle='#fff8b8';ctx.beginPath();ctx.arc(x,y-40,4,0,7);ctx.fill();
+}
+
+function draw(){
+  drawBackground();
+  for(let fl=0;fl<FLOORS;fl++){
+    const built = fl===0 || ownPart(fl===1?'f2_build':'f3_build');
+    if(!built)continue;
+    drawBelt(fl);
+  }
+  // upgraders behind candies
+  for(const p of PARTS)if(p.type==='upgrader')drawUpgrader(p);
+  // candies
+  for(const r of G.candies)drawCandy(r);
+  // droppers
+  for(const p of PARTS)if(p.type==='dropper'&&p.bought)drawDropper(p);
+  // collectors
+  for(const c of PARTS)if(c.type==='collector')drawCollector(c);
+  // deco / stairs / flags
+  for(const p of PARTS)if(p.type==='stairs')drawStairs(p);
+  for(const p of PARTS)if(p.type==='deco')drawDeco(p);
+  for(const p of PARTS)if(p.type==='rush')drawRushButton(p);
+  // pads
+  for(const p of PARTS)drawPad(p);
+  // robber & player
+  drawRobber();
+  drawPlayer();
+  // pops
+  for(const q of G.pops){const x=wx(q.x),y=wy(q.y);ctx.globalAlpha=Math.max(0,q.life);
+    ctx.fillStyle=q.col||'#fff8b8';ctx.font='900 15px Segoe UI';ctx.textAlign='center';
+    ctx.strokeStyle='#0006';ctx.lineWidth=3;ctx.strokeText(q.t,x,y);ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
+  // sparks
+  for(const s of G.sparks){const x=wx(s.x),y=wy(s.y);ctx.globalAlpha=Math.max(0,s.life);
+    ctx.fillStyle=s.col;ctx.fillRect(x-2,y-2,4,4);ctx.globalAlpha=1;}
+}
+
+// ---------- Loop ----------
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();
+  document.getElementById('money').textContent='$'+fmt(G.money);
+  document.getElementById('banked').textContent='Banked: $'+fmt(G.banked);
+  const owned=PARTS.filter(p=>p.bought).length;
+  document.getElementById('sub').textContent=owned+' / '+PARTS.length+' built  •  Floor '+(pl.fl+1);
+  document.getElementById('rb').textContent=G.rebirth>0?('🍬 Sugar Rush ×'+G.rebirth+'  (+'+(G.rebirth*50)+'%)'):'';
+  if(!G.robber && G.robTimer>3)document.getElementById('warn').textContent='';
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

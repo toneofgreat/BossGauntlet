@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>MEGA BASE TYCOON</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;background:#05080f;color:#eaf1fb;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+  #wrap{position:relative;width:100%;height:100%}
+  canvas{display:block;width:100%;height:100%;cursor:pointer}
+  #hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;
+       padding:12px 16px;pointer-events:none;z-index:5}
+  .panel{background:linear-gradient(160deg,#121d33ee,#0a1322ee);border:1px solid #2a3c5e;border-radius:14px;
+         padding:8px 14px;box-shadow:0 8px 26px #000a, inset 0 1px 0 #ffffff15}
+  #money{font-size:30px;font-weight:900;color:#5cf09a;text-shadow:0 2px 18px rgba(60,217,122,.55),0 2px 2px #000;line-height:1}
+  #bank{font-size:14px;font-weight:800;color:#ffd34d;text-shadow:0 1px 4px #000;margin-top:3px}
+  #sub{font-size:11px;font-weight:700;color:#7e93b5;margin-top:2px}
+  #rb{font-size:13px;font-weight:800;color:#ff7a9c;text-shadow:0 1px 6px #000;text-align:right;line-height:1.4}
+  #flr{font-size:11px;font-weight:800;color:#9ad0ff;text-align:right;margin-top:4px}
+  #back{position:absolute;top:16px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:12px;
+        font-weight:800;text-decoration:none;pointer-events:auto;letter-spacing:.6px;z-index:6;
+        text-shadow:0 1px 3px #000}
+  #back:hover{color:#9fd3ff}
+  #reset{position:absolute;top:13px;right:16px;pointer-events:auto;z-index:6;background:#2a1320cc;border:1px solid #743;
+         color:#ff9a9a;font-weight:800;font-size:11px;border-radius:9px;padding:6px 10px;cursor:pointer}
+  #reset:hover{background:#451a25cc}
+  #help{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);color:#5a6b85;font-size:11px;
+        font-weight:700;text-align:center;pointer-events:none;text-shadow:0 1px 2px #000;width:94%;z-index:5}
+  #toast{position:absolute;left:50%;bottom:54px;transform:translateX(-50%) translateY(12px);
+         background:linear-gradient(160deg,#16243dee,#0d1626ee);border:1px solid #3fd97a;border-radius:13px;
+         padding:11px 20px;font-weight:800;color:#7df0aa;opacity:0;transition:.28s;pointer-events:none;
+         text-align:center;max-width:90%;box-shadow:0 8px 26px #000c;z-index:7}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #warn{position:absolute;left:50%;top:74px;transform:translateX(-50%) scale(.9);
+        background:linear-gradient(160deg,#3a0f17ee,#240910ee);border:1px solid #ff5a6e;border-radius:13px;
+        padding:9px 18px;font-weight:900;color:#ff9aa8;opacity:0;transition:.25s;pointer-events:none;
+        text-align:center;box-shadow:0 0 28px #ff2a4a55;z-index:7;font-size:13px}
+  #warn.show{opacity:1;transform:translateX(-50%) scale(1)}
+  #crash{position:absolute;inset:0;background:#0008cf;color:#fff;z-index:30;display:none;
+         flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;
+         font-family:Consolas,monospace}
+  #crash h1{font-size:46px;margin-bottom:14px;text-shadow:0 0 24px #fff6}
+  #crash p{font-size:15px;max-width:560px;line-height:1.7;opacity:.92}
+  #crash button{margin-top:26px;background:#fff;color:#0008cf;border:0;border-radius:10px;
+         padding:12px 26px;font-weight:900;font-size:15px;cursor:pointer}
+  #joy{position:absolute;bottom:0;left:0;width:100%;height:100%;z-index:1}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div class="panel">
+      <div id="money">$0</div>
+      <div id="bank">🏦 Banked: $0</div>
+      <div id="sub"></div>
+    </div>
+    <div class="panel" style="text-align:right">
+      <div id="rb"></div>
+      <div id="flr"></div>
+    </div>
+  </div>
+  <a id="back" href="index.html">&larr; Platyfy</a>
+  <button id="reset">RESET</button>
+  <div id="toast"></div>
+  <div id="warn"></div>
+  <div id="help">WASD / Arrows or tap to walk &nbsp;•&nbsp; step on a glowing pad to BUY &nbsp;•&nbsp; bank cash at 🏦 before robbers strike</div>
+  <div id="crash">
+    <h1>:( SERVER CRASHED</h1>
+    <p>FATAL_NUKE_EXCEPTION 0x00DEAD. The MEGA BASE TYCOON server encountered a problem and needs to restart.
+       All 1 player(s) have been disconnected. Collecting error info... 100% complete.</p>
+    <button id="crashBtn">RECONNECT &amp; CLAIM VICTORY</button>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ============================================================ WORLD ============
+// Top-down 2.5D. World coords (wx,wy). Camera follows player.
+const WLD_W=2600, WLD_H=2400;
+const ISO=0.54;                 // y-squash for pseudo-3D ground
+
+// ---------- helpers ----------
+function fmt(n){
+  n=Math.floor(n);
+  if(n>=1e15)return (n/1e15).toFixed(2)+'Q';
+  if(n>=1e12)return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(2)+'M';
+  if(n>=1e3)return (n/1e3).toFixed(1)+'K';
+  return n.toString();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function lerp(a,b,t){return a+(b-a)*t;}
+
+// world -> screen
+let camX=0,camY=0;
+function sx(wx){return wx-camX;}
+function sy(wy){return wy-camY;}
+
+// ============================================================ BUY PADS =========
+// Each pad: id,name,price,floor, gx,gy (world pos), kind, + behaviour fields.
+// behaviours: dropper(color,val,rate,belt), conveyor, collector(belt->cash),
+//   cashcoll, smasher(mult,shrink), sizeray(mult,grow), gear, deco, owner, nuke, special.
+// Linear gating: a pad is "active" only when all earlier pads (lower order) are bought.
+
+let PADS=[];
+function defPads(){
+const P=[];
+let order=0;
+function add(o){o.order=order++;o.bought=false;o.cool=0;P.push(o);return o;}
+
+// ---- color presets for droppers / hearts ----
+const C={
+  gray:'#9aa3ad', block:'#caa46a', white:'#f2f4f8', lgreen:'#9fe87a', green:'#41c45a',
+  yellow:'#ffe04a', orange:'#ff9a32', red:'#ff4d52', lred:'#ff8a8f', dred:'#a3232a',
+  black:'#2a2f38', pink:'#ff7ad0', purple:'#a05cff', blue:'#4d8aff', lblue:'#7ec8ff',
+  lyellow:'#fff0a0', dyellow:'#d9b020', sand:'#e6cf86', sand2:'#d8bd6e', sand3:'#c9aa55',
+  hred:'#ff3b5c', horange:'#ff8c2a', hyellow:'#ffe23a', hgreen:'#3ee07a', hblue:'#3aa0ff',
+  hpurple:'#b14cff', hpink:'#ff62c6', hwhite:'#ffffff', hgray:'#8c97a6', lettuce:'#8ee06a'
+};
+
+// FLOOR scaling: base price for a pad = baseSeq * floorMult(floor). We'll just author
+// explicit prices that already follow ~1.5x per floor + rising within a floor.
+// floor 1 ground; floor 2 desert; floor 3 hearts; floor 4 roof/endgame.
+
+// =================== FLOOR 1 — GROUND BASE (y around 1700) ===================
+const F1y=1740;
+function f1(gx){return {gx:gx,gy:F1y};}
+// row of droppers across the base
+add({id:'d_gray',  name:'Gray Dropper',   price:0,    floor:1, kind:'dropper', color:C.gray,  val:1,  rate:1.1, belt:1, ...f1(560), free:true});
+add({id:'d_block', name:'Block Dropper',  price:60,   floor:1, kind:'dropper', color:C.block, val:2,  rate:1.1, belt:1, ...f1(640)});
+add({id:'d_white', name:'White Dropper',  price:160,  floor:1, kind:'dropper', color:C.white, val:4,  rate:1.05,belt:1, ...f1(720)});
+add({id:'d_lgreen',name:'Lt-Green Dropper',price:380, floor:1, kind:'dropper', color:C.lgreen,val:7,  rate:1.05,belt:1, ...f1(800)});
+add({id:'d_green', name:'Green Dropper',  price:800,  floor:1, kind:'dropper', color:C.green, val:13, rate:1.0, belt:1, ...f1(880)});
+add({id:'d_yellow',name:'Yellow Dropper', price:1600, floor:1, kind:'dropper', color:C.yellow,val:24, rate:1.0, belt:1, ...f1(960)});
+add({id:'d_orange',name:'Orange Dropper', price:3000, floor:1, kind:'dropper', color:C.orange,val:42, rate:0.95,belt:1, ...f1(1040)});
+add({id:'d_red',   name:'Red Dropper',    price:5500, floor:1, kind:'dropper', color:C.red,   val:75, rate:0.95,belt:1, ...f1(1120)});
+add({id:'sm1',     name:'SMASHER (x3)',   price:9000, floor:1, kind:'smasher', mult:3, beltMatch:1, gx:1240, gy:1640});
+add({id:'barr',    name:'Barricades / Walls',price:14000,floor:1,kind:'deco', deco:'walls1', gx:420, gy:1560});
+add({id:'speed',   name:'Speed Coil',     price:6500, floor:1, kind:'gear', gear:'speed', gx:480, gy:1740});
+add({id:'jump',    name:'Jump Coil',      price:9500, floor:1, kind:'gear', gear:'jump', gx:480, gy:1840});
+add({id:'sword',   name:'Sword',          price:13000,floor:1, kind:'gear', gear:'sword', gx:480, gy:1940});
+add({id:'grass',   name:'Grass (behind base)',price:5000,floor:1,kind:'deco',deco:'grass', gx:300, gy:1450});
+add({id:'cv2',     name:'2nd Conveyor',   price:20000,floor:1, kind:'conveyor', belt:2, gx:640, gy:2060});
+add({id:'col2',    name:'2nd Collector',  price:30000,floor:1, kind:'collector', belt:2, gx:1240, gy:2060});
+add({id:'d_lred',  name:'Lt-Red Dropper', price:42000,floor:1, kind:'dropper', color:C.lred,  val:130, rate:1.0, belt:2, gx:640, gy:2160});
+add({id:'d_dred',  name:'Dark-Red Dropper',price:60000,floor:1,kind:'dropper', color:C.dred,  val:200, rate:1.0, belt:2, gx:760, gy:2160});
+add({id:'d_black', name:'Black Dropper',  price:88000,floor:1, kind:'dropper', color:C.black, val:300, rate:0.95,belt:2, gx:880, gy:2160});
+add({id:'d_pink',  name:'Pink Dropper',   price:130000,floor:1,kind:'dropper', color:C.pink,  val:460, rate:0.95,belt:2, gx:1000, gy:2160});
+add({id:'d_purple',name:'Purple Dropper', price:190000,floor:1,kind:'dropper', color:C.purple,val:700, rate:0.9, belt:2, gx:1120, gy:2160});
+add({id:'d_blue',  name:'Blue Dropper',   price:280000,floor:1,kind:'dropper', color:C.blue,  val:1050,rate:0.9, belt:2, gx:1240, gy:2160});
+add({id:'sm2',     name:'Lt-Blue SMASHER (x4)',price:420000,floor:1,kind:'smasher',mult:4,beltMatch:2,color:C.lblue,gx:1440,gy:2060});
+add({id:'sray1',   name:'SIZE RAY (x6)',  price:700000,floor:1, kind:'sizeray', mult:6, beltMatch:2, gx:1080, gy:1640});
+add({id:'walls1b', name:'Walls',          price:300000,floor:1, kind:'deco', deco:'walls1b', gx:1700, gy:1560});
+add({id:'floor2',  name:'2nd Floor Slab', price:550000,floor:1, kind:'deco', deco:'floor2slab', gx:900, gy:1300});
+add({id:'ladder1', name:'Back Ladder',    price:120000,floor:1, kind:'deco', deco:'ladder1', gx:1820, gy:1480});
+add({id:'stairs1', name:'Inside Stairs',  price:160000,floor:1, kind:'deco', deco:'stairs1', gx:1640, gy:1740});
+add({id:'odoor1',  name:'Owner Door',     price:200000,floor:1, kind:'deco', deco:'odoor1', gx:560, gy:1300});
+add({id:'win1',    name:'Windows',        price:90000, floor:1, kind:'deco', deco:'win1', gx:1100, gy:1560});
+
+// =================== FLOOR 2 — DESERT (y around 1000) ===================
+const F2y=1020;
+function f2(gx){return {gx:gx,gy:F2y};}
+add({id:'sandf',   name:'Sandy Floor',    price:850000, floor:2, kind:'deco', deco:'sandfloor', gx:900, gy:1000});
+add({id:'pyramid', name:'Tiny Pyramid',   price:900000, floor:2, kind:'deco', deco:'pyramid', gx:560, gy:760});
+add({id:'shelf',   name:'Bookshelf',      price:980000, floor:2, kind:'deco', deco:'shelf', gx:1500, gy:760});
+add({id:'books',   name:'Books (fill shelf)',price:1050000,floor:2,kind:'deco', deco:'books', gx:1500, gy:830});
+add({id:'mbook',   name:'Mysterious Book',price:1200000,floor:2,kind:'deco', deco:'mbook', gx:1500, gy:900});
+add({id:'poles',   name:'4 Corner Poles', price:1400000,floor:2,kind:'deco', deco:'poles', gx:900, gy:560});
+add({id:'cv3',     name:'Desert Conveyor',price:1700000,floor:2,kind:'conveyor', belt:3, gx:680, gy:1180});
+add({id:'col3',    name:'Desert Collector',price:2100000,floor:2,kind:'collector',belt:3, gx:1280, gy:1180});
+add({id:'cash2',   name:'Desert Cash Collector',price:2600000,floor:2,kind:'cashcoll',gx:980, gy:1300});
+add({id:'d_lyel',  name:'Lt-Yellow Dropper',price:3200000,floor:2,kind:'dropper',color:C.lyellow,val:3000,rate:1.0,belt:3,gx:680,gy:1080});
+add({id:'d_dyel',  name:'Dark-Yellow Dropper',price:4000000,floor:2,kind:'dropper',color:C.dyellow,val:4500,rate:1.0,belt:3,gx:800,gy:1080});
+add({id:'d_des1',  name:'Desert Dropper', price:5200000,floor:2,kind:'dropper',color:C.sand,val:6500,rate:0.95,belt:3,gx:920,gy:1080});
+add({id:'d_des2',  name:'Desert Dropper #2',price:6600000,floor:2,kind:'dropper',color:C.sand2,val:9000,rate:0.95,belt:3,gx:1040,gy:1080});
+add({id:'d_des3',  name:'Desert Dropper #3',price:8200000,floor:2,kind:'dropper',color:C.sand3,val:12500,rate:0.9,belt:3,gx:1160,gy:1080});
+add({id:'sm3',     name:'MUMMY SMASHER (x5)',price:11000000,floor:2,kind:'smasher',mult:5,beltMatch:3,gx:1380,gy:1180});
+add({id:'bookray', name:'BOOK RAY (x7)',  price:16000000,floor:2,kind:'sizeray',mult:7,beltMatch:3,asBook:true,gx:1080,gy:880});
+add({id:'mummy',   name:'A Mummy',        price:6000000, floor:2,kind:'deco',deco:'mummy',gx:1420,gy:830});
+add({id:'walls2',  name:'Walls',          price:7000000, floor:2,kind:'deco',deco:'walls2',gx:600,gy:1300});
+add({id:'win2',    name:'Windows',        price:5500000, floor:2,kind:'deco',deco:'win2',gx:1300,gy:1320});
+add({id:'door2',   name:'Top-Ladder Door',price:6500000,floor:2,kind:'deco',deco:'door2',gx:380,gy:760});
+add({id:'odoor2',  name:'Owner Door',     price:9000000, floor:2,kind:'deco',deco:'odoor2',gx:520,gy:1300});
+add({id:'obby',    name:'Mini OBBY (to F3)',price:14000000,floor:2,kind:'deco',deco:'obby',gx:1620,gy:560});
+add({id:'stairs2', name:'Inside Stairs',  price:13000000,floor:2,kind:'deco',deco:'stairs2',gx:1680,gy:1000});
+add({id:'rmobby',  name:'Remove the Obby',price:18000000,floor:2,kind:'special',sp:'rmobby',gx:1620,gy:700});
+
+// =================== FLOOR 3 — GLOWING HEARTS (y around 360) ===================
+const F3y=380;
+add({id:'gfloor',  name:'Glowing Black Floor',price:22000000,floor:3,kind:'deco',deco:'gfloor',gx:900,gy:380});
+add({id:'gwalls',  name:'Glowing Black Walls',price:26000000,floor:3,kind:'deco',deco:'gwalls',gx:600,gy:200});
+// heart wall decorations
+add({id:'hw_red',  name:'Red Heart Wall',   price:30000000,floor:3,kind:'deco',deco:'heartwall',color:C.hred,   gx:560,gy:140});
+add({id:'hw_org',  name:'Orange Heart Wall',price:34000000,floor:3,kind:'deco',deco:'heartwall',color:C.horange,gx:660,gy:140});
+add({id:'hw_yel',  name:'Yellow Heart Wall',price:39000000,floor:3,kind:'deco',deco:'heartwall',color:C.hyellow,gx:760,gy:140});
+add({id:'hw_grn',  name:'Green Heart Wall', price:45000000,floor:3,kind:'deco',deco:'heartwall',color:C.hgreen, gx:860,gy:140});
+add({id:'hw_blu',  name:'Blue Heart Wall',  price:52000000,floor:3,kind:'deco',deco:'heartwall',color:C.hblue,  gx:960,gy:140});
+add({id:'hw_pur',  name:'Purple Heart Wall',price:60000000,floor:3,kind:'deco',deco:'heartwall',color:C.hpurple,gx:1060,gy:140});
+add({id:'hw_pnk',  name:'Pink Heart Wall',  price:69000000,floor:3,kind:'deco',deco:'heartwall',color:C.hpink,  gx:1160,gy:140});
+add({id:'hw_wht',  name:'White Heart Wall', price:79000000,floor:3,kind:'deco',deco:'heartwall',color:C.hwhite, gx:1260,gy:140});
+add({id:'hw_gry',  name:'Gray Heart Wall',  price:90000000,floor:3,kind:'deco',deco:'heartwall',color:C.hgray,  gx:1360,gy:140});
+add({id:'col4',    name:'Center Collector', price:110000000,floor:3,kind:'collector',belt:4,center:true,gx:900,gy:380});
+add({id:'cash3',   name:'Heart Cash Collector',price:130000000,floor:3,kind:'cashcoll',gx:900,gy:560});
+add({id:'heartdeco',name:'A Heart',         price:140000000,floor:3,kind:'deco',deco:'heartdeco',color:C.hred,gx:1140,gy:560});
+add({id:'h2dropper',name:'Turn Heart into Dropper',price:160000000,floor:3,kind:'dropper',color:C.hred,val:120000,rate:1.0,belt:4,radial:true,gx:680,gy:300});
+// heart droppers (radial around center collector)
+add({id:'hd_org',  name:'Orange Heart Dropper',price:185000000,floor:3,kind:'dropper',color:C.horange,val:150000,rate:1.0,belt:4,radial:true,gx:760,gy:260});
+add({id:'hd_yel',  name:'Yellow Heart Dropper',price:215000000,floor:3,kind:'dropper',color:C.hyellow,val:185000,rate:1.0,belt:4,radial:true,gx:860,gy:240});
+add({id:'hd_grn',  name:'Green Heart Dropper', price:250000000,floor:3,kind:'dropper',color:C.hgreen, val:230000,rate:0.95,belt:4,radial:true,gx:960,gy:240});
+add({id:'hd_blu',  name:'Blue Heart Dropper',  price:290000000,floor:3,kind:'dropper',color:C.hblue,  val:285000,rate:0.95,belt:4,radial:true,gx:1060,gy:260});
+add({id:'hd_pur',  name:'Purple Heart Dropper',price:340000000,floor:3,kind:'dropper',color:C.hpurple,val:350000,rate:0.9, belt:4,radial:true,gx:1140,gy:300});
+add({id:'hd_pnk',  name:'Pink Heart Dropper',  price:400000000,floor:3,kind:'dropper',color:C.hpink,  val:430000,rate:0.9, belt:4,radial:true,gx:1140,gy:460});
+add({id:'hd_wht',  name:'White Heart Dropper', price:470000000,floor:3,kind:'dropper',color:C.hwhite, val:530000,rate:0.85,belt:4,radial:true,gx:660,gy:460});
+add({id:'hd_gry',  name:'Gray Heart Dropper',  price:550000000,floor:3,kind:'dropper',color:C.hgray,  val:650000,rate:0.85,belt:4,radial:true,gx:660,gy:300});
+add({id:'stairtop',name:'Staircase to the Top',price:650000000,floor:3,kind:'deco',deco:'stairtop',gx:1620,gy:380});
+
+// =================== ROOF / TOP — LETTUCE + ENDGAME (y near top) ===================
+add({id:'lettf',   name:'Lettuce Floor',  price:800000000,  floor:4,kind:'deco',deco:'lettfloor',gx:900,gy:-260});
+add({id:'lamp',    name:'Lamp Post',      price:900000000,  floor:4,kind:'deco',deco:'lamp',gx:560,gy:-420});
+add({id:'bench',   name:'Bench',          price:1000000000, floor:4,kind:'deco',deco:'bench',gx:700,gy:-420});
+add({id:'farm',    name:'Farm (very expensive)',price:5000000000,floor:4,kind:'deco',deco:'farm',gx:1200,gy:-420});
+add({id:'sletuce', name:'Smiling Lettuce',price:1600000000, floor:4,kind:'deco',deco:'sletuce',gx:900,gy:-420});
+add({id:'carpet',  name:'Magic Carpet',   price:2400000000, floor:4,kind:'deco',deco:'carpet',gx:560,gy:-150});
+add({id:'grenade', name:'Hand Grenade',   price:3600000000, floor:4,kind:'gear',gear:'grenade',gx:680,gy:-150});
+add({id:'laser',   name:'LASER GUN',      price:50000000000,floor:4,kind:'gear',gear:'laser',gx:900,gy:-150}); // 2nd most expensive
+add({id:'rocket',  name:'Rocket Launcher',price:9000000000, floor:4,kind:'gear',gear:'rocket',gx:1120,gy:-150});
+add({id:'trolled', name:'"YOU HAVE BEEN TROLLED" Sign',price:5500000000,floor:4,kind:'deco',deco:'trolled',gx:1300,gy:-420});
+add({id:'candy',   name:'Candy Bar (in desert)',price:6500000000,floor:4,kind:'deco',deco:'candy',gx:1080,gy:900}); // placed in desert room
+add({id:'flag',    name:'Flagpole',       price:7500000000, floor:4,kind:'deco',deco:'flag',gx:420,gy:-420});
+add({id:'car',     name:'A Car (on ground)',price:8500000000,floor:4,kind:'deco',deco:'car',gx:1900,gy:1900}); // on ground level
+add({id:'garage',  name:'Car Garage',     price:11000000000,floor:4,kind:'deco',deco:'garage',gx:2050,gy:1900});
+add({id:'lgate',   name:'Laser Gate (cars+owner)',price:13000000000,floor:4,kind:'deco',deco:'lgate',gx:1750,gy:1900});
+add({id:'srv1',    name:'Server',         price:15000000000,floor:4,kind:'deco',deco:'server',idx:0,gx:1400,gy:-150});
+add({id:'srv2',    name:'Server #2',      price:18000000000,floor:4,kind:'deco',deco:'server',idx:1,gx:1480,gy:-150});
+add({id:'srv3',    name:'Server #3',      price:22000000000,floor:4,kind:'deco',deco:'server',idx:2,gx:1560,gy:-150});
+add({id:'srvroom', name:'The Server Room',price:27000000000,floor:4,kind:'deco',deco:'srvroom',gx:1480,gy:-300});
+add({id:'tpath',   name:'Translucent Path',price:32000000000,floor:4,kind:'deco',deco:'tpath',gx:1700,gy:-260});
+add({id:'block',   name:'A Block',        price:36000000000,floor:4,kind:'deco',deco:'block',gx:1950,gy:-260});
+add({id:'platform',name:'Platform on Block',price:40000000000,floor:4,kind:'deco',deco:'platform',gx:1950,gy:-380});
+add({id:'dwall',   name:'Door + Walls',   price:44000000000,floor:4,kind:'deco',deco:'dwall',gx:780,gy:-560});
+add({id:'ceiling', name:'A Ceiling',      price:48000000000,floor:4,kind:'deco',deco:'ceiling',gx:1100,gy:-560});
+add({id:'odoor4',  name:'Owner Door',     price:52000000000,floor:4,kind:'deco',deco:'odoor4',gx:980,gy:-560});
+add({id:'nuke',    name:'☢ LAUNCH NUKE',  price:99000000000,floor:4,kind:'nuke',gx:1480,gy:-560}); // MOST expensive
+
+PADS=P;
+}
+defPads();
+const NUM_PADS=PADS.length;
+
+// ============================================================ STATE ============
+const SAVE='megaBaseTycoon_v1';
+const G={cash:0, banked:0, bought:{}, gear:{}, ores:[], pops:[], lasers:[],
+         buyPad:null, buyT:0, robTimer:20, robWarn:0, robbing:0, obbyRemoved:false};
+
+function ownedCount(){return PADS.filter(p=>p.bought).length;}
+function isBought(id){return !!G.bought[id];}
+
+// linear gating: active pad = lowest-order unbought pad (allow a small window so
+// nearby same-floor pads light up too — but strictly the next one is the gate).
+function activeOrder(){
+  for(const p of PADS){if(!p.bought)return p.order;}
+  return 9e9;
+}
+function isActive(p){
+  if(p.bought)return false;
+  return p.order===activeOrder();
+}
+
+// ============================================================ SAVE/LOAD ========
+function save(){
+  try{
+    const b={};for(const p of PADS)if(p.bought)b[p.id]=1;
+    localStorage.setItem(SAVE,JSON.stringify({cash:G.cash,banked:G.banked,bought:b,
+      gear:G.gear,obbyRemoved:G.obbyRemoved}));
+  }catch(e){}
+}
+function load(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SAVE)||'null');
+    if(!s)return;
+    G.cash=s.cash||0;G.banked=s.banked||0;G.gear=s.gear||{};G.obbyRemoved=!!s.obbyRemoved;
+    const b=s.bought||{};
+    for(const p of PADS){if(b[p.id]){p.bought=true;G.bought[p.id]=1;}}
+  }catch(e){}
+}
+// free starter always owned
+function ensureFree(){const f=PADS.find(p=>p.free);if(f&&!f.bought){f.bought=true;G.bought[f.id]=1;}}
+load();ensureFree();
+let saveT=0;
+
+document.getElementById('reset').onclick=()=>{
+  if(confirm('Reset all progress?')){localStorage.removeItem(SAVE);location.reload();}
+};
+
+// ============================================================ PLAYER ===========
+const pl={x:900,y:1900,vx:0,vy:0,face:1,anim:0,z:0,vz:0};
+const keys={};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+let target=null;
+cv.addEventListener('pointerdown',e=>{
+  const r=cv.getBoundingClientRect();
+  target={x:e.clientX-r.left+camX, y:e.clientY-r.top+camY};
+});
+
+function speed(){return G.gear.speed?470:300;}
+
+// ============================================================ ECONOMY ==========
+// belt definitions: each belt id has a start point and a collector point.
+// belt 1 (F1 main), 2 (F1 second), 3 (desert), 4 (heart center radial).
+function beltOwned(id){
+  if(id===1)return true;               // primary belt exists from start
+  if(id===2)return isBought('cv2');
+  if(id===3)return isBought('cv3');
+  if(id===4)return isBought('col4');
+  return false;
+}
+// belt geometry (world coords). drops travel along x toward collector for 1/2/3.
+const BELT={
+  1:{y:1640, x0:540, x1:1240, by:'F1'},
+  2:{y:2160, x0:620, x1:1240, by:'F1'},
+  3:{y:1080, x0:660, x1:1280, by:'F2'},
+  4:{cx:900, cy:380}                    // radial belt: ore slides to center
+};
+function collectorBoughtFor(belt){
+  if(belt===1)return true;             // base collector always
+  if(belt===2)return isBought('col2');
+  if(belt===3)return isBought('col3');
+  if(belt===4)return isBought('col4');
+  return false;
+}
+
+function smasherFor(belt){
+  // returns combined multiplier of smashers/rays on a belt that are bought
+  let m=1;
+  for(const p of PADS){
+    if(!p.bought)continue;
+    if((p.kind==='smasher'||p.kind==='sizeray')&&p.beltMatch===belt)m*=p.mult;
+  }
+  return m;
+}
+
+function spawnOre(p){
+  const belt=p.belt;
+  if(!collectorBoughtFor(belt))return;     // no collector -> no income path yet
+  const b=BELT[belt];
+  let o;
+  if(belt===4){
+    // radial: spawn at pad position, slide to center
+    o={belt:4, x:p.gx, y:p.gy, color:p.color, baseVal:p.val, val:p.val,
+       size:16, t:0, spin:Math.random()*6, done:false, book:false, big:false, small:false};
+  }else{
+    o={belt:belt, x:b.x0+Math.random()*30, y:b.y, color:p.color, baseVal:p.val, val:p.val,
+       size:16, t:0, spin:Math.random()*6, done:false, book:!!p.asBook, big:false, small:false, fall:18};
+  }
+  // apply smasher/ray mult immediately as it passes (simplify: apply at spawn region scaled)
+  G.ores.push(o);
+  if(G.ores.length>500)G.ores.splice(0,G.ores.length-500);
+}
+
+function collect(o){
+  let v=o.val;
+  G.cash+=v;
+  G.pops.push({x:o.x,y:o.y,vy:-50,life:1.1,t:'+$'+fmt(v),col:'#7df0aa'});
+}
+
+// ============================================================ ROBBERS ==========
+const robber={active:false,x:0,y:0,tx:0,ty:0,carry:0,phase:0};
+function startRob(){
+  if(G.cash<5){G.robTimer=20;return;}
+  robber.active=true;robber.phase=0;robber.carry=0;
+  robber.x=pl.x+ (Math.random()<.5?-1:1)*900; robber.y=pl.y;
+  robber.tx=pl.x;robber.ty=pl.y;
+}
+function updateRobber(dt){
+  if(!robber.active)return;
+  const sp=260;
+  if(robber.phase===0){ // approach the cash pile (player area)
+    const dx=robber.tx-robber.x,dy=robber.ty-robber.y,d=Math.hypot(dx,dy)||1;
+    robber.x+=dx/d*sp*dt;robber.y+=dy/d*sp*dt;
+    if(d<60){ // steal 30% of un-banked
+      const stolen=Math.floor(G.cash*0.30);
+      G.cash-=stolen;robber.carry=stolen;robber.phase=1;
+      robber.tx=robber.x+ (Math.random()<.5?-1:1)*1100;
+      G.pops.push({x:robber.x,y:robber.y-20,vy:-50,life:1.4,t:'-$'+fmt(stolen),col:'#ff7a8c'});
+      toast('💸 Robber stole $'+fmt(stolen)+'! Bank your cash!');
+    }
+  }else{ // flee
+    const dx=robber.tx-robber.x,dy=robber.ty-robber.y,d=Math.hypot(dx,dy)||1;
+    robber.x+=dx/d*sp*1.2*dt;robber.y+=dy/d*sp*1.2*dt;
+    if(d<40){robber.active=false;G.robTimer=20;}
+  }
+}
+
+// ============================================================ TOAST/WARN =======
+let toastT=0;const toastEl=document.getElementById('toast');
+function toast(m){toastEl.textContent=m;toastEl.classList.add('show');toastT=2.4;}
+const warnEl=document.getElementById('warn');
+function showWarn(m){warnEl.textContent=m;warnEl.classList.add('show');G.robWarn=Math.max(G.robWarn,2.5);}
+
+// ============================================================ BUY ==============
+function buyPad(p){
+  if(p.bought)return;
+  if(G.cash<p.price){toast('Need $'+fmt(p.price));p.cool=.7;return;}
+  G.cash-=p.price;p.bought=true;G.bought[p.id]=1;
+  if(p.kind==='gear'){G.gear[p.gear]=true;toast('🛡 Equipped: '+p.name);}
+  else if(p.kind==='special'&&p.sp==='rmobby'){G.obbyRemoved=true;toast('🧱 Obby removed — clear path to F3!');}
+  else if(p.kind==='nuke'){triggerNuke();return;}
+  else toast('✓ Built: '+p.name);
+  save();
+}
+function triggerNuke(){
+  const c=document.getElementById('crash');c.style.display='flex';
+  // glitch flashes via inline; reset on reconnect
+}
+document.getElementById('crashBtn').onclick=()=>{
+  // WIN -> soft reset economy but keep nothing (fresh server)
+  localStorage.removeItem(SAVE);location.reload();
+};
+
+// ============================================================ UPDATE ===========
+let last=performance.now(),T=0;
+function update(dt){
+  // ---- input / movement ----
+  let ax=0,ay=0;
+  if(keys['a']||keys['arrowleft'])ax-=1;
+  if(keys['d']||keys['arrowright'])ax+=1;
+  if(keys['w']||keys['arrowup'])ay-=1;
+  if(keys['s']||keys['arrowdown'])ay+=1;
+  if(ax||ay)target=null;
+  if(target){const dx=target.x-pl.x,dy=target.y-pl.y,d=Math.hypot(dx,dy);
+    if(d>8){ax=dx/d;ay=dy/d;}else target=null;}
+  if(ax||ay){const m=Math.hypot(ax,ay)||1;ax/=m;ay/=m;}
+  const sp=speed();
+  pl.x+=ax*sp*dt;pl.y+=ay*sp*dt;
+  if(ax)pl.face=ax>0?1:-1;
+  pl.anim+=(Math.abs(ax)+Math.abs(ay))*dt*9;
+  // jump bob (jump coil = more hop)
+  pl.bob=(pl.bob||0)+dt* (G.gear.jump?12:6);
+  pl.x=Math.max(120,Math.min(WLD_W-120,pl.x));
+  pl.y=Math.max(-680,Math.min(WLD_H-120,pl.y));
+  // camera
+  camX=Math.max(-200,Math.min(WLD_W- W+200, pl.x-W/2));
+  camY=Math.max(-760,Math.min(WLD_H- H+200, pl.y-H/2));
+
+  // ---- buy pad detection ----
+  G.buyPad=null;
+  for(const p of PADS){
+    if(p.cool>0)p.cool-=dt;
+    if(!isActive(p))continue;
+    const dx=pl.x-p.gx, dy=pl.y-p.gy;
+    if(Math.abs(dx)<54 && Math.abs(dy)<54){
+      G.buyPad=p;G.buyT+=dt;
+      if(G.buyT>0.4){G.buyT=0;buyPad(p);}
+    }
+  }
+  if(!G.buyPad)G.buyT=0;
+
+  // ---- droppers spawn ore ----
+  for(const p of PADS){
+    if(p.kind!=='dropper'||!p.bought)continue;
+    p.spawnT=(p.spawnT||0)-dt;
+    if(p.spawnT<=0){p.spawnT=p.rate;spawnOre(p);}
+  }
+
+  // ---- move ore ----
+  for(let i=G.ores.length-1;i>=0;i--){
+    const o=G.ores[i];
+    if(o.belt===4){
+      const cx=BELT[4].cx, cy=BELT[4].cy;
+      const dx=cx-o.x,dy=cy-o.y,d=Math.hypot(dx,dy)||1;
+      o.x+=dx/d*180*dt;o.y+=dy/d*180*dt;o.spin+=dt*4;
+      if(d<26){applyMods(o,4);collect(o);G.ores.splice(i,1);}
+    }else{
+      const b=BELT[o.belt];
+      if(o.fall>0){o.fall-=dt*60;o.y=b.y - Math.max(0,o.fall);}
+      const beltSp=200;
+      o.x+=beltSp*dt;o.spin+=dt*3;o.y=b.y;
+      if(o.x>=b.x1){applyMods(o,o.belt);collect(o);G.ores.splice(i,1);}
+    }
+  }
+
+  // ---- pops ----
+  for(let i=G.pops.length-1;i>=0;i--){const q=G.pops[i];q.y+=q.vy*dt;q.vy*=0.94;q.life-=dt;if(q.life<=0)G.pops.splice(i,1);}
+
+  // ---- robbers ----
+  G.robTimer-=dt;
+  if(G.robTimer<=3 && G.robTimer>0 && !robber.active && G.robWarn<=0 && G.cash>=5){
+    showWarn('⚠ A ROBBER IS COMING IN '+Math.ceil(G.robTimer)+'s — BANK YOUR CASH!');
+  }
+  if(G.robTimer<=0 && !robber.active){startRob();}
+  updateRobber(dt);
+
+  // ---- banking: walk into any owned cash collector ----
+  for(const cc of cashCollectors()){
+    if(Math.abs(pl.x-cc.x)<70 && Math.abs(pl.y-cc.y)<70 && G.cash>0){
+      const amt=G.cash; G.banked+=amt; G.cash=0;
+      G.pops.push({x:pl.x,y:pl.y-30,vy:-60,life:1.2,t:'🏦 +$'+fmt(amt),col:'#ffd34d'});
+    }
+  }
+
+  // ---- timers ----
+  if(toastT>0){toastT-=dt;if(toastT<=0)toastEl.classList.remove('show');}
+  if(G.robWarn>0){G.robWarn-=dt;if(G.robWarn<=0)warnEl.classList.remove('show');}
+  saveT+=dt;if(saveT>3){saveT=0;save();}
+}
+
+function applyMods(o,belt){
+  // apply belt smasher/ray multiplier at collection (keeps it simple + correct)
+  o.val=o.baseVal*smasherFor(belt);
+}
+
+// list of active cash collectors (always include the base cash collector)
+function cashCollectors(){
+  const arr=[{x:1240,y:1740}]; // base cash collector (F1) — present from start
+  if(isBought('cash2'))arr.push({x:980,y:1300});
+  if(isBought('cash3'))arr.push({x:900,y:560});
+  return arr;
+}
+
+// ============================================================ DRAW =============
+// pseudo-3D: draw ground tiles for each floor region, walls with height, etc.
+function fillGrad(x,y,w,h,c1,c2){const g=ctx.createLinearGradient(0,y,0,y+h);g.addColorStop(0,c1);g.addColorStop(1,c2);ctx.fillStyle=g;ctx.fillRect(x,y,w,h);}
+
+// draw a 2.5D box (top-down with extruded height upward)
+function box3(wx,wy,w,d,h,topCol,sideCol,glow){
+  const x=sx(wx),y=sy(wy);
+  ctx.save();
+  if(glow){ctx.shadowColor=glow;ctx.shadowBlur=18;}
+  // front face (height extrudes up)
+  ctx.fillStyle=sideCol;
+  ctx.fillRect(x-w/2,y-h, w, h+ d*ISO*0.5);
+  // top face
+  ctx.fillStyle=topCol;
+  ctx.beginPath();
+  ctx.moveTo(x-w/2,y-h);
+  ctx.lineTo(x+w/2,y-h);
+  ctx.lineTo(x+w/2- d*0.0, y-h - d*ISO);
+  ctx.lineTo(x-w/2- d*0.0, y-h - d*ISO);
+  ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function groundTile(wx,wy,w,h,c1,c2,grid){
+  const x=sx(wx),y=sy(wy);
+  if(x+w<-50||x-w>W+50||y+h< -50||y-h>H+50)return;
+  fillGrad(x-w/2,y-h/2,w,h,c1,c2);
+  if(grid){
+    ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;
+    const gs=64;
+    for(let gx=x-w/2;gx<=x+w/2;gx+=gs){ctx.beginPath();ctx.moveTo(gx,y-h/2);ctx.lineTo(gx,y+h/2);ctx.stroke();}
+    for(let gy=y-h/2;gy<=y+h/2;gy+=gs){ctx.beginPath();ctx.moveTo(x-w/2,gy);ctx.lineTo(x+w/2,gy);ctx.stroke();}
+  }
+}
+
+function drawBg(){
+  // sky/space gradient
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0a1226');g.addColorStop(.5,'#0c1830');g.addColorStop(1,'#06090f');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // stars (parallax)
+  ctx.fillStyle='rgba(255,255,255,.5)';
+  for(let i=0;i<60;i++){
+    const sxp=((i*173 - camX*0.2)%W+W)%W, syp=((i*97 - camY*0.2)%H+H)%H;
+    ctx.globalAlpha=.3+0.4*Math.abs(Math.sin(i+T));
+    ctx.fillRect(sxp,syp,2,2);
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawFloors(){
+  // FLOOR 4 roof / lettuce (top) — only show if lettuce floor bought
+  if(isBought('lettf')){
+    groundTile(900,-260,1500,520, '#a7eb7e','#6fbf52', true);
+    // border
+  } else {
+    // faint slab placeholder for roof
+    groundTile(900,-260,1500,520,'#1a2436','#10182a',false);
+  }
+  // FLOOR 3 hearts
+  if(isBought('gfloor')){
+    groundTile(900,380,1300,500,'#16121c','#0a0710',true);
+    // glow rim
+    ctx.strokeStyle='rgba(255,80,140,.25)';ctx.lineWidth=3;
+    const x=sx(900),y=sy(380);roundRect(x-650,y-250,1300,500,18);ctx.stroke();
+  } else {
+    groundTile(900,380,1300,500,'#161d2b','#0c1320',false);
+  }
+  // FLOOR 2 desert
+  if(isBought('sandf')){
+    groundTile(900,1000,1450,520,'#e8d18a','#c4a85e',true);
+  } else {
+    groundTile(900,1000,1450,520,'#1a2030','#0e1422',false);
+  }
+  // FLOOR 1 ground base (always)
+  groundTile(960,1850,1800,900,'#36506c','#1c2b3e',true);
+  // grass behind base
+  if(isBought('grass')){
+    groundTile(300,1450,520,260,'#3fb95a','#247a37',true);
+  }
+  // outer ground (for car)
+  groundTile(1950,1900,900,500,'#2a3b4f','#16222f',true);
+}
+
+function drawConnections(){
+  // vertical "shafts" connecting floors visually (back ladder, stairs, staircase)
+  ctx.save();
+  // back ladder F1->F2
+  if(isBought('ladder1')){drawLadder(1820,1480,1480,1100);}
+  // F2->F3 obby / stairs
+  if(isBought('stairtop')){drawStairLine(1620,380,1620,1000,'#3a2f1a');}
+  ctx.restore();
+}
+function drawLadder(wx,wy,wy2,_){
+  const x=sx(wx),y1=sy(1100),y2=sy(1480);
+  ctx.strokeStyle='#7a5a32';ctx.lineWidth=5;
+  ctx.beginPath();ctx.moveTo(x-9,y1);ctx.lineTo(x-9,y2);ctx.moveTo(x+9,y1);ctx.lineTo(x+9,y2);ctx.stroke();
+  ctx.lineWidth=4;
+  for(let yy=y1;yy<y2;yy+=22){ctx.beginPath();ctx.moveTo(x-9,yy);ctx.lineTo(x+9,yy);ctx.stroke();}
+}
+function drawStairLine(ax,ay,bx,by2,col){
+  const x=sx(ax);
+  ctx.fillStyle=col;
+  for(let i=0;i<10;i++){const yy=sy(lerp(ay,by2,i/10));ctx.fillRect(x-30+i*3,yy,40,10);}
+}
+
+// ---- belts ----
+function drawBelt(belt){
+  if(!collectorBoughtFor(belt) && belt!==1)return;
+  if(belt===4){
+    if(!isBought('col4'))return;
+    return; // radial belt is implied by sliding ore; draw subtle ring
+  }
+  const b=BELT[belt];
+  const x0=sx(b.x0),x1=sx(b.x1),y=sy(b.y);
+  // supports
+  ctx.fillStyle='#10171f';
+  for(let x=x0;x<x1;x+=120)ctx.fillRect(x,y+18,8,46);
+  // belt body
+  const g=ctx.createLinearGradient(0,y-16,0,y+18);
+  g.addColorStop(0,'#46586f');g.addColorStop(1,'#161d27');
+  ctx.fillStyle=g;roundRect(x0-18,y-16,x1-x0+36,34,14);ctx.fill();
+  ctx.save();roundRect(x0-18,y-16,x1-x0+36,34,14);ctx.clip();
+  ctx.strokeStyle='#5d7596';ctx.lineWidth=3;
+  const off=(T*150)%26;
+  for(let x=x0-30;x<x1+30;x+=26){ctx.beginPath();ctx.moveTo(x+off,y-16);ctx.lineTo(x+off-16,y+18);ctx.stroke();}
+  ctx.restore();
+  for(const rx of[x0-18,x1+18]){const rg=ctx.createRadialGradient(rx-3,y,2,rx,y+1,16);
+    rg.addColorStop(0,'#8090a8');rg.addColorStop(1,'#2a3340');ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(rx,y+1,15,0,7);ctx.fill();}
+}
+
+function drawOre(o){
+  const x=sx(o.x),y=sy(o.y);
+  if(x<-40||x>W+40||y<-40||y>H+40)return;
+  const m=smasherFor(o.belt);
+  let s=o.size;
+  // smasher shrinks, sizeray grows (visual). compute from belt mods presence.
+  let hasRay=false,hasSm=false;
+  for(const p of PADS){if(p.bought&&p.beltMatch===o.belt){if(p.kind==='sizeray')hasRay=true;if(p.kind==='smasher')hasSm=true;}}
+  if(hasSm)s*=0.7; if(hasRay)s*=1.5;
+  ctx.save();ctx.translate(x,y);ctx.rotate(o.spin);
+  const glow=(o.belt>=3)||['#ff3b5c','#b14cff','#3aa0ff','#ff62c6'].includes(o.color);
+  if(glow){ctx.shadowColor=o.color;ctx.shadowBlur=12;}
+  if(o.book){
+    ctx.fillStyle='#7a3a2a';roundRect(-s*.6,-s*.8,s*1.2,s*1.6,2);ctx.fill();
+    ctx.fillStyle='#f0e6c8';ctx.fillRect(-s*.4,-s*.7,s*0.7,s*1.4);
+  }else{
+    const g=ctx.createLinearGradient(-s,-s,s,s);g.addColorStop(0,o.color);g.addColorStop(1,shade(o.color,-40));
+    ctx.fillStyle=g;roundRect(-s*.7,-s*.6,s*1.4,s*1.2,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.22)';ctx.fillRect(-s*.7,-s*.6,s*1.4,3);
+    ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(-s*.7,s*.45,s*1.4,2);
+  }
+  ctx.restore();
+}
+function shade(hex,amt){
+  const c=hex.replace('#','');const n=parseInt(c.length===3?c.split('').map(x=>x+x).join(''):c,16);
+  let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
+  return 'rgb('+r+','+g+','+b+')';
+}
+
+// ---- machines ----
+function drawDropper(p){
+  if(!p.bought)return;
+  const x=sx(p.gx),y=sy(p.gy);
+  if(x<-90||x>W+90||y<-120||y>H+90)return;
+  const glow=['#ff3b5c','#b14cff','#3aa0ff','#ff62c6','#ffe23a','#3ee07a'].includes(p.color)?p.color:null;
+  ctx.save();if(glow){ctx.shadowColor=glow;ctx.shadowBlur=14;}
+  // body
+  const g=ctx.createLinearGradient(0,y-66,0,y-6);g.addColorStop(0,shade(p.color,30));g.addColorStop(1,shade(p.color,-30));
+  ctx.fillStyle=g;roundRect(x-26,y-66,52,52,8);ctx.fill();
+  ctx.restore();
+  // funnel
+  ctx.fillStyle=shade(p.color,-50);
+  ctx.beginPath();ctx.moveTo(x-26,y-66);ctx.lineTo(x+26,y-66);ctx.lineTo(x+16,y-80);ctx.lineTo(x-16,y-80);ctx.closePath();ctx.fill();
+  // chute
+  ctx.fillStyle='#0d131c';ctx.fillRect(x-7,y-14,14,16);
+  // legs
+  ctx.strokeStyle=shade(p.color,-40);ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x-18,y-14);ctx.lineTo(x-18,y+8);ctx.moveTo(x+18,y-14);ctx.lineTo(x+18,y+8);ctx.stroke();
+}
+
+function drawMachine(p){
+  if(!p.bought)return;
+  const x=sx(p.gx),y=sy(p.gy);
+  if(x<-90||x>W+90)return;
+  const col=p.kind==='smasher'?'#ff7a3a':(p.kind==='sizeray'?'#5ce0ff':'#9a7aff');
+  ctx.save();ctx.shadowColor=col;ctx.shadowBlur=16;
+  ctx.fillStyle=shade(col,-30);roundRect(x-34,y-90,12,90,4);ctx.fill();roundRect(x+22,y-90,12,90,4);ctx.fill();
+  ctx.fillStyle=col;roundRect(x-34,y-92,68,16,5);ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#fff';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';
+  ctx.fillText((p.kind==='smasher'?'×':p.kind==='sizeray'?'⬆×':'×')+p.mult,x,y-79);
+  ctx.fillStyle=p.kind==='smasher'?'rgba(255,120,60,.18)':'rgba(90,224,255,.18)';
+  ctx.fillRect(x-22,y-76,44,72);
+}
+
+function drawCollector(belt){
+  if(!collectorBoughtFor(belt))return;
+  let x,y,label;
+  if(belt===1){x=sx(1240);y=sy(1640);label='COLLECTOR';}
+  else if(belt===2){x=sx(1240);y=sy(2160);label='COLLECTOR 2';}
+  else if(belt===3){x=sx(1280);y=sy(1180);label='COLLECTOR';}
+  else if(belt===4){if(!isBought('col4'))return;x=sx(BELT[4].cx);y=sy(BELT[4].cy);label='CENTER';}
+  ctx.save();ctx.shadowColor='#5cf09a';ctx.shadowBlur=14;
+  const g=ctx.createLinearGradient(0,y-60,0,y+12);g.addColorStop(0,'#2a6a4a');g.addColorStop(1,'#10261c');
+  ctx.fillStyle=g;roundRect(x-34,y-60,68,72,10);ctx.fill();ctx.restore();
+  ctx.fillStyle='#0d1a14';roundRect(x-26,y-52,52,28,6);ctx.fill();
+  ctx.font='20px Segoe UI';ctx.textAlign='center';ctx.fillText('💰',x,y-32);
+  ctx.fillStyle='#9fe8c0';ctx.font='bold 9px Segoe UI';ctx.fillText(label,x,y-12);
+}
+
+function drawCashCollector(cc,name){
+  const x=sx(cc.x),y=sy(cc.y);
+  if(x<-80||x>W+80)return;
+  ctx.save();ctx.shadowColor='#ffd34d';ctx.shadowBlur=18;
+  const g=ctx.createLinearGradient(0,y-56,0,y+14);g.addColorStop(0,'#7a5e1c');g.addColorStop(1,'#3a2c0c');
+  ctx.fillStyle=g;roundRect(x-40,y-56,80,72,12);ctx.fill();ctx.restore();
+  ctx.fillStyle='#1a1404';roundRect(x-32,y-48,64,30,6);ctx.fill();
+  ctx.font='22px Segoe UI';ctx.textAlign='center';ctx.fillText('🏦',x,y-26);
+  ctx.fillStyle='#ffe08a';ctx.font='bold 9px Segoe UI';ctx.fillText('BANK CASH',x,y-6);
+}
+
+// ---- decorations ----
+function drawDeco(p){
+  if(!p.bought)return;
+  if(p.deco==='obby' && G.obbyRemoved)return;
+  const x=sx(p.gx),y=sy(p.gy);
+  if(x<-160||x>W+160||y<-200||y>H+160)return;
+  const d=p.deco;
+  switch(d){
+    case 'walls1': case 'walls1b': case 'walls2': case 'gwalls': case 'dwall':
+      drawWall(x,y, d==='gwalls'?'#241830':'#5a4a36', d==='gwalls'?'#ff5a8c':null); break;
+    case 'grass': /* drawn as ground */ break;
+    case 'floor2slab': /* shown as F2 base later */ break;
+    case 'win1': case 'win2': drawWindows(x,y); break;
+    case 'ladder1': break; // drawn in connections
+    case 'stairs1': case 'stairs2': drawStairs(x,y); break;
+    case 'odoor1': case 'odoor2': case 'odoor4': drawOwnerDoor(x,y); break;
+    case 'sandfloor': break; // ground
+    case 'pyramid': drawPyramid(x,y); break;
+    case 'shelf': drawShelf(x,y,false); break;
+    case 'books': drawShelf(x,y,true); break;
+    case 'mbook': drawMBook(x,y); break;
+    case 'poles': drawPoles(); break;
+    case 'mummy': drawMummy(x,y); break;
+    case 'door2': drawDoor(x,y); break;
+    case 'gfloor': break;
+    case 'heartwall': drawHeart(x,y-40,22,p.color,true); break;
+    case 'heartdeco': drawHeart(x,y,26,p.color,true); break;
+    case 'stairtop': drawStairs(x,y); break;
+    case 'lettfloor': break;
+    case 'lamp': drawLamp(x,y); break;
+    case 'bench': drawBench(x,y); break;
+    case 'farm': drawFarm(x,y); break;
+    case 'sletuce': drawLettuce(x,y,true); break;
+    case 'carpet': drawCarpet(x,y); break;
+    case 'trolled': drawSign(x,y,'YOU HAVE BEEN TROLLED','#ff4d6a'); break;
+    case 'candy': drawCandy(x,y); break;
+    case 'flag': drawFlag(x,y); break;
+    case 'car': drawCar(x,y); break;
+    case 'garage': drawGarage(x,y); break;
+    case 'lgate': drawLaserGate(x,y); break;
+    case 'server': drawServer(x,y,p.idx||0); break;
+    case 'srvroom': drawWall(x,y,'#1a2436',null); break;
+    case 'tpath': drawTPath(x,y); break;
+    case 'block': box3(p.gx,p.gy,90,90,70,'#6a7a92','#3a4a62'); break;
+    case 'platform': box3(p.gx,p.gy,120,40,16,'#8a9ab2','#4a5a72'); break;
+    case 'ceiling': drawCeiling(x,y); break;
+  }
+}
+function drawWall(x,y,col,glow){
+  ctx.save();if(glow){ctx.shadowColor=glow;ctx.shadowBlur=16;}
+  const g=ctx.createLinearGradient(0,y-70,0,y);g.addColorStop(0,shade(col,30));g.addColorStop(1,shade(col,-30));
+  ctx.fillStyle=g;ctx.fillRect(x-150,y-70,300,70);
+  ctx.fillStyle=shade(col,-50);ctx.fillRect(x-150,y-70,300,8);
+  ctx.restore();
+  // brick lines
+  ctx.strokeStyle='rgba(0,0,0,.25)';ctx.lineWidth=1;
+  for(let yy=y-58;yy<y;yy+=14){ctx.beginPath();ctx.moveTo(x-150,yy);ctx.lineTo(x+150,yy);ctx.stroke();}
+}
+function drawWindows(x,y){
+  for(let i=-1;i<=1;i++){
+    ctx.fillStyle='#0d1626';ctx.fillRect(x+i*70-22,y-58,44,40);
+    const g=ctx.createLinearGradient(0,y-58,0,y-18);g.addColorStop(0,'#7ec8ff88');g.addColorStop(1,'#2a5a8a88');
+    ctx.fillStyle=g;ctx.fillRect(x+i*70-18,y-54,36,32);
+    ctx.strokeStyle='#1a2a3a';ctx.lineWidth=2;ctx.strokeRect(x+i*70-22,y-58,44,40);
+  }
+}
+function drawStairs(x,y){
+  for(let i=0;i<6;i++){ctx.fillStyle=shade('#4a5a72',i*6);ctx.fillRect(x-40+i*8,y-i*9,60,12);}
+}
+function drawOwnerDoor(x,y){
+  const g=ctx.createLinearGradient(0,y-72,0,y);g.addColorStop(0,'#caa23a');g.addColorStop(1,'#8a6c1e');
+  ctx.save();ctx.shadowColor='#ffd34d';ctx.shadowBlur=14;ctx.fillStyle=g;
+  roundRect(x-26,y-72,52,72,6);ctx.fill();ctx.restore();
+  ctx.fillStyle='#3a2c0c';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('🔑',x,y-32);
+  ctx.fillStyle='#fff';ctx.font='bold 8px Segoe UI';ctx.fillText('OWNER',x,y-14);
+}
+function drawDoor(x,y){
+  const g=ctx.createLinearGradient(0,y-72,0,y);g.addColorStop(0,'#6a4a2a');g.addColorStop(1,'#3a2614');
+  ctx.fillStyle=g;roundRect(x-24,y-72,48,72,6);ctx.fill();
+  ctx.fillStyle='#caa46a';ctx.beginPath();ctx.arc(x+12,y-36,3,0,7);ctx.fill();
+}
+function drawPyramid(x,y){
+  const g=ctx.createLinearGradient(0,y-90,0,y);g.addColorStop(0,'#f0d886');g.addColorStop(1,'#b89042');
+  ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(x,y-90);ctx.lineTo(x+70,y);ctx.lineTo(x-70,y);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#8a6c2a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y-90);ctx.lineTo(x,y);ctx.stroke();
+}
+function drawShelf(x,y,filled){
+  ctx.fillStyle='#5a3a1e';roundRect(x-60,y-90,120,90,4);ctx.fill();
+  ctx.fillStyle='#3a2412';for(let r=0;r<3;r++)ctx.fillRect(x-56,y-86+r*28,112,4);
+  if(filled){const cols=['#ff5a5a','#5aff8a','#5a8aff','#ffd35a','#c05aff','#ff9a3a'];
+    for(let r=0;r<3;r++)for(let i=0;i<8;i++){ctx.fillStyle=cols[(r*8+i)%cols.length];ctx.fillRect(x-54+i*14,y-82+r*28,11,22);}}
+}
+function drawMBook(x,y){
+  ctx.save();ctx.shadowColor='#a05cff';ctx.shadowBlur=18;
+  ctx.fillStyle='#2a1840';roundRect(x-14,y-20,28,32,3);ctx.fill();ctx.restore();
+  ctx.fillStyle='#c89aff';ctx.font='14px Segoe UI';ctx.textAlign='center';ctx.fillText('✦',x,y);
+}
+function drawPoles(){
+  const corners=[[640,640],[1160,640],[640,1360],[1160,1360]];
+  for(const c of corners){const x=sx(c[0]),y=sy(c[1]);
+    ctx.fillStyle='#8a8a96';ctx.fillRect(x-7,y-160,14,160);
+    ctx.fillStyle='#6a6a76';ctx.fillRect(x-7,y-160,14,8);}
+}
+function drawMummy(x,y){
+  ctx.fillStyle='#e8e2d0';roundRect(x-14,y-46,28,46,6);ctx.fill();
+  ctx.strokeStyle='#c8c0a8';ctx.lineWidth=2;for(let yy=y-42;yy<y;yy+=8){ctx.beginPath();ctx.moveTo(x-14,yy);ctx.lineTo(x+14,yy+4);ctx.stroke();}
+  ctx.fillStyle='#000';ctx.fillRect(x-7,y-34,5,4);ctx.fillRect(x+3,y-34,5,4);
+}
+function drawHeart(x,y,s,col,glow){
+  ctx.save();if(glow){ctx.shadowColor=col;ctx.shadowBlur=16;}
+  ctx.fillStyle=col;ctx.beginPath();
+  ctx.moveTo(x,y+s*0.7);
+  ctx.bezierCurveTo(x+s,y-s*0.4,x+s*0.4,y-s,x,y-s*0.3);
+  ctx.bezierCurveTo(x-s*0.4,y-s,x-s,y-s*0.4,x,y+s*0.7);
+  ctx.closePath();ctx.fill();ctx.restore();
+}
+function drawLamp(x,y){
+  ctx.fillStyle='#3a3a44';ctx.fillRect(x-4,y-120,8,120);
+  ctx.save();ctx.shadowColor='#ffeb99';ctx.shadowBlur=24;ctx.fillStyle='#ffeb99';
+  ctx.beginPath();ctx.arc(x,y-126,12,0,7);ctx.fill();ctx.restore();
+}
+function drawBench(x,y){
+  ctx.fillStyle='#7a5a32';roundRect(x-40,y-22,80,10,3);ctx.fill();
+  ctx.fillStyle='#5a3e1e';ctx.fillRect(x-36,y-12,6,16);ctx.fillRect(x+30,y-12,6,16);
+}
+function drawFarm(x,y){
+  ctx.fillStyle='#5a3a1e';ctx.fillRect(x-70,y-10,140,20);
+  for(let i=0;i<6;i++){ctx.fillStyle='#3fb95a';ctx.beginPath();ctx.arc(x-58+i*22,y-14,8,0,7);ctx.fill();}
+  ctx.fillStyle='#8a6c3a';for(let i=0;i<7;i++)ctx.fillRect(x-70+i*22,y-10,2,20);
+}
+function drawLettuce(x,y,smile){
+  ctx.save();ctx.shadowColor='#8ee06a';ctx.shadowBlur=14;
+  ctx.fillStyle='#7ad65a';ctx.beginPath();ctx.arc(x,y-16,24,0,7);ctx.fill();ctx.restore();
+  ctx.fillStyle='#5ab83a';for(let i=0;i<6;i++){const a=i/6*7;ctx.beginPath();ctx.arc(x+Math.cos(a)*16,y-16+Math.sin(a)*16,9,0,7);ctx.fill();}
+  if(smile){ctx.fillStyle='#143a0a';ctx.fillRect(x-9,y-22,4,5);ctx.fillRect(x+5,y-22,4,5);
+    ctx.strokeStyle='#143a0a';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y-12,8,0.2,Math.PI-0.2);ctx.stroke();}
+}
+function drawCarpet(x,y){
+  ctx.save();ctx.shadowColor='#a05cff';ctx.shadowBlur=12;
+  const wob=Math.sin(T*3)*4;
+  ctx.fillStyle='#b14cff';roundRect(x-44,y-8+wob,88,16,4);ctx.fill();ctx.restore();
+  ctx.fillStyle='#ffd34d';ctx.fillRect(x-40,y-4+wob,80,2);
+}
+function drawSign(x,y,txt,col){
+  ctx.fillStyle='#2a3040';ctx.fillRect(x-4,y-40,8,40);
+  ctx.save();ctx.shadowColor=col;ctx.shadowBlur=12;ctx.fillStyle='#0d1626';
+  roundRect(x-78,y-78,156,40,8);ctx.fill();ctx.restore();
+  ctx.strokeStyle=col;ctx.lineWidth=2;roundRect(x-78,y-78,156,40,8);ctx.stroke();
+  ctx.fillStyle=col;ctx.font='bold 11px Segoe UI';ctx.textAlign='center';ctx.fillText(txt,x,y-54);
+}
+function drawCandy(x,y){
+  ctx.save();ctx.shadowColor='#ff7ad0';ctx.shadowBlur=10;
+  ctx.fillStyle='#8a3a2a';roundRect(x-22,y-12,44,24,5);ctx.fill();ctx.restore();
+  ctx.fillStyle='#ff9a8a';for(let i=0;i<4;i++)ctx.fillRect(x-18+i*11,y-10,4,20);
+}
+function drawFlag(x,y){
+  ctx.fillStyle='#9aa3ad';ctx.fillRect(x-3,y-130,6,130);
+  ctx.fillStyle='#ff4d6a';ctx.beginPath();ctx.moveTo(x+3,y-130);ctx.lineTo(x+50,y-116);ctx.lineTo(x+3,y-102);ctx.closePath();ctx.fill();
+}
+function drawCar(x,y){
+  ctx.save();ctx.shadowColor='#000';ctx.shadowBlur=10;
+  ctx.fillStyle='#e23a4a';roundRect(x-46,y-26,92,30,8);ctx.fill();
+  ctx.fillStyle='#ff5a6a';roundRect(x-28,y-44,52,22,6);ctx.fill();ctx.restore();
+  ctx.fillStyle='#9fd3ff';roundRect(x-22,y-40,44,16,4);ctx.fill();
+  ctx.fillStyle='#1a1a1e';ctx.beginPath();ctx.arc(x-26,y+6,11,0,7);ctx.arc(x+26,y+6,11,0,7);ctx.fill();
+  ctx.fillStyle='#555';ctx.beginPath();ctx.arc(x-26,y+6,5,0,7);ctx.arc(x+26,y+6,5,0,7);ctx.fill();
+}
+function drawGarage(x,y){
+  const g=ctx.createLinearGradient(0,y-100,0,y);g.addColorStop(0,'#4a5566');g.addColorStop(1,'#2a3340');
+  ctx.fillStyle=g;ctx.fillRect(x-70,y-100,140,100);
+  ctx.fillStyle='#1a222e';ctx.fillRect(x-56,y-70,112,70);
+  ctx.strokeStyle='#3a4656';ctx.lineWidth=2;for(let yy=y-64;yy<y;yy+=14){ctx.beginPath();ctx.moveTo(x-56,yy);ctx.lineTo(x+56,yy);ctx.stroke();}
+}
+function drawLaserGate(x,y){
+  ctx.fillStyle='#3a2a3a';ctx.fillRect(x-46,y-90,10,90);ctx.fillRect(x+36,y-90,10,90);
+  ctx.save();ctx.shadowColor='#ff3a5c';ctx.shadowBlur=14;ctx.strokeStyle='#ff3a5c';ctx.lineWidth=3;
+  for(let i=0;i<4;i++){const yy=y-76+i*20;ctx.globalAlpha=.5+0.5*Math.abs(Math.sin(T*4+i));
+    ctx.beginPath();ctx.moveTo(x-36,yy);ctx.lineTo(x+36,yy);ctx.stroke();}
+  ctx.restore();ctx.globalAlpha=1;
+}
+function drawServer(x,y,idx){
+  ctx.save();ctx.shadowColor='#3ee07a';ctx.shadowBlur=10;
+  ctx.fillStyle='#1a222e';roundRect(x-22,y-70,44,70,4);ctx.fill();ctx.restore();
+  for(let i=0;i<6;i++){ctx.fillStyle=Math.sin(T*5+i+idx)>0?'#3ee07a':'#1a3a26';ctx.fillRect(x-16,y-62+i*10,5,5);
+    ctx.fillStyle=Math.cos(T*4+i)>0?'#ffd34d':'#3a3010';ctx.fillRect(x-6,y-62+i*10,5,5);}
+}
+function drawTPath(x,y){
+  ctx.fillStyle='rgba(120,200,255,.22)';ctx.strokeStyle='rgba(150,220,255,.5)';ctx.lineWidth=2;
+  ctx.fillRect(x-90,y-14,180,28);ctx.strokeRect(x-90,y-14,180,28);
+}
+function drawCeiling(x,y){
+  ctx.fillStyle='rgba(60,80,110,.4)';ctx.fillRect(x-160,y-12,320,24);
+  ctx.strokeStyle='rgba(120,150,190,.4)';ctx.strokeRect(x-160,y-12,320,24);
+}
+
+// ---- buy pads ----
+function drawPad(p){
+  if(!isActive(p)&&!p.bought)return;       // hide future pads
+  if(p.bought && p.kind!=='nuke')return;    // bought pads vanish (item appears instead)
+  const x=sx(p.gx),y=sy(p.gy);
+  if(x<-120||x>W+120||y<-160||y>H+120)return;
+  const can=G.cash>=p.price;
+  const here=G.buyPad===p;
+  // pad (top-down rounded plate with glow)
+  ctx.save();
+  let col=p.cool>0?'#b03a3a':(can?'#2ecf63':'#3a8050');
+  if(p.kind==='nuke')col=can?'#ff3a3a':'#7a1a1a';
+  if(p.kind==='gear')col=can?'#3a9adf':'#2a5a7a';
+  if(here){ctx.shadowColor=can?'#7df0aa':'#ff6b6b';ctx.shadowBlur=28;}
+  else {ctx.shadowColor=col;ctx.shadowBlur=14;}
+  ctx.fillStyle=col;roundRect(x-46,y-30,92,60,12);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=2;roundRect(x-46,y-30,92,60,12);ctx.stroke();
+  // inner arrow / icon
+  ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='bold 16px Segoe UI';ctx.textAlign='center';
+  ctx.fillText(p.kind==='nuke'?'☢':p.kind==='gear'?'🛡':'⬇',x,y+6);
+  // fill ring
+  if(here&&can){ctx.strokeStyle='#fff';ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(x,y,36,-Math.PI/2,-Math.PI/2+Math.PI*2*(G.buyT/0.4));ctx.stroke();}
+  // floating sign
+  const sy0=y-92+Math.sin(T*2+p.gx*0.01)*4;
+  const w=Math.max(150, p.name.length*8+40);
+  ctx.save();ctx.shadowColor='#000';ctx.shadowBlur=10;
+  ctx.fillStyle='#0c1626f0';roundRect(x-w/2,sy0-24,w,48,9);ctx.fill();ctx.restore();
+  ctx.strokeStyle=p.kind==='nuke'?'#ff5a5a':(can?'#3fd97a':'#2a3647');ctx.lineWidth=1.5;
+  roundRect(x-w/2,sy0-24,w,48,9);ctx.stroke();
+  ctx.fillStyle='#eaf1fb';ctx.font='bold 12px Segoe UI';ctx.fillText(p.name,x,sy0-5);
+  ctx.fillStyle=can?'#ffd34d':'#ff8a8a';ctx.font='bold 13px Segoe UI';
+  ctx.fillText(p.free?'FREE':'$'+fmt(p.price),x,sy0+15);
+  // post
+  ctx.fillStyle='#243245';ctx.fillRect(x-3,sy0+24,6,(y-30)-(sy0+24));
+}
+
+// ---- player ----
+function drawCharacter(wx,wy,opt){
+  const x=sx(wx),y=sy(wy);
+  const o=opt||{};
+  const hop=o.hop||0;
+  const yy=y-hop;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.4)';ctx.beginPath();ctx.ellipse(x,y+20,20,8,0,0,7);ctx.fill();
+  const sw=Math.sin(o.anim||0)*5;
+  // legs
+  ctx.fillStyle=o.legCol||'#264b8a';
+  ctx.fillRect(x-10,yy+8+sw,8,16);ctx.fillRect(x+2,yy+8-sw,8,16);
+  // torso
+  const tg=ctx.createLinearGradient(0,yy-16,0,yy+10);
+  tg.addColorStop(0,o.shirt||'#3fd97a');tg.addColorStop(1,shade(o.shirt||'#3fd97a',-30));
+  ctx.fillStyle=tg;roundRect(x-15,yy-16,30,26,5);ctx.fill();
+  // arms
+  ctx.fillStyle=o.skin||'#ffd9a8';
+  ctx.fillRect(x-21,yy-14+sw,7,18);ctx.fillRect(x+14,yy-14-sw,7,18);
+  // head
+  ctx.fillStyle=o.skin||'#ffd9a8';roundRect(x-12,yy-40,24,22,6);ctx.fill();
+  // face
+  ctx.fillStyle='#1a1a1a';const f=(o.face||1)*3;
+  ctx.fillRect(x-6+f,yy-32,3,5);ctx.fillRect(x+3+f,yy-32,3,5);
+  ctx.fillStyle='#c98';ctx.fillRect(x-4+f,yy-25,8,2);
+  // hair
+  ctx.fillStyle=o.hair||'#5a3a1a';ctx.fillRect(x-12,yy-40,24,6);
+  // sword
+  if(o.sword){ctx.save();ctx.translate(x+ (o.face||1)*20, yy-2);ctx.rotate((o.face||1)*-0.5);
+    ctx.fillStyle='#cfd8e6';ctx.fillRect(-2,-22,4,22);ctx.fillStyle='#8a6a2a';ctx.fillRect(-6,0,12,4);ctx.restore();}
+  // laser gun
+  if(o.laser){ctx.fillStyle='#3a3a44';ctx.fillRect(x+(o.face||1)*14,yy-6,(o.face||1)*22,6);
+    ctx.save();ctx.shadowColor='#5ce0ff';ctx.shadowBlur=8;ctx.fillStyle='#5ce0ff';
+    ctx.fillRect(x+(o.face||1)*34,yy-5,(o.face||1)*5,4);ctx.restore();}
+}
+function drawPlayer(){
+  drawCharacter(pl.x,pl.y,{
+    anim:pl.anim, face:pl.face,
+    hop:Math.abs(Math.sin(pl.anim))* (G.gear.jump?8:3),
+    sword:G.gear.sword, laser:G.gear.laser
+  });
+}
+function drawRobber(){
+  if(!robber.active)return;
+  const wob=Math.sin(T*12)*4;
+  drawCharacter(robber.x,robber.y,{anim:T*12,face:robber.tx>robber.x?1:-1,
+    shirt:'#3a2a44',skin:'#caa', hair:'#1a1a1a', legCol:'#1a1a22', hop:Math.abs(wob)});
+  // mask + bag
+  const x=sx(robber.x),y=sy(robber.y);
+  ctx.fillStyle='#1a1a22';ctx.fillRect(x-12,y-30,24,8);
+  if(robber.carry>0){ctx.fillStyle='#caa23a';roundRect(x+8,y-8,16,16,3);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='10px Segoe UI';ctx.textAlign='center';ctx.fillText('$',x+16,y+4);}
+}
+
+// ---- depth-sorted scene ----
+function draw(){
+  drawBg();
+  drawFloors();
+  drawConnections();
+  // belts (behind machines)
+  for(const b of[1,2,3])drawBelt(b);
+  // collectors
+  for(const b of[1,2,3,4])drawCollector(b);
+  // base cash collector (F1 always) + others
+  drawCashCollector({x:1240,y:1740},'BANK');
+  if(isBought('cash2'))drawCashCollector({x:980,y:1300});
+  if(isBought('cash3'))drawCashCollector({x:900,y:560});
+  // ore
+  for(const o of G.ores)drawOre(o);
+  // machines / droppers (bought)
+  for(const p of PADS){
+    if(!p.bought)continue;
+    if(p.kind==='dropper')drawDropper(p);
+    else if(p.kind==='smasher'||p.kind==='sizeray')drawMachine(p);
+    else if(p.kind==='deco')drawDeco(p);
+  }
+  // entities sorted by y for depth
+  const ents=[{y:pl.y,fn:drawPlayer}];
+  if(robber.active)ents.push({y:robber.y,fn:drawRobber});
+  ents.sort((a,b)=>a.y-b.y);
+  for(const e of ents)e.fn();
+  // buy pads on top
+  for(const p of PADS)drawPad(p);
+  // pops
+  for(const q of G.pops){const x=sx(q.x),y=sy(q.y);ctx.globalAlpha=Math.max(0,q.life);
+    ctx.fillStyle=q.col||'#7df0aa';ctx.font='bold 15px Segoe UI';ctx.textAlign='center';ctx.fillText(q.t,x,y);ctx.globalAlpha=1;}
+}
+
+// ============================================================ LOOP =============
+const moneyEl=document.getElementById('money'),bankEl=document.getElementById('bank'),
+      subEl=document.getElementById('sub'),rbEl=document.getElementById('rb'),flrEl=document.getElementById('flr');
+function loop(now){
+  const dt=Math.min((now-last)/1000,0.05);last=now;T+=dt;
+  update(dt);draw();
+  moneyEl.textContent='$'+fmt(G.cash);
+  bankEl.textContent='🏦 Banked: $'+fmt(G.banked);
+  subEl.textContent=ownedCount()+' / '+NUM_PADS+' pads bought';
+  rbEl.textContent='💸 Robber in '+Math.max(0,Math.ceil(G.robTimer))+'s';
+  const cur=PADS.find(p=>!p.bought);
+  flrEl.textContent=cur?('Next: Floor '+cur.floor):'★ COMPLETE ★';
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
