@@ -322,8 +322,9 @@ local function makeButton(plot, idx)
 	local col = (idx-1) % 6
 	local row = math.floor((idx-1) / 6)
 	local bx = o.X - 28 + col*11
-	local bz = o.Z - 40 - row*9
-	local b = part({Name="Buy_"..idx, Size=Vector3.new(7,1,7), Position=Vector3.new(bx, 1, bz),
+	local bz = o.Z - 8 - row*5.5
+	-- floor top surface is at y = 3 (the ground floor slab); pads sit ON it
+	local b = part({Name="Buy_"..idx, Size=Vector3.new(7,1,7), Position=Vector3.new(bx, 3.6, bz),
 		Color=Color3.fromRGB(40,200,90), Material=Enum.Material.Neon}, plot.buttonsModel)
 	local _, costLabel = billboard(b, btn.name, "$"..money(costOf(btn)), Color3.fromRGB(120,255,160))
 	plot.buttonNodes[idx] = b
@@ -423,8 +424,8 @@ local function buildPlot(player)
 	}
 	plots[player.UserId] = plot
 
-	-- spawn pad
-	part({Name="Spawn", Size=Vector3.new(12,1,12), Position=Vector3.new(origin.X-30, 1, origin.Z-50),
+	-- spawn pad (sits on the ground floor, top surface y=3)
+	part({Name="Spawn", Size=Vector3.new(12,1,12), Position=Vector3.new(origin.X-44, 3.1, origin.Z-25),
 		Color=Color3.fromRGB(80,120,200), Material=Enum.Material.SmoothPlastic}, model)
 
 	-- load save
@@ -450,7 +451,7 @@ local function buildPlot(player)
 	local function onChar(char)
 		local hrp = char:WaitForChild("HumanoidRootPart")
 		task.wait(0.1)
-		hrp.CFrame = CFrame.new(origin.X-30, 4, origin.Z-50)
+		hrp.CFrame = CFrame.new(origin.X-44, 6, origin.Z-25)
 		applyGear(plot)
 	end
 	if player.Character then onChar(player.Character) end
