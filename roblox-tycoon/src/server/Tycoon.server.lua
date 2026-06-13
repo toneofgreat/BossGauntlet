@@ -23,9 +23,11 @@ pcall(function() STORE = DataStoreService:GetDataStore("RobloxTycoon_v1") end)
 local PlotsFolder = Instance.new("Folder"); PlotsFolder.Name = "Plots"; PlotsFolder.Parent = workspace
 local baseplate = workspace:FindFirstChildWhichIsA("Terrain")  -- keep terrain if any
 
+local MAX_PLOTS      = 10
 local plots          = {}   -- [userId] = plot state
-local usedPlotIndex  = {}
+local plotMeta       = {}   -- [0..MAX_PLOTS-1] = {origin, taken, userId, sign}
 local activeOre      = {}    -- { {part, value, plot, fs, x, applied={}} }
+pcall(function() Players.MaxPlayers = MAX_PLOTS end)
 
 -- ── Helpers ──────────────────────────────────────────────────────────────
 local function part(props, parent)
@@ -304,15 +306,39 @@ function rebirth(plot)
 end
 
 -- ── Plot creation ────────────────────────────────────────────────────────
+-- Pre-build 10 floating island plots in a row that players claim on join.
+local function buildIslands()
+	for i = 0, MAX_PLOTS - 1 do
+		local o = Vector3.new(i * Config.PLOT_SPACING, 0, 0)
+		part({Name="Island"..i, Size=Vector3.new(132, 4, 104), Position=Vector3.new(o.X+5, 0, o.Z),
+			Color=Color3.fromRGB(70,80,100), Material=Enum.Material.Slate}, PlotsFolder)
+		part({Name="Rim"..i, Size=Vector3.new(136, 1, 108), Position=Vector3.new(o.X+5, 2.1, o.Z),
+			Color=Color3.fromRGB(90,200,255), Material=Enum.Material.Neon, Transparency=0.25}, PlotsFolder)
+		-- floating claim sign
+		local post = part({Name="Sign"..i, Size=Vector3.new(2, 14, 2), Position=Vector3.new(o.X-48, 9, o.Z-40),
+			Color=Color3.fromRGB(55,60,72), Material=Enum.Material.Metal}, PlotsFolder)
+		local _, sub = billboard(post, "🏝 PLOT "..(i+1), "OPEN — join to claim", Color3.fromRGB(120,255,170))
+		plotMeta[i] = {origin=o, taken=false, userId=nil, sign=sub}
+	end
+end
+
 local function freeIndex()
-	local i = 0
-	while usedPlotIndex[i] do i += 1 end
-	return i
+	for i = 0, MAX_PLOTS - 1 do
+		if plotMeta[i] and not plotMeta[i].taken then return i end
+	end
+	return nil
 end
 
 local function buildPlot(player)
-	local index = freeIndex(); usedPlotIndex[index] = true
-	local origin = Vector3.new(index * Config.PLOT_SPACING, 0, 0)
+	local index = freeIndex()
+	if not index then
+		Notify:FireClient(player, "poor", "All 10 plots are taken — you can watch until one frees up!")
+		return
+	end
+	plotMeta[index].taken = true
+	plotMeta[index].userId = player.UserId
+	plotMeta[index].sign.Text = player.Name .. "'s base"
+	local origin = plotMeta[index].origin
 
 	local model = Instance.new("Folder"); model.Name = "Plot_"..player.UserId; model.Parent = PlotsFolder
 	local buttonsModel = Instance.new("Folder"); buttonsModel.Name = "Buttons"; buttonsModel.Parent = model
@@ -367,12 +393,18 @@ local function buildPlot(player)
 end
 
 -- ── Player lifecycle ─────────────────────────────────────────────────────
+buildIslands()
+for _, p in ipairs(Players:GetPlayers()) do buildPlot(p) end  -- in case some joined before script ran
 Players.PlayerAdded:Connect(buildPlot)
 Players.PlayerRemoving:Connect(function(player)
 	local plot = plots[player.UserId]
 	if plot then
 		save(plot)
-		usedPlotIndex[plot.index] = nil
+		local meta = plotMeta[plot.index]
+		if meta then
+			meta.taken = false; meta.userId = nil
+			meta.sign.Text = "OPEN — join to claim"
+		end
 		if plot.model then plot.model:Destroy() end
 		plots[player.UserId] = nil
 	end
