@@ -1612,7 +1612,10 @@ fillRun(1436, 76, TX - 26, TBASE, 0, {step:11, mat:'grass', lavaBelow:false});
 
 // spiral of platforms around the pillar
 const SPIRAL = [];
-let sa = Math.PI, sy = TBASE + 5;
+// the spiral used to start at TBASE+5 and step +3.6, putting the first platform
+// 8.6 studs above the tower foot — higher than the 6.38 stud jump apex, so there
+// was no way onto the spiral at all. Start lower; everything above follows.
+let sa = Math.PI, sy = TBASE + 1.4;
 for(let i=0;i<30;i++){
   sa += 0.42; sy += 3.6;
   const r = 26 + (i%3===0 ? 3 : 0);
@@ -1645,7 +1648,9 @@ sign(TX, TOPY + 10, TZ, 'TOP OF THE TOWER', {size:3.4, color:'#4ade80'});
 box(TX + Math.cos(sa)*26, sy + 3, TZ + Math.sin(sa)*26, 7, 2, 7, 'grass2');
 box(TX + Math.cos(sa)*16, sy + 5, TZ + Math.sin(sa)*16, 9, 2, 9, 'grass2');
 // the finale: 3-stud wraparound on a separate spire, then bridge to stage 11
-box(TX + 22, TOPY, TZ, 16, 1.6, 6, 'stone2');
+// this bridge stopped at x=TX+30 and the spire's ring starts at TX+43 — a 13 stud
+// gap against an 8.5 stud reach. Lengthened so the hop across is about 5.
+box(TX + 26, TOPY, TZ, 24, 1.6, 6, 'stone2');
 pillarWrap(TX + 56, TZ, TOPY, 20, 3, {blocked:'z-', mat:'stone2'});
 box(TX + 56, TOPY + 40, TZ, 20, 80, 20, 'stone');
 lava(TX + 56, TOPY - 40, TZ, 70, 70);
