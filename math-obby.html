@@ -124,8 +124,8 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
   <div class="panel" id="timerbox"><div class="l">LOCKDOWN</div><div class="t" id="hud-timer">30:00</div></div>
   <div class="panel" id="deaths">DEATHS<br><span id="hud-deaths">0</span></div>
   <div class="panel" id="helpbox">
-    <b>Arrow keys</b> move &nbsp; <b>Space</b> jump<br>
-    <b>WASD</b> or <b>Mouse</b> look &nbsp; <b>Scroll</b> zoom<br>
+    <b>WASD</b> move &nbsp; <b>Space</b> jump<br>
+    <b>Arrow keys</b> or <b>Mouse</b> look &nbsp; <b>Scroll</b> zoom<br>
     <b>E</b> interact<br>
     <b>Shift</b> shiftlock <span id="sl-state">(locked — Stage 10)</span><br>
     <b>R</b> respawn &nbsp; <b>Esc</b> free cursor<br>
@@ -160,8 +160,8 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
     Every stage is a checkpoint.
   </div>
   <div class="keys">
-    <div class="k"><b>ARROW KEYS</b>move</div>
-    <div class="k"><b>WASD</b>look around</div>
+    <div class="k"><b>WASD</b>move</div>
+    <div class="k"><b>ARROW KEYS</b>look around</div>
     <div class="k"><b>SPACE</b>jump</div>
     <div class="k"><b>E</b>interact</div>
     <div class="k"><b>SHIFT</b>shiftlock (Stage 10)</div>
@@ -816,13 +816,13 @@ function updatePlayer(dt, t){
   }
   const canMove = !P.frozen && !uiOpen;
 
-  // WASD looks around, so a mouse is optional
+  // arrow keys look around, so a mouse is optional
   if(canMove){
     const LOOK = 2.1;                       // radians a second
-    if(keys['KeyA']) P.yaw   += LOOK * dt;
-    if(keys['KeyD']) P.yaw   -= LOOK * dt;
-    if(keys['KeyW']) P.pitch -= LOOK * 0.72 * dt;
-    if(keys['KeyS']) P.pitch += LOOK * 0.72 * dt;
+    if(keys['ArrowLeft'])  P.yaw   += LOOK * dt;
+    if(keys['ArrowRight']) P.yaw   -= LOOK * dt;
+    if(keys['ArrowUp'])    P.pitch -= LOOK * 0.72 * dt;
+    if(keys['ArrowDown'])  P.pitch += LOOK * 0.72 * dt;
     P.pitch = Math.max(-1.25, Math.min(0.95, P.pitch));
   }
 
@@ -830,12 +830,12 @@ function updatePlayer(dt, t){
   if(canMove){
     if(isMobile && (Math.abs(joy.dx)+Math.abs(joy.dz)) > 0.1){ moveDir.x = joy.dx; moveDir.z = joy.dz; }
     else {
-      // Arrows move. WASD is the camera (see above) so you can play without a
-      // mouse — pointer lock is not always available.
-      if(keys['ArrowUp'])    moveDir.z -= 1;
-      if(keys['ArrowDown'])  moveDir.z += 1;
-      if(keys['ArrowLeft'])  moveDir.x -= 1;
-      if(keys['ArrowRight']) moveDir.x += 1;
+      // WASD moves. The arrows are the camera (see below) so you can play
+      // without a mouse — pointer lock is not always available.
+      if(keys['KeyW']) moveDir.z -= 1;
+      if(keys['KeyS']) moveDir.z += 1;
+      if(keys['KeyA']) moveDir.x -= 1;
+      if(keys['KeyD']) moveDir.x += 1;
     }
     if(moveDir.lengthSq() > 1) moveDir.normalize();
   }
@@ -852,8 +852,8 @@ function updatePlayer(dt, t){
   P.onLadder = !!lad;
   if(lad && canMove){
     P.vel.y = 0;
-    const fwd = (keys['ArrowUp'] || (isMobile && joy.dz < -0.3)) ? 1 :
-                (keys['ArrowDown'] || (isMobile && joy.dz > 0.3)) ? -1 : 0;
+    const fwd = (keys['KeyW'] || (isMobile && joy.dz < -0.3)) ? 1 :
+                (keys['KeyS'] || (isMobile && joy.dz > 0.3)) ? -1 : 0;
     if(fwd) P.pos.y += fwd * CLIMB * dt;
     if(keys['Space'] || mobileJump){
       P.vel.y = JUMP*0.8; mobileJump = mobileJumpHeld;
@@ -3178,8 +3178,8 @@ function startTower(){
   P.deathY = TOW.base - 18;                 // below the base = you fell, start again
   document.getElementById('helpbox').innerHTML = isMobile
     ? '<b>Stick</b> move &nbsp; <b>JUMP</b> jump<br><b>Drag</b> to look<br>No checkpoints. Reach the crown.'
-    : '<b>Arrow keys</b> move &nbsp; <b>Space</b> jump &nbsp; <b>M</b> music<br>' +
-      '<b>WASD</b> or <b>Mouse</b> look<br>' +
+    : '<b>WASD</b> move &nbsp; <b>Space</b> jump &nbsp; <b>M</b> music<br>' +
+      '<b>Arrow keys</b> or <b>Mouse</b> look<br>' +
       '<b>R</b> restart the climb &nbsp; <b>Esc</b> free cursor<br>No checkpoints. Reach the crown.';
   updateTowerHUD();
   grabPointer();
