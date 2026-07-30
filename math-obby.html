@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Math Obby — 21 Stages</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0e18;font-family:'Trebuchet MS',Verdana,sans-serif;color:#fff;user-select:none}
-canvas#c{display:block;width:100%;height:100%}
+/* touch-action:none stops the browser pinch-zooming/panning the page out of shape —
+   the game handles pinch itself as a camera zoom */
+canvas#c{display:block;width:100%;height:100%;touch-action:none}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
@@ -98,7 +100,7 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
 #backlink:hover{color:#fff}
 
 /* ---------- MOBILE ---------- */
-#touch{position:fixed;inset:0;z-index:9;display:none;pointer-events:none}
+#touch{position:fixed;inset:0;z-index:9;display:none;pointer-events:none;touch-action:none}
 #joy{position:absolute;left:26px;bottom:26px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2);pointer-events:auto}
 #nub{position:absolute;left:35px;top:35px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.3)}
 #jbtn{position:absolute;right:26px;bottom:34px;width:96px;height:96px;border-radius:50%;background:rgba(255,210,63,.25);border:2px solid rgba(255,210,63,.6);pointer-events:auto;display:flex;align-items:center;justify-content:center;font-weight:900;color:#ffd23f}
@@ -566,16 +568,33 @@ if(isMobile){
     nub.style.left = (35+dx) + 'px'; nub.style.top = (35+dy) + 'px';
     joy.dx = dx/max; joy.dz = dy/max;
   }
-  const jrelease = ()=>{ joy.active=false; joy.dx=joy.dz=0; nub.style.left='35px'; nub.style.top='35px'; };
-  jel.addEventListener('touchstart', e=>{ joy.active=true; jmove(e.changedTouches[0]); e.preventDefault(); });
-  jel.addEventListener('touchmove',  e=>{ jmove(e.changedTouches[0]); e.preventDefault(); });
-  jel.addEventListener('touchend',   jrelease);
-  jel.addEventListener('touchcancel',jrelease);
+  // Every control tracks the identifier of its own finger, so a second finger
+  // elsewhere can never move or release it. Without this, walking and jumping
+  // at the same time fights over whichever touch happens to be first in the list.
+  const jrelease = ()=>{ joy.active=false; joy.id=null; joy.dx=joy.dz=0; nub.style.left='35px'; nub.style.top='35px'; };
+  const pickTouch = (e, id) => { for(const t of e.changedTouches) if(t.identifier === id) return t; return null; };
+  jel.addEventListener('touchstart', e=>{
+    if(joy.id !== null) return;                       // already owned by another finger
+    const t = e.changedTouches[0];
+    joy.active = true; joy.id = t.identifier; jmove(t); e.preventDefault();
+  }, {passive:false});
+  jel.addEventListener('touchmove', e=>{
+    const t = pickTouch(e, joy.id); if(!t) return;
+    jmove(t); e.preventDefault();
+  }, {passive:false});
+  const jendMaybe = e=>{ if(pickTouch(e, joy.id)) jrelease(); };
+  jel.addEventListener('touchend',   jendMaybe);
+  jel.addEventListener('touchcancel',jendMaybe);
 
   // holding JUMP keeps jumping, the way holding Space does
   const jbtn = document.getElementById('jbtn');
-  const jbUp = ()=>{ mobileJumpHeld = false; };
-  jbtn.addEventListener('touchstart', e=>{ mobileJump=true; mobileJumpHeld=true; e.preventDefault(); });
+  let jumpId = null;
+  jbtn.addEventListener('touchstart', e=>{
+    if(jumpId !== null) return;
+    jumpId = e.changedTouches[0].identifier;
+    mobileJump = true; mobileJumpHeld = true; e.preventDefault();
+  }, {passive:false});
+  const jbUp = e=>{ if(pickTouch(e, jumpId)){ jumpId = null; mobileJumpHeld = false; } };
   jbtn.addEventListener('touchend',   jbUp);
   jbtn.addEventListener('touchcancel',jbUp);
 
@@ -586,26 +605,53 @@ if(isMobile){
   // a touch that starts on a control belongs to that control — never to the camera.
   // (checking the target beats screen regions, which overlapped the buttons in landscape)
   const onControl = t => !!(t.target && t.target.closest && t.target.closest('#touch'));
-  releaseTouchControls = ()=>{ jrelease(); mobileJump = mobileJumpHeld = false; lookId = null; };
+  let pinchD = 0, pinching = false;
+  const freeTouches = e => [...e.touches].filter(t => !onControl(t));
+  const spread = ts => Math.hypot(ts[0].clientX-ts[1].clientX, ts[0].clientY-ts[1].clientY);
+  releaseTouchControls = ()=>{ jrelease(); mobileJump = mobileJumpHeld = false; lookId = null; pinching = false; };
+
   addEventListener('touchstart', e=>{
     if(uiOpen) return;              // a puzzle is up: taps and scrolls belong to it, not the camera
+    const free = freeTouches(e);
+    if(free.length >= 2){           // two fingers on open screen = zoom, not look
+      pinching = true; lookId = null; pinchD = spread(free);
+      return;
+    }
     for(const t of e.changedTouches){
       if(lookId !== null) break;
       if(onControl(t)) continue;
       lookId = t.identifier; lx = t.clientX; ly = t.clientY;
     }
-  });
+  }, {passive:false});
+
   addEventListener('touchmove', e=>{
     if(uiOpen) return;
+    const free = freeTouches(e);
+    if(pinching && free.length >= 2){
+      const d = spread(free);
+      P.camDist = Math.max(0, Math.min(46, P.camDist - (d - pinchD)*0.09));
+      pinchD = d;
+      e.preventDefault();           // and never let the browser zoom the page itself
+      return;
+    }
     for(const t of e.changedTouches) if(t.identifier === lookId){
-      P.yaw -= (t.clientX - lx)*0.006; P.pitch -= (t.clientY - ly)*0.005;
+      // drag up = look up (the camera drops behind you and tilts skyward)
+      P.yaw -= (t.clientX - lx)*0.006; P.pitch += (t.clientY - ly)*0.005;
       P.pitch = Math.max(-1.25, Math.min(0.95, P.pitch));
       lx = t.clientX; ly = t.clientY;
+      e.preventDefault();
     }
-  });
-  const lookUp = e=>{ for(const t of e.changedTouches) if(t.identifier===lookId) lookId=null; };
+  }, {passive:false});
+
+  const lookUp = e=>{
+    for(const t of e.changedTouches) if(t.identifier===lookId) lookId=null;
+    if(freeTouches(e).length < 2) pinching = false;
+  };
   addEventListener('touchend', lookUp);
   addEventListener('touchcancel', lookUp);
+  // iOS fires its own gesture events for pinch on top of touch events
+  for(const g of ['gesturestart','gesturechange','gestureend'])
+    addEventListener(g, e=>e.preventDefault(), {passive:false});
 
   // on-screen text should describe the buttons, not the keyboard
   document.getElementById('helpbox').classList.add('mob');
@@ -1118,6 +1164,10 @@ function stageGate(n, name, x, topY, z, qz, o={}){
   st.padVis = checkpointPad(x, topY, z, n);
   // gate frame
   const gx = x + 15;
+  // Threshold under the gate. Without it the pad ends at x+13 and the run's first
+  // platform starts around x+34 — a ~20 stud gap against a ~8.5 stud jump, i.e. no
+  // way out of the gate at all. Narrower than the door (17) so it can't be bypassed.
+  box(gx + 3, topY, z, 20, 2, 16, o.mat || 'stone2');
   box(gx, topY + 26, z - 9, 3, 26, 3, o.frameMat || 'stone');
   box(gx, topY + 26, z + 9, 3, 26, 3, o.frameMat || 'stone');
   box(gx, topY + 28, z, 3, 2.4, 21, o.frameMat || 'stone');
@@ -1221,9 +1271,10 @@ function cloud(x,y,z,s=1){
   box(x+9*s, y-1.5*s, z+3*s, 14*s, 5*s, 10*s, 'white', {solid:false});
   box(x-8*s, y-2*s, z-2*s, 12*s, 4*s, 9*s, 'white', {solid:false});
 }
-/* grassy island under a platform, for looks */
+/* grassy island under a platform. the top face is solid — it reads as ground,
+   so falling straight through it was the single most confusing thing at spawn */
 function island(x, topY, z, r, m1='grass', m2='stone2'){
-  box(x, topY, z, r*2, 3, r*2, m1, {solid:false});
+  box(x, topY, z, r*2, 3, r*2, m1);
   box(x, topY-3, z, r*1.6, 5, r*1.6, m2, {solid:false});
   box(x, topY-8, z, r*0.9, 7, r*0.9, m2, {solid:false});
 }
