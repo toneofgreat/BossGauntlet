@@ -1670,11 +1670,16 @@ g = stageGate(11, 'Multiplication', 1750, TOPY, 0, pick([
 box(1790, TOPY, 0, 40, 2, 40, 'stone');
 spinner(1790, TOPY + 4, 0, 36, {speed:1.6, w:2.4, h:3});
 lava(1790, TOPY - 40, 0, 64, 64);
-box(1826, TOPY + 2, 0, 10, 2, 10, 'stone2');
+// this stepping stone was 10 wide, leaving 9 studs of air on both sides against a
+// reach of ~7.8 up and 8.5 flat — impossible in either direction. Widened to 20 so
+// each hop is about 4.
+box(1826, TOPY + 2, 0, 20, 2, 12, 'stone2');
 box(1862, TOPY + 2, 0, 40, 2, 40, 'stone');
 spinner(1862, TOPY + 6, 0, 36, {speed:-2.1, w:2.4, h:3, phase:1.2});
 lava(1862, TOPY - 40, 0, 64, 64);
-fillRun(1886, TOPY + 2, 1918, TOPY + 2, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:36});
+// started at 1886, which put the first platform 9.2 studs off the arena edge.
+// Starting at 1878 lands it at 1888 instead — a 2.5 stud step off the arena.
+fillRun(1878, TOPY + 2, 1918, TOPY + 2, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:36});
 
 /* ================================================================
    STAGE 12 — multiplication + TWO 3-stud wraparounds
