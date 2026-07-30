@@ -124,8 +124,9 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
   <div class="panel" id="timerbox"><div class="l">LOCKDOWN</div><div class="t" id="hud-timer">30:00</div></div>
   <div class="panel" id="deaths">DEATHS<br><span id="hud-deaths">0</span></div>
   <div class="panel" id="helpbox">
-    <b>WASD</b> / <b>Arrows</b> move &nbsp; <b>Space</b> jump<br>
-    <b>E</b> interact &nbsp; <b>Mouse</b> look &nbsp; <b>Scroll</b> zoom<br>
+    <b>WASD</b> move &nbsp; <b>Space</b> jump<br>
+    <b>Arrow keys</b> or <b>Mouse</b> look &nbsp; <b>Scroll</b> zoom<br>
+    <b>E</b> interact<br>
     <b>Shift</b> shiftlock <span id="sl-state">(locked — Stage 10)</span><br>
     <b>R</b> respawn &nbsp; <b>Esc</b> free cursor<br>
     <b>M</b> music <span id="m-state">(on)</span>
@@ -159,7 +160,8 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
     Every stage is a checkpoint.
   </div>
   <div class="keys">
-    <div class="k"><b>WASD / ARROWS</b>move + jump</div>
+    <div class="k"><b>WASD</b>move</div>
+    <div class="k"><b>ARROW KEYS</b>look around</div>
     <div class="k"><b>SPACE</b>jump</div>
     <div class="k"><b>E</b>interact</div>
     <div class="k"><b>SHIFT</b>shiftlock (Stage 10)</div>
@@ -167,6 +169,9 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
   <div class="row">
     <button class="btn" id="btn-play">START — STAGE 1</button>
     <button class="btn alt" id="btn-cont" style="display:none">CONTINUE</button>
+  </div>
+  <div class="row" style="max-width:420px;width:100%">
+    <button class="btn" id="btn-toh" style="background:#a02418">🔥 TOWER OF HELL — 10 FLOORS, NO CHECKPOINTS</button>
   </div>
 </div>
 <a href="index.html" id="backlink">← PLATYFY</a>
@@ -473,6 +478,7 @@ const P = {
   onGround: false, ground: null, onLadder: false,
   dead: false, deadT: 0, frozen: true,
   camDist: 17, shiftlock: false, facing: 0,
+  doubleJump: false, djUsed: false, jumpWasDown: false,
   spawn: new THREE.Vector3(0, 26, 0), spawnYaw: 0,
   deathY: -60, stage: 1, maxStage: 1, deaths: 0, walkPhase: 0
 };
@@ -510,7 +516,7 @@ addEventListener('keydown', e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code) && !uiOpen) e.preventDefault();
   if(uiOpen) return;
   if(e.code==='KeyE') tryInteract();
-  if(e.code==='KeyR' && !P.dead) die('Respawned');
+  if(e.code==='KeyR' && !P.dead) die(MODE === 'tower' ? 'Back to the bottom' : 'Respawned');
   if(e.code==='ShiftLeft' || e.code==='ShiftRight') toggleShiftlock();
   if(e.code==='KeyM') MUSIC.toggle();
 });
@@ -810,14 +816,26 @@ function updatePlayer(dt, t){
   }
   const canMove = !P.frozen && !uiOpen;
 
+  // arrow keys look around, so a mouse is optional
+  if(canMove){
+    const LOOK = 2.1;                       // radians a second
+    if(keys['ArrowLeft'])  P.yaw   += LOOK * dt;
+    if(keys['ArrowRight']) P.yaw   -= LOOK * dt;
+    if(keys['ArrowUp'])    P.pitch -= LOOK * 0.72 * dt;
+    if(keys['ArrowDown'])  P.pitch += LOOK * 0.72 * dt;
+    P.pitch = Math.max(-1.25, Math.min(0.95, P.pitch));
+  }
+
   moveDir.set(0,0,0);
   if(canMove){
     if(isMobile && (Math.abs(joy.dx)+Math.abs(joy.dz)) > 0.1){ moveDir.x = joy.dx; moveDir.z = joy.dz; }
     else {
-      if(keys['KeyW'] || keys['ArrowUp'])    moveDir.z -= 1;
-      if(keys['KeyS'] || keys['ArrowDown'])  moveDir.z += 1;
-      if(keys['KeyA'] || keys['ArrowLeft'])  moveDir.x -= 1;
-      if(keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
+      // WASD moves. The arrows are the camera (see below) so you can play
+      // without a mouse — pointer lock is not always available.
+      if(keys['KeyW']) moveDir.z -= 1;
+      if(keys['KeyS']) moveDir.z += 1;
+      if(keys['KeyA']) moveDir.x -= 1;
+      if(keys['KeyD']) moveDir.x += 1;
     }
     if(moveDir.lengthSq() > 1) moveDir.normalize();
   }
@@ -834,8 +852,8 @@ function updatePlayer(dt, t){
   P.onLadder = !!lad;
   if(lad && canMove){
     P.vel.y = 0;
-    const fwd = (keys['KeyW']||keys['ArrowUp']|| (isMobile && joy.dz < -0.3)) ? 1 :
-                (keys['KeyS']||keys['ArrowDown']|| (isMobile && joy.dz > 0.3)) ? -1 : 0;
+    const fwd = (keys['KeyW'] || (isMobile && joy.dz < -0.3)) ? 1 :
+                (keys['KeyS'] || (isMobile && joy.dz > 0.3)) ? -1 : 0;
     if(fwd) P.pos.y += fwd * CLIMB * dt;
     if(keys['Space'] || mobileJump){
       P.vel.y = JUMP*0.8; mobileJump = mobileJumpHeld;
@@ -846,7 +864,12 @@ function updatePlayer(dt, t){
   } else {
     P.vel.y -= GRAV * dt;
     if(P.vel.y < -260) P.vel.y = -260;
-    if((keys['Space'] || mobileJump) && P.onGround && canMove){ P.vel.y = JUMP; P.onGround = false; }
+    const jumpDown = !!(keys['Space'] || mobileJump);
+    if(jumpDown && P.onGround && canMove){ P.vel.y = JUMP; P.onGround = false; P.djUsed = false; }
+    else if(jumpDown && !P.jumpWasDown && !P.onGround && canMove && P.doubleJump && !P.djUsed){
+      P.vel.y = JUMP * 0.92; P.djUsed = true;      // the mid-air second jump
+    }
+    P.jumpWasDown = jumpDown;
     mobileJump = mobileJumpHeld;   // stays armed while the button is held down
   }
 
@@ -865,6 +888,11 @@ function updatePlayer(dt, t){
     const c = P.ground.conv;
     moveX(c.vx*dt); moveZ(c.vz*dt);
   }
+  // launch pad
+  if(P.onGround && P.ground && P.ground.pad){
+    P.vel.y = P.ground.pad; P.onGround = false; P.ground = null; P.djUsed = false;
+  }
+  if(P.onGround) P.djUsed = false;
 
   // hazards
   if(inVolume('kills')){ die('Lava!'); return; }
@@ -1284,6 +1312,91 @@ function island(x, topY, z, r, m1='grass', m2='stone2'){
   box(x, topY-3, z, r*1.6, 5, r*1.6, m2, {solid:false});
   box(x, topY-8, z, r*0.9, 7, r*0.9, m2, {solid:false});
 }
+
+/* ================================================================
+   ToH MECHANICS — launch pads, double jump, blinkers, movers.
+   Used by the Tower of Hell; harmless to the math stages.
+   ================================================================ */
+let MODE = 'math';
+const MOVERS = [], BLINKERS = [], TOWER_RESET = [];
+
+/* launch pad — land on it and it fires you straight back up */
+function jumpPad(x, topY, z, w, d, power, o){
+  o = o || {};
+  const m = box(x, topY, z, w, 1.4, d, 'neon', {tag:'pad'});
+  m.userData.solid.pad = power || 96;
+  // a little ring so it reads as a pad, not a platform
+  box(x, topY + 0.1, z, w*0.55, 0.2, d*0.55, 'gold', {solid:false});
+  return m;
+}
+
+/* one-time pickup that switches double jump on for the rest of the climb */
+function djButton(x, topY, z){
+  const m = box(x, topY + 2.4, z, 3.2, 3.2, 3.2, 'purple', {solid:false});
+  ANIM.push((t)=>{ m.rotation.y = t*1.6; m.position.y = topY + 2.4 + Math.sin(t*2.4)*0.5; });
+  const zn = zone(x, topY + 3, z, 7, 8, 7, ()=>{
+    if(P.doubleJump) return;
+    P.doubleJump = true;
+    m.visible = false;
+    toast('DOUBLE JUMP UNLOCKED — jump again in mid-air', '#c9a0ff', 3.2);
+  }, true);
+  TOWER_RESET.push(()=>{ zn.done = false; m.visible = true; });
+  return m;
+}
+
+/* platform that blinks out of existence on a cycle */
+function blinker(x, topY, z, w, d, o){
+  o = o || {};
+  const m = box(x, topY, z, w, 2, d, o.mat || 'glass');
+  const b = {s:m.userData.solid, mesh:m, period:o.period || 3, duty:o.duty === undefined ? 0.6 : o.duty,
+             phase:o.phase || 0, on:true};
+  BLINKERS.push(b);
+  return m;
+}
+
+/* platform that slides between two points and carries you with it */
+function mover(x, topY, z, w, d, o){
+  o = o || {};
+  const m = box(x, topY, z, w, 2, d, o.mat || 'brick');
+  const s = m.userData.solid;
+  const mv = {s, mesh:m, speed:o.speed || 0.7, phase:o.phase || 0,
+              x0:s.x, y0:s.y, z0:s.z,
+              x1:s.x + (o.dx||0), y1:s.y + (o.dy||0), z1:s.z + (o.dz||0)};
+  MOVERS.push(mv);
+  // register across the whole sweep so the spatial grid can always find it
+  const pad = {x:(mv.x0+mv.x1)/2, z:(mv.z0+mv.z1)/2,
+               hw:s.hw + Math.abs(mv.x1-mv.x0)/2, hd:s.hd + Math.abs(mv.z1-mv.z0)/2};
+  const gx0 = Math.floor((pad.x-pad.hw)/CELL), gx1 = Math.floor((pad.x+pad.hw)/CELL);
+  const gz0 = Math.floor((pad.z-pad.hd)/CELL), gz1 = Math.floor((pad.z+pad.hd)/CELL);
+  for(let cx=gx0; cx<=gx1; cx++) for(let cz=gz0; cz<=gz1; cz++){
+    const k = gkey(cx,cz);
+    let b = GRID.get(k);
+    if(!b){ b = {solids:[], kills:[], ladders:[]}; GRID.set(k,b); }
+    if(b.solids.indexOf(s) < 0) b.solids.push(s);
+  }
+  return m;
+}
+
+function updateMovers(t){
+  for(const m of MOVERS){
+    const k = (Math.sin(m.phase + t*m.speed) + 1) / 2;
+    const nx = m.x0 + (m.x1-m.x0)*k, ny = m.y0 + (m.y1-m.y0)*k, nz = m.z0 + (m.z1-m.z0)*k;
+    const dx = nx-m.s.x, dy = ny-m.s.y, dz = nz-m.s.z;
+    m.s.x = nx; m.s.y = ny; m.s.z = nz;
+    m.mesh.position.set(nx, ny, nz);
+    if(P.ground === m.s && !P.dead){ P.pos.x += dx; P.pos.y += dy; P.pos.z += dz; }
+  }
+}
+function updateBlinkers(t){
+  for(const b of BLINKERS){
+    const on = ((t + b.phase) % b.period) < b.period * b.duty;
+    if(on !== b.on){
+      b.on = on;
+      b.s.disabled = !on;
+      b.mesh.visible = on;
+    }
+  }
+}
 /* ring ledge around a square pillar — walk around it. blocked = side that is walled off */
 function pillarWrap(cx, cz, y, S, L, o={}){
   const M = o.mat || 'sandst2', T = 1.0;
@@ -1325,10 +1438,13 @@ g = stageGate(2, 'Addition II', 150, 26, 0, pick([
      sub:'LAVA JUMPS — one touch and you restart the stage'});
 
 fillRun(g.x + 4, 26, 296, 28, 0, {step:12.5, mat:'stone', alt:'brick', lavaBelow:true, lavaDrop:12, zig:6});
-// a couple of lava-topped traps you must not land on
-lava(210, 30, 0, 8, 8, {hot:true});
-lava(258, 32, 12, 8, 8, {hot:true});
-box(210, 28, 0, 9, 2, 9, 'stone', {}); box(258, 30, 12, 9, 2, 9, 'stone', {});
+// Decoy pads. These used to sit at z=0 and z=12, which overlapped the landing
+// platforms at z=+-6 — a solid block with lava on top, standing 1.4 studs proud
+// of the platform you were aiming for. Moved out to the sides and shrunk: still
+// a warning, no longer something you collide with on the way past.
+lava(205, 29,   -18, 6, 6, {hot:true});
+lava(253, 29.5,  18, 6, 6, {hot:true});
+box(205, 27,   -18, 7, 2, 7, 'stone', {}); box(253, 27.5, 18, 7, 2, 7, 'stone', {});
 sign(230, 40, 0, 'DO NOT TOUCH\nTHE ORANGE', {size:3.2, color:'#ff9e5c'});
 
 /* ================================================================
@@ -2889,6 +3005,208 @@ const TOH = {x:T6.x + 108, z:T6.z, base:Y20 + 44};
   }, {r:9});
 })();
 
+
+/* ================================================================
+   THE TOWER OF HELL — a proper ToH. Vertical, long, no checkpoints,
+   you win at the top. Ten floors, each one nastier than the last.
+
+   Spacing is derived from the real jump arc (reach ~8.5 flat, apex
+   6.38) so every floor is tight but provably possible.
+   ================================================================ */
+const TOW = {x:-2200, z:0, base:30, R:34, floors:[], top:0, win:null};
+
+(function buildTower(){
+  const X = TOW.x, Z = TOW.z, R = TOW.R;
+  const at = (a, r)=>({x: X + Math.cos(a)*(r===undefined?R:r), z: Z + Math.sin(a)*(r===undefined?R:r)});
+
+  const FLOORS = [
+    {n:'FOOTHOLD',   dth:0.22, w:9, rise:3.6, c:9,  theme:'plain'},
+    {n:'THIN AIR',   dth:0.24, w:5, rise:3.6, c:9,  theme:'thin'},
+    {n:'THE BELTS',  dth:0.26, w:8, rise:3.8, c:9,  theme:'conveyor'},
+    {n:'THE DISCS',  dth:0.26, w:8, rise:3.8, c:9,  theme:'spinner'},
+    {n:'SPRUNG',     dth:0.28, w:7, rise:3.8, c:9,  theme:'pads'},
+    {n:'BLINK',      dth:0.28, w:7, rise:3.8, c:9,  theme:'blink'},
+    {n:'THE SLIDE',  dth:0.30, w:7, rise:4.0, c:8,  theme:'mover'},
+    {n:'THE COLLAR', dth:0.30, w:4, rise:4.0, c:9,  theme:'wrap'},
+    {n:'EVERYTHING', dth:0.32, w:5, rise:4.0, c:9,  theme:'mixed'},
+    {n:'THE CROWN',  dth:0.32, w:4, rise:4.0, c:10, theme:'final'}
+  ];
+
+  // ---- the shaft: a base disc, a spine, and lava underneath ----
+  box(X, TOW.base, Z, 46, 4, 46, 'stone2');                 // landing pad you start on
+  box(X, TOW.base + 0.3, Z, 20, 0.4, 20, 'check', {solid:false});
+  lava(X, TOW.base - 26, Z, 150, 150);                       // fall = back to the bottom
+  billboard(X, TOW.base + 12, Z, 'TOWER OF HELL', {size:5, bg:'none', color:'#ff5a3c'});
+  sign(X + 16, TOW.base + 7, Z, 'NO CHECKPOINTS\nFALL = START AGAIN', {size:3,
+       color:'#ff9e5c', bg:'#1a0d08', border:'#ff5a3c', w:520, fontSize:52});
+
+  let a = 0, y = TOW.base;
+  const spineTop = TOW.base + FLOORS.reduce((s,f)=>s + f.rise*f.c, 0) + 20;
+  box(X, spineTop, Z, 18, spineTop - TOW.base + 8, 18, 'dark');   // central spine
+
+  FLOORS.forEach((F, fi)=>{
+    TOW.floors.push({n:fi+1, name:F.n, y});
+    // floor marker ring on the spine
+    box(X, y + 1.2, Z, 20, 0.8, 20, fi%2 ? 'stone' : 'stone2', {solid:false});
+    billboard(X + 11, y + 6, Z, 'F' + (fi+1) + ' ' + F.n, {size:2.2, bg:'none',
+      color: fi < 3 ? '#4ade80' : fi < 7 ? '#ffd23f' : '#ff5a3c'});
+
+    for(let i=0;i<F.c;i++){
+      a += F.dth; y += F.rise;
+      const p = at(a);
+      const isLast = i === F.c - 1;
+
+      if(F.theme === 'conveyor' && i%3 === 1){
+        // belt pushing tangentially, against the way you are going
+        const tx = -Math.sin(a), tz = Math.cos(a);
+        conveyor(p.x, y, p.z, F.w, F.w, -tx*11, -tz*11);
+      }
+      else if(F.theme === 'blink' && i%2 === 1){
+        blinker(p.x, y, p.z, F.w, F.w, {period:2.8, duty:0.62, phase:i*0.9});
+      }
+      else if(F.theme === 'mover'){
+        const tx = -Math.sin(a), tz = Math.cos(a);
+        mover(p.x, y, p.z, F.w, F.w, {dx:tx*10, dz:tz*10, speed:0.75, phase:i*1.1});
+      }
+      else if(F.theme === 'pads' && i%3 === 2){
+        jumpPad(p.x, y, p.z, F.w, F.w, 92);
+        a += F.dth * 0.6; y += 7.5;                    // the pad buys you a big step up
+        const q = at(a);
+        box(q.x, y, q.z, F.w, 2, F.w, 'stone');
+      }
+      else if(F.theme === 'wrap'){
+        // a 4-stud collar around the spine, out over the void
+        box(p.x, y, p.z, F.w, 1.4, F.w, 'sandst2');
+        if(i%3 === 0) pillarWrap(X, Z, y + 1.5, 18, 4, {mat:'sandst2', blocked: i%6 ? 'z-' : 'z+'});
+      }
+      else if(F.theme === 'mixed' || F.theme === 'final'){
+        if(i%4 === 1) blinker(p.x, y, p.z, F.w, F.w, {period:2.4, duty:0.6, phase:i});
+        else if(i%4 === 2){
+          const tx = -Math.sin(a), tz = Math.cos(a);
+          conveyor(p.x, y, p.z, F.w, F.w, -tx*13, -tz*13);
+        }
+        else if(i%4 === 3){
+          const tx = -Math.sin(a), tz = Math.cos(a);
+          mover(p.x, y, p.z, F.w, F.w, {dx:tx*9, dz:tz*9, speed:0.9, phase:i});
+        }
+        else box(p.x, y, p.z, F.w, 2, F.w, 'stone2');
+      }
+      else {
+        box(p.x, y, p.z, F.w, 2, F.w, F.theme === 'thin' ? 'brick' : 'stone');
+      }
+
+      // hazards layered on top of the platforming
+      if(F.theme === 'spinner' && i%3 === 0) spinner(p.x, y + 3.4, p.z, F.w*2.6, {speed:1.5 + fi*0.06, phase:i});
+      if((F.theme === 'mixed' || F.theme === 'final') && i%5 === 0)
+        spinner(p.x, y + 3.4, p.z, F.w*2.8, {speed:1.9, phase:i*1.7});
+      if(isLast && fi < FLOORS.length-1){
+        // small breather ledge at each floor line
+        const q = at(a + F.dth*0.5);
+        box(q.x, y + F.rise, q.z, 10, 2, 10, 'grass');
+        a += F.dth*0.5; y += F.rise;
+      }
+    }
+
+    if(F.theme === 'pads') { const q = at(a + 0.3, R); djButton(q.x, y, q.z); }
+  });
+
+  // ---- the crown: win here ----
+  // the spiral runs at radius R and the crown sits at the centre, so walk it
+  // inward in steps — otherwise the last hop is 17 studs across and 6.5 up
+  for(let i=1;i<=3;i++){
+    a += 0.22; y += 3.2;
+    const p = at(a, R - i*7);
+    box(p.x, y, p.z, 8, 2, 8, 'gold');
+  }
+  y += 3.2;
+  box(X, y, Z, 30, 3, 30, 'gold');
+  billboard(X, y + 9, Z, 'THE CROWN', {size:4.4, bg:'none', color:'#ffd23f'});
+  TOW.top = y;
+  TOW.win = zone(X, y + 4, Z, 26, 10, 26, ()=>{ if(MODE === 'tower') winTower(); }, false);
+})();
+
+/* ================================================================
+   TOWER MODE — no checkpoints, no math, climb or start again.
+   ================================================================ */
+let TOWER_T = 0, TOWER_BEST = 0, TOWER_BESTTIME = 0, TOWER_FLOOR = 0;
+try{
+  TOWER_BEST = parseInt(localStorage.getItem('mathobby_toh_floor') || '0', 10) || 0;
+  TOWER_BESTTIME = parseFloat(localStorage.getItem('mathobby_toh_time') || '0') || 0;
+}catch(e){}
+
+function currentTowerFloor(){
+  let f = 0;
+  for(const fl of TOW.floors) if(P.pos.y >= fl.y - 2) f = fl.n;
+  if(P.pos.y >= TOW.top - 2) f = TOW.floors.length + 1;
+  return f;
+}
+function fmtTime(s){
+  const m = Math.floor(s/60), q = Math.floor(s%60);
+  return m + ':' + String(q).padStart(2,'0');
+}
+function updateTowerHUD(){
+  const f = currentTowerFloor();
+  if(f !== TOWER_FLOOR){
+    TOWER_FLOOR = f;
+    if(f > TOWER_BEST){
+      TOWER_BEST = f;
+      try{ localStorage.setItem('mathobby_toh_floor', String(f)); }catch(e){}
+    }
+    const fl = TOW.floors[Math.max(0,f-1)];
+    setHUD(f, f === 0 ? 'The Base' : (fl ? fl.name : 'The Crown'),
+           'Best floor ' + TOWER_BEST + '  ·  no checkpoints');
+    document.getElementById('hud-stage').textContent =
+      f === 0 ? 'BASE' : f > TOW.floors.length ? 'THE CROWN' : 'FLOOR ' + f;
+  }
+  const t = document.getElementById('hud-sub');
+  if(t) t.textContent = fmtTime(TOWER_T) + '  ·  best floor ' + TOWER_BEST + '  ·  no checkpoints';
+}
+
+function startTower(){
+  MODE = 'tower';
+  document.getElementById('title').style.display = 'none';
+  document.getElementById('backlink').style.display = 'none';
+  MUSIC_ON = true;
+  MUSIC.play('insane');
+  TOWER_T = 0; TOWER_FLOOR = -1;
+  P.doubleJump = false; P.djUsed = false;
+  for(const f of TOWER_RESET) f();
+  P.pos.set(TOW.x, TOW.base + 2, TOW.z);
+  P.vel.set(0,0,0); P.dead = false; P.frozen = false;
+  P.yaw = 0; P.pitch = -0.16;
+  setSpawn(TOW.x, TOW.base + 2, TOW.z, 0);
+  P.deathY = TOW.base - 18;                 // below the base = you fell, start again
+  document.getElementById('helpbox').innerHTML = isMobile
+    ? '<b>Stick</b> move &nbsp; <b>JUMP</b> jump<br><b>Drag</b> to look<br>No checkpoints. Reach the crown.'
+    : '<b>WASD</b> move &nbsp; <b>Space</b> jump &nbsp; <b>M</b> music<br>' +
+      '<b>Arrow keys</b> or <b>Mouse</b> look<br>' +
+      '<b>R</b> restart the climb &nbsp; <b>Esc</b> free cursor<br>No checkpoints. Reach the crown.';
+  updateTowerHUD();
+  grabPointer();
+  toast('THE TOWER OF HELL — 10 floors, no checkpoints', '#ff5a3c', 3.4);
+}
+
+function winTower(){
+  if(P.frozen) return;
+  P.frozen = true;
+  const best = TOWER_BESTTIME;
+  if(!best || TOWER_T < best){
+    TOWER_BESTTIME = TOWER_T;
+    try{ localStorage.setItem('mathobby_toh_time', String(TOWER_T)); }catch(e){}
+  }
+  setTimeout(()=>{
+    showInfo('YOU BEAT THE TOWER OF HELL',
+      '<p>Ten floors. Lava discs, belts that shove you off, blinking glass, sliding ' +
+      'platforms and a four-stud collar over nothing at all. No checkpoints the whole way.</p>' +
+      '<div class="inv"><div class="item">TIME: <b>' + fmtTime(TOWER_T) + '</b></div>' +
+      '<div class="item">FALLS: <b>' + P.deaths + '</b></div>' +
+      (best ? '<div class="item">BEST: <b>' + fmtTime(TOWER_BESTTIME) + '</b></div>' : '') +
+      '</div><p>Now go back and do it faster.</p>', '', ()=>{
+        P.frozen = false;
+        startTower();
+      });
+  }, 700);
+}
 /* ================================================================
    MUSIC — three hand-written tracks, synthesised live.
    No files: everything here is oscillators, noise and envelopes.
@@ -3341,6 +3659,9 @@ function animate(){
   for(let i=0;i<ANIM.length;i++) ANIM[i](t, dt);
   updateShooters(dt);
   updateShots(dt);
+  updateBlinkers(t);
+  updateMovers(t);          // before the player moves, so riding a platform is stable
+  if(MODE === 'tower' && !P.frozen && !uiOpen){ TOWER_T += dt; updateTowerHUD(); }
 
   if(CUT.active){
     updateCutscene(dt);
@@ -3386,7 +3707,12 @@ function startGame(n){
   MUSIC_ON = true;              // this click is the gesture that lets audio start
   gotoStage(n);
   P.frozen = false;
-  if(!isMobile) canvas.requestPointerLock();
+  grabPointer();
+}
+/* pointer lock throws if there was no user gesture (e.g. the ?tower deep link) */
+function grabPointer(){
+  if(isMobile) return;
+  try{ const p = canvas.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 
 const sv = loadSave();
@@ -3404,6 +3730,24 @@ document.getElementById('btn-play').onclick = ()=>{
   P.deaths = 0; document.getElementById('hud-deaths').textContent = 0;
   startGame(1);
 };
+document.getElementById('btn-toh').onclick = ()=>{
+  P.deaths = 0; document.getElementById('hud-deaths').textContent = 0;
+  startTower();
+};
+if(TOWER_BEST > 0) document.getElementById('btn-toh').textContent =
+  '🔥 TOWER OF HELL — best floor ' + TOWER_BEST + '/10';
+// deep link so the hub can point straight at the tower. Audio cannot start without a
+// gesture, so if we auto-started, pick the music up on the player's first input.
+if(/(\?|&)tower\b/.test(location.search)){
+  setTimeout(()=>startTower(), 60);
+  const kick = ()=>{
+    if(MUSIC_ON) MUSIC.play(MODE === 'tower' ? 'insane' : MUSIC.forStage(P.stage));
+    removeEventListener('pointerdown', kick); removeEventListener('keydown', kick);
+    removeEventListener('touchstart', kick);
+  };
+  addEventListener('pointerdown', kick); addEventListener('keydown', kick);
+  addEventListener('touchstart', kick);
+}
 
 // music toggle (works before the game starts, so you can mute on the title screen)
 MUSIC.setMuted(MUSIC.restoreMute());

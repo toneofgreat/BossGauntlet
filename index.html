@@ -118,6 +118,8 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-nin canvas{width:100%;height:100%}
 .bg-mo{background:linear-gradient(135deg,#070b14 0%,#1d3b6e 55%,#ffd23f 100%)}
 .bg-mo canvas{width:100%;height:100%}
+.bg-toh{background:linear-gradient(180deg,#1a0604 0%,#4a1208 55%,#ff5a1e 100%)}
+.bg-toh canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -125,6 +127,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="math-obby.html?tower" class="card">
+    <div class="card-img bg-toh"><canvas id="c33"></canvas></div>
+    <div class="card-body">
+      <h2>TOWER OF HELL</h2>
+      <p>A proper ToH: ten floors straight up, no checkpoints, and you win at the crown. Thin plates over nothing, conveyors that shove you backwards off the edge, rotating lava discs, launch pads, glass that blinks out from under you, platforms that slide away, and a four-stud collar around the spine with a very long drop underneath. Fall and you start again from the bottom. Timer and best floor are saved. PC + mobile.</p>
+      <span class="tag" style="background:#3a0a05;color:#ff8a5c">3D OBBY · 10 FLOORS · NO CHECKPOINTS</span>
+    </div>
+  </a>
   <a href="math-obby.html" class="card">
     <div class="card-img bg-mo"><canvas id="c32"></canvas></div>
     <div class="card-body">
@@ -1764,6 +1774,64 @@ tycoonPreview('c29',{sky:['#05030f','#1a0a3a'],floor:'#14182a',ore:['#9aa7b8','#
 tycoonPreview('c30',{sky:['#3a1030','#ff7ad0'],floor:'#5a2a4a',ore:['#ff5a72','#ffe27a','#7fd0ff','#9aff9a'],shirt:'#ff7ad0',label:['🍭 CANDY','#fff']});
 tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#cfd6de','#3ad07a','#ff6b8a'],shirt:'#ff6b8a',label:['🥷 NINJA','#ff9ab0'],
   bg:(x,w,h,t)=>{x.fillStyle='#ff9ad0';for(let i=0;i<10;i++){x.globalAlpha=.6;x.fillRect((i*59+t*20)%w,((t*25+i*30)%h),3,2);}x.globalAlpha=1;}});
+
+// ---- Tower of Hell preview: a climber working up a spiral over lava ----
+(function(){
+  const c=document.getElementById('c33'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function draw(){
+    t+=0.02;
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#160504');g.addColorStop(.55,'#3d0f07');g.addColorStop(1,'#7a1e08');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    // lava glow at the foot of the tower
+    for(let i=0;i<w;i+=6){
+      const fl=Math.sin(t*3+i*0.15)*3;
+      ctx.fillStyle='rgba(255,90,30,.75)';ctx.fillRect(i,h-14+fl,5,14);
+    }
+    ctx.fillStyle='rgba(255,140,40,.25)';ctx.fillRect(0,h-30,w,30);
+    // the spine
+    const cx=w*0.5, sw=w*0.13;
+    ctx.fillStyle='#15161c';ctx.fillRect(cx-sw/2,0,sw,h-12);
+    ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(cx-sw/2,0,3,h-12);
+    // spiral plates, scrolling downward so it reads as climbing
+    const step=17, off=(t*13)%step;
+    for(let i=-1;i<h/step+2;i++){
+      const y=h-20-(i*step-off);
+      if(y<-8||y>h) continue;
+      const a=i*0.62+t*0.35;
+      const px=cx+Math.sin(a)*(w*0.3);
+      const dep=Math.cos(a);
+      const pw=Math.max(9, 26+dep*9), ph=5;
+      const lit=dep>0;
+      ctx.fillStyle= i%7===3 ? '#7fd8ff' : (i%5===0 ? '#394a63' : (lit?'#9aa3ad':'#6a727c'));
+      ctx.fillRect(px-pw/2,y,pw,ph);
+      ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(px-pw/2,y+ph-2,pw,2);
+      if(i%6===2){                                  // a lava disc
+        ctx.save();ctx.translate(px,y-3);ctx.rotate(t*2+i);
+        ctx.fillStyle='#ff5a1e';ctx.fillRect(-pw*0.75,-1.5,pw*1.5,3);
+        ctx.restore();
+      }
+    }
+    // the climber, pinned mid-frame
+    const by=h*0.52, bob=Math.abs(Math.sin(t*2.6))*7;
+    const bx=cx+Math.sin(t*0.35+2)*(w*0.3)*0.25;
+    ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(bx,by+13,8,3,0,0,7);ctx.fill();
+    ctx.fillStyle='#2b6cff';ctx.fillRect(bx-6,by-bob-8,12,9);
+    ctx.fillStyle='#ffd9a8';ctx.fillRect(bx-5,by-bob-18,10,10);
+    ctx.fillStyle='#14181f';ctx.fillRect(bx-3,by-bob-15,2,2);ctx.fillRect(bx+1,by-bob-15,2,2);
+    ctx.fillStyle='#1a2c52';ctx.fillRect(bx-5,by-bob+1,4,5);ctx.fillRect(bx+1,by-bob+1,4,5);
+    ctx.fillStyle='#ff5a3c';ctx.font='bold 12px Arial';ctx.textAlign='left';
+    ctx.fillText('🔥 TOWER OF HELL',6,16);
+    ctx.fillStyle='#ffb08a';ctx.font='bold 9px Arial';
+    ctx.fillText('NO CHECKPOINTS',6,29);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
 
 // ---- Math Obby preview: blocky guy hopping gold platforms toward a math gate ----
 (function(){
