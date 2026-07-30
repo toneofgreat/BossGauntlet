@@ -1,0 +1,2929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Math Obby — 21 Stages</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e18;font-family:'Trebuchet MS',Verdana,sans-serif;color:#fff;user-select:none}
+canvas#c{display:block;width:100%;height:100%}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+.panel{position:absolute;background:rgba(8,12,22,.72);border:2px solid rgba(255,255,255,.14);border-radius:10px;padding:8px 14px;backdrop-filter:blur(4px)}
+#stagebox{top:14px;left:14px;min-width:210px}
+#stagebox .num{font-size:26px;font-weight:900;letter-spacing:1px;color:#ffd23f;text-shadow:0 2px 0 #7a5400}
+#stagebox .nm{font-size:12px;color:#9fb4d8;letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+#stagebox .sub{font-size:11px;color:#6f86ab;margin-top:4px}
+#timerbox{top:14px;left:50%;transform:translateX(-50%);display:none;text-align:center;border-color:#c33}
+#timerbox .t{font-size:30px;font-weight:900;color:#ff6a4d;font-family:'Courier New',monospace;letter-spacing:2px}
+#timerbox .l{font-size:10px;letter-spacing:3px;color:#ffb3a3}
+#timerbox.warn{animation:pulsered .7s infinite}
+@keyframes pulsered{0%,100%{border-color:#c33;background:rgba(60,8,8,.75)}50%{border-color:#ff5a3c;background:rgba(120,10,10,.85)}}
+#helpbox{bottom:14px;left:14px;font-size:11px;line-height:1.7;color:#9fb4d8;max-width:260px}
+#helpbox b{color:#ffd23f}
+/* on touch devices the bottom-left corner belongs to the joystick */
+#helpbox.mob{bottom:auto;top:98px;max-width:186px;font-size:10px;line-height:1.55;padding:6px 10px}
+#deaths{top:14px;right:14px;font-size:12px;color:#9fb4d8;text-align:right}
+#deaths span{color:#ff7a5c;font-weight:900;font-size:18px}
+#prompt{position:absolute;bottom:22%;left:50%;transform:translateX(-50%);background:rgba(8,12,22,.85);border:2px solid #ffd23f;border-radius:8px;padding:8px 18px;font-size:15px;display:none;white-space:nowrap}
+#prompt b{color:#ffd23f}
+#toast{position:absolute;top:18%;left:50%;transform:translateX(-50%);text-align:center;font-size:20px;font-weight:900;text-shadow:0 3px 8px #000;opacity:0;transition:opacity .3s;max-width:80%}
+#crosshair{position:absolute;top:50%;left:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:rgba(255,255,255,.55);display:none}
+#flash{position:fixed;inset:0;background:#c00;opacity:0;pointer-events:none;transition:opacity .12s;z-index:12}
+#fadeblack{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .5s;z-index:13}
+#bars{position:fixed;inset:0;pointer-events:none;z-index:14;opacity:0;transition:opacity .4s}
+#bars .b{position:absolute;left:0;right:0;height:13%;background:#000}
+#bars .b.t{top:0}#bars .b.bt{bottom:0}
+#bars .cap{position:absolute;bottom:16%;left:0;right:0;text-align:center;font-size:20px;letter-spacing:2px;color:#ffe9a8;text-shadow:0 2px 6px #000}
+
+/* ---------- MODAL ---------- */
+#modalwrap{position:fixed;inset:0;background:rgba(4,7,14,.86);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+#modal{background:linear-gradient(180deg,#161d2e,#0e1422);border:3px solid #ffd23f;border-radius:14px;max-width:680px;width:100%;max-height:92vh;overflow-y:auto;padding:22px 24px;box-shadow:0 24px 70px rgba(0,0,0,.8)}
+#modal.temple{border-color:#e0a33c;background:linear-gradient(180deg,#2a2013,#150f08)}
+#modal.cat{border-color:#ff9ec4;background:linear-gradient(180deg,#2b1b26,#170e14)}
+#modal h2{font-size:22px;color:#ffd23f;letter-spacing:1px;margin-bottom:4px}
+#modal .tag{font-size:11px;letter-spacing:3px;color:#7f93b5;text-transform:uppercase;margin-bottom:14px}
+#modal p{font-size:14px;line-height:1.6;color:#cfdcf0;margin-bottom:10px}
+#modal .q{font-size:38px;font-weight:900;text-align:center;margin:18px 0;color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.5);letter-spacing:2px}
+#modal .mono{font-family:'Courier New',monospace}
+#modal input[type=text]{width:100%;background:#0a0f1c;border:2px solid #3a4a66;border-radius:8px;padding:12px 14px;font-size:22px;color:#fff;text-align:center;outline:none;font-family:'Courier New',monospace;letter-spacing:3px}
+#modal input[type=text]:focus{border-color:#ffd23f}
+.row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.btn{flex:1;min-width:120px;background:#2b6cff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;transition:.12s}
+.btn:hover{filter:brightness(1.15)}
+.btn.alt{background:#3a4a66}
+.btn.hint{background:#8a6a12}
+.btn.ghost{background:transparent;border:2px solid #3a4a66;color:#9fb4d8}
+.err{color:#ff7a5c;text-align:center;font-weight:700;min-height:20px;margin-top:10px;font-size:14px}
+.ok{color:#4ade80}
+.hintbox{background:rgba(255,210,63,.09);border-left:3px solid #ffd23f;padding:9px 12px;font-size:13px;color:#ffe9a8;margin-top:12px;border-radius:0 6px 6px 0;line-height:1.55}
+.choices{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.choice{background:#1b2436;border:2px solid #33415c;border-radius:8px;padding:11px 14px;cursor:pointer;font-size:15px;transition:.12s}
+.choice:hover{border-color:#ffd23f;background:#24304a}
+.choice.sel{border-color:#2b6cff;background:#1a2c52}
+.choice.good{border-color:#4ade80;background:#12331f}
+.choice.bad{border-color:#ff5a3c;background:#331414}
+.grid{display:grid;gap:8px;margin:14px 0;justify-content:center}
+.cell{width:54px;height:54px;background:#1b2436;border:2px solid #33415c;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;transition:.1s}
+.cell:hover{border-color:#8fa6c9}
+.cell.on{background:#ffd23f;border-color:#fff3c4;color:#231a00}
+.cell.lit{background:#2b6cff;border-color:#8fb6ff}
+.dots{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:10px 0}
+.dot{width:16px;height:16px;border-radius:50%;background:#ffd23f}
+.dot.off{background:#2a3550}
+.sw{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0}
+.swatch{width:44px;height:44px;border-radius:8px;border:3px solid transparent;cursor:pointer}
+.swatch.sel{border-color:#fff}
+table.leg{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+table.leg td{border:1px solid #33415c;padding:6px 8px;text-align:center}
+table.leg td.g{font-size:22px;color:#ffd23f;font-family:'Courier New',monospace}
+canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:block;margin:12px auto;cursor:crosshair;max-width:100%}
+.inv{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.item{background:#1b2436;border:1px solid #33415c;border-radius:6px;padding:6px 10px;font-size:12px;color:#cfdcf0}
+.item b{color:#ffd23f}
+
+/* ---------- TITLE ---------- */
+#title{position:fixed;inset:0;z-index:30;background:radial-gradient(circle at 50% 30%,#1d3b6e,#070b14 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+#title h1{font-size:min(13vw,86px);font-weight:900;letter-spacing:-2px;line-height:.92;color:#ffd23f;text-shadow:0 6px 0 #7a5400,0 12px 30px rgba(0,0,0,.7)}
+#title h1 span{display:block;font-size:min(5vw,30px);color:#8fb6ff;letter-spacing:8px;text-shadow:none;margin-top:10px}
+#title .blurb{max-width:560px;font-size:14px;line-height:1.7;color:#9fb4d8;margin:22px 0}
+#title .blurb b{color:#fff}
+#title .keys{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:22px}
+#title .k{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:8px 14px;font-size:12px;color:#cfdcf0}
+#title .k b{color:#ffd23f;display:block;font-size:14px}
+#title .row{max-width:420px;width:100%}
+#backlink{position:fixed;top:12px;left:14px;z-index:31;color:#7f93b5;font-size:12px;text-decoration:none;background:rgba(0,0,0,.4);padding:6px 12px;border-radius:6px}
+#backlink:hover{color:#fff}
+
+/* ---------- MOBILE ---------- */
+#touch{position:fixed;inset:0;z-index:9;display:none;pointer-events:none}
+#joy{position:absolute;left:26px;bottom:26px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2);pointer-events:auto}
+#nub{position:absolute;left:35px;top:35px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.3)}
+#jbtn{position:absolute;right:26px;bottom:34px;width:96px;height:96px;border-radius:50%;background:rgba(255,210,63,.25);border:2px solid rgba(255,210,63,.6);pointer-events:auto;display:flex;align-items:center;justify-content:center;font-weight:900;color:#ffd23f}
+#ebtn{position:absolute;right:140px;bottom:52px;width:64px;height:64px;border-radius:50%;background:rgba(43,108,255,.25);border:2px solid rgba(120,170,255,.6);pointer-events:auto;display:flex;align-items:center;justify-content:center;font-weight:900}
+/* shiftlock — hidden until Stage 10 unlocks it */
+#sbtn{position:absolute;right:36px;bottom:148px;width:76px;height:76px;border-radius:50%;background:rgba(143,182,255,.18);border:2px solid rgba(143,182,255,.55);pointer-events:auto;display:none;align-items:center;justify-content:center;font-weight:900;font-size:12px;line-height:1.15;text-align:center;color:#8fb6ff}
+#sbtn.on{background:rgba(143,182,255,.5);border-color:#dbe8ff;color:#fff;box-shadow:0 0 14px rgba(143,182,255,.65)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div class="panel" id="stagebox">
+    <div class="num" id="hud-stage">STAGE 1</div>
+    <div class="nm" id="hud-name">Addition</div>
+    <div class="sub" id="hud-sub">Answer the question to open the gate</div>
+  </div>
+  <div class="panel" id="timerbox"><div class="l">LOCKDOWN</div><div class="t" id="hud-timer">30:00</div></div>
+  <div class="panel" id="deaths">DEATHS<br><span id="hud-deaths">0</span></div>
+  <div class="panel" id="helpbox">
+    <b>WASD</b> / <b>Arrows</b> move &nbsp; <b>Space</b> jump<br>
+    <b>E</b> interact &nbsp; <b>Mouse</b> look &nbsp; <b>Scroll</b> zoom<br>
+    <b>Shift</b> shiftlock <span id="sl-state">(locked — Stage 10)</span><br>
+    <b>R</b> respawn &nbsp; <b>Esc</b> free cursor
+  </div>
+  <div id="prompt"></div>
+  <div id="toast"></div>
+  <div id="crosshair"></div>
+</div>
+
+<div id="flash"></div>
+<div id="fadeblack"></div>
+<div id="bars"><div class="b t"></div><div class="b bt"></div><div class="cap" id="bar-cap"></div></div>
+
+<div id="modalwrap"><div id="modal"></div></div>
+
+<div id="touch">
+  <div id="joy"><div id="nub"></div></div>
+  <div id="jbtn">JUMP</div>
+  <div id="ebtn">E</div>
+  <div id="sbtn">SHIFT<br>LOCK</div>
+</div>
+
+<div id="title">
+  <h1>MATH OBBY<span>21 STAGES · TOWER OF THE DESERT KING</span></h1>
+  <div class="blurb">
+    Every stage is locked behind a <b>math question</b> — addition, subtraction, multiplication,
+    division, squares and cubes. Answer it and the gate opens onto the obby: <b>lava jumps</b>,
+    <b>reversed conveyors</b>, <b>lava spinners</b>, <b>wraparounds</b>, a <b>puzzle tower</b>,
+    a <b>cat therapy room</b>, and a <b>desert temple that goes into lockdown</b>.
+    Every stage is a checkpoint.
+  </div>
+  <div class="keys">
+    <div class="k"><b>WASD / ARROWS</b>move + jump</div>
+    <div class="k"><b>SPACE</b>jump</div>
+    <div class="k"><b>E</b>interact</div>
+    <div class="k"><b>SHIFT</b>shiftlock (Stage 10)</div>
+  </div>
+  <div class="row">
+    <button class="btn" id="btn-play">START — STAGE 1</button>
+    <button class="btn alt" id="btn-cont" style="display:none">CONTINUE</button>
+  </div>
+</div>
+<a href="index.html" id="backlink">← PLATYFY</a>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+/* ================================================================
+   MATH OBBY — core engine
+   1 unit = 1 Roblox stud. Character is 2 wide x 5 tall.
+   Movement tuned to Roblox defaults: walkspeed 16, jump 50, grav 196.
+   ================================================================ */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+
+const scene = new THREE.Scene();
+const SKY_BLUE = 0x8fd0ff, SKY_DESERT = 0xe8c48a, SKY_DARK = 0x120d08;
+scene.background = new THREE.Color(SKY_BLUE);
+scene.fog = new THREE.Fog(SKY_BLUE, 260, 900);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 2500);
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+scene.add(new THREE.HemisphereLight(0xdff0ff, 0x4a5a3a, 0.85));
+const sun = new THREE.DirectionalLight(0xfff3d6, 0.75);
+sun.position.set(-300, 600, 220); scene.add(sun);
+const fill = new THREE.DirectionalLight(0x9ec4ff, 0.25);
+fill.position.set(300, 200, -300); scene.add(fill);
+
+/* ---------------- materials ---------------- */
+const MATS = {};
+function mat(name, color, opts={}){
+  MATS[name] = new THREE.MeshLambertMaterial(Object.assign({color}, opts));
+  return MATS[name];
+}
+mat('grass',   0x4caf50); mat('grass2', 0x3d9142);
+mat('stone',   0x9aa3ad); mat('stone2', 0x7a838d);
+mat('brick',   0xb85c3c); mat('wood',   0x8b5a2b);
+mat('sand',    0xe3c67a); mat('sand2',  0xcaa95d);
+mat('sandst',  0xd8b06a); mat('sandst2',0xbf9450);
+mat('gold',    0xffcf3f, {emissive:0x3a2c00});
+mat('white',   0xf2f4f8); mat('dark',   0x2a3040);
+mat('glass',   0x9fd8ff, {transparent:true, opacity:0.35});
+mat('neon',    0x39e6ff, {emissive:0x0d5f75});
+mat('purple',  0x9d5cff); mat('pink', 0xff9ec4);
+mat('cactus',  0x3f9a55);
+mat('lava',    0xff5a1e, {emissive:0xff3a00, emissiveIntensity:0.9});
+mat('lava2',   0xffa030, {emissive:0xff6a00, emissiveIntensity:0.9});
+mat('convey',  0x394a63); mat('conveyStripe', 0xffd23f, {emissive:0x3a2c00});
+mat('check',   0x2bd66a, {emissive:0x0f5a2c});
+mat('checkOff',0x60708a);
+mat('gate',    0x8899bb, {transparent:true, opacity:0.9});
+mat('trussM',  0x6b7280);
+mat('rope',    0xd8c08a);
+mat('black',   0x14181f);
+mat('templeW', 0xc9a06a);
+mat('templeD', 0x9a7748);
+mat('carpet',  0x8a2c3c);
+
+/* ---------------- collision world ---------------- */
+const SOLIDS = [];    // {x,y,z,hw,hh,hd, conv:{vx,vz}|null, tag}
+const KILLS  = [];    // {x,y,z,hw,hh,hd}
+const LADDERS= [];    // {x,y,z,hw,hh,hd}
+const ZONES  = [];    // {x,y,z,hw,hh,hd, fn, once, done}
+const SPINNERS = [];  // {x,y,z,len,hw,h,speed,phase,mesh,active}
+const SHOOTERS = [];  // {x,y,z,dx,dz,every,t,speed,life}
+const SHOTS = [];     // live projectiles
+const ANIM = [];      // per-frame callbacks: fn(t, dt)
+
+const CELL = 32;
+const GRID = new Map();
+function gkey(cx,cz){ return cx + ',' + cz; }
+function gridAdd(list, o){
+  const x0 = Math.floor((o.x-o.hw)/CELL), x1 = Math.floor((o.x+o.hw)/CELL);
+  const z0 = Math.floor((o.z-o.hd)/CELL), z1 = Math.floor((o.z+o.hd)/CELL);
+  for(let cx=x0; cx<=x1; cx++) for(let cz=z0; cz<=z1; cz++){
+    const k = gkey(cx,cz);
+    let b = GRID.get(k);
+    if(!b){ b = {solids:[], kills:[], ladders:[]}; GRID.set(k,b); }
+    b[list].push(o);
+  }
+}
+function gridQuery(x, z, list){
+  const cx = Math.floor(x/CELL), cz = Math.floor(z/CELL), out = [];
+  for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++){
+    const b = GRID.get(gkey(cx+i, cz+j));
+    if(b) for(const o of b[list]) if(out.indexOf(o)<0) out.push(o);
+  }
+  return out;
+}
+
+/* ---------------- build helpers ----------------
+   All builders take CENTER x,z and the TOP surface y (obby-friendly).
+   box(x, topY, z, w, h, d, material, opts)
+--------------------------------------------------*/
+function box(x, topY, z, w, h, d, material, opts={}){
+  const g = new THREE.BoxGeometry(w, h, d);
+  const m = new THREE.Mesh(g, typeof material==='string' ? MATS[material] : material);
+  m.position.set(x, topY - h/2, z);
+  if(opts.ry) m.rotation.y = opts.ry;
+  if(opts.rx) m.rotation.x = opts.rx;
+  if(opts.rz) m.rotation.z = opts.rz;
+  (opts.parent || scene).add(m);
+  if(opts.solid !== false && !opts.ry && !opts.rx && !opts.rz){
+    const s = {x, y:topY - h/2, z, hw:w/2, hh:h/2, hd:d/2, conv:opts.conv||null, tag:opts.tag||null, mesh:m};
+    SOLIDS.push(s); gridAdd('solids', s); m.userData.solid = s;
+  }
+  if(opts.kill) addKill(x, topY - h/2, z, w, h, d);
+  return m;
+}
+function addKill(x, y, z, w, h, d){
+  const k = {x, y, z, hw:w/2, hh:h/2, hd:d/2};
+  KILLS.push(k); gridAdd('kills', k); return k;
+}
+function addLadder(x, y, z, w, h, d){
+  const l = {x, y, z, hw:w/2, hh:h/2, hd:d/2};
+  LADDERS.push(l); gridAdd('ladders', l); return l;
+}
+function zone(x, y, z, w, h, d, fn, once=true){
+  const zn = {x, y, z, hw:w/2, hh:h/2, hd:d/2, fn, once, done:false};
+  ZONES.push(zn); return zn;
+}
+/* lava slab — visual + kill volume, slightly proud of its top face */
+function lava(x, topY, z, w, d, opts={}){
+  const m = box(x, topY, z, w, opts.h||2, d, opts.hot?'lava2':'lava', {solid:false});
+  addKill(x, topY - (opts.h||2)/2 + 0.6, z, w, (opts.h||2)+1.2, d);
+  ANIM.push((t)=>{ m.position.y = (topY-(opts.h||2)/2) + Math.sin(t*2 + x*0.1)*0.12; });
+  return m;
+}
+/* conveyor platform pushing along (vx,vz) studs/sec */
+function conveyor(x, topY, z, w, d, vx, vz, opts={}){
+  const h = opts.h||1.6;
+  const m = box(x, topY, z, w, h, d, 'convey', {conv:{vx, vz}});
+  // arrow stripes showing direction
+  const along = Math.abs(vx) > Math.abs(vz);
+  const n = Math.max(2, Math.floor((along?w:d)/4));
+  const stripes = [];
+  for(let i=0;i<n;i++){
+    const s = box(x, topY+0.06, z, along?2:w*0.55, 0.12, along?d*0.55:2, 'conveyStripe', {solid:false});
+    stripes.push(s);
+  }
+  const span = along ? w : d;
+  const dir = along ? Math.sign(vx) : Math.sign(vz);
+  ANIM.push((t)=>{
+    for(let i=0;i<n;i++){
+      let o = (((t*Math.abs(along?vx:vz)*0.5 + i*span/n) % span) + span) % span - span/2;
+      if(along) stripes[i].position.x = x + o*dir; else stripes[i].position.z = z + o*dir;
+    }
+  });
+  return m;
+}
+/* rotating lava beam. y = beam center height, len = full length */
+function spinner(x, y, z, len, opts={}){
+  const w = opts.w || 2.2, h = opts.h || 2.2;
+  const g = new THREE.Group(); g.position.set(x, y, z); scene.add(g);
+  const bar = box(0, h/2, 0, len, h, w, 'lava', {solid:false, parent:g});
+  // hub post
+  box(x, y - h/2, z, 2.2, 60, 2.2, 'stone2', {solid:false});
+  const sp = {x, y, z, len, hw:w/2, h, speed:opts.speed||1.5, phase:opts.phase||0, g, active:true};
+  SPINNERS.push(sp);
+  ANIM.push((t)=>{ g.rotation.y = sp.phase + t*sp.speed; });
+  return sp;
+}
+/* block that periodically shoots a lava ball along (dx,dz) */
+function shooter(x, y, z, dx, dz, opts={}){
+  const m = box(x, y+1.5, z, 3, 3, 3, 'stone2', {solid:opts.solid!==false});
+  box(x + dx*1.6, y+1.5-0.4, z + dz*1.6, dx?1.2:2.2, 2.2, dz?1.2:2.2, 'lava', {solid:false});
+  const sh = {x:x+dx*3, y:y+1.1, z:z+dz*3, dx, dz, every:opts.every||1.8, t:opts.phase||0,
+              speed:opts.speed||34, life:opts.life||3.2};
+  SHOOTERS.push(sh); return sh;
+}
+const SHOT_GEO = new THREE.SphereGeometry(1.3, 10, 8);
+function fireShot(sh){
+  const m = new THREE.Mesh(SHOT_GEO, MATS.lava);
+  m.position.set(sh.x, sh.y, sh.z); scene.add(m);
+  SHOTS.push({m, vx:sh.dx*sh.speed, vz:sh.dz*sh.speed, life:sh.life});
+}
+/* climbable truss/ladder */
+function truss(x, baseY, z, height, opts={}){
+  const w = opts.w || 4, d = opts.d || 1;
+  const g = new THREE.Group(); scene.add(g);
+  for(let i=0;i<2;i++) box(x + (i?w/2-0.3:-w/2+0.3), baseY+height, z, 0.6, height, 0.6, 'trussM', {solid:false, parent:g});
+  for(let y=1; y<height; y+=3) box(x, baseY+y, z, w, 0.5, 0.5, 'trussM', {solid:false, parent:g});
+  addLadder(x, baseY+height/2, z, w, height, Math.max(d, 2.6));
+  return g;
+}
+/* ---- wraparound: a tower you must shimmy around on an N-stud ledge ----
+   Enters on -X face, exits on +X face, going around the +Z or -Z side.
+   ledge = width in studs. Returns {exitX, exitZ, exitY}
+*/
+function wraparound(x, ledgeY, z, size, ledge, opts={}){
+  const side = opts.side === -1 ? -1 : 1;   // which way you walk around
+  const th = 1.0;                            // ledge thickness
+  const H = opts.height || 46;
+  const halfS = size/2;
+  const wall = opts.mat || 'stone';
+  // the tower body (solid, blocks you)
+  box(x, ledgeY + H*0.55, z, size, H, size, wall);
+  // decorative banding
+  for(let i=1;i<4;i++) box(x, ledgeY + H*0.55 - i*(H/4), z, size+0.6, 1.2, size+0.6, opts.mat2||'stone2', {solid:false});
+  const off = halfS + ledge/2;
+  // ledge on -X face (entry), +/-Z face (the walk), +X face (exit)
+  box(x - off, ledgeY, z, ledge, th, size + ledge*2, wall==='stone'?'stone2':(opts.ledgeMat||'sandst2'));
+  box(x + off, ledgeY, z, ledge, th, size + ledge*2, wall==='stone'?'stone2':(opts.ledgeMat||'sandst2'));
+  box(x, ledgeY, z + side*off, size, th, ledge, wall==='stone'?'stone2':(opts.ledgeMat||'sandst2'));
+  // block the other side so there is only one route around
+  box(x, ledgeY + 8, z - side*off, size + ledge*2, 16, ledge, 'dark', {});
+  // deadly floor far below
+  if(opts.lava !== false) lava(x, ledgeY - (opts.drop||34), z, size + 34, size + 34);
+  // stud-count sign
+  sign(x, ledgeY + 12, z - side*(halfS+0.6), ledge + '-STUD\nWRAPAROUND', {size:2.6, ry: side>0?Math.PI:0});
+  return {x: x + off + ledge/2, y: ledgeY, z};
+}
+
+/* ---------------- canvas text signs / posters ---------------- */
+function makeTextTexture(text, o={}){
+  const cv = document.createElement('canvas');
+  const lines = text.split('\n');
+  const fs = o.fontSize || 64;
+  cv.width = o.w || 512; cv.height = o.h || Math.max(128, lines.length*fs*1.35 + 40);
+  const g = cv.getContext('2d');
+  if(o.bg !== 'none'){ g.fillStyle = o.bg || '#12182a'; g.fillRect(0,0,cv.width,cv.height); }
+  if(o.border){ g.strokeStyle = o.border; g.lineWidth = 10; g.strokeRect(5,5,cv.width-10,cv.height-10); }
+  g.fillStyle = o.color || '#ffd23f';
+  g.font = (o.weight||'900') + ' ' + fs + 'px ' + (o.font || '"Trebuchet MS",Verdana,sans-serif');
+  g.textAlign = o.align || 'center'; g.textBaseline = 'middle';
+  const cx = o.align === 'left' ? 24 : cv.width/2;
+  lines.forEach((ln,i)=> g.fillText(ln, cx, cv.height/2 + (i - (lines.length-1)/2)*fs*1.3, cv.width-30));
+  const tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4; return tex;
+}
+function sign(x, y, z, text, o={}){
+  const tex = makeTextTexture(text, o);
+  const asp = tex.image.width / tex.image.height;
+  const h = o.size || 3, w = h*asp;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+            new THREE.MeshBasicMaterial({map:tex, transparent:true, side:THREE.DoubleSide}));
+  m.position.set(x,y,z); if(o.ry!==undefined) m.rotation.y = o.ry;
+  if(o.rx!==undefined) m.rotation.x = o.rx;
+  (o.parent||scene).add(m); return m;
+}
+function billboard(x, y, z, text, o={}){
+  const s = sign(x,y,z,text,o); s.userData.bill = true; BILLBOARDS.push(s); return s;
+}
+const BILLBOARDS = [];
+
+/* ---------------- scenery props ---------------- */
+function tree(x, y, z, s=1){
+  box(x, y+7*s, z, 1.6*s, 7*s, 1.6*s, 'wood', {solid:false});
+  box(x, y+12*s, z, 8*s, 6*s, 8*s, 'grass2', {solid:false});
+  box(x, y+15*s, z, 5.5*s, 4*s, 5.5*s, 'grass', {solid:false});
+}
+function palm(x, y, z, s=1){
+  for(let i=0;i<5;i++) box(x+i*0.3*s, y+(i+1)*2.4*s, z, 1.4*s, 2.4*s, 1.4*s, 'wood', {solid:false});
+  for(let a=0;a<6;a++){
+    const ang = a/6*Math.PI*2;
+    box(x+1.2*s+Math.cos(ang)*3.4*s, y+12.6*s, z+Math.sin(ang)*3.4*s, 7*s, 0.5*s, 2.2*s, 'grass2', {solid:false, ry:-ang});
+  }
+}
+function cactusMesh(x, y, z, type, parent){
+  const g = new THREE.Group(); g.position.set(x,y,z); (parent||scene).add(g);
+  const H = [10,14,8,12,16][type] || 10;
+  const b = new THREE.Mesh(new THREE.BoxGeometry(2.6, H, 2.6), MATS.cactus);
+  b.position.y = H/2; g.add(b);
+  if(type===1||type===3){
+    const a = new THREE.Mesh(new THREE.BoxGeometry(4.5,1.6,1.6), MATS.cactus); a.position.set(2.6, H*0.6, 0); g.add(a);
+    const a2 = new THREE.Mesh(new THREE.BoxGeometry(1.6,4,1.6), MATS.cactus); a2.position.set(4.4, H*0.6+2.2, 0); g.add(a2);
+  }
+  if(type===2||type===4){
+    const a = new THREE.Mesh(new THREE.BoxGeometry(4.5,1.6,1.6), MATS.cactus); a.position.set(-2.6, H*0.5, 0); g.add(a);
+    const a2 = new THREE.Mesh(new THREE.BoxGeometry(1.6,4.5,1.6), MATS.cactus); a2.position.set(-4.4, H*0.5+2.4, 0); g.add(a2);
+  }
+  if(type===4){
+    const f = new THREE.Mesh(new THREE.BoxGeometry(2,1.4,2), MATS.pink); f.position.y = H+0.7; g.add(f);
+  }
+  g.userData.type = type;
+  return g;
+}
+function rock(x,y,z,s=1){ box(x, y+2.6*s, z, 4*s, 2.6*s, 3.4*s, 'stone2', {solid:false}); }
+
+/* checkpoint pad visuals */
+function checkpointPad(x, topY, z, n){
+  const pad = box(x, topY, z, 12, 1.2, 12, 'checkOff');
+  const ring = box(x, topY+0.14, z, 9, 0.2, 9, 'check', {solid:false});
+  ring.visible = false;
+  const flagPole = box(x-4.4, topY+13, z-4.4, 0.7, 13, 0.7, 'stone2', {solid:false});
+  const flag = box(x-2.6, topY+12.4, z-4.4, 4, 3, 0.3, 'checkOff', {solid:false});
+  billboard(x, topY+9, z, 'STAGE ' + n, {size:3.2, bg:'none', color:'#ffffff'});
+  return {pad, ring, flag};
+}
+/* ================================================================
+   PLAYER — Roblox-ish blocky avatar, third person + shiftlock
+   ================================================================ */
+const WALK = 16, JUMP = 50, GRAV = 196, CLIMB = 13;
+const PHW = 1.0, PHD = 1.0, PHT = 5.0;   // half width / half depth / height
+
+const P = {
+  pos: new THREE.Vector3(0, 26, 0),
+  vel: new THREE.Vector3(),
+  yaw: 0, pitch: -0.16,
+  onGround: false, ground: null, onLadder: false,
+  dead: false, deadT: 0, frozen: true,
+  camDist: 17, shiftlock: false, facing: 0,
+  spawn: new THREE.Vector3(0, 26, 0), spawnYaw: 0,
+  deathY: -60, stage: 1, maxStage: 1, deaths: 0, walkPhase: 0
+};
+
+/* ---------------- avatar ---------------- */
+const avatar = new THREE.Group(); scene.add(avatar);
+const skin = new THREE.MeshLambertMaterial({color:0xf5c98a});
+const shirt = new THREE.MeshLambertMaterial({color:0x2b6cff});
+const pants = new THREE.MeshLambertMaterial({color:0x243a63});
+function part(w,h,d,m,x,y,z){
+  const me = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m);
+  me.position.set(x,y,z); avatar.add(me); return me;
+}
+const av = {};
+av.torso = part(2, 2, 1, shirt, 0, 3, 0);
+av.head  = part(1.6, 1.5, 1.6, skin, 0, 4.75, 0);
+av.armL  = part(1, 2, 1, skin, -1.5, 3, 0);
+av.armR  = part(1, 2, 1, skin,  1.5, 3, 0);
+av.legL  = part(1, 2, 1, pants, -0.5, 1, 0);
+av.legR  = part(1, 2, 1, pants,  0.5, 1, 0);
+// face
+const faceMat = new THREE.MeshBasicMaterial({map: makeTextTexture('• ᵕ •', {w:256,h:256,bg:'none',color:'#1a1a1a',fontSize:110}), transparent:true});
+const face = new THREE.Mesh(new THREE.PlaneGeometry(1.5,1.4), faceMat);
+face.position.set(0, 4.75, 0.82); avatar.add(face);
+// name/aura
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.6, 14),
+  new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.28}));
+shadow.rotation.x = -Math.PI/2; scene.add(shadow);
+
+/* ---------------- input ---------------- */
+const keys = {};
+let uiOpen = false, locked = false;
+addEventListener('keydown', e=>{
+  keys[e.code] = true;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code) && !uiOpen) e.preventDefault();
+  if(uiOpen) return;
+  if(e.code==='KeyE') tryInteract();
+  if(e.code==='KeyR' && !P.dead) die('Respawned');
+  if(e.code==='ShiftLeft' || e.code==='ShiftRight') toggleShiftlock();
+});
+addEventListener('keyup', e=>{ keys[e.code] = false; });
+canvas.addEventListener('click', ()=>{ if(!uiOpen && !P.frozen) canvas.requestPointerLock(); });
+addEventListener('pointerlockchange', ()=>{
+  locked = document.pointerLockElement === canvas;
+  syncShiftlockUI();
+});
+addEventListener('mousemove', e=>{
+  if(!locked) return;
+  P.yaw   -= e.movementX * 0.0026;
+  P.pitch -= e.movementY * 0.0022;
+  P.pitch = Math.max(-1.25, Math.min(0.95, P.pitch));
+});
+addEventListener('wheel', e=>{
+  if(uiOpen) return;
+  P.camDist = Math.max(0, Math.min(46, P.camDist + Math.sign(e.deltaY)*2.2));
+}, {passive:true});
+
+let SHIFTLOCK_UNLOCKED = false;
+/* mobile has no pointer lock, so the crosshair keys off isMobile there instead */
+function syncShiftlockUI(){
+  document.getElementById('crosshair').style.display = ((locked || isMobile) && P.shiftlock) ? 'block' : 'none';
+  const b = document.getElementById('sbtn');
+  if(b) b.classList.toggle('on', P.shiftlock);
+}
+function toggleShiftlock(){
+  if(!SHIFTLOCK_UNLOCKED){ toast('SHIFTLOCK is locked — reach STAGE 10', '#ff9e5c'); return; }
+  P.shiftlock = !P.shiftlock;
+  syncShiftlockUI();
+  toast('SHIFTLOCK ' + (P.shiftlock ? 'ON' : 'OFF'), '#8fb6ff');
+}
+function unlockShiftlock(){
+  if(SHIFTLOCK_UNLOCKED) return;
+  SHIFTLOCK_UNLOCKED = true; P.shiftlock = true;
+  const b = document.getElementById('sbtn');
+  if(isMobile && b) b.style.display = 'flex';
+  const sl = document.getElementById('sl-state');
+  if(sl){ sl.textContent = '(unlocked!)'; sl.style.color = '#4ade80'; }
+  syncShiftlockUI();
+  toast('SHIFTLOCK UNLOCKED — ' + (isMobile ? 'tap the SHIFTLOCK button' : 'press SHIFT to toggle'), '#4ade80', 3.4);
+}
+
+/* mobile */
+const isMobile = matchMedia('(pointer:coarse)').matches;
+const joy = {dx:0, dz:0, active:false, id:null};
+let mobileJump = false, mobileJumpHeld = false;
+/* called when a modal opens so nothing stays held behind it (mobile overrides this) */
+let releaseTouchControls = ()=>{ joy.dx = joy.dz = 0; joy.active = false; mobileJump = mobileJumpHeld = false; };
+if(isMobile){
+  document.getElementById('touch').style.display = 'block';
+  const jel = document.getElementById('joy'), nub = document.getElementById('nub');
+  const rect = ()=> jel.getBoundingClientRect();
+  function jmove(t){
+    const r = rect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+    let dx = t.clientX - cx, dy = t.clientY - cy;
+    const d = Math.hypot(dx,dy), max = r.width/2;
+    if(d > max){ dx *= max/d; dy *= max/d; }
+    nub.style.left = (35+dx) + 'px'; nub.style.top = (35+dy) + 'px';
+    joy.dx = dx/max; joy.dz = dy/max;
+  }
+  const jrelease = ()=>{ joy.active=false; joy.dx=joy.dz=0; nub.style.left='35px'; nub.style.top='35px'; };
+  jel.addEventListener('touchstart', e=>{ joy.active=true; jmove(e.changedTouches[0]); e.preventDefault(); });
+  jel.addEventListener('touchmove',  e=>{ jmove(e.changedTouches[0]); e.preventDefault(); });
+  jel.addEventListener('touchend',   jrelease);
+  jel.addEventListener('touchcancel',jrelease);
+
+  // holding JUMP keeps jumping, the way holding Space does
+  const jbtn = document.getElementById('jbtn');
+  const jbUp = ()=>{ mobileJumpHeld = false; };
+  jbtn.addEventListener('touchstart', e=>{ mobileJump=true; mobileJumpHeld=true; e.preventDefault(); });
+  jbtn.addEventListener('touchend',   jbUp);
+  jbtn.addEventListener('touchcancel',jbUp);
+
+  document.getElementById('ebtn').addEventListener('touchstart', e=>{ tryInteract(); e.preventDefault(); });
+  document.getElementById('sbtn').addEventListener('touchstart', e=>{ toggleShiftlock(); e.preventDefault(); });
+
+  let lookId = null, lx=0, ly=0;
+  // a touch that starts on a control belongs to that control — never to the camera.
+  // (checking the target beats screen regions, which overlapped the buttons in landscape)
+  const onControl = t => !!(t.target && t.target.closest && t.target.closest('#touch'));
+  releaseTouchControls = ()=>{ jrelease(); mobileJump = mobileJumpHeld = false; lookId = null; };
+  addEventListener('touchstart', e=>{
+    if(uiOpen) return;              // a puzzle is up: taps and scrolls belong to it, not the camera
+    for(const t of e.changedTouches){
+      if(lookId !== null) break;
+      if(onControl(t)) continue;
+      lookId = t.identifier; lx = t.clientX; ly = t.clientY;
+    }
+  });
+  addEventListener('touchmove', e=>{
+    if(uiOpen) return;
+    for(const t of e.changedTouches) if(t.identifier === lookId){
+      P.yaw -= (t.clientX - lx)*0.006; P.pitch -= (t.clientY - ly)*0.005;
+      P.pitch = Math.max(-1.25, Math.min(0.95, P.pitch));
+      lx = t.clientX; ly = t.clientY;
+    }
+  });
+  const lookUp = e=>{ for(const t of e.changedTouches) if(t.identifier===lookId) lookId=null; };
+  addEventListener('touchend', lookUp);
+  addEventListener('touchcancel', lookUp);
+
+  // on-screen text should describe the buttons, not the keyboard
+  document.getElementById('helpbox').classList.add('mob');
+  document.getElementById('helpbox').innerHTML =
+    '<b>Stick</b> move &nbsp; <b>JUMP</b> jump &nbsp; <b>E</b> interact<br>' +
+    '<b>Drag</b> anywhere else to look<br>' +
+    '<b>SHIFTLOCK</b> button <span id="sl-state">(locked — Stage 10)</span>';
+  const kk = document.querySelector('#title .keys');
+  if(kk) kk.innerHTML =
+    '<div class="k"><b>STICK</b>move</div>' +
+    '<div class="k"><b>JUMP</b>jump</div>' +
+    '<div class="k"><b>E</b>interact</div>' +
+    '<div class="k"><b>SHIFTLOCK</b>button (Stage 10)</div>';
+}
+
+/* ---------------- collision ---------------- */
+function boxOverlap(px, py, pz, s){
+  return !s.disabled &&
+         Math.abs(px - s.x) < PHW + s.hw &&
+         Math.abs(pz - s.z) < PHD + s.hd &&
+         py < s.y + s.hh && py + PHT > s.y - s.hh;
+}
+function moveX(dx){
+  P.pos.x += dx;
+  for(const s of gridQuery(P.pos.x, P.pos.z, 'solids')){
+    if(!boxOverlap(P.pos.x, P.pos.y, P.pos.z, s)) continue;
+    const top = s.y + s.hh;
+    if(P.onGround && top - P.pos.y > 0.01 && top - P.pos.y < 1.7){ P.pos.y = top; continue; }
+    P.pos.x = dx > 0 ? s.x - s.hw - PHW - 0.001 : s.x + s.hw + PHW + 0.001;
+    P.vel.x = 0;
+  }
+}
+function moveZ(dz){
+  P.pos.z += dz;
+  for(const s of gridQuery(P.pos.x, P.pos.z, 'solids')){
+    if(!boxOverlap(P.pos.x, P.pos.y, P.pos.z, s)) continue;
+    const top = s.y + s.hh;
+    if(P.onGround && top - P.pos.y > 0.01 && top - P.pos.y < 1.7){ P.pos.y = top; continue; }
+    P.pos.z = dz > 0 ? s.z - s.hd - PHD - 0.001 : s.z + s.hd + PHD + 0.001;
+    P.vel.z = 0;
+  }
+}
+function moveY(dy){
+  P.pos.y += dy;
+  for(const s of gridQuery(P.pos.x, P.pos.z, 'solids')){
+    if(!boxOverlap(P.pos.x, P.pos.y, P.pos.z, s)) continue;
+    if(dy <= 0){ P.pos.y = s.y + s.hh; P.vel.y = 0; P.onGround = true; P.ground = s; }
+    else { P.pos.y = s.y - s.hh - PHT - 0.001; P.vel.y = 0; }
+  }
+}
+function inVolume(list){
+  for(const v of gridQuery(P.pos.x, P.pos.z, list)){
+    if(v.disabled) continue;
+    if(Math.abs(P.pos.x - v.x) < PHW + v.hw &&
+       Math.abs(P.pos.z - v.z) < PHD + v.hd &&
+       P.pos.y < v.y + v.hh && P.pos.y + PHT*0.8 > v.y - v.hh) return v;
+  }
+  return null;
+}
+
+/* ---------------- death / checkpoints ---------------- */
+var onRespawn = null;
+const flashEl = document.getElementById('flash');
+function die(reason){
+  if(P.dead) return;
+  P.dead = true; P.deadT = 0.85; P.vel.set(0,0,0);
+  P.deaths++; document.getElementById('hud-deaths').textContent = P.deaths;
+  flashEl.style.opacity = 0.55;
+  setTimeout(()=>{ flashEl.style.opacity = 0; }, 160);
+  if(reason) toast(reason, '#ff7a5c', 1.2);
+}
+function respawn(){
+  P.pos.copy(P.spawn); P.vel.set(0,0,0); P.dead = false;
+  P.yaw = P.spawnYaw; P.pitch = -0.16; P.onGround = false;
+  if(typeof onRespawn === 'function') onRespawn();
+}
+function setSpawn(x,y,z,yaw){
+  P.spawn.set(x,y,z); P.spawnYaw = yaw === undefined ? P.spawnYaw : yaw;
+}
+
+/* ---------------- interactables ---------------- */
+const INTERACTS = [];   // {x,y,z,r,label,fn,enabled}
+let nearest = null;
+function interact(x,y,z,label,fn,o={}){
+  const it = {x,y,z, r:o.r||8, label, fn, enabled:o.enabled!==false, tag:o.tag};
+  INTERACTS.push(it); return it;
+}
+const promptEl = document.getElementById('prompt');
+function updateInteract(){
+  let best = null, bd = 1e9;
+  for(const it of INTERACTS){
+    if(!it.enabled) continue;
+    const d = (it.x-P.pos.x)**2 + (it.z-P.pos.z)**2 + ((it.y-P.pos.y)*0.7)**2;
+    if(d < it.r*it.r && d < bd){ bd = d; best = it; }
+  }
+  nearest = best;
+  if(best && !uiOpen){ promptEl.style.display='block'; promptEl.innerHTML = '<b>[E]</b> ' + best.label; }
+  else promptEl.style.display = 'none';
+}
+function tryInteract(){
+  if(uiOpen || P.frozen || P.dead) return;
+  if(nearest && nearest.enabled) nearest.fn(nearest);
+}
+
+/* ---------------- toast ---------------- */
+const toastEl = document.getElementById('toast');
+let toastT = 0;
+function toast(msg, color, dur){
+  toastEl.textContent = msg; toastEl.style.color = color || '#ffd23f';
+  toastEl.style.opacity = 1; toastT = dur || 2.0;
+}
+
+/* ---------------- camera ---------------- */
+const camTarget = new THREE.Vector3();
+function updateCamera(dt){
+  const headY = P.pos.y + 4.6;
+  camTarget.set(P.pos.x, headY, P.pos.z);
+  const cp = Math.cos(P.pitch), sp = Math.sin(P.pitch);
+  const dir = new THREE.Vector3(Math.sin(P.yaw)*cp, sp, Math.cos(P.yaw)*cp);
+  let dist = P.camDist;
+  if(P.shiftlock){
+    // over-the-shoulder offset
+    const right = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+    camTarget.addScaledVector(right, 2.4);
+    dist = Math.max(6, Math.min(dist, 14));
+  }
+  // pull camera in if it would clip a solid
+  for(let d = 1.5; d <= dist; d += 1.5){
+    const px = camTarget.x + dir.x*d, py = camTarget.y + dir.y*d, pz = camTarget.z + dir.z*d;
+    let hit = false;
+    for(const s of gridQuery(px, pz, 'solids')){
+      if(s.disabled) continue;
+      if(Math.abs(px-s.x) < s.hw+0.8 && Math.abs(pz-s.z) < s.hd+0.8 && Math.abs(py-s.y) < s.hh+0.8){ hit = true; break; }
+    }
+    if(hit){ dist = Math.max(2.2, d - 1.5); break; }
+  }
+  camera.position.set(camTarget.x + dir.x*dist, camTarget.y + dir.y*dist, camTarget.z + dir.z*dist);
+  camera.lookAt(camTarget.x, camTarget.y - (P.shiftlock?0.4:0), camTarget.z);
+  const firstPerson = dist < 3.2;
+  avatar.visible = !firstPerson; face.visible = !firstPerson;
+}
+
+/* ---------------- player update ---------------- */
+const moveDir = new THREE.Vector3();
+function updatePlayer(dt, t){
+  if(P.dead){
+    P.deadT -= dt;
+    avatar.rotation.z = Math.min(Math.PI/2, avatar.rotation.z + dt*6);
+    if(P.deadT <= 0){ avatar.rotation.z = 0; respawn(); }
+    return;
+  }
+  const canMove = !P.frozen && !uiOpen;
+
+  moveDir.set(0,0,0);
+  if(canMove){
+    if(isMobile && (Math.abs(joy.dx)+Math.abs(joy.dz)) > 0.1){ moveDir.x = joy.dx; moveDir.z = joy.dz; }
+    else {
+      if(keys['KeyW'] || keys['ArrowUp'])    moveDir.z -= 1;
+      if(keys['KeyS'] || keys['ArrowDown'])  moveDir.z += 1;
+      if(keys['KeyA'] || keys['ArrowLeft'])  moveDir.x -= 1;
+      if(keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
+    }
+    if(moveDir.lengthSq() > 1) moveDir.normalize();
+  }
+  // camera-relative
+  const cy = Math.cos(P.yaw), sy = Math.sin(P.yaw);
+  const wx = moveDir.x*cy + moveDir.z*sy;
+  const wz = -moveDir.x*sy + moveDir.z*cy;
+  const moving = (wx*wx + wz*wz) > 0.02;
+
+  P.vel.x = wx*WALK; P.vel.z = wz*WALK;
+
+  // ladders / trusses
+  const lad = inVolume('ladders');
+  P.onLadder = !!lad;
+  if(lad && canMove){
+    P.vel.y = 0;
+    const fwd = (keys['KeyW']||keys['ArrowUp']|| (isMobile && joy.dz < -0.3)) ? 1 :
+                (keys['KeyS']||keys['ArrowDown']|| (isMobile && joy.dz > 0.3)) ? -1 : 0;
+    if(fwd) P.pos.y += fwd * CLIMB * dt;
+    if(keys['Space'] || mobileJump){
+      P.vel.y = JUMP*0.8; mobileJump = mobileJumpHeld;
+      P.pos.x += (P.pos.x - lad.x) * 0.25 + wx*0.6;
+      P.pos.z += (P.pos.z - lad.z) * 0.25 + wz*0.6;
+      P.onLadder = false;
+    }
+  } else {
+    P.vel.y -= GRAV * dt;
+    if(P.vel.y < -260) P.vel.y = -260;
+    if((keys['Space'] || mobileJump) && P.onGround && canMove){ P.vel.y = JUMP; P.onGround = false; }
+    mobileJump = mobileJumpHeld;   // stays armed while the button is held down
+  }
+
+  const wasGround = P.onGround;
+  P.onGround = false; P.ground = null;
+
+  moveX(P.vel.x * dt);
+  moveZ(P.vel.z * dt);
+  // vertical, substepped so fast falls never tunnel
+  const steps = Math.min(8, Math.ceil(Math.abs(P.vel.y*dt)/1.4) + 1);
+  for(let i=0;i<steps;i++){ moveY(P.vel.y*dt/steps); if(P.onGround) break; }
+  if(P.onLadder && !P.onGround) P.vel.y = Math.max(P.vel.y, 0);
+
+  // conveyor push
+  if(P.onGround && P.ground && P.ground.conv){
+    const c = P.ground.conv;
+    moveX(c.vx*dt); moveZ(c.vz*dt);
+  }
+
+  // hazards
+  if(inVolume('kills')){ die('Lava!'); return; }
+  for(const sp of SPINNERS){
+    if(!sp.active) continue;
+    if(P.pos.y > sp.y + sp.h/2 + 0.2 || P.pos.y + PHT < sp.y - sp.h/2 - 0.2) continue;
+    const a = sp.phase + t*sp.speed;
+    const dx = P.pos.x - sp.x, dz = P.pos.z - sp.z;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const lx = dx*ca - dz*sa, lz = dx*sa + dz*ca;
+    if(Math.abs(lx) < sp.len/2 + PHW*0.6 && Math.abs(lz) < sp.hw + PHD*0.6){ die('Spinner!'); return; }
+  }
+  for(const s of SHOTS){
+    if(Math.abs(s.m.position.x - P.pos.x) < 2.4 && Math.abs(s.m.position.z - P.pos.z) < 2.4 &&
+       s.m.position.y > P.pos.y - 1 && s.m.position.y < P.pos.y + PHT){ die('Burned!'); return; }
+  }
+  if(P.pos.y < P.deathY){ die('Fell!'); return; }
+
+  // zones — not while frozen, or the title screen would trigger stage 1's gate
+  // behind itself and leave that modal open over whatever stage you CONTINUE into
+  for(const z of ZONES){
+    if(P.frozen) break;
+    if(z.done) continue;
+    if(Math.abs(P.pos.x-z.x) < PHW+z.hw && Math.abs(P.pos.z-z.z) < PHD+z.hd &&
+       P.pos.y < z.y+z.hh && P.pos.y+PHT > z.y-z.hh){
+      if(z.once) z.done = true;
+      z.fn();
+    }
+  }
+
+  // avatar pose
+  avatar.position.set(P.pos.x, P.pos.y, P.pos.z);
+  const goalFace = P.shiftlock ? P.yaw + Math.PI : (moving ? Math.atan2(wx, wz) : P.facing);
+  let d = ((goalFace - P.facing + Math.PI*3) % (Math.PI*2)) - Math.PI;
+  P.facing += d * Math.min(1, dt*14);
+  avatar.rotation.y = P.facing;
+  if(moving || P.onLadder){
+    P.walkPhase += dt * (P.onLadder ? 7 : 11);
+    const s = Math.sin(P.walkPhase);
+    av.legL.rotation.x = s*0.7; av.legR.rotation.x = -s*0.7;
+    av.armL.rotation.x = -s*0.6; av.armR.rotation.x = s*0.6;
+    av.legL.position.set(-0.5, 1 - Math.abs(s)*0.15, -s*0.6);
+    av.legR.position.set( 0.5, 1 - Math.abs(s)*0.15,  s*0.6);
+    av.armL.position.set(-1.5, 3, s*0.5);
+    av.armR.position.set( 1.5, 3, -s*0.5);
+  } else {
+    P.walkPhase = 0;
+    for(const k of ['legL','legR','armL','armR']) av[k].rotation.x = 0;
+    av.legL.position.set(-0.5,1,0); av.legR.position.set(0.5,1,0);
+    av.armL.position.set(-1.5,3,0); av.armR.position.set(1.5,3,0);
+  }
+  if(!P.onGround && !P.onLadder){ av.armL.rotation.x = -2.2; av.armR.rotation.x = -2.2; }
+  avatar.position.y += P.onGround ? Math.abs(Math.sin(P.walkPhase))*0.06 : 0;
+  shadow.position.set(P.pos.x, P.pos.y + 0.06, P.pos.z);
+  shadow.visible = P.onGround;
+}
+/* ================================================================
+   UI — modals, questions, puzzles, cutscenes, checkpoints
+   ================================================================ */
+const wrapEl = document.getElementById('modalwrap');
+const modalEl = document.getElementById('modal');
+function openUI(html, cls){
+  uiOpen = true;
+  if(document.pointerLockElement) document.exitPointerLock();
+  releaseTouchControls();
+  modalEl.className = cls || '';
+  modalEl.innerHTML = html;
+  wrapEl.style.display = 'flex';
+  promptEl.style.display = 'none';
+  const inp = modalEl.querySelector('input[type=text]');
+  if(inp) setTimeout(()=>inp.focus(), 30);
+}
+function closeUI(){ uiOpen = false; wrapEl.style.display = 'none'; }
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ---- generic text-answer puzzle (1 hint each) ---- */
+function askText(o){
+  const hintId = 'hint_' + Math.floor(Math.random()*1e6);
+  // phones should get a number pad when every accepted answer is a number
+  const answers = (Array.isArray(o.answer) ? o.answer : [o.answer]).map(String);
+  const allNumeric = answers.length > 0 && answers.every(a => /\d/.test(a) && /^[-\d.,\s]+$/.test(a));
+  const imode = o.inputmode || (allNumeric ? (answers.some(a=>a.includes('.')) ? 'decimal' : 'numeric') : 'text');
+  openUI(`
+    <h2>${o.title}</h2>
+    <div class="tag">${o.tag || 'PUZZLE'}</div>
+    ${o.body || ''}
+    ${o.q ? `<div class="q">${o.q}</div>` : ''}
+    <input type="text" id="pz-in" placeholder="${o.placeholder||'type your answer'}" autocomplete="off" spellcheck="false" inputmode="${imode}" autocapitalize="off" autocorrect="off">
+    <div class="err" id="pz-err"></div>
+    <div class="row">
+      <button class="btn" id="pz-ok">${o.okLabel || 'SUBMIT'}</button>
+      ${o.hint ? '<button class="btn hint" id="pz-hint">HINT (1)</button>' : ''}
+      ${o.canClose !== false ? '<button class="btn ghost" id="pz-close">LEAVE</button>' : ''}
+    </div>
+    <div id="${hintId}"></div>
+  `, o.cls);
+  const inp = el('pz-in'), err = el('pz-err');
+  function norm(s){ return String(s).toLowerCase().replace(/[\s,_'"-]/g,''); }
+  function submit(){
+    const v = inp.value.trim();
+    if(!v) return;
+    const ans = Array.isArray(o.answer) ? o.answer : [o.answer];
+    const good = ans.some(a => norm(a) === norm(v));
+    if(good){
+      err.className = 'err ok'; err.textContent = o.okMsg || 'CORRECT!';
+      setTimeout(()=>{ closeUI(); o.onSolve && o.onSolve(); }, 520);
+    } else {
+      err.className = 'err'; err.textContent = o.wrongMsg || 'Not quite. Try again.';
+      inp.value = ''; inp.focus();
+      o.onWrong && o.onWrong();
+    }
+  }
+  el('pz-ok').onclick = submit;
+  inp.onkeydown = e=>{ if(e.key === 'Enter'){ e.preventDefault(); submit(); } };
+  if(o.hint) el('pz-hint').onclick = function(){
+    el(hintId).innerHTML = '<div class="hintbox"><b>HINT:</b> ' + o.hint + '</div>';
+    this.disabled = true; this.style.opacity = .5; this.textContent = 'HINT USED';
+  };
+  if(o.canClose !== false) el('pz-close').onclick = ()=>{ closeUI(); o.onClose && o.onClose(); };
+}
+
+/* ---- multiple choice ---- */
+function askChoice(o){
+  const hintId = 'hint_' + Math.floor(Math.random()*1e6);
+  openUI(`
+    <h2>${o.title}</h2>
+    <div class="tag">${o.tag || 'QUESTION'}</div>
+    ${o.body || ''}
+    ${o.q ? `<div class="q" style="font-size:26px">${o.q}</div>` : ''}
+    <div class="choices" id="ch-list">
+      ${o.choices.map((c,i)=>`<div class="choice" data-i="${i}">${c}</div>`).join('')}
+    </div>
+    <div class="err" id="pz-err"></div>
+    <div class="row">
+      ${o.hint ? '<button class="btn hint" id="pz-hint">HINT (1)</button>' : ''}
+      ${o.canClose !== false ? '<button class="btn ghost" id="pz-close">LEAVE</button>' : ''}
+    </div>
+    <div id="${hintId}"></div>
+  `, o.cls);
+  const err = el('pz-err');
+  modalEl.querySelectorAll('.choice').forEach(c=>{
+    c.onclick = ()=>{
+      const i = +c.dataset.i;
+      if(i === o.correct){
+        c.classList.add('good'); err.className = 'err ok'; err.textContent = o.okMsg || 'CORRECT!';
+        setTimeout(()=>{ closeUI(); o.onSolve && o.onSolve(); }, 560);
+      } else {
+        c.classList.add('bad'); err.className = 'err'; err.textContent = o.wrongMsg || 'Wrong.';
+        setTimeout(()=>c.classList.remove('bad'), 700);
+        o.onWrong && o.onWrong();
+      }
+    };
+  });
+  if(o.hint) el('pz-hint').onclick = function(){
+    el(hintId).innerHTML = '<div class="hintbox"><b>HINT:</b> ' + o.hint + '</div>';
+    this.disabled = true; this.style.opacity = .5; this.textContent = 'HINT USED';
+  };
+  if(o.canClose !== false) el('pz-close').onclick = ()=>{ closeUI(); o.onClose && o.onClose(); };
+}
+
+/* ---- info panel ---- */
+function showInfo(title, body, cls, onClose){
+  openUI(`<h2>${title}</h2><div class="tag">LOOK</div>${body}
+    <div class="row"><button class="btn" id="pz-close">CLOSE</button></div>`, cls);
+  el('pz-close').onclick = ()=>{ closeUI(); onClose && onClose(); };
+}
+
+/* ================================================================
+   CUTSCENES
+   ================================================================ */
+const CUT = {active:false, t:0, dur:0, focus:new THREE.Vector3(), from:new THREE.Vector3(), cb:null, ang:0};
+const barsEl = document.getElementById('bars'), capEl = document.getElementById('bar-cap');
+function cutscene(focus, dur, caption, cb){
+  CUT.active = true; CUT.t = 0; CUT.dur = dur; CUT.focus.copy(focus);
+  CUT.from.copy(camera.position); CUT.cb = cb || null;
+  CUT.ang = Math.atan2(camera.position.x - focus.x, camera.position.z - focus.z);
+  capEl.textContent = caption || '';
+  barsEl.style.opacity = 1;
+}
+function updateCutscene(dt){
+  if(!CUT.active) return;
+  CUT.t += dt;
+  const k = Math.min(1, CUT.t/CUT.dur);
+  const a = CUT.ang + k*0.9;
+  const d = 34 - k*10, h = 16 + Math.sin(k*Math.PI)*8;
+  camera.position.set(CUT.focus.x + Math.sin(a)*d, CUT.focus.y + h, CUT.focus.z + Math.cos(a)*d);
+  camera.lookAt(CUT.focus);
+  if(CUT.t >= CUT.dur){
+    CUT.active = false; barsEl.style.opacity = 0; capEl.textContent = '';
+    if(CUT.cb) CUT.cb();
+  }
+}
+const fadeEl = document.getElementById('fadeblack');
+function fadeTo(cb, dur){
+  fadeEl.style.opacity = 1;
+  setTimeout(()=>{ cb && cb(); fadeEl.style.opacity = 0; }, dur || 520);
+}
+
+/* ================================================================
+   DOORS / GATES — solid walls that open
+   ================================================================ */
+function makeDoor(x, topY, z, w, h, d, matName, opts={}){
+  const m = box(x, topY, z, w, h, d, matName || 'gate', {tag:'door'});
+  const s = m.userData.solid;
+  const startY = m.position.y;
+  const D = {mesh:m, solid:s, open:false, x, y:topY, z};
+  D.openIt = function(caption, cb){
+    if(D.open) return; D.open = true;
+    const focus = new THREE.Vector3(x, topY - h/2, z);
+    const doMove = ()=>{
+      let e = 0;
+      const dropTo = opts.slide === 'up' ? startY + h*1.05 : startY - h*1.05;
+      const step = ()=>{
+        e += 0.016;
+        const k = Math.min(1, e/1.4);
+        m.position.y = startY + (dropTo - startY) * (k*k*(3-2*k));
+        if(k < 1) requestAnimationFrame(step);
+        else { s.disabled = true; m.visible = opts.hideWhenOpen !== false ? false : true; cb && cb(); }
+      };
+      step();
+    };
+    if(opts.noCut) doMove();
+    else cutscene(focus, opts.cutDur || 2.6, caption || 'THE DOOR OPENS', doMove);
+  };
+  D.closeIt = function(){
+    D.open = false; m.position.y = startY; m.visible = true; s.disabled = false;
+  };
+  return D;
+}
+/* smoothly slide a mesh by dy over dur seconds */
+function slideMesh(mesh, dy, dur, cb){
+  const y0 = mesh.position.y, y1 = y0 + dy;
+  let e = 0;
+  const step = ()=>{
+    e += 1/60;
+    const k = Math.min(1, e/dur);
+    mesh.position.y = y0 + (y1 - y0)*(k*k*(3-2*k));
+    if(k < 1) requestAnimationFrame(step); else cb && cb();
+  };
+  step();
+}
+
+/* ================================================================
+   STAGES
+   ================================================================ */
+const STAGES = [];
+let CURRENT = null;
+function setHUD(n, name, sub){
+  el('hud-stage').textContent = 'STAGE ' + n;
+  el('hud-name').textContent = name;
+  el('hud-sub').textContent = sub || '';
+}
+function reachStage(st){
+  if(CURRENT === st) return false;   // already here — caller uses this to auto-ask only on arrival
+  CURRENT = st;
+  P.stage = st.n;
+  if(st.n > P.maxStage) P.maxStage = st.n;
+  setSpawn(st.spawn.x, st.spawn.y, st.spawn.z, st.spawnYaw);
+  P.deathY = st.deathY;
+  setHUD(st.n, st.name, st.solved ? st.sub : 'Answer the question to open the gate');
+  st.padVis.ring.visible = true;
+  st.padVis.pad.material = MATS.check;
+  st.padVis.flag.material = MATS.check;
+  toast('CHECKPOINT — STAGE ' + st.n, '#4ade80', 1.6);
+  save();
+  if(st.onReach) st.onReach();
+  return true;
+}
+function askStageQuestion(st){
+  askText({
+    title: 'STAGE ' + st.n + ' — ' + st.name.toUpperCase(),
+    tag: st.topic || 'MATH GATE',
+    body: '<p>' + (st.blurb || 'Solve it to open the gate.') + '</p>',
+    q: st.qz.q,
+    placeholder: 'answer',
+    hint: st.qz.hint,
+    okMsg: 'CORRECT — GATE OPEN!',
+    wrongMsg: 'Wrong. Check your working and try again.',
+    answer: String(st.qz.a),
+    canClose: true,
+    onSolve: ()=>{
+      st.solved = true;
+      st.door.openIt('STAGE ' + st.n + ' UNLOCKED', ()=>{
+        setHUD(st.n, st.name, st.sub);
+        toast(st.sub || 'GO!', '#ffd23f', 2.2);
+      });
+      save();
+    }
+  });
+}
+/* Build a checkpoint + question gate. Course runs along +X.
+   Returns the x just past the gate. */
+function stageGate(n, name, x, topY, z, qz, o={}){
+  const st = {
+    n, name, qz, topic:o.topic, blurb:o.blurb, sub:o.sub || 'Cross the obby to the next stage',
+    solved:false, spawn:new THREE.Vector3(x, topY+1, z), spawnYaw:o.yaw!==undefined?o.yaw:-Math.PI/2,
+    deathY: o.deathY !== undefined ? o.deathY : topY - 55, onReach:o.onReach
+  };
+  // landing area
+  box(x, topY, z, 26, 2, 22, o.mat || 'stone2');
+  st.padVis = checkpointPad(x, topY, z, n);
+  // gate frame
+  const gx = x + 15;
+  box(gx, topY + 26, z - 9, 3, 26, 3, o.frameMat || 'stone');
+  box(gx, topY + 26, z + 9, 3, 26, 3, o.frameMat || 'stone');
+  box(gx, topY + 28, z, 3, 2.4, 21, o.frameMat || 'stone');
+  st.door = makeDoor(gx, topY + 24, z, 2.4, 24, 17, o.doorMat || 'gate', {cutDur:2.2});
+  // question board on the approach side
+  sign(gx - 1.6, topY + 15, z, 'STAGE ' + n + '\n' + qz.q + ' = ?', {
+    size: 7, ry: -Math.PI/2, color:'#ffd23f', bg:'#0d1220', border:'#ffd23f', fontSize:56, w:640
+  });
+  // console
+  const con = box(x + 8, topY + 4, z + 5, 3, 4, 3, 'stone');
+  sign(x + 8, topY + 5.6, z + 5, '[E]', {size:1.4, bg:'none', color:'#ffd23f'});
+  interact(x + 8, topY + 4, z + 5, 'Answer Stage ' + n, ()=>{
+    if(st.solved){ toast('Already solved — go through the gate!', '#4ade80'); return; }
+    askStageQuestion(st);
+  }, {r:9});
+  // reaching the pad = checkpoint (+ auto-open the question the first time)
+  zone(x, topY + 3, z, 26, 8, 22, ()=>{
+    // this zone re-fires every frame you stand on the pad, so only auto-ask on arrival —
+    // otherwise LEAVE is useless (a queued timeout reopens it instantly). [E] re-asks.
+    if(reachStage(st) && !st.solved) setTimeout(()=>{ if(!uiOpen && !st.solved) askStageQuestion(st); }, 420);
+  }, false);
+  STAGES.push(st);
+  return {x: gx + 6, y: topY, z};
+}
+
+/* pick one question variant per session */
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* ================================================================
+   SAVE / LOAD
+   ================================================================ */
+const SAVE_KEY = 'mathobby_save_v1';
+function save(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      stage: P.maxStage, deaths: P.deaths, sl: SHIFTLOCK_UNLOCKED
+    }));
+  }catch(e){}
+}
+function loadSave(){
+  try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }catch(e){ return null; }
+}
+
+/* ================================================================
+   LOCKDOWN TIMER (temple)
+   ================================================================ */
+const LOCK = {active:false, t:0, total:30*60, onFail:null};
+const timerBox = el('timerbox');
+function startLockdown(seconds, onFail){
+  LOCK.active = true; LOCK.total = seconds; LOCK.t = seconds; LOCK.onFail = onFail;
+  timerBox.style.display = 'block';
+}
+function stopLockdown(){ LOCK.active = false; timerBox.style.display = 'none'; timerBox.classList.remove('warn'); }
+function updateLockdown(dt){
+  if(!LOCK.active) return;
+  LOCK.t -= dt;
+  if(LOCK.t <= 0){ LOCK.t = 0; LOCK.active = false; LOCK.onFail && LOCK.onFail(); }
+  const m = Math.floor(LOCK.t/60), s = Math.floor(LOCK.t%60);
+  el('hud-timer').textContent = m + ':' + (s<10?'0':'') + s;
+  timerBox.classList.toggle('warn', LOCK.t < 300);
+}
+
+/* ================================================================
+   FOG / SKY zones
+   ================================================================ */
+const SKY = {target:new THREE.Color(SKY_BLUE), fogNear:260, fogFar:900,
+             tFogNear:260, tFogFar:900, fogColor:new THREE.Color(SKY_BLUE)};
+function setSky(color, near, far){
+  SKY.target.set(color); SKY.tFogNear = near; SKY.tFogFar = far;
+}
+function updateSky(dt){
+  const k = Math.min(1, dt*1.4);
+  scene.background.lerp(SKY.target, k);
+  scene.fog.color.lerp(SKY.target, k);
+  scene.fog.near += (SKY.tFogNear - scene.fog.near)*k;
+  scene.fog.far  += (SKY.tFogFar  - scene.fog.far)*k;
+}
+/* ================================================================
+   COURSE HELPERS
+   ================================================================ */
+/* A run of jump platforms from (x0,y0) to (x1,y1) along +X. */
+function fillRun(x0, y0, x1, y1, z, o={}){
+  const step = o.step || 12.5, w = o.w || 7, d = o.d || 7, m = o.mat || 'stone';
+  const n = Math.max(1, Math.round((x1 - x0)/step));
+  const out = [];
+  for(let i=1;i<=n;i++){
+    const t = i/n;
+    const px = x0 + (x1-x0)*t;
+    const py = y0 + (y1-y0)*t + (o.wave ? Math.sin(i*1.2)*o.wave : 0);
+    const pz = z + (o.zig ? (i%2 ? o.zig : -o.zig) : 0) + (o.snake ? Math.sin(i*0.9)*o.snake : 0);
+    const mm = (o.alt && i%2===0) ? o.alt : m;
+    if(o.conv && i%o.conv===0) out.push(conveyor(px, py, pz, w, d, o.cvx||0, o.cvz||0));
+    else out.push(box(px, py, pz, w, o.h||2, d, mm));
+    if(o.lavaBelow) lava(px, py - (o.lavaDrop||14), pz, step, d + 6);
+    if(o.deco && i%3===0) box(px, py-2.2, pz, w-1.5, 5, d-1.5, o.deco, {solid:false});
+  }
+  return {x:x1, y:y1, z, plats:out};
+}
+function cloud(x,y,z,s=1){
+  box(x, y, z, 22*s, 6*s, 14*s, 'white', {solid:false});
+  box(x+9*s, y-1.5*s, z+3*s, 14*s, 5*s, 10*s, 'white', {solid:false});
+  box(x-8*s, y-2*s, z-2*s, 12*s, 4*s, 9*s, 'white', {solid:false});
+}
+/* grassy island under a platform, for looks */
+function island(x, topY, z, r, m1='grass', m2='stone2'){
+  box(x, topY, z, r*2, 3, r*2, m1, {solid:false});
+  box(x, topY-3, z, r*1.6, 5, r*1.6, m2, {solid:false});
+  box(x, topY-8, z, r*0.9, 7, r*0.9, m2, {solid:false});
+}
+/* ring ledge around a square pillar — walk around it. blocked = side that is walled off */
+function pillarWrap(cx, cz, y, S, L, o={}){
+  const M = o.mat || 'sandst2', T = 1.0;
+  box(cx, y, cz + S/2 + L/2, S + 2*L, T, L, M);
+  box(cx, y, cz - S/2 - L/2, S + 2*L, T, L, M);
+  box(cx + S/2 + L/2, y, cz, L, T, S, M);
+  box(cx - S/2 - L/2, y, cz, L, T, S, M);
+  // wall off one side so there is exactly one way around
+  const b = o.blocked || 'z-';
+  if(b === 'z-') box(cx, y + 10, cz - S/2 - L/2, S + 2*L, 10, L, 'dark');
+  if(b === 'z+') box(cx, y + 10, cz + S/2 + L/2, S + 2*L, 10, L, 'dark');
+  if(b === 'x-') box(cx - S/2 - L/2, y + 10, cz, L, 10, S, 'dark');
+  if(b === 'x+') box(cx + S/2 + L/2, y + 10, cz, L, 10, S, 'dark');
+  if(o.sign !== false) sign(cx, y + 7, cz + S/2 + L + 0.4, L + '-STUD WRAPAROUND', {size:2.4, color:'#ffd23f'});
+}
+
+/* ================================================================
+   STAGE 1 — addition + simple jumps
+   ================================================================ */
+let g = stageGate(1, 'Addition', 0, 24, 0, pick([
+  {q:'27 + 46', a:73, hint:'7 + 6 = 13 — write the 3, carry the 1.'},
+  {q:'38 + 55', a:93, hint:'8 + 5 = 13 — write the 3, carry the 1.'},
+  {q:'46 + 37', a:83, hint:'6 + 7 = 13 — write the 3, carry the 1.'}
+]), {topic:'ADDITION', blurb:'Welcome to the Math Obby. Every gate is a question. Solve it and jump.',
+     sub:'Simple jumps — mind the gaps'});
+
+island(0, 21, 0, 20); cloud(-40, 60, -50); cloud(60, 74, 60, 1.4); cloud(120, 52, -70);
+fillRun(g.x + 4, 24, 148, 26, 0, {step:12, mat:'grass', alt:'grass2', deco:'stone2', zig:5});
+for(let i=0;i<5;i++) tree(30 + i*28, 22, (i%2?1:-1)*22 + Math.sin(i)*6, 0.8);
+
+/* ================================================================
+   STAGE 2 — addition + LAVA jumps
+   ================================================================ */
+g = stageGate(2, 'Addition II', 150, 26, 0, pick([
+  {q:'138 + 259', a:397, hint:'Line up the columns: 8+9 = 17, carry the 1.'},
+  {q:'246 + 178', a:424, hint:'6+8 = 14 — carry into the tens.'},
+  {q:'375 + 286', a:661, hint:'5+6 = 11, then 7+8+1 = 16 — carry again.'}
+]), {topic:'ADDITION', blurb:'Second gate. The floor below is lava from here on.',
+     sub:'LAVA JUMPS — one touch and you restart the stage'});
+
+fillRun(g.x + 4, 26, 296, 28, 0, {step:12.5, mat:'stone', alt:'brick', lavaBelow:true, lavaDrop:12, zig:6});
+// a couple of lava-topped traps you must not land on
+lava(210, 30, 0, 8, 8, {hot:true});
+lava(258, 32, 12, 8, 8, {hot:true});
+box(210, 28, 0, 9, 2, 9, 'stone', {}); box(258, 30, 12, 9, 2, 9, 'stone', {});
+sign(230, 40, 0, 'DO NOT TOUCH\nTHE ORANGE', {size:3.2, color:'#ff9e5c'});
+
+/* ================================================================
+   STAGE 3 — addition + a LADDER
+   ================================================================ */
+g = stageGate(3, 'Addition III', 300, 28, 0, pick([
+  {q:'4,762 + 3,589', a:8351, hint:'Ones: 2+9 = 11. Keep carrying left.'},
+  {q:'5,847 + 2,976', a:8823, hint:'7+6 = 13, 4+7+1 = 12, 8+9+1 = 18…'},
+  {q:'6,395 + 1,848', a:8243, hint:'5+8 = 13 — carry the 1 into the tens.'}
+]), {topic:'ADDITION', blurb:'Four digits now. Same method, more columns.',
+     sub:'Jump to the tower, then CLIMB the ladder (hold W)'});
+
+fillRun(g.x + 4, 28, 372, 30, 0, {step:12, mat:'stone', alt:'stone2', lavaBelow:true, zig:4});
+// climb tower
+box(392, 32, 0, 16, 4, 16, 'brick');
+box(392, 66, -9, 18, 40, 2.5, 'brick');
+truss(392, 32, -6.6, 32, {w:8});
+sign(392, 50, -7.6, 'CLIMB', {size:3, color:'#8fb6ff', ry:Math.PI});
+box(392, 66, 4, 16, 3, 14, 'stone');
+lava(392, 6, 0, 46, 46);
+fillRun(398, 66, 428, 60, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:40});
+
+/* ================================================================
+   STAGE 4 — hard addition + a wraparound
+   ================================================================ */
+g = stageGate(4, 'Hard Addition', 440, 60, 0, pick([
+  {q:'12,847 + 39,566', a:52413, hint:'7+6 = 13. Work right to left and keep the carries.'},
+  {q:'28,394 + 17,658', a:46052, hint:'4+8 = 12, 9+5+1 = 15, 3+6+1 = 10…'},
+  {q:'45,678 + 29,876', a:75554, hint:'Five columns — carry every single time here.'}
+]), {topic:'ADDITION', blurb:'Five digits. Take your time; the gate is not going anywhere.',
+     sub:'WRAPAROUND — shimmy the ledge around the tower'});
+
+fillRun(g.x + 4, 60, 496, 60, 0, {step:12, mat:'stone', lavaBelow:true, lavaDrop:26});
+// the wraparound tower (3-stud ledge)
+box(505, 60, 0, 10, 2, 10, 'stone2');
+pillarWrap(524, 0, 60, 18, 3, {blocked:'z-', mat:'stone2'});
+lava(524, 26, 0, 60, 60);
+box(524, 96, 0, 18, 70, 18, 'stone');   // the tower body
+box(543, 60, 0, 10, 2, 10, 'stone2');
+fillRun(548, 60, 588, 64, 0, {step:11.5, mat:'stone', lavaBelow:true, lavaDrop:30});
+
+/* ================================================================
+   STAGE 5 — harder addition + TWO wraparounds
+   ================================================================ */
+g = stageGate(5, 'Harder Addition', 600, 64, 0, pick([
+  {q:'68,394 + 25,718 + 9,847', a:103959, hint:'Add two of them first, then add the third.'},
+  {q:'47,562 + 38,915 + 7,648', a:94125, hint:'Stack all three and add one column at a time.'},
+  {q:'55,201 + 29,876 + 13,478', a:98555, hint:'Three numbers — a column can carry 2.'}
+]), {topic:'ADDITION', blurb:'Three numbers at once. Stack them and add column by column.',
+     sub:'TWO WRAPAROUNDS back to back'});
+
+fillRun(g.x + 4, 64, 656, 64, 0, {step:12, mat:'stone', lavaBelow:true, lavaDrop:26});
+box(664, 64, 0, 10, 2, 10, 'stone2');
+pillarWrap(682, 0, 64, 16, 3, {blocked:'z-', mat:'stone2'});
+box(682, 100, 0, 16, 70, 16, 'stone'); lava(682, 30, 0, 56, 56);
+box(700, 64, 0, 10, 2, 10, 'stone2');
+box(714, 66, 0, 10, 2, 10, 'stone2');
+pillarWrap(732, 0, 66, 16, 3, {blocked:'z+', mat:'stone2'});
+box(732, 102, 0, 16, 70, 16, 'stone'); lava(732, 32, 0, 56, 56);
+box(750, 66, 0, 10, 2, 10, 'stone2');
+fillRun(755, 66, 788, 68, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:34});
+
+/* ================================================================
+   STAGE 6 — easy subtraction + REVERSED CONVEYORS
+   ================================================================ */
+g = stageGate(6, 'Subtraction', 800, 68, 0, pick([
+  {q:'84 − 39', a:45, hint:'4 − 9 needs a borrow: 14 − 9 = 5.'},
+  {q:'92 − 47', a:45, hint:'2 − 7 needs a borrow from the 9.'},
+  {q:'71 − 38', a:33, hint:'1 − 8 needs a borrow: 11 − 8 = 3.'}
+]), {topic:'SUBTRACTION', blurb:'Subtraction time. Borrow when the top digit is too small.',
+     sub:'CONVEYORS run backwards — keep moving forward!'});
+
+// conveyor belts pushing -X while you travel +X
+let cx6 = g.x + 8;
+for(let i=0;i<6;i++){
+  conveyor(cx6, 68 + i*0.6, 0, 16, 8, -(9 + i*1.6), 0);
+  lava(cx6, 68 + i*0.6 - 16, 0, 18, 22);
+  cx6 += 24;
+  if(i < 5) box(cx6 - 8, 68 + i*0.6 + 0.6, (i%2?1:-1)*7, 6, 2, 6, 'stone');
+}
+sign(g.x + 20, 84, 0, 'THE BELTS PUSH BACK', {size:3.4, color:'#ff9e5c'});
+fillRun(cx6 - 6, 72, 788 + 160, 70, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:24});
+
+/* ================================================================
+   STAGE 7 — subtraction + a 2-STUD wraparound
+   ================================================================ */
+g = stageGate(7, 'Subtraction II', 960, 70, 0, pick([
+  {q:'512 − 287', a:225, hint:'2 − 7 borrows, then 0 − 8 borrows again.'},
+  {q:'634 − 359', a:275, hint:'4 − 9 borrows from the 3.'},
+  {q:'803 − 476', a:327, hint:'Borrowing across a 0: take from the 8 first.'}
+]), {topic:'SUBTRACTION', blurb:'Three digits — you will borrow more than once.',
+     sub:'A 2-STUD wraparound. That ledge is barely wider than you.'});
+
+fillRun(g.x + 4, 70, 1016, 70, 0, {step:12, mat:'stone', lavaBelow:true, lavaDrop:26});
+box(1024, 70, 0, 10, 2, 10, 'stone2');
+pillarWrap(1044, 0, 70, 20, 2, {blocked:'z-', mat:'stone2'});
+box(1044, 108, 0, 20, 74, 20, 'stone'); lava(1044, 34, 0, 62, 62);
+box(1065, 70, 0, 10, 2, 10, 'stone2');
+fillRun(1070, 70, 1098, 72, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:32});
+
+/* ================================================================
+   STAGE 8 — hard subtraction + TWO 2-stud wraparounds
+   ================================================================ */
+g = stageGate(8, 'Hard Subtraction', 1110, 72, 0, pick([
+  {q:'9,043 − 5,678', a:3365, hint:'3 − 8 borrows; the 0 makes you borrow twice.'},
+  {q:'8,021 − 4,567', a:3454, hint:'Borrow through the zero carefully.'},
+  {q:'7,350 − 2,896', a:4454, hint:'0 − 6 borrows from the 5.'}
+]), {topic:'SUBTRACTION', blurb:'Zeros in the middle make borrowing tricky.',
+     sub:'TWO 2-stud wraparounds — no rushing'});
+
+fillRun(g.x + 4, 72, 1160, 72, 0, {step:11.5, mat:'stone', lavaBelow:true, lavaDrop:26});
+box(1168, 72, 0, 9, 2, 9, 'stone2');
+pillarWrap(1188, 0, 72, 20, 2, {blocked:'z-', mat:'stone2'});
+box(1188, 112, 0, 20, 76, 20, 'stone'); lava(1188, 36, 0, 62, 62);
+box(1209, 72, 0, 9, 2, 9, 'stone2');
+box(1222, 74, 0, 9, 2, 9, 'stone2');
+pillarWrap(1242, 0, 74, 20, 2, {blocked:'z+', mat:'stone2'});
+box(1242, 114, 0, 20, 76, 20, 'stone'); lava(1242, 38, 0, 62, 62);
+box(1263, 74, 0, 9, 2, 9, 'stone2');
+fillRun(1268, 74, 1288, 74, 0, {step:10, mat:'stone', lavaBelow:true, lavaDrop:32});
+
+/* ================================================================
+   STAGE 9 — hard subtraction + a LAVA SPINNER
+   ================================================================ */
+g = stageGate(9, 'Hard Subtraction II', 1300, 74, 0, pick([
+  {q:'30,215 − 18,947', a:11268, hint:'5 − 7 borrows; work all the way left.'},
+  {q:'40,182 − 27,596', a:12586, hint:'2 − 6 borrows from the 8.'},
+  {q:'50,304 − 31,789', a:18515, hint:'Two zeros to borrow through — go slow.'}
+]), {topic:'SUBTRACTION', blurb:'Five digits and plenty of borrowing.',
+     sub:'LAVA SPINNER — time your run around the disc'});
+
+box(1330, 74, 0, 12, 2, 12, 'stone2');
+// spinner arena: big round-ish platform with a rotating lava beam
+box(1370, 74, 0, 46, 2, 46, 'stone');
+spinner(1370, 78, 0, 42, {speed:1.35, w:2.4, h:3});
+lava(1370, 40, 0, 70, 70);
+box(1400, 74, 0, 12, 2, 12, 'stone2');
+fillRun(1404, 74, 1436, 76, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:32});
+
+/* ================================================================
+   STAGE 10 — harder subtraction, SHIFTLOCK, and the GRASSLAND TOWER
+   ================================================================ */
+g = stageGate(10, 'Harder Subtraction', 1450, 76, 0, pick([
+  {q:'100,000 − 46,839', a:53161, hint:'Borrow all the way across the zeros — or do 99,999 − 46,839 then +1.'},
+  {q:'200,000 − 87,654', a:112346, hint:'Try 199,999 − 87,654 and then add 1.'},
+  {q:'100,500 − 63,728', a:36772, hint:'Borrow through the zeros one column at a time.'}
+]), {topic:'SUBTRACTION', blurb:'The big one. Zeros everywhere — borrow carefully.',
+     sub:'GRASSLAND TOWER — climb it all, then a 3-stud wraparound',
+     onReach: ()=>{ unlockShiftlock(); }});
+
+/* --- the grassland tower: a spiral of every obstacle so far --- */
+const TX = 1580, TZ = 0, TBASE = 78;
+// grass mountain base
+for(let i=0;i<5;i++) box(TX, TBASE - 2 + i*0, TZ, 150 - i*20, 6, 150 - i*20, i?'grass2':'grass', {solid:false});
+box(TX, TBASE - 4, TZ, 120, 30, 120, 'grass2', {solid:false});
+box(TX, TBASE - 30, TZ, 90, 40, 90, 'stone2', {solid:false});
+box(TX, TBASE, TZ, 44, 6, 44, 'grass');                 // tower foot (landable)
+box(TX, TBASE + 130, TZ, 24, 132, 24, 'stone');          // central pillar
+for(let i=0;i<14;i++) tree(TX - 60 + (i%7)*20, TBASE - 4, TZ + (i<7 ? -56 : 56), 1);
+lava(TX, TBASE - 46, TZ, 200, 200);
+
+fillRun(1436, 76, TX - 26, TBASE, 0, {step:11, mat:'grass', lavaBelow:false});
+
+// spiral of platforms around the pillar
+const SPIRAL = [];
+let sa = Math.PI, sy = TBASE + 5;
+for(let i=0;i<30;i++){
+  sa += 0.42; sy += 3.6;
+  const r = 26 + (i%3===0 ? 3 : 0);
+  const px = TX + Math.cos(sa)*r, pz = TZ + Math.sin(sa)*r;
+  const kind = i % 7;
+  if(i === 14){ SPIRAL.push({px, pz, py:sy, skip:true}); continue; }  // wraparound level
+  if(kind === 3){                      // lava-flanked hop
+    box(px, sy, pz, 6, 2, 6, 'stone2');
+    lava(px, sy - 9, pz, 12, 12);
+  } else if(kind === 5){               // conveyor pushing outward
+    conveyor(px, sy, pz, 8, 8, Math.cos(sa)*8, Math.sin(sa)*8);
+  } else {
+    box(px, sy, pz, 6.5, 2, 6.5, i%2 ? 'grass' : 'grass2');
+  }
+  SPIRAL.push({px, pz, py:sy});
+}
+// mid-tower wraparound (bridge in, walk around the pillar, bridge out)
+const W14 = SPIRAL[14];
+box(TX + 20, W14.py, TZ, 22, 1.4, 5, 'stone2');       // bridge in
+pillarWrap(TX, TZ, W14.py, 24, 3, {blocked:'z-', mat:'stone2', sign:false});
+box(TX - 20, W14.py, TZ, 22, 1.4, 5, 'stone2');       // bridge out
+sign(TX, W14.py + 8, TZ + 16, '3-STUD WRAPAROUND', {size:2.6});
+// two spinners cutting across the spiral
+spinner(TX, TBASE + 46, TZ, 60, {speed:0.9, w:2.4, h:3, phase:0.6});
+spinner(TX, TBASE + 96, TZ, 60, {speed:-1.1, w:2.4, h:3, phase:2.1});
+// top platform of the tower
+const TOPY = sy + 6;
+box(TX, TOPY, TZ, 30, 3, 30, 'grass');
+sign(TX, TOPY + 10, TZ, 'TOP OF THE TOWER', {size:3.4, color:'#4ade80'});
+box(TX + Math.cos(sa)*26, sy + 3, TZ + Math.sin(sa)*26, 7, 2, 7, 'grass2');
+box(TX + Math.cos(sa)*16, sy + 5, TZ + Math.sin(sa)*16, 9, 2, 9, 'grass2');
+// the finale: 3-stud wraparound on a separate spire, then bridge to stage 11
+box(TX + 22, TOPY, TZ, 16, 1.6, 6, 'stone2');
+pillarWrap(TX + 56, TZ, TOPY, 20, 3, {blocked:'z-', mat:'stone2'});
+box(TX + 56, TOPY + 40, TZ, 20, 80, 20, 'stone');
+lava(TX + 56, TOPY - 40, TZ, 70, 70);
+box(TX + 78, TOPY, TZ, 12, 2, 12, 'stone2');
+fillRun(TX + 84, TOPY, 1740, TOPY, 0, {step:11.5, mat:'stone2'});
+cloud(TX - 70, TOPY + 30, TZ + 60, 1.6); cloud(TX + 80, TOPY + 46, TZ - 70, 1.2);
+/* ================================================================
+   STAGE 11 — multiplication + TWO lava spinners
+   ================================================================ */
+g = stageGate(11, 'Multiplication', 1750, TOPY, 0, pick([
+  {q:'12 × 8', a:96, hint:'12 × 8 = (10 × 8) + (2 × 8).'},
+  {q:'14 × 7', a:98, hint:'14 × 7 = (10 × 7) + (4 × 7).'},
+  {q:'13 × 9', a:117, hint:'13 × 9 = (13 × 10) − 13.'}
+]), {topic:'MULTIPLICATION', blurb:'New operation. Split the number up if it helps.',
+     sub:'TWO lava spinners — watch the rhythm before you step on'});
+
+box(1790, TOPY, 0, 40, 2, 40, 'stone');
+spinner(1790, TOPY + 4, 0, 36, {speed:1.6, w:2.4, h:3});
+lava(1790, TOPY - 40, 0, 64, 64);
+box(1826, TOPY + 2, 0, 10, 2, 10, 'stone2');
+box(1862, TOPY + 2, 0, 40, 2, 40, 'stone');
+spinner(1862, TOPY + 6, 0, 36, {speed:-2.1, w:2.4, h:3, phase:1.2});
+lava(1862, TOPY - 40, 0, 64, 64);
+fillRun(1886, TOPY + 2, 1918, TOPY + 2, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:36});
+
+/* ================================================================
+   STAGE 12 — multiplication + TWO 3-stud wraparounds
+   ================================================================ */
+const Y12 = TOPY + 2;
+g = stageGate(12, 'Multiplication II', 1930, Y12, 0, pick([
+  {q:'24 × 15', a:360, hint:'24 × 15 = 24 × 10 + 24 × 5.'},
+  {q:'32 × 18', a:576, hint:'32 × 18 = 32 × 20 − 32 × 2.'},
+  {q:'26 × 14', a:364, hint:'26 × 14 = 26 × 10 + 26 × 4.'}
+]), {topic:'MULTIPLICATION', blurb:'Two-digit times two-digit. Break it into tens and ones.',
+     sub:'TWO 3-stud wraparounds'});
+
+fillRun(g.x + 4, Y12, 1974, Y12, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:30});
+box(1982, Y12, 0, 9, 2, 9, 'stone2');
+pillarWrap(2000, 0, Y12, 16, 3, {blocked:'z-', mat:'stone2'});
+box(2000, Y12 + 40, 0, 16, 80, 16, 'stone'); lava(2000, Y12 - 40, 0, 60, 60);
+box(2018, Y12, 0, 9, 2, 9, 'stone2');
+box(2032, Y12 + 2, 0, 9, 2, 9, 'stone2');
+pillarWrap(2050, 0, Y12 + 2, 16, 3, {blocked:'z+', mat:'stone2'});
+box(2050, Y12 + 42, 0, 16, 80, 16, 'stone'); lava(2050, Y12 - 38, 0, 60, 60);
+box(2068, Y12 + 2, 0, 9, 2, 9, 'stone2');
+fillRun(2072, Y12 + 2, 2098, Y12 + 2, 0, {step:10.5, mat:'stone', lavaBelow:true, lavaDrop:34});
+
+/* ================================================================
+   STAGE 13 — hard multiplication + a 4-stud wraparound
+   ================================================================ */
+const Y13 = Y12 + 2;
+g = stageGate(13, 'Hard Multiplication', 2110, Y13, 0, pick([
+  {q:'47 × 38', a:1786, hint:'47 × 38 = 47 × 40 − 47 × 2.'},
+  {q:'56 × 43', a:2408, hint:'56 × 43 = 56 × 40 + 56 × 3.'},
+  {q:'64 × 37', a:2368, hint:'64 × 37 = 64 × 30 + 64 × 7.'}
+]), {topic:'MULTIPLICATION', blurb:'Long multiplication. Two rows, then add them.',
+     sub:'A 4-stud wraparound — wider, but a lot longer'});
+
+fillRun(g.x + 4, Y13, 2154, Y13, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:30});
+box(2162, Y13, 0, 9, 2, 9, 'stone2');
+pillarWrap(2186, 0, Y13, 30, 4, {blocked:'z-', mat:'stone2'});
+box(2186, Y13 + 45, 0, 30, 90, 30, 'stone'); lava(2186, Y13 - 40, 0, 76, 76);
+box(2210, Y13, 0, 9, 2, 9, 'stone2');
+fillRun(2214, Y13, 2248, Y13 + 2, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:34});
+
+/* ================================================================
+   STAGE 14 — hard multiplication + THE PUZZLE TOWER
+   (dots -> morse -> binary -> door code)
+   ================================================================ */
+const Y14 = Y13 + 2;
+g = stageGate(14, 'Hard Multiplication II', 2260, Y14, 0, pick([
+  {q:'126 × 54', a:6804, hint:'126 × 54 = 126 × 50 + 126 × 4.'},
+  {q:'148 × 36', a:5328, hint:'148 × 36 = 148 × 30 + 148 × 6.'},
+  {q:'213 × 47', a:10011, hint:'213 × 47 = 213 × 40 + 213 × 7.'}
+]), {topic:'MULTIPLICATION', blurb:'Three digits by two digits. Rows, then add.',
+     sub:'PUZZLE TOWER — dots, morse, binary. One hint each.'});
+
+/* --- generate the 3 code digits for this session --- */
+const MORSE_DIGITS = ['-----','.----','..---','...--','....-','.....','-....','--...','---..','----.'];
+const CODE_D = [2 + Math.floor(Math.random()*8), 1 + Math.floor(Math.random()*9), 2 + Math.floor(Math.random()*8)];
+const TOWER_CODE = CODE_D.join('');
+const PT = {x:2350, z:0, y:Y14};
+const PZ_DONE = [false, false, false];
+
+fillRun(g.x + 4, Y14, PT.x - 24, Y14, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:30});
+
+/* tower shell: 3 floors, ladders between them */
+(function buildPuzzleTower(){
+  const x = PT.x, z = PT.z, S = 34, H = 22;
+  for(let f=0; f<3; f++){
+    const fy = Y14 + f*H;
+    box(x, fy, z, S, 2, S, f%2 ? 'stone' : 'stone2');                 // floor
+    // walls with a doorway on -X for the ground floor
+    const wallM = 'brick';
+    box(x, fy + H, z + S/2, S, H, 2, wallM);
+    box(x, fy + H, z - S/2, S, H, 2, wallM);
+    box(x + S/2, fy + H, z, 2, H, S, wallM);
+    if(f === 0){
+      box(x - S/2, fy + H, z + 11, 2, H, 12, wallM);
+      box(x - S/2, fy + H, z - 11, 2, H, 12, wallM);
+      box(x - S/2, fy + H, z, 2, H - 11, 10, wallM);                  // lintel over the door
+    } else {
+      box(x - S/2, fy + H, z, 2, H, S, wallM);
+    }
+    if(f < 2){                                                        // hole + ladder up
+      const hy = fy + H;
+      box(x + 12, hy, z + 12, 10, 2, 10, 'stone2');
+      truss(x + 12, fy, z + 16.4, H, {w:7});
+    }
+    // torches
+    for(let i=0;i<2;i++) box(x + (i?14:-14), fy + 9, z + (i?14:-14), 1.2, 1.2, 1.2, 'lava', {solid:false});
+  }
+  // roof
+  box(x, Y14 + 3*H + 2, z, S + 4, 2, S + 4, 'stone');
+  sign(x - S/2 - 1.2, Y14 + 14, z, 'PUZZLE TOWER', {size:4, ry:-Math.PI/2, color:'#8fb6ff'});
+
+  /* --- floor 0: DOTS --- */
+  const d0 = CODE_D[0];
+  box(x - 8, Y14 + 5, z - 8, 6, 5, 4, 'wood');
+  sign(x - 8, Y14 + 6.4, z - 6, 'DOTS', {size:1.6, bg:'none'});
+  interact(x - 8, Y14 + 5, z - 8, 'Read the dot panel', ()=>{
+    const rows = [];
+    let left = d0;
+    // scatter d0 dots over 3 panels
+    const panels = [0,0,0];
+    for(let i=0;i<d0;i++) panels[i % 3]++;
+    for(const p of panels) rows.push('<div class="dots">' +
+      Array.from({length:9}, (_,i)=> '<span class="dot' + (i < p ? '' : ' off') + '"></span>').join('') + '</div>');
+    askText({
+      title:'PANEL I — THE DOTS', tag:'PUZZLE TOWER · 1 OF 3',
+      body:'<p>Three plates are carved with dots. <b>Count every lit dot</b> — that is the FIRST digit of the tower code.</p>' + rows.join(''),
+      answer:String(d0), hint:'Count the gold dots only. The dark ones are empty holes.',
+      okMsg:'FIRST DIGIT: ' + d0,
+      onSolve:()=>{ PZ_DONE[0] = true; toast('CODE DIGIT 1 = ' + d0, '#4ade80', 3); }
+    });
+  }, {r:8});
+
+  /* --- floor 1: MORSE --- */
+  const d1 = CODE_D[1];
+  interact(x - 8, Y14 + H + 5, z - 8, 'Listen to the morse beacon', ()=>{
+    const leg = MORSE_DIGITS.map((m,i)=> '<td>' + i + '<br><span class="mono" style="color:#ffd23f">' + m + '</span></td>');
+    askText({
+      title:'PANEL II — MORSE CODE', tag:'PUZZLE TOWER · 2 OF 3',
+      body:'<p>The beacon blinks one digit over and over. <b>Decode it</b> — that is the SECOND digit.</p>' +
+           '<div class="q mono" style="font-size:46px;letter-spacing:8px">' + MORSE_DIGITS[d1] + '</div>' +
+           '<table class="leg"><tr>' + leg.slice(0,5).join('') + '</tr><tr>' + leg.slice(5).join('') + '</tr></table>',
+      answer:String(d1), hint:'Dots are short blinks, dashes are long. Match the pattern in the table.',
+      okMsg:'SECOND DIGIT: ' + d1,
+      onSolve:()=>{ PZ_DONE[1] = true; toast('CODE DIGIT 2 = ' + d1, '#4ade80', 3); }
+    });
+  }, {r:9});
+  box(x - 8, Y14 + H + 5, z - 8, 5, 5, 5, 'stone');
+  const beacon = box(x - 8, Y14 + H + 7.4, z - 8, 2, 2, 2, 'neon', {solid:false});
+  ANIM.push(t=>{ beacon.visible = (Math.sin(t*4) > 0); });
+
+  /* --- floor 2: BINARY + the code door --- */
+  const d2 = CODE_D[2];
+  interact(x - 8, Y14 + 2*H + 5, z - 8, 'Read the binary switches', ()=>{
+    const bits = d2.toString(2).padStart(4,'0').split('');
+    askText({
+      title:'PANEL III — BINARY', tag:'PUZZLE TOWER · 3 OF 3',
+      body:'<p>Four switches. UP is 1, DOWN is 0. <b>What number is this?</b> That is the THIRD digit.</p>' +
+           '<div class="q mono" style="letter-spacing:14px">' + bits.join('') + '</div>' +
+           '<table class="leg"><tr><td>place</td><td>8</td><td>4</td><td>2</td><td>1</td></tr>' +
+           '<tr><td>switch</td>' + bits.map(b=>'<td class="g">'+b+'</td>').join('') + '</tr></table>',
+      answer:String(d2), hint:'Add the place values wherever there is a 1. 8+4+2+1 style.',
+      okMsg:'THIRD DIGIT: ' + d2,
+      onSolve:()=>{ PZ_DONE[2] = true; toast('CODE DIGIT 3 = ' + d2, '#4ade80', 3); }
+    });
+  }, {r:9});
+  box(x - 8, Y14 + 2*H + 5, z - 8, 5, 5, 5, 'stone');
+
+  // the coded door, top floor, +X side, leading out to a bridge
+  const dy = Y14 + 2*H;
+  box(x + S/2, dy + H, z + 11, 2, H, 12, 'brick');
+  box(x + S/2, dy + H, z - 11, 2, H, 12, 'brick');
+  const codeDoor = makeDoor(x + S/2, dy + 12, z, 2.4, 12, 10, 'gold');
+  sign(x + S/2 - 1.4, dy + 14.6, z, 'CODE', {size:2, ry:Math.PI/2, bg:'none'});
+  interact(x + S/2 - 3, dy + 5, z, 'Enter the 3-digit code', ()=>{
+    if(codeDoor.open){ toast('Already open.', '#4ade80'); return; }
+    const solvedCount = PZ_DONE.filter(Boolean).length;
+    askText({
+      title:'THE CODED DOOR', tag:'3 DIGITS',
+      body:'<p>Three digits, in the order you found them: <b>dots</b>, then <b>morse</b>, then <b>binary</b>.</p>' +
+           '<p style="color:#7f93b5">Panels solved: ' + solvedCount + ' / 3</p>',
+      answer:TOWER_CODE, placeholder:'###',
+      hint:'You need all three panels. Each floor has one — climb the trusses.',
+      okMsg:'THE LOCK TURNS…',
+      onSolve:()=>{ codeDoor.openIt('THE PUZZLE TOWER OPENS'); }
+    });
+  }, {r:8});
+  // bridge out to stage 15
+  fillRun(x + S/2 + 4, dy, 2470, Y14 + 4, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:60});
+})();
+
+/* ================================================================
+   STAGE 15 — multiplication & squares + LAVA SHOOTERS and 4 wraparounds
+   ================================================================ */
+const Y15 = Y14 + 4;
+g = stageGate(15, 'Multiply & Square', 2500, Y15, 0, pick([
+  {q:'7² × 6', a:294, hint:'7² means 7 × 7 = 49. Then 49 × 6.'},
+  {q:'9² × 4', a:324, hint:'9² = 81. Then 81 × 4.'},
+  {q:'8² × 5', a:320, hint:'8² = 64. Then 64 × 5.'}
+]), {topic:'SQUARES', blurb:'A small ² means multiply the number by itself. Do that first.',
+     sub:'LAVA CANNONS, then FOUR 3-stud wraparounds'});
+
+// shooter corridor
+const cor = fillRun(g.x + 4, Y15, 2620, Y15, 0, {step:11, mat:'stone', w:9, lavaBelow:true, lavaDrop:26});
+for(let i=0;i<5;i++){
+  const sx = g.x + 18 + i*22;
+  shooter(sx, Y15, 16, 0, -1, {every:2.0, phase:i*0.45, speed:30});
+  shooter(sx + 11, Y15, -16, 0, 1, {every:2.4, phase:i*0.7 + 1.1, speed:26});
+}
+sign(g.x + 30, Y15 + 14, 0, 'LAVA CANNONS', {size:3.2, color:'#ff9e5c'});
+// four 3-stud wraparounds
+let wx = 2650;
+for(let i=0;i<4;i++){
+  box(wx - 10, Y15 + i*1.5, 0, 9, 2, 9, 'stone2');
+  pillarWrap(wx + 6, 0, Y15 + i*1.5, 14, 3, {blocked: i%2 ? 'z+' : 'z-', mat:'stone2', sign:i===0});
+  box(wx + 6, Y15 + i*1.5 + 40, 0, 14, 80, 14, 'stone');
+  lava(wx + 6, Y15 - 34, 0, 52, 52);
+  box(wx + 22, Y15 + i*1.5, 0, 9, 2, 9, 'stone2');
+  wx += 44;
+}
+fillRun(wx - 16, Y15 + 6, 2856, Y15 + 8, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:30});
+
+/* ================================================================
+   STAGE 16 — division + a 5-stud wraparound
+   ================================================================ */
+const Y16 = Y15 + 8;
+g = stageGate(16, 'Division', 2870, Y16, 0, pick([
+  {q:'144 ÷ 12', a:12, hint:'What times 12 makes 144?'},
+  {q:'196 ÷ 14', a:14, hint:'What times 14 makes 196?'},
+  {q:'225 ÷ 15', a:15, hint:'What times 15 makes 225?'}
+]), {topic:'DIVISION', blurb:'Division is multiplication backwards. Ask: what times the divisor gives this?',
+     sub:'A wide 5-stud wraparound — but a very long way around'});
+
+fillRun(g.x + 4, Y16, 2916, Y16, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:28});
+box(2924, Y16, 0, 10, 2, 10, 'stone2');
+pillarWrap(2952, 0, Y16, 38, 5, {blocked:'z-', mat:'stone2'});
+box(2952, Y16 + 50, 0, 38, 100, 38, 'stone'); lava(2952, Y16 - 36, 0, 84, 84);
+box(2980, Y16, 0, 10, 2, 10, 'stone2');
+fillRun(2986, Y16, 3000, Y16 + 2, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:32});
+
+/* ================================================================
+   STAGE 17 — multiply & divide + THE BIG DESERT + 6-stud wrap in brown fog
+   ================================================================ */
+const Y17 = Y16 + 2;
+g = stageGate(17, 'Multiply & Divide', 3010, Y17, 0, pick([
+  {q:'(18 × 24) ÷ 6', a:72, hint:'Do the bracket first: 18 × 24 = 432.'},
+  {q:'(36 × 15) ÷ 9', a:60, hint:'36 × 15 = 540. Now divide by 9.'},
+  {q:'(28 × 27) ÷ 12', a:63, hint:'28 × 27 = 756. Now divide by 12.'}
+]), {topic:'MIXED', blurb:'Brackets first, then the division.',
+     sub:'THE GREAT DESERT — cross it, then a 6-stud wraparound in the fog',
+     mat:'sandst2', frameMat:'sandst', doorMat:'sandst'});
+
+// --- the desert: dunes, ruins, palms, quicksand ---
+function quicksand(x, topY, z, w, d){
+  box(x, topY, z, w, 3, d, 'sand2', {solid:false});
+  addKill(x, topY - 2, z, w, 5, d);
+}
+const DX0 = 3040, DX1 = 3320, DZ = 0;
+zone(DX0 - 6, Y17 + 6, DZ, 12, 40, 60, ()=>{ setSky(SKY_DESERT, 200, 800); toast('THE GREAT DESERT', '#e8c48a', 2.6); });
+// dune floor (walkable in places, quicksand in others)
+for(let i=0;i<16;i++){
+  const dx = DX0 + i*18, dy = Y17 - i*4;
+  box(dx, dy, DZ + (i%2?12:-12), 26, 6, 26, i%3 ? 'sand' : 'sand2');
+  if(i%4 === 2) quicksand(dx + 9, dy + 0.2, DZ + (i%2?-12:12), 22, 22);
+  if(i%3 === 0) palm(dx + 4, dy, DZ + (i%2?-14:14), 1);
+  if(i%5 === 1) rock(dx - 6, dy, DZ + (i%2?18:-18), 1.4);
+}
+const DY_END = Y17 - 15*4;
+// ruins: a broken pyramid and pillars you jump over
+box(3180, DY_END + 60, DZ - 70, 90, 60, 90, 'sandst2', {solid:false});
+box(3180, DY_END + 80, DZ - 70, 60, 20, 60, 'sandst', {solid:false});
+for(let i=0;i<6;i++) box(3090 + i*30, DY_END + 26 + (i%2)*6, DZ + 58, 8, 26, 8, 'sandst2', {solid:false});
+// caravan
+box(3240, DY_END + 6, DZ + 34, 12, 6, 8, 'wood', {solid:false});
+box(3240, DY_END + 10, DZ + 34, 10, 4, 6, 'sand', {solid:false});
+sign(3120, DY_END + 34, DZ - 26, 'THE GREAT DESERT', {size:5, color:'#7a5a2a', bg:'none'});
+
+// brown fog + the 6-stud wraparound
+zone(DX1, DY_END + 8, DZ, 14, 40, 70, ()=>{
+  setSky(0x6b4a2a, 40, 190); toast('BROWN FOG — you can barely see', '#c99a5c', 3);
+});
+box(DX1 + 10, DY_END, DZ, 14, 3, 14, 'sandst2');
+pillarWrap(DX1 + 48, DZ, DY_END, 44, 6, {blocked:'z-', mat:'sandst2'});
+box(DX1 + 48, DY_END + 55, DZ, 44, 110, 44, 'sandst');
+lava(DX1 + 48, DY_END - 34, DZ, 92, 92);
+box(DX1 + 82, DY_END, DZ, 14, 3, 14, 'sandst2');
+fillRun(DX1 + 88, DY_END, 3448, DY_END, DZ, {step:11, mat:'sandst2'});
+
+/* ================================================================
+   STAGE 18 — division, squares & cubes + THREE 5-stud wraps w/ mini spinners
+   ================================================================ */
+const Y18 = DY_END;
+g = stageGate(18, 'Squares & Cubes', 3470, Y18, 0, pick([
+  {q:'(12³ ÷ 8) + 9²', a:297, hint:'12³ = 12 × 12 × 12 = 1728. Then ÷ 8, then + 81.'},
+  {q:'(10³ ÷ 4) − 6²', a:214, hint:'10³ = 1000. 1000 ÷ 4 = 250. Then − 36.'},
+  {q:'(8³ ÷ 2) + 7²', a:305, hint:'8³ = 512. 512 ÷ 2 = 256. Then + 49.'}
+]), {topic:'CUBES', blurb:'A small ³ means the number times itself three times.',
+     sub:'THREE 5-stud wraparounds with mini spinners between them',
+     mat:'sandst2', frameMat:'sandst', doorMat:'sandst',
+     onReach: ()=>{ setSky(SKY_DESERT, 220, 900); toast('THE FOG LIFTS', '#ffe9a8', 2.4); }});
+
+let wx18 = 3520;
+for(let i=0;i<3;i++){
+  box(wx18 - 12, Y18 + i*2, 0, 10, 2, 10, 'sandst2');
+  pillarWrap(wx18 + 10, 0, Y18 + i*2, 28, 5, {blocked: i===1 ? 'z+' : 'z-', mat:'sandst2', sign:i===0});
+  box(wx18 + 10, Y18 + i*2 + 45, 0, 28, 90, 28, 'sandst');
+  lava(wx18 + 10, Y18 - 34, 0, 66, 66);
+  box(wx18 + 32, Y18 + i*2, 0, 10, 2, 10, 'sandst2');
+  if(i < 2){                       // mini spinner between wraparounds
+    box(wx18 + 48, Y18 + i*2 + 2, 0, 22, 2, 22, 'sandst2');
+    spinner(wx18 + 48, Y18 + i*2 + 5, 0, 19, {speed: i%2 ? -2.6 : 2.6, w:1.8, h:2.4});
+    lava(wx18 + 48, Y18 - 30, 0, 40, 40);
+  }
+  wx18 += 64;
+}
+fillRun(wx18 - 20, Y18 + 6, 3706, Y18 + 6, 0, {step:11, mat:'sandst2', lavaBelow:true, lavaDrop:34});
+
+/* ================================================================
+   STAGE 19 — everything so far + THE CAT THERAPY ROOM
+   ================================================================ */
+const Y19 = Y18 + 6;
+g = stageGate(19, 'Mixed Review', 3720, Y19, 0, pick([
+  {q:'(13² × 4) − 268 + 57', a:465, hint:'13² = 169. 169 × 4 = 676. Then − 268, then + 57.'},
+  {q:'(11² × 6) − 349 + 128', a:505, hint:'11² = 121. 121 × 6 = 726. Then − 349, then + 128.'},
+  {q:'(14² × 3) + 486 − 279', a:795, hint:'14² = 196. 196 × 3 = 588. Then + 486, then − 279.'}
+]), {topic:'MIXED', blurb:'Squares, multiply, subtract, add — in that order.',
+     sub:'CAT THERAPY ROOM — you are locked in. Find the code.',
+     mat:'sandst2', frameMat:'sandst', doorMat:'sandst'});
+
+/* --- cat therapy room ---------------------------------------- */
+const CR = {x:3800, z:0, y:Y19, S:56, H:22};
+const CAT_CODE = [];   // filled with {digit, letter, pos}
+const CAT_PIECES = [
+  {digit:7, letter:'A', pos:0}, {digit:3, letter:'B', pos:1},
+  {digit:9, letter:'C', pos:2}, {digit:4, letter:'D', pos:3}
+];
+const CAT_ANSWER = CAT_PIECES.map(p=>p.digit).join('');
+let catFound = 0;
+(function buildCatRoom(){
+  const {x, z, y, S, H} = CR;
+  fillRun(g.x + 4, y, x - S/2 - 5, y, z, {step:11, mat:'sandst2'});   // path in
+  box(x, y, z, S, 2, S, 'carpet');                     // floor
+  box(x, y + H + 2, z, S + 2, 2, S + 2, 'white');       // ceiling
+  box(x, y + H, z + S/2, S, H, 2, 'white');
+  box(x, y + H, z - S/2, S, H, 2, 'white');
+  box(x + S/2, y + H, z - 23, 2, H, 10, 'white');       // +X wall, split for the exit door
+  box(x + S/2, y + H, z + 11, 2, H, 34, 'white');
+  box(x - S/2, y + H, z + 14, 2, H, S/2 - 6, 'white');
+  box(x - S/2, y + H, z - 14, 2, H, S/2 - 6, 'white');
+  box(x - S/2, y + H, z, 2, H - 11, 12, 'white');       // the way you came in (lintel)
+  // one-way: seal the entrance behind you
+  const seal = box(x - S/2, y + 11, z, 2, 11, 12, 'pink', {tag:'seal'});
+  seal.visible = false; seal.userData.solid.disabled = true;
+  zone(x - 14, y + 6, z, 10, 14, 20, ()=>{
+    seal.visible = true; seal.userData.solid.disabled = false;
+    toast('The door clicks shut behind you…', '#ff9ec4', 3);
+  });
+  // furniture
+  box(x + 10, y + 3, z - 18, 18, 3, 7, 'wood');         // bench
+  for(let i=0;i<3;i++) box(x + 3 + i*7, y + 1.4, z - 18, 1.4, 1.4, 5, 'wood');
+  const DESKS = [[x - 16, z + 12], [x + 4, z + 16], [x + 18, z + 4]];
+  DESKS.forEach(([dx,dz],i)=>{
+    box(dx, y + 5, dz, 12, 1.2, 8, 'wood');
+    for(const sx of [-5,5]) for(const sz of [-3,3]) box(dx+sx, y+4, dz+sz, 1, 4, 1, 'wood', {solid:false});
+  });
+  // whiteboard
+  box(x + S/2 - 1.6, y + 14, z + 10, 0.6, 12, 20, 'white', {solid:false});
+  sign(x + S/2 - 2.1, y + 14, z + 10, 'FEELINGS CHECK-IN\n\nfour things in this room\nare hiding a digit.\nA B C D = the order.', {
+    size:9, ry:-Math.PI/2, color:'#2b3b57', bg:'#f2f4f8', fontSize:44, w:520, h:420});
+  // cat photos on the walls
+  const CATFACES = ['=^･ω･^=','(=^･^=)','ᓚᘏᗢ','(^･o･^)','₍^..^₎','(=ↀωↀ=)'];
+  for(let i=0;i<6;i++){
+    const px = x - 20 + (i%3)*20, pz = (i<3 ? z - S/2 + 1.4 : z + S/2 - 1.4);
+    sign(px, y + 13, pz, CATFACES[i], {size:5, color:'#ff9ec4', bg:'#3a2430', border:'#ff9ec4',
+      ry: i<3 ? 0 : Math.PI, fontSize:70, w:300, h:300});
+  }
+  // 3 live cats sitting around
+  for(let i=0;i<3;i++){
+    const cxp = x - 12 + i*14, czp = z + 20;
+    const cg = new THREE.Group(); cg.position.set(cxp, y + 1, czp); scene.add(cg);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(5,3,3), MATS.pink); body.position.y = 2; cg.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(3,2.6,2.6), MATS.pink); head.position.set(2.6,4,0); cg.add(head);
+    for(const s of [-1,1]){
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.9,1.2,0.9), MATS.pink);
+      ear.position.set(2.6, 5.4, s*0.8); cg.add(ear);
+    }
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,3.4), MATS.pink); tail.position.set(-2.6,3,0); cg.add(tail);
+    ANIM.push(t=>{ tail.rotation.x = Math.sin(t*2 + i)*0.5; head.rotation.z = Math.sin(t*1.3 + i)*0.1; });
+  }
+
+  function award(piece, meshes, msg){
+    CAT_CODE.push(piece); catFound++;
+    meshes.forEach(m=>{
+      m.material = m.material.clone(); m.material.transparent = true;
+      const fade = ()=>{ m.material.opacity -= 0.02; if(m.material.opacity > 0) requestAnimationFrame(fade); else m.visible = false; };
+      fade();
+    });
+    toast(msg + '   →   ' + piece.digit + ' is letter ' + piece.letter, '#ff9ec4', 4);
+  }
+
+  // A — the cat photos (count the whiskers)
+  const photoBoard = box(x - 22, y + 8, z + 4, 1.4, 9, 9, 'pink', {solid:false});
+  interact(x - 22, y + 8, z + 4, 'Study the cat photo wall', ()=>{
+    if(CAT_CODE.some(c=>c.letter==='A')){ toast('Already solved — 7 is letter A', '#ff9ec4'); return; }
+    askChoice({
+      title:'THE PHOTO WALL', tag:'CAT THERAPY · LETTER A', cls:'cat',
+      body:'<p>Six cats. Three are looking left, two are asleep, one is looking straight at you. ' +
+           'The therapist wrote underneath: <i>"cats looking left, doubled, plus the one staring."</i></p>',
+      q:'What number is that?',
+      choices:['5','6','7','8'], correct:2,
+      hint:'3 looking left, doubled = 6, plus the 1 staring = ?',
+      onSolve:()=>{ award(CAT_PIECES[0], [photoBoard], 'THE PHOTOS FADE'); }
+    });
+  }, {r:9});
+
+  // B — gum under the desks
+  DESKS.forEach(([dx,dz],i)=>{
+    const gum = box(dx, y + 4.2, dz, 2, 0.8, 2, 'neon', {solid:false});
+    interact(dx, y + 4, dz, 'Look under desk ' + (i+1), ()=>{
+      if(i !== 1){ showInfo('UNDER DESK ' + (i+1), '<p>Old gum. Nothing written on it. Gross.</p>', 'cat'); return; }
+      if(CAT_CODE.some(c=>c.letter==='B')){ toast('Already solved — 3 is letter B', '#ff9ec4'); return; }
+      askText({
+        title:'GUM UNDER DESK 2', tag:'CAT THERAPY · LETTER B', cls:'cat',
+        body:'<p>Someone scratched a sum into the gum:</p>',
+        q:'(4 × 9) ÷ 12',
+        answer:'3', hint:'4 × 9 = 36. And 36 ÷ 12 = ?',
+        onSolve:()=>{ award(CAT_PIECES[1], [gum], 'THE GUM DISSOLVES'); }
+      });
+    }, {r:7});
+  });
+
+  // C — the whiteboard
+  interact(x + S/2 - 3, y + 10, z + 10, 'Read the whiteboard', ()=>{
+    if(CAT_CODE.some(c=>c.letter==='C')){ toast('Already solved — 9 is letter C', '#ff9ec4'); return; }
+    askText({
+      title:'THE WHITEBOARD', tag:'CAT THERAPY · LETTER C', cls:'cat',
+      body:'<p>Under the feelings chart, in tiny handwriting:</p>' +
+           '<p class="mono" style="color:#ffd23f">"the square of the number of lives a cat has, minus 16"</p>',
+      q:'?', answer:'9', hint:'A cat has 9 lives. 5² = 25… but which number is it really? 25 − 16.',
+      onSolve:()=>{ award(CAT_PIECES[2], [], 'THE WRITING FADES'); }
+    });
+  }, {r:10});
+
+  // D — the bench
+  interact(x + 10, y + 4, z - 18, 'Sit on the bench', ()=>{
+    if(CAT_CODE.some(c=>c.letter==='D')){ toast('Already solved — 4 is letter D', '#ff9ec4'); return; }
+    askChoice({
+      title:'THE BENCH', tag:'CAT THERAPY · LETTER D', cls:'cat',
+      body:'<p>You sit down. It is oddly relaxing. Carved into the seat:</p>' +
+           '<p class="mono" style="color:#ffd23f">"how many paws are in this room? divide by the number of live cats."</p>',
+      q:'3 cats are in the room.', choices:['2','3','4','12'], correct:2,
+      hint:'Each cat has 4 paws. 3 cats = 12 paws. 12 ÷ 3 = ?',
+      onSolve:()=>{ award(CAT_PIECES[3], [], 'THE CARVING FILLS ITSELF IN'); }
+    });
+  }, {r:8});
+
+  // the coded exit door
+  const cdoor = makeDoor(x + S/2, y + 13, z - 12, 2.4, 13, 12, 'pink');
+  sign(x + S/2 - 1.4, y + 8, z - 12, 'A B C D', {size:2.4, ry:Math.PI/2, bg:'none', color:'#ff9ec4'});
+  interact(x + S/2 - 4, y + 5, z - 12, 'Enter the 4-digit code', ()=>{
+    if(cdoor.open){ toast('Already open.', '#4ade80'); return; }
+    askText({
+      title:'THE THERAPY DOOR', tag:'FOUR DIGITS · A B C D', cls:'cat',
+      body:'<p>Four dials, labelled <b>A B C D</b>. Enter the digits in that order.</p>' +
+           '<div class="inv">' + ['A','B','C','D'].map(L=>{
+             const f = CAT_CODE.find(c=>c.letter===L);
+             return '<div class="item">' + L + ': <b>' + (f ? f.digit : '?') + '</b></div>';
+           }).join('') + '</div>',
+      answer:CAT_ANSWER, placeholder:'####',
+      hint:'Four things in this room hide a digit: the photo wall, under a desk, the whiteboard, the bench.',
+      okMsg:'THE DOOR UNLOCKS — free at last',
+      onSolve:()=>{ cdoor.openIt('THE THERAPY ROOM RELEASES YOU'); }
+    });
+  }, {r:8});
+  // exit walkway toward the temple
+  fillRun(x + S/2 + 4, y, 3900, y, z - 12, {step:11, mat:'sandst2'});
+  box(3906, y, z - 12, 20, 2, 24, 'sandst2');
+})();
+/* ================================================================
+   STAGE 20 — the hardest question, then THE DESERT TEMPLE LOCKDOWN
+   ================================================================ */
+const Y20 = Y19;
+g = stageGate(20, 'The Final Question', 3940, Y20, -12, pick([
+  {q:'(15² × 4) ÷ 10 + (7³ − 143)', a:290, hint:'15² = 225 → ×4 = 900 → ÷10 = 90. Then 7³ = 343, 343 − 143 = 200. Add them.'},
+  {q:'(24² ÷ 8) + (6³ × 2) − 195', a:309, hint:'24² = 576 → ÷8 = 72. 6³ = 216 → ×2 = 432. 72 + 432 − 195.'},
+  {q:'(18² × 3) ÷ 4 + (5³ − 87)', a:281, hint:'18² = 324 → ×3 = 972 → ÷4 = 243. 5³ = 125, 125 − 87 = 38. Add.'}
+]), {topic:'EVERYTHING', blurb:'Squares, cubes, brackets, multiply, divide, add, subtract. All of it.',
+     sub:'THE DESERT TEMPLE — do not go in unprepared',
+     mat:'sandst2', frameMat:'sandst', doorMat:'sandst'});
+
+/* ---------------- temple globals ---------------- */
+const S20 = STAGES[STAGES.length - 1];
+const TP = {x:4060, z:-12, y:Y20};
+const TEMPLE = {
+  entered:false, cactus:false, glyphDoor:false, floorOpen:false,
+  buttons:[false,false,false], ladderDown:false, catsDone:0, catDoor:false,
+  paintings:[false,false,false], kingQ:[false,false,false], hasKey:false, escaped:false,
+  doors:[], resetFns:[]
+};
+const GLYPHS = ['✦','⌘','☘','⚑','☾','⍟','✧','⌾'];
+const GLYPH_MAP = {};              // glyph -> digit, randomised per session
+(function(){
+  const digits = [0,1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-0.5);
+  GLYPHS.forEach((gl,i)=> GLYPH_MAP[gl] = digits[i]);
+})();
+const DOOR_GLYPHS = [GLYPHS[0], GLYPHS[3], GLYPHS[5], GLYPHS[1]];
+const DOOR_CODE = DOOR_GLYPHS.map(gl=>GLYPH_MAP[gl]).join('');
+const CAT_GLYPHS = [GLYPHS[2], GLYPHS[6], GLYPHS[4]];
+const CAT_DOOR_CODE = CAT_GLYPHS.map(gl=>GLYPH_MAP[gl]).join('');
+
+function tdoor(x, topY, z, w, h, d, m, o){
+  const D = makeDoor(x, topY, z, w, h, d, m || 'templeD', o);
+  TEMPLE.doors.push(D); return D;
+}
+function sandRoom(x, z, y, S, H, o={}){
+  box(x, y, z, S, 2, S, o.floor || 'templeW');                       // floor
+  box(x, y + H + 2, z, S + 2, 2, S + 2, o.roof || 'templeD');        // ceiling
+  const wallM = o.wall || 'sandst2';
+  const gapW = o.gap || 12;
+  // -X wall (entrance side): split around a doorway unless told otherwise
+  if(o.openMinusX){
+    box(x - S/2, y + H, z + (S/4 + gapW/4), 2, H, S/2 - gapW/2, wallM);
+    box(x - S/2, y + H, z - (S/4 + gapW/4), 2, H, S/2 - gapW/2, wallM);
+    box(x - S/2, y + H, z, 2, H - 11, gapW, wallM);
+  } else box(x - S/2, y + H, z, 2, H, S, wallM);
+  if(o.openPlusX){
+    box(x + S/2, y + H, z + (S/4 + gapW/4), 2, H, S/2 - gapW/2, wallM);
+    box(x + S/2, y + H, z - (S/4 + gapW/4), 2, H, S/2 - gapW/2, wallM);
+    box(x + S/2, y + H, z, 2, H - 11, gapW, wallM);
+  } else box(x + S/2, y + H, z, 2, H, S, wallM);
+  box(x, y + H, z + S/2, S, H, 2, wallM);
+  box(x, y + H, z - S/2, S, H, 2, wallM);
+  // torches
+  for(const s of [-1,1]){
+    box(x + s*(S/2 - 4), y + 11, z + s*(S/2 - 4), 1.4, 5, 1.4, 'wood', {solid:false});
+    const fl = box(x + s*(S/2 - 4), y + 13.4, z + s*(S/2 - 4), 2, 2.4, 2, 'lava', {solid:false});
+    ANIM.push(t=>{ fl.scale.y = 1 + Math.sin(t*7 + s)*0.2; });
+  }
+}
+
+/* ---------------- approach + lockdown trigger ---------------- */
+fillRun(g.x + 4, Y20, TP.x - 46, Y20, TP.z, {step:11, mat:'sandst2'});
+// temple facade
+box(TP.x - 40, Y20 + 46, TP.z, 14, 48, 70, 'sandst');
+box(TP.x - 40, Y20 + 30, TP.z, 15, 26, 14, 'templeD', {solid:false});
+for(let i=0;i<4;i++) box(TP.x - 46, Y20 + 26 + i*8, TP.z + (i%2?26:-26), 8, 8, 8, 'sandst2', {solid:false});
+sign(TP.x - 47.2, Y20 + 34, TP.z, 'TEMPLE OF THE\nDESERT KING', {size:9, ry:-Math.PI/2, color:'#5a3d1a', bg:'#d8b06a', fontSize:52, w:640});
+// doorway hole through the facade
+box(TP.x - 40, Y20 + 46, TP.z + 26, 14, 48, 18, 'sandst');
+box(TP.x - 40, Y20 + 46, TP.z - 26, 14, 48, 18, 'sandst');
+box(TP.x - 40, Y20 + 46, TP.z, 14, 32, 16, 'sandst');
+box(TP.x - 33, Y20, TP.z, 16, 2, 16, 'templeW');
+
+const lockGate = tdoor(TP.x - 40, Y20 + 14, TP.z, 3, 14, 16, 'templeD', {noCut:true});
+lockGate.solid.disabled = true; lockGate.mesh.visible = false;
+
+zone(TP.x - 30, Y20 + 6, TP.z, 12, 16, 20, ()=>{
+  if(TEMPLE.entered) return;
+  TEMPLE.entered = true;
+  lockGate.solid.disabled = false; lockGate.mesh.visible = true; lockGate.open = false;
+  lockGate.mesh.position.y = Y20 + 14 - 7;
+  setSky(0x2a1c0e, 20, 150);
+  setSpawn(TP.x - 33, Y20 + 2, TP.z, -Math.PI/2);   // checkpoint moves inside the temple
+  cutscene(new THREE.Vector3(TP.x - 40, Y20 + 12, TP.z), 3.2, 'THE TEMPLE SEALS ITSELF — LOCKDOWN IN EFFECT', ()=>{
+    startLockdown(30*60, templeFail);
+    toast('30 MINUTES TO ESCAPE', '#ff6a4d', 4);
+  });
+}, false);
+
+function templeFail(){
+  toast('THE TEMPLE CLAIMS YOU — THE LEVEL RESTARTS', '#ff6a4d', 4);
+  templeReset();
+  die('Lockdown expired');
+}
+function templeReset(){
+  TEMPLE.entered = false; TEMPLE.cactus = false; TEMPLE.glyphDoor = false; TEMPLE.floorOpen = false;
+  TEMPLE.buttons = [false,false,false]; TEMPLE.ladderDown = false;
+  TEMPLE.catsDone = 0; TEMPLE.catDoor = false; TEMPLE.paintings = [false,false,false];
+  TEMPLE.kingQ = [false,false,false]; TEMPLE.hasKey = false;
+  TEMPLE.doors.forEach(d=>d.closeIt());
+  TEMPLE.resetFns.forEach(f=>f());
+  lockGate.solid.disabled = true; lockGate.mesh.visible = false;
+  stopLockdown();
+  setSky(SKY_DESERT, 220, 900);
+  setSpawn(S20.spawn.x, S20.spawn.y, S20.spawn.z, S20.spawnYaw);
+}
+/* the stage-20 checkpoint respawn also resets the temple */
+onRespawn = function(){
+  if(P.stage >= 20 && TEMPLE.entered && !TEMPLE.escaped && !LOCK.active) templeReset();
+};
+
+/* ================================================================
+   T1 — THE CACTUS ROOM (match the painting)
+   ================================================================ */
+const CAC_ORDER = [0,1,2,3,4].sort(()=>Math.random()-0.5);
+(function cactusRoom(){
+  const x = TP.x, z = TP.z, y = Y20, S = 60, H = 24;
+  sandRoom(x, z, y, S, H, {openMinusX:true, gap:16});
+  sign(x, y + 20, z - S/2 + 1.4, 'CHAMBER I', {size:3.4, color:'#e0c08a'});
+
+  // the painting on the +Z wall — draws the correct order
+  const cv = document.createElement('canvas'); cv.width = 640; cv.height = 320;
+  const q = cv.getContext('2d');
+  q.fillStyle = '#c9a06a'; q.fillRect(0,0,640,320);
+  q.strokeStyle = '#5a3d1a'; q.lineWidth = 8; q.strokeRect(8,8,624,304);
+  q.fillStyle = '#3f6a3a';
+  CAC_ORDER.forEach((type, i)=>{
+    const cx = 78 + i*118, base = 280;
+    const hh = [90,140,64,116,168][type];
+    q.fillRect(cx-16, base-hh, 32, hh);
+    if(type===1||type===3){ q.fillRect(cx+16, base-hh*0.6, 40, 16); q.fillRect(cx+40, base-hh*0.6-34, 16, 40); }
+    if(type===2||type===4){ q.fillRect(cx-56, base-hh*0.5, 40, 16); q.fillRect(cx-56, base-hh*0.5-34, 16, 40); }
+    if(type===4){ q.fillStyle = '#d05a8a'; q.fillRect(cx-10, base-hh-16, 20, 16); q.fillStyle = '#3f6a3a'; }
+    q.fillStyle = '#5a3d1a'; q.font = '900 26px Verdana'; q.textAlign = 'center';
+    q.fillText(String(i+1), cx, 306); q.fillStyle = '#3f6a3a';
+  });
+  const ptex = new THREE.CanvasTexture(cv);
+  const painting = new THREE.Mesh(new THREE.PlaneGeometry(30, 15),
+    new THREE.MeshBasicMaterial({map:ptex}));
+  painting.position.set(x, y + 14, z + S/2 - 1.3); painting.rotation.y = Math.PI;
+  scene.add(painting);
+  box(x, y + 22, z + S/2 - 2.6, 34, 19, 1.2, 'templeD', {solid:false});
+  interact(x, y + 12, z + S/2 - 4, 'Look at the painting', ()=>{
+    showInfo('THE PAINTING', '<p>Five cacti, painted in a very deliberate order. ' +
+      'The pedestals in this room hold the same five cacti — but shuffled.</p>' +
+      '<p><b>Press E on a pedestal to swap which cactus stands on it.</b> ' +
+      'Match all five to the painting, left to right (1 → 5).</p>' +
+      '<div class="hintbox">The painting is numbered 1–5 from left to right. So are the pedestals.</div>', 'temple');
+  }, {r:12});
+
+  // 5 pedestals with cycling cacti
+  const cur = [0,0,0,0,0];
+  const meshes = [];
+  const startShuffle = ()=>{
+    for(let i=0;i<5;i++){ cur[i] = (CAC_ORDER[i] + 1 + i) % 5; refresh(i); }
+  };
+  function refresh(i){
+    if(meshes[i]) scene.remove(meshes[i]);
+    meshes[i] = cactusMesh(x - 24 + i*12, y + 5, z - 6, cur[i]);
+  }
+  for(let i=0;i<5;i++){
+    box(x - 24 + i*12, y + 5, z - 6, 8, 5, 8, 'sandst2');
+    sign(x - 24 + i*12, y + 5.4, z - 10.2, String(i+1), {size:1.8, bg:'none', color:'#5a3d1a'});
+    interact(x - 24 + i*12, y + 6, z - 6, 'Swap the cactus on pedestal ' + (i+1), ()=>{
+      if(TEMPLE.cactus) return;
+      cur[i] = (cur[i] + 1) % 5; refresh(i);
+      if(cur.every((c,j)=>c === CAC_ORDER[j])) solveCactus();
+    }, {r:8});
+  }
+  startShuffle();
+  TEMPLE.resetFns.push(()=>{ startShuffle(); painting.position.y = y + 14; painting.rotation.x = 0; });
+
+  // exit: hidden behind the painting
+  const exitWall = box(x, y + 12, z + S/2, 24, 12, 2.4, 'sandst2');
+  TEMPLE.resetFns.push(()=>{ exitWall.userData.solid.disabled = false; exitWall.visible = true; });
+  function solveCactus(){
+    TEMPLE.cactus = true;
+    cutscene(new THREE.Vector3(x, y + 12, z + S/2 - 6), 3.0, 'THE PAINTING FALLS', ()=>{
+      slideMesh(painting, -13, 0.9);
+      painting.rotation.x = 0.5;
+      exitWall.userData.solid.disabled = true; exitWall.visible = false;
+      toast('A passage opens behind the painting', '#ffd23f', 3);
+    });
+  }
+  // corridor from the painting hole to chamber II
+  box(x, y, z + S/2 + 14, 16, 2, 28, 'templeW');
+  box(x - 9, y + 12, z + S/2 + 14, 2, 12, 28, 'sandst2');
+  box(x + 9, y + 12, z + S/2 + 14, 2, 12, 28, 'sandst2');
+  box(x, y + 14, z + S/2 + 14, 20, 2, 28, 'templeD');
+})();
+
+/* ================================================================
+   T2 — THE ANCIENT LETTERS ROOM (code opens the FLOOR)
+   ================================================================ */
+const T2 = {x:TP.x, z:TP.z + 76, y:Y20, S:56, H:26};
+(function glyphRoom(){
+  const {x, z, y, S, H} = T2;
+  // floor built around an 18x18 hole at (x-14, z+12) — the trapdoor fills it
+  box(x - 25.5, y, z, 5, 2, S, 'templeW');
+  box(x + 11.5, y, z, 33, 2, S, 'templeW');
+  box(x - 14, y, z - 12.5, 18, 2, 31, 'templeW');
+  box(x - 14, y, z + 24.5, 18, 2, 7, 'templeW');
+  box(x, y + H + 2, z, S + 2, 2, S + 2, 'templeD');
+  box(x + S/2, y + H, z, 2, H, S, 'sandst2');
+  box(x, y + H, z + S/2, S, H, 2, 'sandst2');
+  box(x - S/2, y + H, z + 14, 2, H, S/2 - 6, 'sandst2');
+  box(x - S/2, y + H, z - 14, 2, H, S/2 - 6, 'sandst2');
+  // entrance from the corridor (-Z wall) with a doorway
+  box(x - 16, y + H, z - S/2, 24, H, 2, 'sandst2');
+  box(x + 16, y + H, z - S/2, 24, H, 2, 'sandst2');
+  box(x, y + H, z - S/2, 8, H - 12, 2, 'sandst2');
+  sign(x, y + 22, z + S/2 - 1.4, 'CHAMBER II', {size:3.4, color:'#e0c08a', ry:Math.PI});
+
+  // the code, carved big on the far wall
+  sign(x, y + 15, z + S/2 - 1.6, DOOR_GLYPHS.join('  '), {
+    size:9, ry:Math.PI, color:'#ffd23f', bg:'#3a2a14', border:'#8a6a2a', fontSize:110, w:760, h:260});
+  // the legend, written on the floor
+  GLYPHS.forEach((gl, i)=>{
+    const gx = x - 21 + (i%4)*14, gz = z - 12 + Math.floor(i/4)*14;
+    sign(gx, y + 1.3, gz, gl + ' = ' + GLYPH_MAP[gl], {
+      size:7, rx:-Math.PI/2, color:'#6a4a22', bg:'none', fontSize:80, w:300, h:180});
+  });
+  sign(x, y + 1.3, z + 12, 'THE FLOOR REMEMBERS', {size:6, rx:-Math.PI/2, color:'#8a6a3a', bg:'none', w:520, h:120});
+
+  // the code door on +X (it will NOT open yet)
+  const cdoor = tdoor(x + S/2, y + 14, z, 3, 14, 14, 'gold');
+  box(x + S/2, y + H, z + 20, 2, H, 16, 'sandst2');
+  box(x + S/2, y + H, z - 20, 2, H, 16, 'sandst2');
+  T2.door = cdoor;
+  // the trapdoor floor section
+  const trap = box(x - 14, y, z + 12, 18, 2, 18, 'templeD');
+  TEMPLE.resetFns.push(()=>{ trap.userData.solid.disabled = false; trap.visible = true; trap.position.y = y - 1; });
+
+  interact(x + S/2 - 4, y + 5, z, 'Enter the ancient code', ()=>{
+    if(TEMPLE.glyphDoor){ toast('The door stands open.', '#4ade80'); return; }
+    askText({
+      title:'THE GLYPH DOOR', tag:'CHAMBER II · ANCIENT LETTERS', cls:'temple',
+      body:'<p>Four glyphs are carved above the door. The floor tells you what each glyph is worth.</p>' +
+           '<div class="q" style="letter-spacing:16px">' + DOOR_GLYPHS.join(' ') + '</div>',
+      answer:DOOR_CODE, placeholder:'####',
+      hint:'Read the floor: every glyph in this room is written next to its digit.',
+      okMsg:'THE LOCK ACCEPTS IT… but the door does not move.',
+      onSolve:()=>{
+        if(TEMPLE.floorOpen) return;
+        TEMPLE.floorOpen = true;
+        cutscene(new THREE.Vector3(x - 14, y, z + 12), 3.2, 'THE DOOR STAYS SHUT — THE FLOOR OPENS', ()=>{
+          slideMesh(trap, -26, 1.1, ()=>{ trap.userData.solid.disabled = true; trap.visible = false; });
+          trap.userData.solid.disabled = true;
+          toast('Something opened below. Go down.', '#ffd23f', 3.5);
+        });
+      }
+    });
+  }, {r:9});
+})();
+
+/* ================================================================
+   T3 — THE PIT: three hidden buttons, three annoying questions
+   ================================================================ */
+const T3 = {x:T2.x - 14, z:T2.z + 12, y:Y20 - 42, S:64, H:20};
+(function pitRoom(){
+  const {x, z, y, S, H} = T3;
+  box(x, y, z, S, 2, S, 'templeD');
+  box(x, y + H, z + S/2, S, H, 2, 'sandst2');
+  box(x, y + H, z - S/2, S, H, 2, 'sandst2');
+  box(x + S/2, y + H, z, 2, H, S, 'sandst2');
+  box(x - S/2, y + H, z, 2, H, S, 'sandst2');
+  // ceiling with an 18x18 hole, plus the shaft you fell down
+  const cy = y + H + 2;
+  box(x, cy, z + (S/4 + 4.5), S, 2, S/2 - 9, 'templeD');
+  box(x, cy, z - (S/4 + 4.5), S, 2, S/2 - 9, 'templeD');
+  box(x + (S/4 + 4.5), cy, z, S/2 - 9, 2, 18, 'templeD');
+  box(x - (S/4 + 4.5), cy, z, S/2 - 9, 2, 18, 'templeD');
+  const shaftH = Y20 - cy;
+  for(const s of [-1,1]){
+    box(x + s*10, cy + shaftH, z, 2, shaftH, 20, 'sandst2');
+    box(x, cy + shaftH, z + s*10, 20, shaftH, 2, 'sandst2');
+  }
+  // pillars to hide things behind
+  const pillars = [[-20,-16],[16,-20],[-14,18],[20,16],[0,0]];
+  pillars.forEach(([px,pz])=> box(x+px, y + H, z+pz, 7, H, 7, 'sandst2'));
+  for(let i=0;i<3;i++) box(x - 26 + i*26, y + 3, z + 24, 10, 3, 6, 'sandst', {solid:false});
+  sign(x, y + 14, z - S/2 + 1.4, 'THE PIT', {size:4, color:'#a07a44'});
+
+  const QS = [
+    {t:'BUTTON I', q:'A brick weighs 1 kg plus half a brick.<br>How many kg does the whole brick weigh?',
+     a:['2','2kg','2 kg'], hint:'Half a brick = 1 kg. So the whole brick is…'},
+    {t:'BUTTON II', q:'5 machines make 5 widgets in 5 minutes.<br>How many MINUTES for 100 machines to make 100 widgets?',
+     a:['5','5 minutes','5min','5 min'], hint:'Each machine makes 1 widget in 5 minutes. Adding machines does not change that.'},
+    {t:'BUTTON III', q:'What is 12 ÷ ½ + 4 ?',
+     a:['28'], hint:'Dividing by a half DOUBLES it. 12 ÷ ½ = 24, then + 4.'}
+  ];
+  const btnMeshes = [];
+  const spots = [[-20,-22],[22,-14],[-8,20]];
+  spots.forEach(([px,pz], i)=>{
+    const bm = box(x+px, y + 4, z+pz, 4, 4, 4, 'sandst');
+    const light = box(x+px, y + 4.6, z+pz, 2.4, 0.6, 2.4, 'lava', {solid:false});
+    btnMeshes.push(light);
+    interact(x+px, y + 4, z+pz, 'Press the hidden button', ()=>{
+      if(TEMPLE.buttons[i]){ toast('Already pressed.', '#4ade80'); return; }
+      askText({
+        title:QS[i].t, tag:'CHAMBER III · ANNOYING QUESTION', cls:'temple',
+        body:'<p>' + QS[i].q + '</p>', answer:QS[i].a, hint:QS[i].hint,
+        wrongMsg:'The button buzzes at you. Rude. Try again.',
+        onSolve:()=>{
+          TEMPLE.buttons[i] = true; light.material = MATS.check;
+          const done = TEMPLE.buttons.filter(Boolean).length;
+          toast('BUTTON ' + (i+1) + ' — ' + done + ' / 3', '#4ade80', 2.4);
+          if(done === 3) dropLadder();
+        }
+      });
+    }, {r:8});
+  });
+  TEMPLE.resetFns.push(()=>{ btnMeshes.forEach(m=> m.material = MATS.lava); });
+
+  // the ladder that falls when all three are pressed
+  const ladderG = truss(x, y, z - 5, 48, {w:7});
+  ladderG.position.y = 60; ladderG.visible = false;
+  const ladVol = LADDERS[LADDERS.length - 1];
+  ladVol.disabled = true;
+  TEMPLE.resetFns.push(()=>{ ladderG.position.y = 60; ladderG.visible = false; ladVol.disabled = true; });
+  function dropLadder(){
+    if(TEMPLE.ladderDown) return;
+    TEMPLE.ladderDown = true;
+    ladderG.visible = true;
+    cutscene(new THREE.Vector3(x + 4, y + 18, z - 6), 3.4, 'A LADDER FALLS FROM THE CEILING', ()=>{
+      slideMesh(ladderG, -60, 1.2, ()=>{
+        ladVol.disabled = false;
+        toast('Climb back up — and the glyph door is open now', '#ffd23f', 4);
+        TEMPLE.glyphDoor = true;
+        T2.door.openIt('THE GLYPH DOOR GRINDS OPEN');
+      });
+    });
+  }
+})();
+
+/* ================================================================
+   T4 — THE CAT ROOM (trim their hair, read their glyphs)
+   ================================================================ */
+const T4 = {x:T2.x + 74, z:T2.z, y:Y20, S:56, H:24};
+(function templeCatRoom(){
+  const {x, z, y, S, H} = T4;
+  // corridor from the glyph door
+  box(T2.x + 34, y, z, 34, 2, 14, 'templeW');
+  box(T2.x + 34, y + 14, z, 34, 2, 18, 'templeD');
+  box(T2.x + 34, y + 12, z + 8, 34, 12, 2, 'sandst2');
+  box(T2.x + 34, y + 12, z - 8, 34, 12, 2, 'sandst2');
+  sandRoom(x, z, y, S, H, {openMinusX:true, gap:14});
+  sign(x, y + 20, z - S/2 + 1.4, 'CHAMBER IV', {size:3.4, color:'#e0c08a'});
+
+  const STYLES = [
+    {name:'A NEAT DESERT FADE', hint:'The bowl by this cat is carved with a straight, level line.'},
+    {name:'A WILD SPIKY MANE',  hint:'This cat sleeps on a bed of spiky palm fronds.'},
+    {name:'A SHORT ROUND TRIM', hint:'This cat has worn a perfectly round collar smooth.'}
+  ];
+  const want = [0,1,2].sort(()=>Math.random()-0.5);
+  const glyphSigns = [];
+  for(let i=0;i<3;i++){
+    const cxp = x - 16 + i*16, czp = z + 4;
+    const cg = new THREE.Group(); cg.position.set(cxp, y + 2, czp); scene.add(cg);
+    const fur = new THREE.MeshLambertMaterial({color:[0xd9a441, 0x8a6a4a, 0xe8dcc0][i]});
+    const body = new THREE.Mesh(new THREE.BoxGeometry(6,3.4,3.4), fur); body.position.y = 2.4; cg.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(3.2,3,3), fur); head.position.set(3.2,4.6,0); cg.add(head);
+    for(const s of [-1,1]){
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(1,1.4,1), fur); ear.position.set(3.2,6.3,s*0.9); cg.add(ear);
+    }
+    const hair = new THREE.Mesh(new THREE.BoxGeometry(3.4,2.4,3.2), new THREE.MeshLambertMaterial({color:0x5a4530}));
+    hair.position.set(3.2,6.6,0); cg.add(hair);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(1,1,4), fur); tail.position.set(-3.4,3.4,0); cg.add(tail);
+    ANIM.push(t=>{ tail.rotation.x = Math.sin(t*2.2 + i)*0.6; });
+    // the prop that hints at the style
+    box(cxp, y + 3, czp - 8, 4, 3, 4, ['sandst','cactus','gold'][want[i]], {solid:false});
+    const gs = billboard(cxp, y + 12, czp, CAT_GLYPHS[i], {size:4.4, bg:'none', color:'#ffd23f', fontSize:120});
+    gs.visible = false; glyphSigns.push(gs);
+
+    interact(cxp, y + 4, czp, 'Trim this cat\'s hair', ()=>{
+      if(gs.visible){ toast('This one is happy already.', '#4ade80'); return; }
+      askChoice({
+        title:'CAT ' + (i+1), tag:'CHAMBER IV · GROOMING', cls:'cat',
+        body:'<p>A very old, very fluffy temple cat. Pick a trim. Guess wrong and it just glares at you.</p>' +
+             '<p style="color:#8fb6ff">Look at the object beside it before you choose.</p>',
+        choices: STYLES.map(s=>s.name), correct: want[i],
+        hint: STYLES[want[i]].hint,
+        wrongMsg:'The cat glares. Try a different style.',
+        okMsg:'PURRRRR — it shows you something',
+        onSolve:()=>{
+          hair.scale.set(0.5, 0.4, 0.5); hair.position.y = 6.1;
+          gs.visible = true; TEMPLE.catsDone++;
+          toast('A GLYPH APPEARS ABOVE THE CAT', '#ffd23f', 3);
+          if(TEMPLE.catsDone === 3) toast('Three glyphs. Take them to the door.', '#ffd23f', 3.5);
+        }
+      });
+    }, {r:9});
+    TEMPLE.resetFns.push(()=>{ gs.visible = false; hair.scale.set(1,1,1); hair.position.y = 6.6; });
+  }
+  // the glyph-coded exit
+  const cdoor = tdoor(x + S/2, y + 14, z, 3, 14, 14, 'gold');
+  box(x + S/2, y + H, z + 21, 2, H, 14, 'sandst2');
+  box(x + S/2, y + H, z - 21, 2, H, 14, 'sandst2');
+  interact(x + S/2 - 4, y + 5, z, 'Enter the cats\' code', ()=>{
+    if(TEMPLE.catDoor){ toast('Already open.', '#4ade80'); return; }
+    askText({
+      title:'THE CATS\' DOOR', tag:'CHAMBER IV · THREE GLYPHS', cls:'temple',
+      body:'<p>Three glyphs, left cat to right cat. The floor of Chamber II told you what glyphs are worth.</p>' +
+           '<p style="color:#7f93b5">Cats groomed: ' + TEMPLE.catsDone + ' / 3</p>',
+      answer:CAT_DOOR_CODE, placeholder:'###',
+      hint:'Groom all three cats first. Then read their glyphs left to right and convert each to its digit.',
+      onSolve:()=>{ TEMPLE.catDoor = true; cdoor.openIt('THE CATS LET YOU PASS'); }
+    });
+  }, {r:9});
+})();
+
+/* ================================================================
+   T5 — THE CAVE PAINTING ROOM (dots / lines / colours)
+   ================================================================ */
+const T5 = {x:T4.x + 74, z:T4.z, y:Y20, S:60, H:26};
+(function paintingRoom(){
+  const {x, z, y, S, H} = T5;
+  box(T4.x + 34, y, z, 34, 2, 14, 'templeW');
+  box(T4.x + 34, y + 14, z, 34, 2, 18, 'templeD');
+  box(T4.x + 34, y + 12, z + 8, 34, 12, 2, 'sandst2');
+  box(T4.x + 34, y + 12, z - 8, 34, 12, 2, 'sandst2');
+  sandRoom(x, z, y, S, H, {openMinusX:true, gap:14});
+  sign(x, y + 22, z - S/2 + 1.4, 'CHAMBER V', {size:3.4, color:'#e0c08a'});
+
+  // the guide painting: says what the other three are for
+  sign(x - 20, y + 13, z + S/2 - 1.5, 'THE THREE WALLS\n\n◇ dots  → copy them\n◇ lines → follow them\n◇ colours → count them',
+    {size:11, ry:Math.PI, color:'#5a3d1a', bg:'#c9a06a', border:'#8a6a2a', fontSize:40, w:520, h:420});
+
+  const DOT_PAT = [0,2,3,5,6,9,10,15].filter(()=>Math.random()<0.75).concat([1,7]);
+  const LINE_ORDER = [0,1,2,3,4].sort(()=>Math.random()-0.5);
+  const COLOURS = [['#e04a3a','RED',3], ['#3a8ae0','BLUE',5], ['#e0c23a','GOLD',7], ['#4ade80','GREEN',2]];
+  const colourSeq = [1,2,0,2,3];
+  const colourTotal = colourSeq.reduce((s,i)=> s + COLOURS[i][2], 0);
+
+  function pMark(i, done){ /* recolour the plinth when solved */ }
+
+  // --- 1: DOTS (copy the pattern) ---
+  sign(x + 6, y + 14, z + S/2 - 1.5, '· · ·\n· ·\n· · ·', {size:9, ry:Math.PI, color:'#5a3d1a', bg:'#c9a06a', fontSize:70, w:340, h:340});
+  const plinth1 = box(x + 6, y + 4, z + 18, 6, 4, 6, 'sandst');
+  interact(x + 6, y + 4, z + 18, 'Study the DOT wall', ()=>{
+    if(TEMPLE.paintings[0]){ toast('Solved.', '#4ade80'); return; }
+    const pat = new Set(DOT_PAT);
+    openUI(`
+      <h2>THE DOT WALL</h2><div class="tag">CHAMBER V · 1 OF 3</div>
+      <p>Light the grid so it matches the painting exactly. Click a square to light it.</p>
+      <div style="display:flex;gap:22px;justify-content:center;flex-wrap:wrap">
+        <div><div class="tag" style="text-align:center">PAINTING</div>
+          <div class="grid" id="pat" style="grid-template-columns:repeat(4,1fr)"></div></div>
+        <div><div class="tag" style="text-align:center">YOUR WALL</div>
+          <div class="grid" id="mine" style="grid-template-columns:repeat(4,1fr)"></div></div>
+      </div>
+      <div class="err" id="pz-err"></div>
+      <div class="row"><button class="btn" id="pz-ok">CARVE IT</button>
+      <button class="btn hint" id="pz-hint">HINT (1)</button>
+      <button class="btn ghost" id="pz-close">LEAVE</button></div><div id="hb"></div>
+    `, 'temple');
+    const mine = new Set();
+    const pg = el('pat'), mg = el('mine');
+    for(let i=0;i<16;i++){
+      const a = document.createElement('div'); a.className = 'cell' + (pat.has(i) ? ' on' : ''); a.style.cursor='default';
+      a.style.width = a.style.height = '34px'; pg.appendChild(a);
+      const b = document.createElement('div'); b.className = 'cell'; b.style.width = b.style.height = '34px';
+      b.onclick = ()=>{ if(mine.has(i)){ mine.delete(i); b.classList.remove('on'); } else { mine.add(i); b.classList.add('on'); } };
+      mg.appendChild(b);
+    }
+    el('pz-ok').onclick = ()=>{
+      const same = mine.size === pat.size && [...pat].every(i=>mine.has(i));
+      const err = el('pz-err');
+      if(same){
+        err.className = 'err ok'; err.textContent = 'THE DOTS GLOW.';
+        setTimeout(()=>{ closeUI(); solveP(0); }, 600);
+      } else { err.className = 'err'; err.textContent = 'The wall stays dark. Look again.'; }
+    };
+    el('pz-hint').onclick = function(){
+      el('hb').innerHTML = '<div class="hintbox"><b>HINT:</b> There are exactly ' + pat.size +
+        ' lit squares in the painting. Count yours.</div>';
+      this.disabled = true; this.style.opacity = .5;
+    };
+    el('pz-close').onclick = closeUI;
+  }, {r:8});
+
+  // --- 2: LINES (follow the order) ---
+  sign(x + 20, y + 14, z + S/2 - 1.5, '◠─◠\n│ ╲│\n◠─◠', {size:9, ry:Math.PI, color:'#5a3d1a', bg:'#c9a06a', fontSize:64, w:340, h:340});
+  const plinth2 = box(x + 20, y + 4, z + 18, 6, 4, 6, 'sandst');
+  interact(x + 20, y + 4, z + 18, 'Study the LINE wall', ()=>{
+    if(TEMPLE.paintings[1]){ toast('Solved.', '#4ade80'); return; }
+    const NAMES = ['SUN','SNAKE','JAR','EYE','RIVER'];
+    openUI(`
+      <h2>THE LINE WALL</h2><div class="tag">CHAMBER V · 2 OF 3</div>
+      <p>The painted line touches five carvings in one unbroken path.
+      <b>Click them in the painted order.</b> One mistake and the line resets.</p>
+      <p class="mono" style="color:#ffd23f;text-align:center;font-size:17px">
+        ` + LINE_ORDER.map(i=> NAMES[i]).join(' → ') + `</p>
+      <p style="color:#7f93b5;text-align:center;font-size:12px">(the painting, faint but readable)</p>
+      <div class="grid" id="nodes" style="grid-template-columns:repeat(5,1fr)"></div>
+      <div class="err" id="pz-err"></div>
+      <div class="row"><button class="btn hint" id="pz-hint">HINT (1)</button>
+      <button class="btn ghost" id="pz-close">LEAVE</button></div><div id="hb"></div>
+    `, 'temple');
+    let step = 0;
+    const ng = el('nodes'), err = el('pz-err');
+    const ICONS = ['☀','〰','⚱','◉','≈'];
+    NAMES.forEach((nm,i)=>{
+      const c = document.createElement('div'); c.className = 'cell'; c.textContent = ICONS[i];
+      c.title = nm;
+      c.onclick = ()=>{
+        if(LINE_ORDER[step] === i){
+          c.classList.add('lit'); step++;
+          if(step === 5){ err.className = 'err ok'; err.textContent = 'THE LINE COMPLETES.';
+            setTimeout(()=>{ closeUI(); solveP(1); }, 600); }
+        } else {
+          err.className = 'err'; err.textContent = 'The line breaks. Start again.';
+          step = 0; ng.querySelectorAll('.cell').forEach(k=>k.classList.remove('lit'));
+        }
+      };
+      ng.appendChild(c);
+    });
+    el('pz-hint').onclick = function(){
+      el('hb').innerHTML = '<div class="hintbox"><b>HINT:</b> Start with <b>' + NAMES[LINE_ORDER[0]] +
+        '</b> (' + ICONS[LINE_ORDER[0]] + ').</div>';
+      this.disabled = true; this.style.opacity = .5;
+    };
+    el('pz-close').onclick = closeUI;
+  }, {r:8});
+
+  // --- 3: COLOURS (what each colour is worth) ---
+  sign(x - 6, y + 14, z + S/2 - 1.5, '■ ■ ■\n■ ■', {size:9, ry:Math.PI, color:'#5a3d1a', bg:'#c9a06a', fontSize:80, w:340, h:340});
+  const plinth3 = box(x - 6, y + 4, z + 18, 6, 4, 6, 'sandst');
+  interact(x - 6, y + 4, z + 18, 'Study the COLOUR wall', ()=>{
+    if(TEMPLE.paintings[2]){ toast('Solved.', '#4ade80'); return; }
+    askText({
+      title:'THE COLOUR WALL', tag:'CHAMBER V · 3 OF 3', cls:'temple',
+      body:'<p>Each colour in this temple is worth a number:</p>' +
+        '<table class="leg"><tr>' + COLOURS.map(c=>'<td style="background:'+c[0]+';color:#111"><b>'+c[1]+'</b></td>').join('') + '</tr>' +
+        '<tr>' + COLOURS.map(c=>'<td class="g">'+c[2]+'</td>').join('') + '</tr></table>' +
+        '<p>The painted row of squares reads:</p>' +
+        '<div class="sw">' + colourSeq.map(i=>'<div class="swatch" style="background:'+COLOURS[i][0]+'"></div>').join('') + '</div>' +
+        '<p style="text-align:center">What do they add up to?</p>',
+      answer:String(colourTotal),
+      hint:'Write the value under each square, then add them: ' + colourSeq.map(i=>COLOURS[i][2]).join(' + '),
+      onSolve:()=>{ solveP(2); }
+    });
+  }, {r:8});
+
+  const kingDoor = tdoor(x + S/2, y + 15, z, 3, 15, 14, 'gold');
+  box(x + S/2, y + H, z + 23, 2, H, 14, 'sandst2');
+  box(x + S/2, y + H, z - 23, 2, H, 14, 'sandst2');
+  sign(x + S/2 - 1.7, y + 18, z, 'THE KING', {size:2.6, ry:Math.PI/2, bg:'none'});
+  const plinths = [plinth1, plinth2, plinth3];
+  TEMPLE.resetFns.push(()=>{ plinths.forEach(p=> p.material = MATS.sandst); });
+  function solveP(i){
+    TEMPLE.paintings[i] = true;
+    plinths[i].material = MATS.gold;
+    const n = TEMPLE.paintings.filter(Boolean).length;
+    toast('WALL SOLVED — ' + n + ' / 3', '#4ade80', 2.4);
+    if(n === 3) kingDoor.openIt('THE KING\'S DOOR OPENS');
+  }
+})();
+/* ================================================================
+   T6 — THE KING'S ROOM: three doors
+   ================================================================ */
+const T6 = {x:T5.x + 78, z:T5.z, y:Y20, S:64, H:30};
+(function kingRoom(){
+  const {x, z, y, S, H} = T6;
+  // corridor in
+  box(T5.x + 36, y, z, 38, 2, 14, 'templeW');
+  box(T5.x + 36, y + 14, z, 38, 2, 18, 'templeD');
+  box(T5.x + 36, y + 12, z + 8, 38, 12, 2, 'sandst2');
+  box(T5.x + 36, y + 12, z - 8, 38, 12, 2, 'sandst2');
+
+  box(x, y, z, S, 2, S, 'carpet');
+  box(x, y + H + 2, z, S + 2, 2, S + 2, 'templeD');
+  box(x - S/2, y + H, z + 15, 2, H, S/2 - 7, 'sandst');
+  box(x - S/2, y + H, z - 15, 2, H, S/2 - 7, 'sandst');
+  box(x - S/2, y + H, z, 2, H - 12, 14, 'sandst');
+  // +Z wall with door B, -Z wall with door A, +X wall with door C
+  box(x - 21, y + H, z + S/2, 22, H, 2, 'sandst');
+  box(x + 21, y + H, z + S/2, 22, H, 2, 'sandst');
+  box(x, y + H, z + S/2, 22, H - 15, 2, 'sandst');
+  box(x - 21, y + H, z - S/2, 22, H, 2, 'sandst');
+  box(x + 21, y + H, z - S/2, 22, H, 2, 'sandst');
+  box(x, y + H, z - S/2, 22, H - 15, 2, 'sandst');
+  box(x + S/2, y + H, z + 21, 2, H, 22, 'sandst');
+  box(x + S/2, y + H, z - 21, 2, H, 22, 'sandst');
+  box(x + S/2, y + H, z, 2, H - 15, 22, 'sandst');
+  // throne + statues
+  box(x - 20, y + 4, z, 12, 4, 16, 'gold', {solid:true});
+  box(x - 25, y + 16, z, 3, 16, 16, 'gold', {solid:false});
+  for(const s of [-1,1]){
+    box(x + 6, y + 16, z + s*20, 6, 16, 6, 'sandst2', {solid:false});
+    box(x + 6, y + 20, z + s*20, 8, 4, 8, 'gold', {solid:false});
+  }
+  sign(x, y + 25, z - S/2 + 1.4, 'THE KING\'S HALL', {size:4, color:'#ffd23f'});
+  sign(x, y + 20, z + S/2 - 1.5, 'THREE DOORS', {size:3, ry:Math.PI, color:'#e0c08a'});
+
+  /* ---- DOOR A: the necklace room (open, -Z) ---- */
+  const A = {x:x, z:z - 58, y, S:40, H:22};
+  box(A.x, A.y, A.z, A.S, 2, A.S, 'templeW');
+  box(A.x, A.y + A.H + 2, A.z, A.S + 2, 2, A.S + 2, 'templeD');
+  box(A.x - A.S/2, A.y + A.H, A.z, 2, A.H, A.S, 'sandst2');
+  box(A.x + A.S/2, A.y + A.H, A.z, 2, A.H, A.S, 'sandst2');
+  box(A.x, A.y + A.H, A.z - A.S/2, A.S, A.H, 2, 'sandst2');
+  box(A.x - 14, A.y + A.H, A.z + A.S/2, 12, A.H, 2, 'sandst2');
+  box(A.x + 14, A.y + A.H, A.z + A.S/2, 12, A.H, 2, 'sandst2');
+  box(A.x, A.y + A.H, A.z + A.S/2, 16, A.H - 13, 2, 'sandst2');
+  box(x, y, z - 40, 16, 2, 36, 'carpet');    // link corridor
+  sign(A.x, A.y + 16, A.z - A.S/2 + 1.4, 'THE NECKLACE', {size:3, color:'#ffd23f'});
+  // the necklace on a plinth
+  box(A.x, A.y + 6, A.z - 8, 8, 6, 8, 'sandst');
+  const neck = new THREE.Group(); neck.position.set(A.x, A.y + 9.5, A.z - 8); scene.add(neck);
+  for(let i=0;i<12;i++){
+    const a = i/12*Math.PI*2;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), MATS.gold);
+    b.position.set(Math.cos(a)*2.4, Math.sin(a)*2.4*0.5, Math.sin(a)*1.2); neck.add(b);
+  }
+  const gem = new THREE.Mesh(new THREE.BoxGeometry(1.6,1.6,1.6), MATS.neon);
+  gem.position.y = -1.6; neck.add(gem);
+  ANIM.push(t=>{ neck.rotation.y = t*0.7; });
+  interact(A.x, A.y + 8, A.z - 8, 'Examine the king\'s necklace', ()=>{
+    showInfo('THE KING\'S NECKLACE', '<p>Gold links, a blue stone, and a plaque underneath.</p>' +
+      '<div class="hintbox"><b>HERE LIES AMUN-RA THE THIRD</b><br>' +
+      'Crowned in his <b>19th</b> year, buried in his <b>64th</b>.<br>' +
+      'He had <b>7 sons</b>. Each son had <b>3 daughters</b>.<br>' +
+      'He was buried with <b>3 chests</b> of <b>144 coins</b>, ' +
+      'after giving <b>96 coins</b> to the desert.</div>' +
+      '<p>The room across the hall asks questions about him.</p>', 'temple');
+  }, {r:9});
+  // the key box
+  const kbox = box(A.x + 10, A.y + 4, A.z + 8, 6, 4, 6, 'wood');
+  const kglow = box(A.x + 10, A.y + 4.6, A.z + 8, 3, 0.6, 3, 'checkOff', {solid:false});
+  interact(A.x + 10, A.y + 4, A.z + 8, 'Open the sealed box', ()=>{
+    if(TEMPLE.hasKey){ toast('You already have the key.', '#ffd23f'); return; }
+    const n = TEMPLE.kingQ.filter(Boolean).length;
+    if(n < 3){
+      showInfo('THE SEALED BOX', '<p>Three seals hold it shut. <b>' + n + ' of 3</b> have broken so far.</p>' +
+        '<p>The unlocked room across the hall has three questions about the king. Answer them all.</p>', 'temple');
+      return;
+    }
+    TEMPLE.hasKey = true; kglow.material = MATS.gold;
+    showInfo('THE SEALED BOX', '<p>The last seal cracks. Inside, on old cloth: <b>a heavy bronze key.</b></p>' +
+      '<div class="inv"><div class="item">🔑 <b>BRONZE KEY</b></div></div>', 'temple',
+      ()=>{ toast('BRONZE KEY OBTAINED', '#ffd23f', 3); });
+  }, {r:8});
+  TEMPLE.resetFns.push(()=>{ kglow.material = MATS.checkOff; });
+
+  /* ---- DOOR B: the unlocked room (+Z) — 3 questions about the king ---- */
+  const B = {x:x, z:z + 58, y, S:40, H:22};
+  box(B.x, B.y, B.z, B.S, 2, B.S, 'templeW');
+  box(B.x, B.y + B.H + 2, B.z, B.S + 2, 2, B.S + 2, 'templeD');
+  box(B.x - B.S/2, B.y + B.H, B.z, 2, B.H, B.S, 'sandst2');
+  box(B.x + B.S/2, B.y + B.H, B.z, 2, B.H, B.S, 'sandst2');
+  box(B.x, B.y + B.H, B.z + B.S/2, B.S, B.H, 2, 'sandst2');
+  box(B.x - 14, B.y + B.H, B.z - B.S/2, 12, B.H, 2, 'sandst2');
+  box(B.x + 14, B.y + B.H, B.z - B.S/2, 12, B.H, 2, 'sandst2');
+  box(B.x, B.y + B.H, B.z - B.S/2, 16, B.H - 13, 2, 'sandst2');
+  box(x, y, z + 40, 16, 2, 36, 'carpet');
+  sign(B.x, B.y + 16, B.z + B.S/2 - 1.4, 'ASK OF THE KING', {size:3, ry:Math.PI, color:'#e0c08a'});
+  const KQ = [
+    {t:'HOW LONG DID HE RULE?', q:'64 − 19', a:'45', hint:'Crowned in his 19th year, buried in his 64th.'},
+    {t:'HOW MANY GRANDDAUGHTERS?', q:'7 sons × 3 daughters each', a:'21', hint:'7 × 3.'},
+    {t:'HOW MANY COINS WERE BURIED?', q:'(3 × 144) − 96', a:'336', hint:'3 × 144 = 432, then take away the 96 he gave away.'}
+  ];
+  const kp = [];
+  KQ.forEach((k, i)=>{
+    const px = B.x - 12 + i*12;
+    const pl = box(px, B.y + 5, B.z, 6, 5, 6, 'sandst'); kp.push(pl);
+    sign(px, B.y + 5.4, B.z - 3.2, String(i+1), {size:1.8, bg:'none', color:'#5a3d1a'});
+    interact(px, B.y + 5, B.z, 'Answer the king\'s question ' + (i+1), ()=>{
+      if(TEMPLE.kingQ[i]){ toast('Already answered.', '#4ade80'); return; }
+      askText({
+        title:k.t, tag:'THE KING · QUESTION ' + (i+1), cls:'temple',
+        body:'<p>The stone will only take a number.</p>', q:k.q, answer:k.a, hint:k.hint,
+        onSolve:()=>{
+          TEMPLE.kingQ[i] = true; pl.material = MATS.gold;
+          const n = TEMPLE.kingQ.filter(Boolean).length;
+          toast('SEAL ' + n + ' / 3 BROKEN', '#4ade80', 2.4);
+          if(n === 3) toast('Something clicked in the necklace room…', '#ffd23f', 3.4);
+        }
+      });
+    }, {r:8});
+  });
+  TEMPLE.resetFns.push(()=>{ kp.forEach(p=> p.material = MATS.sandst); });
+
+  /* ---- DOOR C: locked, needs the key (+X) → the way out ---- */
+  const cdoor = tdoor(x + S/2, y + 15, z, 3, 15, 22, 'templeD');
+  sign(x + S/2 - 1.7, y + 9, z, '🔒', {size:3, ry:Math.PI/2, bg:'none'});
+  interact(x + S/2 - 4, y + 5, z, 'Try the locked door', ()=>{
+    if(cdoor.open){ toast('It is open — go.', '#4ade80'); return; }
+    if(!TEMPLE.hasKey){
+      showInfo('THE LOCKED DOOR', '<p>Bronze lock, bronze keyhole. You do not have the key.</p>' +
+        '<p>The necklace room holds a sealed box. The unlocked room holds three questions.</p>', 'temple');
+      return;
+    }
+    cdoor.openIt('THE BRONZE KEY TURNS');
+    setTimeout(()=> toast('A ladder to daylight!', '#ffd23f', 3.5), 2600);
+  }, {r:9});
+
+  /* ---- escape shaft to the surface ---- */
+  const EX = x + S/2 + 20, EZ = z;
+  box(EX, y, EZ, 34, 2, 24, 'templeW');
+  for(const s of [-1,1]) box(EX, y + 20, EZ + s*12, 34, 20, 2, 'sandst2');
+  box(EX + 17, y + 20, EZ, 2, 20, 24, 'sandst2');
+  const SURF = y + 44;
+  // shaft: walls only above head height so the corridor stays walkable
+  const shH = SURF - (y + 14);
+  for(const s of [-1,1]) box(EX + 4 + s*11, SURF, EZ, 2, shH, 24, 'sandst2');
+  box(EX + 4, SURF, EZ + 12, 24, shH, 2, 'sandst2');    // open on -Z so you can walk out
+  // truss against the +Z wall, exit ledge in front of it
+  truss(EX + 4, y, EZ + 9, SURF - y + 5, {w:8});
+  box(EX + 4, SURF, EZ - 8, 18, 2, 28, 'sandst2');
+  zone(EX + 4, SURF + 4, EZ - 8, 16, 10, 24, ()=>{
+    TEMPLE.escaped = true; stopLockdown();
+    setSky(SKY_DESERT, 200, 900);
+    setSpawn(EX + 4, SURF + 2, EZ - 16, -Math.PI/2);
+    P.deathY = SURF - 70;
+    toast('YOU ESCAPED THE TEMPLE', '#4ade80', 4);
+    setHUD(20, 'The Desert Tower', 'THREE FLOORS. No checkpoints between — good luck.');
+  });
+})();
+
+/* ================================================================
+   THE DESERT TOWER — 3 intense EToH-style floors
+   ================================================================ */
+const TOH = {x:T6.x + 108, z:T6.z, base:Y20 + 44};
+(function desertTower(){
+  const X = TOH.x, Z = TOH.z, B = TOH.base;
+  const surfaceY = B;
+  // sand ground + a lethal lava moat under the whole tower
+  box(X, surfaceY - 4, Z, 150, 8, 150, 'sand', {solid:false});
+  lava(X, surfaceY - 14, Z, 220, 220);
+  for(let i=0;i<10;i++) palm(X - 60 + (i%5)*30, surfaceY - 4, Z + (i<5 ? -62 : 62), 1.1);
+  // bridge from the escape shaft (comes out at z = Z − 22)
+  fillRun(T6.x + 60, surfaceY, X - 40, surfaceY, Z - 22, {step:11, mat:'sandst2'});
+  box(X - 40, surfaceY, Z - 8, 22, 3, 44, 'sandst2');
+  sign(X - 40, surfaceY + 14, Z, 'THE DESERT TOWER\n3 FLOORS · NO MERCY', {size:4.6, color:'#ffd23f', bg:'#3a2a14', border:'#ffd23f', w:640});
+  // central spire (decor + wraparound bodies)
+  box(X, surfaceY + 150, Z, 16, 300, 16, 'sandst');
+  for(let i=0;i<9;i++) box(X, surfaceY + 20 + i*16, Z, 22 - (i%2)*3, 2, 22 - (i%2)*3, 'sandst2', {solid:false});
+
+  function floorSign(fy, txt, col){
+    sign(X - 26, fy + 10, Z, txt, {size:3.6, color:col || '#ffd23f'});
+  }
+  function checkpointHere(fx, fy, fz, label){
+    zone(fx, fy + 5, fz, 14, 12, 14, ()=>{
+      setSpawn(fx, fy + 2, fz, -Math.PI/2);
+      P.deathY = fy - 60;
+      toast(label, '#4ade80', 2.6);
+    });
+  }
+
+  /* ---------------- FLOOR 1 : beams, conveyors, a wraparound ---------------- */
+  let fy = surfaceY;
+  box(X - 26, fy, Z, 14, 3, 14, 'sandst2');
+  checkpointHere(X - 26, fy, Z, 'FLOOR 1');
+  floorSign(fy, 'FLOOR 1');
+  // narrow beams over lava
+  for(let i=0;i<5;i++){
+    box(X - 14 + i*11, fy + 2 + i*2.4, Z + (i%2 ? 6 : -6), 9, 1.4, 2.6, 'sandst2');
+  }
+  // conveyor run pushing backwards
+  let f1x = X + 34, f1y = fy + 13;
+  for(let i=0;i<3;i++){
+    conveyor(f1x + i*18, f1y + i*3, Z, 14, 7, -12 - i*3, 0);
+    box(f1x + i*18 + 9, f1y + i*3 + 1.6, Z + (i%2?5:-5), 5, 1.6, 5, 'sandst');
+  }
+  // 3-stud wraparound around the spire
+  const w1y = f1y + 13;
+  box(X + 22, w1y, Z, 44, 1.6, 5, 'sandst2');
+  pillarWrap(X, Z, w1y, 16, 3, {blocked:'z-', mat:'sandst2', sign:false});
+  sign(X, w1y + 7, Z + 12, '3-STUD', {size:2.2});
+  box(X - 22, w1y, Z, 24, 1.6, 5, 'sandst2');
+  // jumps up to floor 2
+  let cy1 = w1y;
+  for(let i=0;i<4;i++){ cy1 += 5; box(X - 36 - i*2, cy1, Z + 8 + i*9, 7, 1.6, 7, 'sandst'); }
+  truss(X - 44, cy1, Z + 40, 22, {w:7});
+  box(X - 44, cy1 + 22, Z + 34, 14, 2, 14, 'sandst2');
+
+  /* ---------------- FLOOR 2 : spinners, tightrope, cannons ---------------- */
+  fy = cy1 + 22;
+  checkpointHere(X - 44, fy, Z + 34, 'FLOOR 2');
+  floorSign(fy, 'FLOOR 2', '#ff9e5c');
+  box(X - 20, fy + 2, Z + 34, 30, 2, 30, 'sandst2');
+  spinner(X - 20, fy + 6, Z + 34, 28, {speed:2.2, w:2, h:2.6});
+  box(X + 6, fy + 4, Z + 20, 10, 2, 10, 'sandst');
+  // tightrope: 2-stud beams with a gap
+  for(let i=0;i<4;i++) box(X + 16 + i*10, fy + 6 + i*2, Z + 10 - i*4, 8, 1.2, 2, 'sandst2');
+  // cannon gauntlet
+  const g2y = fy + 14;
+  box(X + 58, g2y, Z - 6, 12, 2, 34, 'sandst2');
+  for(let i=0;i<4;i++) shooter(X + 74, g2y + 1, Z - 18 + i*10, -1, 0, {every:1.7, phase:i*0.4, speed:32});
+  box(X + 58, g2y + 6, Z - 26, 12, 2, 12, 'sandst');
+  // second spinner + climb
+  box(X + 34, g2y + 10, Z - 30, 26, 2, 26, 'sandst2');
+  spinner(X + 34, g2y + 14, Z - 30, 24, {speed:-2.8, w:1.8, h:2.4});
+  truss(X + 18, g2y + 10, Z - 30, 24, {w:7});
+  box(X + 18, g2y + 34, Z - 24, 14, 2, 14, 'sandst2');
+
+  /* ---------------- FLOOR 3 : the finale ---------------- */
+  fy = g2y + 34;
+  checkpointHere(X + 18, fy, Z - 24, 'FLOOR 3 — LAST ONE');
+  floorSign(fy, 'FLOOR 3', '#ff5a3c');
+  // 2-stud wraparound around the spire
+  box(X + 10, fy + 2, Z - 12, 20, 1.6, 5, 'sandst2');
+  pillarWrap(X, Z, fy + 2, 16, 2, {blocked:'z+', mat:'sandst2', sign:false});
+  sign(X, fy + 9, Z - 12, '2-STUD', {size:2.2, color:'#ff9e5c'});
+  box(X - 14, fy + 2, Z, 14, 1.6, 5, 'sandst2');
+  // spinner ring + shooters
+  box(X - 34, fy + 5, Z, 26, 2, 26, 'sandst2');
+  spinner(X - 34, fy + 9, Z, 24, {speed:3.1, w:1.8, h:2.4});
+  shooter(X - 34, fy + 6, Z + 20, 0, -1, {every:1.4, speed:36});
+  shooter(X - 34, fy + 6, Z - 20, 0, 1, {every:1.4, phase:0.7, speed:36});
+  // final tightrope + conveyor combo
+  let f3x = X - 50, f3y = fy + 9;
+  for(let i=0;i<3;i++){
+    box(f3x - i*12, f3y + i*4, Z + 6 + i*7, 9, 1.2, 2, 'sandst2');
+  }
+  conveyor(f3x - 30, f3y + 12, Z + 26, 16, 8, 0, -13);
+  box(f3x - 30, f3y + 16, Z + 40, 10, 2, 10, 'sandst');
+  truss(f3x - 30, f3y + 16, Z + 46, 26, {w:8});
+  const TOPTOH = f3y + 42;
+  box(f3x - 30, TOPTOH, Z + 40, 20, 2, 20, 'gold');
+  sign(f3x - 30, TOPTOH + 12, Z + 40, 'TOP OF THE TOWER', {size:4, color:'#ffd23f'});
+  TOH.topX = f3x - 30; TOH.topY = TOPTOH; TOH.topZ = Z + 40;
+  // bridge to stage 21
+  fillRun(f3x - 24, TOPTOH, f3x + 30, TOPTOH, Z + 40, {step:11, mat:'gold'});
+  TOH.exitX = f3x + 30;
+})();
+
+/* ================================================================
+   STAGE 21 — the end (for now)
+   ================================================================ */
+(function finale(){
+  const x = TOH.exitX + 26, y = TOH.topY, z = TOH.topZ;
+  box(x, y, z, 40, 3, 40, 'gold');
+  box(x, y - 3, z, 34, 8, 34, 'sandst', {solid:false});
+  for(const s of [-1,1]) for(const t of [-1,1]) box(x + s*16, y + 14, z + t*16, 4, 28, 4, 'sandst2', {solid:false});
+  box(x, y + 30, z, 44, 3, 44, 'sandst', {solid:false});
+  // trophy
+  const tr = new THREE.Group(); tr.position.set(x, y + 4, z); scene.add(tr);
+  const cup = new THREE.Mesh(new THREE.BoxGeometry(6,6,6), MATS.gold); cup.position.y = 6; tr.add(cup);
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(2,3,2), MATS.gold); stem.position.y = 1.5; tr.add(stem);
+  for(const s of [-1,1]){
+    const h = new THREE.Mesh(new THREE.BoxGeometry(1.2,4,1.2), MATS.gold); h.position.set(s*4, 6, 0); tr.add(h);
+  }
+  ANIM.push(t=>{ tr.rotation.y = t*0.9; tr.position.y = y + 4 + Math.sin(t*1.6)*0.5; });
+  sign(x, y + 22, z, 'STAGE 21\nTHE END — FOR NOW', {size:7, color:'#ffd23f', bg:'#1a1206', border:'#ffd23f', w:680, fontSize:60});
+
+  const st21 = {
+    n:21, name:'The End', sub:'You beat the Math Obby. More stages coming.',
+    solved:true, spawn:new THREE.Vector3(x, y + 2, z), spawnYaw:-Math.PI/2,
+    deathY: y - 70, qz:{q:'', a:''}, door:null,
+    padVis: checkpointPad(x, y, z + 14, 21)
+  };
+  STAGES.push(st21);
+  zone(x, y + 5, z, 40, 12, 40, ()=>{
+    reachStage(st21);
+    setHUD(21, 'The End', 'You beat every stage. Thank you for playing!');
+    if(LOCK.active) stopLockdown();
+    const mins = Math.floor(PLAYTIME/60), secs = Math.floor(PLAYTIME%60);
+    setTimeout(()=>{
+      showInfo('YOU FINISHED THE MATH OBBY',
+        '<p>21 stages. Addition, subtraction, multiplication, division, squares and cubes — ' +
+        'a puzzle tower, a cat therapy room, a temple lockdown and a desert tower.</p>' +
+        '<div class="inv"><div class="item">DEATHS: <b>' + P.deaths + '</b></div>' +
+        '<div class="item">TIME: <b>' + mins + 'm ' + secs + 's</b></div>' +
+        '<div class="item">STAGES: <b>21 / 21</b></div></div>' +
+        '<p style="margin-top:12px">More stages are coming. For now — go outside, hydrate, ' +
+        'and tell someone what 12³ ÷ 8 is.</p>', '', ()=>{});
+    }, 900);
+  });
+  interact(x, y + 4, z, 'Lift the trophy', ()=>{
+    toast('🏆 MATH OBBY CHAMPION', '#ffd23f', 4);
+  }, {r:9});
+})();
+/* ================================================================
+   PROJECTILES / MAIN LOOP / BOOT
+   ================================================================ */
+function updateShooters(dt){
+  for(const sh of SHOOTERS){
+    sh.t -= dt;
+    if(sh.t <= 0){ sh.t = sh.every; fireShot(sh); }
+  }
+}
+function updateShots(dt){
+  for(let i=SHOTS.length-1; i>=0; i--){
+    const s = SHOTS[i];
+    s.m.position.x += s.vx*dt; s.m.position.z += s.vz*dt;
+    s.life -= dt;
+    if(s.life <= 0){ scene.remove(s.m); SHOTS.splice(i,1); }
+  }
+}
+
+const clock = new THREE.Clock();
+let PLAYTIME = 0;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.getElapsedTime();
+  if(!P.frozen && !uiOpen) PLAYTIME += dt;
+
+  for(let i=0;i<ANIM.length;i++) ANIM[i](t, dt);
+  updateShooters(dt);
+  updateShots(dt);
+
+  if(CUT.active){
+    updateCutscene(dt);
+  } else {
+    updatePlayer(dt, t);
+    updateCamera(dt);
+  }
+  updateInteract();
+  updateLockdown(dt);
+  updateSky(dt);
+
+  for(let i=0;i<BILLBOARDS.length;i++){
+    const b = BILLBOARDS[i];
+    b.rotation.y = Math.atan2(camera.position.x - b.position.x, camera.position.z - b.position.z);
+  }
+  if(toastT > 0){ toastT -= dt; if(toastT <= 0) toastEl.style.opacity = 0; }
+
+  renderer.render(scene, camera);
+}
+
+/* ---------------- boot ---------------- */
+addEventListener('blur', ()=>{ for(const k in keys) keys[k] = false; });
+addEventListener('keydown', e=>{ if(e.key === 'Escape' && uiOpen) closeUI(); });
+
+function gotoStage(n){
+  const st = STAGES.find(s=>s.n === n) || STAGES[0];
+  CURRENT = null;
+  P.stage = st.n; P.maxStage = Math.max(P.maxStage, st.n);
+  P.pos.copy(st.spawn); P.pos.y += 1;
+  P.vel.set(0,0,0); P.yaw = st.spawnYaw; P.pitch = -0.16;
+  setSpawn(st.spawn.x, st.spawn.y, st.spawn.z, st.spawnYaw);
+  P.deathY = st.deathY;
+  setHUD(st.n, st.name, st.n === 21 ? 'You beat it.' : 'Answer the question to open the gate');
+  if(n >= 10) unlockShiftlock();
+  if(n >= 17) setSky(SKY_DESERT, 220, 900);
+}
+
+function startGame(n){
+  document.getElementById('title').style.display = 'none';
+  document.getElementById('backlink').style.display = 'none';
+  gotoStage(n);
+  P.frozen = false;
+  if(!isMobile) canvas.requestPointerLock();
+}
+
+const sv = loadSave();
+if(sv && sv.stage > 1){
+  const b = document.getElementById('btn-cont');
+  b.style.display = 'block';
+  b.textContent = 'CONTINUE — STAGE ' + sv.stage;
+  b.onclick = ()=>{
+    P.deaths = sv.deaths || 0;
+    document.getElementById('hud-deaths').textContent = P.deaths;
+    startGame(sv.stage);
+  };
+}
+document.getElementById('btn-play').onclick = ()=>{
+  P.deaths = 0; document.getElementById('hud-deaths').textContent = 0;
+  startGame(1);
+};
+
+// park the camera on stage 1 for the title screen
+gotoStage(1);
+P.frozen = true;
+animate();
+</script>
+</body>
+</html>

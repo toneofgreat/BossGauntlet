@@ -116,6 +116,8 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-cdy canvas{width:100%;height:100%}
 .bg-nin{background:linear-gradient(135deg,#1a0a14 0%,#3a1020 50%,#0a0a12 100%)}
 .bg-nin canvas{width:100%;height:100%}
+.bg-mo{background:linear-gradient(135deg,#070b14 0%,#1d3b6e 55%,#ffd23f 100%)}
+.bg-mo canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -123,6 +125,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="math-obby.html" class="card">
+    <div class="card-img bg-mo"><canvas id="c32"></canvas></div>
+    <div class="card-body">
+      <h2>MATH OBBY</h2>
+      <p>3D Roblox-style obby where every one of the 21 stages is locked behind a math question — addition, subtraction, multiplication, division, squares and cubes. Solve it and the gate opens onto lava jumps, reversed conveyors, spinning lava beams, wraparound towers and disappearing platforms. Along the way: a puzzle tower, a cat therapy room you're locked inside, and a desert temple that goes into lockdown before the Tower of the Desert King. Every stage is a checkpoint. PC + mobile controls.</p>
+      <span class="tag" style="background:#1a2c52;color:#ffd23f">3D OBBY · 21 STAGES</span>
+    </div>
+  </a>
   <a href="bossgauntlet.html" class="card">
     <div class="card-img bg-boss"><canvas id="c1"></canvas></div>
     <div class="card-body">
@@ -686,7 +696,8 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
   function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
   resize();window.addEventListener('resize',resize);
   const weights=['🟤','⚫','🌿','🌸','🪵','🪨','🌳','🐺','🌍','🌌','☀️','✨'];
-  const cols=['#c8941e','#999','#3d8','#f9c','#a63','#89a','#3b3','#aac','#36e','#a4f','#fc0','#fff'];
+  // 6-digit hex required: these get an '44' alpha suffix appended for the glow gradient
+  const cols=['#c8941e','#999999','#33dd88','#ff99cc','#aa6633','#8899aa','#33bb33','#aaaacc','#3366ee','#aa44ff','#ffcc00','#ffffff'];
   function draw(){
     t+=0.018;ctx.fillStyle='rgba(5,4,15,0.2)';ctx.fillRect(0,0,w,h);
     // Stars
@@ -1753,6 +1764,67 @@ tycoonPreview('c29',{sky:['#05030f','#1a0a3a'],floor:'#14182a',ore:['#9aa7b8','#
 tycoonPreview('c30',{sky:['#3a1030','#ff7ad0'],floor:'#5a2a4a',ore:['#ff5a72','#ffe27a','#7fd0ff','#9aff9a'],shirt:'#ff7ad0',label:['🍭 CANDY','#fff']});
 tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#cfd6de','#3ad07a','#ff6b8a'],shirt:'#ff6b8a',label:['🥷 NINJA','#ff9ab0'],
   bg:(x,w,h,t)=>{x.fillStyle='#ff9ad0';for(let i=0;i<10;i++){x.globalAlpha=.6;x.fillRect((i*59+t*20)%w,((t*25+i*30)%h),3,2);}x.globalAlpha=1;}});
+
+// ---- Math Obby preview: blocky guy hopping gold platforms toward a math gate ----
+(function(){
+  const c=document.getElementById('c32'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const SYMS=['+','−','×','÷','²','³'];
+  const floats=[];
+  for(let i=0;i<10;i++) floats.push({s:SYMS[i%6],x:rand(),y:rand(),sp:.1+rand()*.25,sz:10+rand()*10});
+  function draw(){
+    t+=0.02;
+    // night sky over a lava valley
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#070b14');g.addColorStop(.6,'#1d3b6e');g.addColorStop(1,'#2b1a08');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    // drifting math symbols
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    for(const f of floats){
+      const fy=((f.y-t*f.sp)%1+1)%1;
+      ctx.globalAlpha=.16;ctx.fillStyle='#ffd23f';
+      ctx.font='bold '+f.sz+'px Trebuchet MS,Arial';
+      ctx.fillText(f.s,f.x*w,fy*h);
+    }
+    ctx.globalAlpha=1;
+    // lava
+    const lavaY=h*0.82;
+    ctx.fillStyle='#3a1206';ctx.fillRect(0,lavaY,w,h-lavaY);
+    ctx.fillStyle='#ff5a1e';ctx.fillRect(0,lavaY,w,4);
+    for(let i=0;i<w;i+=7){
+      ctx.fillStyle='rgba(255,150,40,.55)';ctx.fillRect(i,lavaY+2+sin(t*3+i*0.25)*2,5,3);
+    }
+    // scrolling gold platform run
+    const step=46,off=(t*26)%step,py=h*0.62;
+    for(let i=-1;i<w/step+2;i++){
+      const px=i*step-off,bob=sin(t*1.6+i)*3;
+      ctx.fillStyle='#8a6a12';ctx.fillRect(px,py+bob+9,34,6);
+      ctx.fillStyle='#ffd23f';ctx.fillRect(px,py+bob,34,10);
+      ctx.fillStyle='rgba(255,255,255,.28)';ctx.fillRect(px,py+bob,34,2);
+    }
+    // hopping blocky character
+    const cx=w*0.42,idx=Math.round((cx+off)/step);
+    const cy=py+sin(t*1.6+idx)*3-sin(((t*1.6)%1)*PI)*26;
+    ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(cx+7,py+6,10,3,0,0,7);ctx.fill();
+    ctx.fillStyle='#2b6cff';ctx.fillRect(cx,cy-13,14,9);
+    ctx.fillStyle='#ffd9a8';ctx.fillRect(cx+1,cy-24,12,11);
+    ctx.fillStyle='#1a1a1a';ctx.fillRect(cx+3,cy-20,2,2);ctx.fillRect(cx+9,cy-20,2,2);
+    ctx.fillStyle='#1a2c52';ctx.fillRect(cx+1,cy-4,5,5);ctx.fillRect(cx+8,cy-4,5,5);
+    // the locked math gate
+    const gx=w*0.8;
+    ctx.fillStyle='#c9a24a';ctx.fillRect(gx-30,py-52,7,58);ctx.fillRect(gx+25,py-52,7,58);ctx.fillRect(gx-30,py-58,62,8);
+    ctx.fillStyle='rgba(43,108,255,.35)';ctx.fillRect(gx-23,py-50,48,56);
+    ctx.fillStyle='#ffd23f';ctx.font='bold 15px Trebuchet MS,Arial';ctx.fillText('7×8',gx+1,py-26);
+    ctx.fillStyle='#fff';ctx.font='bold 10px Trebuchet MS,Arial';ctx.fillText('= ?',gx+1,py-10);
+    ctx.fillStyle='#ffd23f';ctx.font='bold 12px Arial';ctx.textAlign='left';
+    ctx.fillText('🧮 MATH OBBY',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
 </script>
 <!-- GLOBAL play counts (everyone's plays, via Abacus counter) + sort most-played to top -->
 <script>
