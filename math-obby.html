@@ -108,6 +108,8 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
 /* shiftlock — hidden until Stage 10 unlocks it */
 #sbtn{position:absolute;right:36px;bottom:148px;width:76px;height:76px;border-radius:50%;background:rgba(143,182,255,.18);border:2px solid rgba(143,182,255,.55);pointer-events:auto;display:none;align-items:center;justify-content:center;font-weight:900;font-size:12px;line-height:1.15;text-align:center;color:#8fb6ff}
 #sbtn.on{background:rgba(143,182,255,.5);border-color:#dbe8ff;color:#fff;box-shadow:0 0 14px rgba(143,182,255,.65)}
+#mbtn{position:fixed;top:70px;right:14px;z-index:11;width:38px;height:38px;border-radius:50%;background:rgba(8,12,22,.72);border:2px solid rgba(255,255,255,.18);color:#ffd23f;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;user-select:none}
+#mbtn:hover{border-color:#ffd23f}
 </style>
 </head>
 <body>
@@ -125,12 +127,14 @@ canvas.pz{background:#0a0f1c;border:2px solid #33415c;border-radius:8px;display:
     <b>WASD</b> / <b>Arrows</b> move &nbsp; <b>Space</b> jump<br>
     <b>E</b> interact &nbsp; <b>Mouse</b> look &nbsp; <b>Scroll</b> zoom<br>
     <b>Shift</b> shiftlock <span id="sl-state">(locked — Stage 10)</span><br>
-    <b>R</b> respawn &nbsp; <b>Esc</b> free cursor
+    <b>R</b> respawn &nbsp; <b>Esc</b> free cursor<br>
+    <b>M</b> music <span id="m-state">(on)</span>
   </div>
   <div id="prompt"></div>
   <div id="toast"></div>
   <div id="crosshair"></div>
 </div>
+<div id="mbtn" title="Music (M)">♪</div>
 
 <div id="flash"></div>
 <div id="fadeblack"></div>
@@ -508,6 +512,7 @@ addEventListener('keydown', e=>{
   if(e.code==='KeyE') tryInteract();
   if(e.code==='KeyR' && !P.dead) die('Respawned');
   if(e.code==='ShiftLeft' || e.code==='ShiftRight') toggleShiftlock();
+  if(e.code==='KeyM') MUSIC.toggle();
 });
 addEventListener('keyup', e=>{ keys[e.code] = false; });
 canvas.addEventListener('click', ()=>{ if(!uiOpen && !P.frozen) canvas.requestPointerLock(); });
@@ -1126,6 +1131,7 @@ function reachStage(st){
   st.padVis.flag.material = MATS.check;
   toast('CHECKPOINT — STAGE ' + st.n, '#4ade80', 1.6);
   save();
+  if(MUSIC_ON) MUSIC.play(MUSIC.forStage(st.n));   // tower / cat room / pyramid swap the track
   if(st.onReach) st.onReach();
   return true;
 }
@@ -1454,7 +1460,9 @@ g = stageGate(9, 'Hard Subtraction II', 1300, 74, 0, pick([
 ]), {topic:'SUBTRACTION', blurb:'Five digits and plenty of borrowing.',
      sub:'LAVA SPINNER — time your run around the disc'});
 
-box(1330, 74, 0, 12, 2, 12, 'stone2');
+// wider and pushed toward the arena: at 12 wide it sat 11 studs short of the
+// spinner, and the jump needs 9 studs of air against a reach of ~8.5
+box(1332, 74, 0, 16, 2, 12, 'stone2');
 // spinner arena: big round-ish platform with a rotating lava beam
 box(1370, 74, 0, 46, 2, 46, 'stone');
 spinner(1370, 78, 0, 42, {speed:1.35, w:2.4, h:3});
@@ -2880,6 +2888,429 @@ const TOH = {x:T6.x + 108, z:T6.z, base:Y20 + 44};
     toast('🏆 MATH OBBY CHAMPION', '#ffd23f', 4);
   }, {r:9});
 })();
+
+/* ================================================================
+   MUSIC — three hand-written tracks, synthesised live.
+   No files: everything here is oscillators, noise and envelopes.
+
+     lobby  "BRIGHT STEPS"     D major, 124bpm  — the normal stages
+     chill  "SUNBEAM NAP"      F major 7ths, 72bpm — the cat therapy room
+     insane "TOMB PROTOCOL"    A phrygian dominant, 150bpm — puzzle tower
+                                                   + the King's pyramid
+   ================================================================ */
+const MUSIC = (function(){
+  let ctx = null, master = null, comp = null, verb = null, verbGain = null;
+  let current = null, currentName = null, timer = null, muted = false;
+  const LOOKAHEAD = 0.7, TICK = 30;
+
+  /* ---------- note names -> frequency ---------- */
+  const SEMI = {C:0, D:2, E:4, F:5, G:7, A:9, B:11};
+  function hz(n){
+    if(typeof n === 'number') return n;
+    const m = /^([A-G])([#b]?)(-?\d)$/.exec(n);
+    if(!m) return 440;
+    let s = SEMI[m[1]] + (m[2]==='#'?1:m[2]==='b'?-1:0);
+    return 440 * Math.pow(2, (s - 9 + (parseInt(m[3],10) - 4)*12)/12);
+  }
+
+  /* ---------- a short synthetic room, for depth ---------- */
+  function makeVerb(seconds, decay){
+    const rate = ctx.sampleRate, len = Math.floor(rate*seconds);
+    const buf = ctx.createBuffer(2, len, rate);
+    for(let c=0;c<2;c++){
+      const d = buf.getChannelData(c);
+      for(let i=0;i<len;i++){
+        const t = i/len;
+        d[i] = (Math.random()*2-1) * Math.pow(1-t, decay) * (1 - t*0.15);
+      }
+    }
+    const cv = ctx.createConvolver(); cv.buffer = buf; return cv;
+  }
+
+  function init(){
+    if(ctx) return true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return false;
+    ctx = new AC();
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.knee.value = 22;
+    comp.ratio.value = 7; comp.attack.value = 0.004; comp.release.value = 0.22;
+    master = ctx.createGain(); master.gain.value = muted ? 0 : 0.85;
+    verb = makeVerb(2.4, 2.6);
+    verbGain = ctx.createGain(); verbGain.gain.value = 0.32;
+    verb.connect(verbGain); verbGain.connect(comp);
+    master.connect(comp); comp.connect(ctx.destination);
+    return true;
+  }
+
+  /* ---------- voices ---------- */
+  // out: gain node the track owns, so crossfades are per-track
+  function env(g, t, a, d, s, r, dur, peak){
+    g.gain.cancelScheduledValues(t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak*s), t + a + d);
+    g.gain.setValueAtTime(Math.max(0.0002, peak*s), t + Math.max(a+d, dur));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(a+d, dur) + r);
+  }
+
+  function tone(out, note, t, dur, o){
+    o = o || {};
+    const f = hz(note);
+    const g = ctx.createGain(); g.connect(out);
+    let node = g, filt = null;
+    if(o.cut){
+      filt = ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.setValueAtTime(o.cut, t);
+      if(o.sweep) filt.frequency.exponentialRampToValueAtTime(Math.max(80, o.sweep), t + dur);
+      filt.Q.value = o.q || 1;
+      g.disconnect(); g.connect(filt); filt.connect(out);
+      if(o.send) { const s = ctx.createGain(); s.gain.value = o.send; filt.connect(s); s.connect(verb); }
+    } else if(o.send){
+      const s = ctx.createGain(); s.gain.value = o.send; g.connect(s); s.connect(verb);
+    }
+    const voices = o.detune ? [-o.detune, o.detune] : [0];
+    for(const dt of voices){
+      const osc = ctx.createOscillator();
+      osc.type = o.type || 'sawtooth';
+      osc.frequency.setValueAtTime(f, t);
+      if(o.glideFrom) {
+        osc.frequency.setValueAtTime(hz(o.glideFrom), t);
+        osc.frequency.exponentialRampToValueAtTime(f, t + (o.glide || 0.06));
+      }
+      osc.detune.value = dt;
+      osc.connect(g);
+      osc.start(t); osc.stop(t + dur + (o.r || 0.25) + 0.05);
+    }
+    if(o.sub){
+      const so = ctx.createOscillator(); so.type = 'sine';
+      so.frequency.setValueAtTime(f/2, t);
+      const sg = ctx.createGain(); sg.gain.value = o.sub; so.connect(sg); sg.connect(g);
+      so.start(t); so.stop(t + dur + (o.r||0.25) + 0.05);
+    }
+    env(g, t, o.a || 0.008, o.d || 0.09, o.s === undefined ? 0.6 : o.s,
+        o.r || 0.25, dur, (o.v === undefined ? 0.5 : o.v) / voices.length);
+  }
+
+  function noise(out, t, dur, o){
+    o = o || {};
+    const len = Math.max(1, Math.floor(ctx.sampleRate * (dur + 0.05)));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = o.type || 'highpass'; f.frequency.value = o.freq || 6000; f.Q.value = o.q || 1;
+    const g = ctx.createGain();
+    src.connect(f); f.connect(g); g.connect(out);
+    if(o.send){ const s = ctx.createGain(); s.gain.value = o.send; g.connect(s); s.connect(verb); }
+    g.gain.setValueAtTime(o.v || 0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.start(t); src.stop(t + dur + 0.02);
+  }
+
+  const DRUM = {
+    k(out, t, v){                              // kick: pitch drop + body
+      const g = ctx.createGain(); g.connect(out);
+      const o = ctx.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(44, t+0.11);
+      o.connect(g); o.start(t); o.stop(t+0.42);
+      g.gain.setValueAtTime((v||1)*0.95, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.4);
+      noise(out, t, 0.02, {freq:2200, v:(v||1)*0.12});
+    },
+    s(out, t, v){                              // snare: tone + rattle
+      noise(out, t, 0.16, {type:'bandpass', freq:1900, q:0.7, v:(v||1)*0.42, send:0.18});
+      const g = ctx.createGain(); g.connect(out);
+      const o = ctx.createOscillator(); o.type='triangle';
+      o.frequency.setValueAtTime(232, t);
+      o.frequency.exponentialRampToValueAtTime(150, t+0.09);
+      o.connect(g); o.start(t); o.stop(t+0.16);
+      g.gain.setValueAtTime((v||1)*0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.14);
+    },
+    h(out, t, v){ noise(out, t, 0.035, {freq:8200, v:(v||1)*0.20}); },      // closed hat
+    H(out, t, v){ noise(out, t, 0.26,  {freq:7200, v:(v||1)*0.17}); },      // open hat
+    c(out, t, v){                              // clap
+      for(let i=0;i<3;i++) noise(out, t+i*0.011, 0.09, {type:'bandpass', freq:1500, q:0.9, v:(v||1)*0.3, send:0.2});
+    },
+    r(out, t, v){ noise(out, t, 0.05, {type:'bandpass', freq:2600, q:2, v:(v||1)*0.3}); }, // rim
+    t(out, t, v, f){                           // tom
+      const g = ctx.createGain(); g.connect(out);
+      const o = ctx.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(f||200, t);
+      o.frequency.exponentialRampToValueAtTime((f||200)*0.55, t+0.2);
+      o.connect(g); o.start(t); o.stop(t+0.3);
+      g.gain.setValueAtTime((v||1)*0.5, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.28);
+      noise(out, t, 0.04, {freq:1200, v:(v||1)*0.1});
+    }
+  };
+  // 16-step drum line -> events. '.' rest, else a DRUM key.
+  function steps(str, vel){
+    const out = [];
+    for(let i=0;i<str.length;i++) if(str[i] !== '.') out.push([i/4, str[i], vel || 1]);
+    return out;
+  }
+
+  /* ================================================================
+     TRACK 1 — "BRIGHT STEPS"   D major, 124bpm
+     I-V-vi-IV, a proper 8-bar tune over it. Bouncy, keeps you moving.
+     ================================================================ */
+  const LOBBY = {
+    bpm: 124, bars: 16,
+    chords: [                                   // one per bar, cycles every 4
+      ['D3','F#4','A4','D5'], ['A2','C#4','E4','A4'],
+      ['B2','D4','F#4','B4'], ['G2','B3','D4','G4']
+    ],
+    roots: ['D2','A1','B1','G1'],
+    // melody: [bar, beat, note, dur, vel]
+    lead: [
+      [0,0,'F#5',1],[0,1,'A5',0.5],[0,1.5,'B5',0.5],[0,2,'A5',1],[0,3,'F#5',1],
+      [1,0,'E5',1],[1,1,'F#5',1],[1,2,'E5',2],
+      [2,0,'D5',1],[2,1,'F#5',0.5],[2,1.5,'A5',0.5],[2,2,'B5',1],[2,3,'A5',1],
+      [3,0,'G5',2],[3,2,'F#5',1],[3,3,'E5',1],
+      [4,0,'F#5',1],[4,1,'A5',0.5],[4,1.5,'D6',0.5],[4,2,'C#6',1],[4,3,'A5',1],
+      [5,0,'B5',1.5],[5,1.5,'A5',0.5],[5,2,'F#5',2],
+      [6,0,'E5',1],[6,1,'G5',1],[6,2,'F#5',1],[6,3,'E5',1],
+      [7,0,'D5',3],[7,3,'A4',1],
+      // second half lifts an octave-ish and answers itself
+      [8,0,'A5',1],[8,1,'D6',0.5],[8,1.5,'E6',0.5],[8,2,'D6',1],[8,3,'A5',1],
+      [9,0,'C#6',1],[9,1,'A5',1],[9,2,'E5',2],
+      [10,0,'D6',1],[10,1,'B5',0.5],[10,1.5,'A5',0.5],[10,2,'F#5',1],[10,3,'B5',1],
+      [11,0,'G5',1],[11,1,'A5',1],[11,2,'B5',2],
+      [12,0,'A5',1],[12,1,'D6',0.5],[12,1.5,'F#6',0.5],[12,2,'E6',1],[12,3,'C#6',1],
+      [13,0,'D6',1.5],[13,1.5,'C#6',0.5],[13,2,'A5',2],
+      [14,0,'B5',1],[14,1,'A5',1],[14,2,'G5',1],[14,3,'F#5',1],
+      [15,0,'D5',4]
+    ],
+    drums(bar){
+      let s = 'k..hk.hck..hk.hc';                 // kick + hats + claps on 2 and 4
+      if(bar % 8 === 7) s = 'k..hk.hck.khk.kk';   // little fill into the turnaround
+      if(bar % 4 === 3) s = 'k..hk.hck..hk.hH';
+      return steps(s);
+    }
+  };
+
+  /* ================================================================
+     TRACK 2 — "SUNBEAM NAP"   Fmaj7 Am7 Dm7 Bbmaj7, 72bpm
+     Slow, warm, lots of air. The cat room is where you stop running.
+     ================================================================ */
+  const CHILL = {
+    bpm: 72, bars: 8, swing: 0.06,
+    chords: [
+      ['F3','A3','C4','E4'], ['A3','C4','E4','G4'],
+      ['D3','F3','A3','C4'], ['Bb2','D3','F3','A3']
+    ],
+    roots: ['F1','A1','D1','Bb1'],
+    lead: [
+      [0,1,'A4',1.5],[0,2.5,'G4',0.5],[0,3,'F4',1],
+      [1,0,'E4',2],[1,2.5,'C4',1.5],
+      [2,1,'F4',1],[2,2,'A4',1],[2,3,'C5',1],
+      [3,0,'A4',3],
+      [4,1,'C5',1.5],[4,2.5,'Bb4',0.5],[4,3,'A4',1],
+      [5,0,'G4',2],[5,2.5,'E4',1.5],
+      [6,1,'D5',1],[6,2,'C5',1],[6,3,'A4',1],
+      [7,0,'F4',4]
+    ],
+    drums(bar){
+      const out = steps(bar % 4 === 3 ? 'k...r...k.k.r.rr' : 'k...r...k.k.r...', 0.7);
+      out.push(...steps('..h...h...h...h.', 0.34));   // soft air on the offbeats
+      return out;
+    }
+  };
+
+  /* ================================================================
+     TRACK 3 — "TOMB PROTOCOL"   A phrygian dominant (A Bb C# D E F G), 150bpm
+     The b2 and the major 3rd over a minor key is the desert sound.
+     Relentless 16ths — this is the panic music.
+     ================================================================ */
+  const INSANE = {
+    bpm: 150, bars: 16,
+    chords: [
+      ['A3','C#4','E4'], ['Bb3','D4','F4'],
+      ['A3','C#4','E4'], ['E3','G#3','B3','D4']
+    ],
+    roots: ['A1','Bb1','A1','E1'],
+    lead: [
+      // bars 0-3: the motif, low and coiled
+      [0,0,'A4',0.5],[0,0.5,'Bb4',0.5],[0,1,'C#5',0.5],[0,1.5,'Bb4',0.5],
+      [0,2,'A4',0.5],[0,2.5,'G4',0.5],[0,3,'F4',1],
+      [1,0,'Bb4',0.5],[1,0.5,'C#5',0.5],[1,1,'D5',0.5],[1,1.5,'C#5',0.5],
+      [1,2,'Bb4',1],[1,3,'A4',1],
+      [2,0,'A4',0.5],[2,0.5,'C#5',0.5],[2,1,'E5',0.5],[2,1.5,'F5',0.5],
+      [2,2,'E5',0.5],[2,2.5,'C#5',0.5],[2,3,'A4',1],
+      [3,0,'G#4',0.5],[3,0.5,'B4',0.5],[3,1,'D5',0.5],[3,1.5,'B4',0.5],[3,2,'G#4',2],
+      // bars 4-7: same shape an octave up, faster subdivisions
+      [4,0,'A5',0.5],[4,0.5,'Bb5',0.5],[4,1,'C#6',0.5],[4,1.5,'Bb5',0.5],
+      [4,2,'A5',0.5],[4,2.5,'G5',0.5],[4,3,'F5',1],
+      [5,0,'Bb5',0.5],[5,0.5,'C#6',0.5],[5,1,'D6',0.5],[5,1.5,'C#6',0.5],
+      [5,2,'Bb5',1],[5,3,'A5',1],
+      [6,0,'E6',0.5],[6,0.5,'D6',0.5],[6,1,'C#6',0.5],[6,1.5,'Bb5',0.5],
+      [6,2,'A5',0.5],[6,2.5,'Bb5',0.5],[6,3,'C#6',1],
+      [7,0,'A5',2],[7,2,'G#5',2],
+      // bars 8-11: held stabs, let the bass carry it
+      [8,0,'A5',1],[8,2,'F5',1],[9,0,'E5',1],[9,2,'C#5',1],
+      [10,0,'Bb5',1],[10,2,'A5',1],[11,0,'G#5',2],
+      // bars 12-15: full descent, the climax
+      [12,0,'C#6',0.5],[12,0.5,'Bb5',0.5],[12,1,'A5',0.5],[12,1.5,'G5',0.5],
+      [12,2,'F5',0.5],[12,2.5,'E5',0.5],[12,3,'D5',0.5],[12,3.5,'C#5',0.5],
+      [13,0,'Bb4',0.5],[13,0.5,'C#5',0.5],[13,1,'E5',0.5],[13,1.5,'G5',0.5],
+      [13,2,'F5',0.5],[13,2.5,'E5',0.5],[13,3,'C#5',1],
+      [14,0,'A5',0.5],[14,0.5,'E5',0.5],[14,1,'A5',0.5],[14,1.5,'C#6',0.5],
+      [14,2,'E6',2],
+      [15,0,'A5',4]
+    ],
+    drums(bar){
+      let s = 'k.hhk.hhk.hhk.hh';
+      if(bar % 4 === 1 || bar % 4 === 3) s = 'k.hhs.hhk.hhs.hh';
+      else s = 'k.hhs.hhk.khs.hh';
+      if(bar % 8 === 7) s = 'ttttssssk.k.ssss';           // tom fill
+      if(bar % 16 === 15) s = 'ttttttttssssssss';         // big turnaround
+      return steps(s);
+    }
+  };
+
+  const TRACKS = {lobby:LOBBY, chill:CHILL, insane:INSANE};
+
+  /* ---------- scheduling ---------- */
+  function startTrack(name){
+    const spec = TRACKS[name];
+    if(!spec) return null;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(1, ctx.currentTime + 1.2);   // fade in
+    g.connect(master);
+    return {spec, out:g, bar:0, next:ctx.currentTime + 0.12, name};
+  }
+
+  function scheduleBar(tr){
+    const S = tr.spec, t0 = tr.next, spb = 60/S.bpm, bar = tr.bar;
+    const ci = bar % S.chords.length;
+    const chord = S.chords[ci], root = S.roots[ci];
+    const sw = S.swing || 0;
+    const at = b => t0 + (b + (Math.floor(b*2)%2 ? sw : 0)) * spb;
+
+    if(tr.name === 'lobby'){
+      // bass: root-fifth pulse in eighths
+      const pat = [0,0.5,1,1.5,2,2.5,3,3.5];
+      pat.forEach((b,i)=>{
+        const n = (i===2||i===6) ? chord[2] : (i===5 ? chord[1] : root);
+        tone(tr.out, n, at(b), spb*0.42, {type:'square', cut:900, v:0.30, d:0.06, s:0.4, r:0.08, sub:0.5});
+      });
+      // chord stabs on the offbeats
+      [1,3].forEach(b=> chord.slice(1).forEach(n=>
+        tone(tr.out, n, at(b), spb*0.34, {type:'sawtooth', cut:2400, v:0.10, a:0.006, d:0.08, s:0.3, r:0.12, detune:8, send:0.12})));
+      // sparkly 16th arp on the chord
+      for(let i=0;i<8;i++){
+        const n = chord[(i + bar) % chord.length];
+        tone(tr.out, n, at(i*0.5+0.25), spb*0.2, {type:'triangle', v:0.09, a:0.004, d:0.05, s:0.2, r:0.08, send:0.18});
+      }
+    }
+    else if(tr.name === 'chill'){
+      tone(tr.out, root, at(0), spb*2.4, {type:'sine', v:0.26, a:0.03, d:0.3, s:0.55, r:0.5, cut:400});
+      tone(tr.out, root, at(2.5), spb*1.2, {type:'sine', v:0.19, a:0.03, d:0.25, s:0.5, r:0.4, cut:400});
+      // pad: whole-bar wash, open enough to hear the voicing
+      chord.forEach(n=> tone(tr.out, n, at(0), spb*3.8,
+        {type:'sawtooth', cut:2600, v:0.075, a:0.55, d:0.6, s:0.75, r:1.1, detune:6, send:0.55}));
+      // rhodes-ish comp on the and-of-2
+      if(bar % 2 === 0) chord.slice(1).forEach(n=> tone(tr.out, n, at(1.5), spb*0.8,
+        {type:'triangle', v:0.13, a:0.01, d:0.25, s:0.3, r:0.5, send:0.4}));
+      // a bell on the top of the chord every other bar — the bit of sparkle
+      if(bar % 2 === 1) tone(tr.out, chord[3] || chord[2], at(3), spb*1.4,
+        {type:'triangle', v:0.1, a:0.005, d:0.5, s:0.15, r:0.9, send:0.7});
+    }
+    else {
+      // insane: driving 16th bass
+      for(let i=0;i<16;i++){
+        if(i%4===2 && (i/4|0)%2===1) continue;         // a breath, so it grooves
+        tone(tr.out, root, at(i*0.25), spb*0.2,
+          {type:'sawtooth', cut:520, sweep:180, q:6, v:0.26, d:0.05, s:0.35, r:0.05, sub:0.7});
+      }
+      // stabbed chords on 1 and the and-of-3
+      [0,2.5].forEach(b=> chord.forEach(n=> tone(tr.out, n, at(b), spb*0.5,
+        {type:'sawtooth', cut:2000, v:0.10, a:0.004, d:0.1, s:0.25, r:0.18, detune:12, send:0.2})));
+      // drone underneath the whole bar
+      tone(tr.out, 'A1', at(0), spb*3.9, {type:'sawtooth', cut:220, v:0.09, a:0.2, d:0.5, s:0.8, r:0.4});
+    }
+
+    // melody (shared handling)
+    const lead = S.lead.filter(e => e[0] === bar % S.bars);
+    for(const [,b,n,d] of lead){
+      if(tr.name === 'lobby')
+        tone(tr.out, n, at(b), spb*d*0.9, {type:'square', cut:3400, v:0.19, a:0.01, d:0.12, s:0.6, r:0.22, send:0.22});
+      else if(tr.name === 'chill')
+        tone(tr.out, n, at(b), spb*d*0.95, {type:'triangle', cut:3000, v:0.22, a:0.04, d:0.35, s:0.45, r:0.9, send:0.6});
+      else
+        tone(tr.out, n, at(b), spb*d*0.88, {type:'sawtooth', cut:3200, v:0.17, a:0.006, d:0.1, s:0.55, r:0.2, detune:10, send:0.25});
+    }
+
+    // drums
+    for(const [b, k, v] of S.drums(bar)){
+      const f = DRUM[k]; if(!f) continue;
+      if(k === 't') f(tr.out, at(b), v, 260 - (b*30));
+      else f(tr.out, at(b), v);
+    }
+
+    tr.next += spb * 4;
+    tr.bar++;
+  }
+
+  function pump(){
+    if(!ctx || !current) return;
+    const horizon = ctx.currentTime + LOOKAHEAD;
+    let guard = 0;
+    while(current.next < horizon && guard++ < 8) scheduleBar(current);
+  }
+
+  /* ---------- public ---------- */
+  let pending = null;
+  function play(name){
+    if(!init()) return;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    if(currentName === name) return;
+    currentName = name;
+    if(current){                              // fade the old one out and let it die
+      const old = current, t = ctx.currentTime;
+      old.out.gain.cancelScheduledValues(t);
+      old.out.gain.setValueAtTime(Math.max(0.0001, old.out.gain.value), t);
+      old.out.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+      setTimeout(()=>{ try{ old.out.disconnect(); }catch(e){} }, 1600);
+    }
+    current = startTrack(name);
+    if(!timer) timer = setInterval(pump, TICK);
+    pump();
+  }
+  function stop(){
+    if(current){ try{ current.out.disconnect(); }catch(e){} }
+    current = null; currentName = null;
+    if(timer){ clearInterval(timer); timer = null; }
+  }
+  function setMuted(m){
+    muted = m;
+    if(master) master.gain.setTargetAtTime(m ? 0 : 0.85, ctx.currentTime, 0.05);
+    const b = document.getElementById('mbtn');
+    if(b) b.textContent = m ? '♪̶' : '♪';
+    const h = document.getElementById('m-state');
+    if(h){ h.textContent = m ? '(off)' : '(on)'; }
+    try{ localStorage.setItem('mathobby_muted', m ? '1' : '0'); }catch(e){}
+  }
+  function toggle(){ setMuted(!muted); if(!muted && ctx && ctx.state==='suspended') ctx.resume().catch(()=>{}); }
+  function isMuted(){ return muted; }
+  function restoreMute(){
+    try{ muted = localStorage.getItem('mathobby_muted') === '1'; }catch(e){}
+    return muted;
+  }
+
+  /* which track a stage wants */
+  const REGION = {14:'insane', 19:'chill', 20:'insane', 21:'insane'};
+  function forStage(n){ return REGION[n] || 'lobby'; }
+
+  return {play, stop, toggle, setMuted, isMuted, forStage, restoreMute,
+          get ready(){ return !!ctx; }};
+})();
 /* ================================================================
    PROJECTILES / MAIN LOOP / BOOT
    ================================================================ */
@@ -2945,11 +3376,14 @@ function gotoStage(n){
   setHUD(st.n, st.name, st.n === 21 ? 'You beat it.' : 'Answer the question to open the gate');
   if(n >= 10) unlockShiftlock();
   if(n >= 17) setSky(SKY_DESERT, 220, 900);
+  if(MUSIC_ON) MUSIC.play(MUSIC.forStage(st.n));
 }
 
+let MUSIC_ON = false;
 function startGame(n){
   document.getElementById('title').style.display = 'none';
   document.getElementById('backlink').style.display = 'none';
+  MUSIC_ON = true;              // this click is the gesture that lets audio start
   gotoStage(n);
   P.frozen = false;
   if(!isMobile) canvas.requestPointerLock();
@@ -2970,6 +3404,15 @@ document.getElementById('btn-play').onclick = ()=>{
   P.deaths = 0; document.getElementById('hud-deaths').textContent = 0;
   startGame(1);
 };
+
+// music toggle (works before the game starts, so you can mute on the title screen)
+MUSIC.setMuted(MUSIC.restoreMute());
+(function(){
+  const b = document.getElementById('mbtn');
+  const hit = e=>{ e.preventDefault(); e.stopPropagation(); MUSIC.toggle(); };
+  b.addEventListener('click', hit);
+  b.addEventListener('touchstart', hit, {passive:false});
+})();
 
 // park the camera on stage 1 for the title screen
 gotoStage(1);
