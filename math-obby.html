@@ -2239,15 +2239,18 @@ function sandRoom(x, z, y, S, H, o={}){
 
 /* ---------------- approach + lockdown trigger ---------------- */
 fillRun(g.x + 4, Y20, TP.x - 46, Y20, TP.z, {step:11, mat:'sandst2'});
-// temple facade
-box(TP.x - 40, Y20 + 46, TP.z, 14, 48, 70, 'sandst');
+// temple facade — built in pieces around the doorway. A solid full-width slab
+// used to be laid down here first, which sealed the entrance completely: the
+// "doorway hole" below was cut into thin air next to a wall that was still there.
 box(TP.x - 40, Y20 + 30, TP.z, 15, 26, 14, 'templeD', {solid:false});
 for(let i=0;i<4;i++) box(TP.x - 46, Y20 + 26 + i*8, TP.z + (i%2?26:-26), 8, 8, 8, 'sandst2', {solid:false});
 sign(TP.x - 47.2, Y20 + 34, TP.z, 'TEMPLE OF THE\nDESERT KING', {size:9, ry:-Math.PI/2, color:'#5a3d1a', bg:'#d8b06a', fontSize:52, w:640});
-// doorway hole through the facade
-box(TP.x - 40, Y20 + 46, TP.z + 26, 14, 48, 18, 'sandst');
-box(TP.x - 40, Y20 + 46, TP.z - 26, 14, 48, 18, 'sandst');
-box(TP.x - 40, Y20 + 46, TP.z, 14, 32, 16, 'sandst');
+// the facade, with a 16-wide doorway at TP.z. The side pieces were 18 deep at
+// +-26, which left two full-height gaps either side of the door; 27 deep at
+// +-21.5 closes the wall properly so the doorway is the only way through.
+box(TP.x - 40, Y20 + 46, TP.z + 21.5, 14, 48, 27, 'sandst');
+box(TP.x - 40, Y20 + 46, TP.z - 21.5, 14, 48, 27, 'sandst');
+box(TP.x - 40, Y20 + 46, TP.z, 14, 32, 16, 'sandst');    // lintel over the door
 box(TP.x - 33, Y20, TP.z, 16, 2, 16, 'templeW');
 
 const lockGate = tdoor(TP.x - 40, Y20 + 14, TP.z, 3, 14, 16, 'templeD', {noCut:true});
