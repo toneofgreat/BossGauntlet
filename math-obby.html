@@ -1879,7 +1879,10 @@ g = stageGate(15, 'Multiply & Square', 2500, Y15, 0, pick([
      sub:'LAVA CANNONS, then FOUR 3-stud wraparounds'});
 
 // shooter corridor
-const cor = fillRun(g.x + 4, Y15, 2620, Y15, 0, {step:11, mat:'stone', w:9, lavaBelow:true, lavaDrop:26});
+// ran to 2620, leaving a 9.0 stud hop to the first wraparound against an 8.5
+// reach — right on the edge. Ends at 2623 now: still a real jump, ~6 effective,
+// with a couple of studs of margin instead of a deficit.
+const cor = fillRun(g.x + 4, Y15, 2623, Y15, 0, {step:11, mat:'stone', w:9, lavaBelow:true, lavaDrop:26});
 for(let i=0;i<5;i++){
   const sx = g.x + 18 + i*22;
   shooter(sx, Y15, 16, 0, -1, {every:2.0, phase:i*0.45, speed:30});
@@ -1914,7 +1917,10 @@ box(2924, Y16, 0, 10, 2, 10, 'stone2');
 pillarWrap(2952, 0, Y16, 38, 5, {blocked:'z-', mat:'stone2'});
 box(2952, Y16 + 50, 0, 38, 100, 38, 'stone'); lava(2952, Y16 - 36, 0, 84, 84);
 box(2980, Y16, 0, 10, 2, 10, 'stone2');
-fillRun(2986, Y16, 3000, Y16 + 2, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:32});
+// starting at 2986 rounded to a single platform at 3000, so the hop off the
+// wraparound exit was 9.5 studs against a 7.8 reach — impossible. Starting at
+// 2980 gives two platforms (2990, 3000) and turns it into a step across.
+fillRun(2980, Y16, 3000, Y16 + 2, 0, {step:11, mat:'stone', lavaBelow:true, lavaDrop:32});
 
 /* ================================================================
    STAGE 17 — multiply & divide + THE BIG DESERT + 6-stud wrap in brown fog
