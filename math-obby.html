@@ -2227,7 +2227,15 @@ function sandRoom(x, z, y, S, H, o={}){
     box(x + S/2, y + H, z - (S/4 + gapW/4), 2, H, S/2 - gapW/2, wallM);
     box(x + S/2, y + H, z, 2, H - 11, gapW, wallM);
   } else box(x + S/2, y + H, z, 2, H, S, wallM);
-  box(x, y + H, z + S/2, S, H, 2, wallM);
+  // +Z can carry a doorway too — the cactus room hides its exit behind the
+  // painting on this wall, and without a gap here the removable panel just
+  // uncovered the solid wall behind it
+  if(o.openPlusZ){
+    const gw = o.zGap || 24, gh = o.zGapH || 12;
+    box(x - (S/4 + gw/4), y + H, z + S/2, S/2 - gw/2, H, 2, wallM);
+    box(x + (S/4 + gw/4), y + H, z + S/2, S/2 - gw/2, H, 2, wallM);
+    box(x, y + H, z + S/2, gw, H - gh, 2, wallM);          // lintel above the gap
+  } else box(x, y + H, z + S/2, S, H, 2, wallM);
   box(x, y + H, z - S/2, S, H, 2, wallM);
   // torches
   for(const s of [-1,1]){
@@ -2297,7 +2305,7 @@ onRespawn = function(){
 const CAC_ORDER = [0,1,2,3,4].sort(()=>Math.random()-0.5);
 (function cactusRoom(){
   const x = TP.x, z = TP.z, y = Y20, S = 60, H = 24;
-  sandRoom(x, z, y, S, H, {openMinusX:true, gap:16});
+  sandRoom(x, z, y, S, H, {openMinusX:true, gap:16, openPlusZ:true, zGap:24, zGapH:12});
   sign(x, y + 20, z - S/2 + 1.4, 'CHAMBER I', {size:3.4, color:'#e0c08a'});
 
   // the painting on the +Z wall — draws the correct order
@@ -2383,7 +2391,8 @@ const T2 = {x:TP.x, z:TP.z + 76, y:Y20, S:56, H:26};
   box(x - 14, y, z - 12.5, 18, 2, 31, 'templeW');
   box(x - 14, y, z + 24.5, 18, 2, 7, 'templeW');
   box(x, y + H + 2, z, S + 2, 2, S + 2, 'templeD');
-  box(x + S/2, y + H, z, 2, H, S, 'sandst2');
+  // (the +X wall is built below, in pieces around the code door — a full wall
+  //  here left that door opening onto solid stone)
   box(x, y + H, z + S/2, S, H, 2, 'sandst2');
   box(x - S/2, y + H, z + 14, 2, H, S/2 - 6, 'sandst2');
   box(x - S/2, y + H, z - 14, 2, H, S/2 - 6, 'sandst2');
@@ -2406,8 +2415,12 @@ const T2 = {x:TP.x, z:TP.z + 76, y:Y20, S:56, H:26};
 
   // the code door on +X (it will NOT open yet)
   const cdoor = tdoor(x + S/2, y + 14, z, 3, 14, 14, 'gold');
-  box(x + S/2, y + H, z + 20, 2, H, 16, 'sandst2');
-  box(x + S/2, y + H, z - 20, 2, H, 16, 'sandst2');
+  // the +X wall, in pieces around a 14-wide doorway. The old pieces sat at +-20
+  // and were 16 deep, leaving 5-stud slots either side of the door and nothing
+  // above it — the full wall behind was covering for them.
+  box(x + S/2, y + H, z + 17.5, 2, H, 21, 'sandst2');       // z 7..28
+  box(x + S/2, y + H, z - 17.5, 2, H, 21, 'sandst2');       // z -28..-7
+  box(x + S/2, y + H, z, 2, H - 14, 14, 'sandst2');         // lintel over the door
   T2.door = cdoor;
   // the trapdoor floor section
   const trap = box(x - 14, y, z + 12, 18, 2, 18, 'templeD');
@@ -2526,7 +2539,7 @@ const T4 = {x:T2.x + 74, z:T2.z, y:Y20, S:56, H:24};
   box(T2.x + 34, y + 14, z, 34, 2, 18, 'templeD');
   box(T2.x + 34, y + 12, z + 8, 34, 12, 2, 'sandst2');
   box(T2.x + 34, y + 12, z - 8, 34, 12, 2, 'sandst2');
-  sandRoom(x, z, y, S, H, {openMinusX:true, gap:14});
+  sandRoom(x, z, y, S, H, {openMinusX:true, openPlusX:true, gap:14});
   sign(x, y + 20, z - S/2 + 1.4, 'CHAMBER IV', {size:3.4, color:'#e0c08a'});
 
   const STYLES = [
@@ -2601,7 +2614,7 @@ const T5 = {x:T4.x + 74, z:T4.z, y:Y20, S:60, H:26};
   box(T4.x + 34, y + 14, z, 34, 2, 18, 'templeD');
   box(T4.x + 34, y + 12, z + 8, 34, 12, 2, 'sandst2');
   box(T4.x + 34, y + 12, z - 8, 34, 12, 2, 'sandst2');
-  sandRoom(x, z, y, S, H, {openMinusX:true, gap:14});
+  sandRoom(x, z, y, S, H, {openMinusX:true, openPlusX:true, gap:14});
   sign(x, y + 22, z - S/2 + 1.4, 'CHAMBER V', {size:3.4, color:'#e0c08a'});
 
   // the guide painting: says what the other three are for
