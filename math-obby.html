@@ -1747,7 +1747,19 @@ fillRun(g.x + 4, Y14, PT.x - 24, Y14, 0, {step:11, mat:'stone', lavaBelow:true, 
   const x = PT.x, z = PT.z, S = 34, H = 22;
   for(let f=0; f<3; f++){
     const fy = Y14 + f*H;
-    box(x, fy, z, S, 2, S, f%2 ? 'stone' : 'stone2');                 // floor
+    const fm = f%2 ? 'stone' : 'stone2';
+    if(f === 0){
+      box(x, fy, z, S, 2, S, fm);                                     // ground floor is solid
+    } else {
+      // Floors 1 and 2 need an opening for the ladder coming up from below. The
+      // floor used to be one solid 34x34 slab, so the truss dead-ended into the
+      // ceiling and there was no way off the ground floor at all. The hole is in
+      // the +X/+Z corner; the puzzle panels are all at -X/-Z, so they are clear.
+      // Hole kept tight and hard against the +Z wall the ladder is mounted on, so
+      // you climb out and step straight onto the floor a stud or two away.
+      box(x, fy, z - 2, S, 2, 30, fm);                                // z -17..+13
+      box(x - 4.5, fy, z + 15, 25, 2, 4, fm);                         // x -17..+8, z +13..+17
+    }
     // walls with a doorway on -X for the ground floor
     const wallM = 'brick';
     box(x, fy + H, z + S/2, S, H, 2, wallM);
@@ -1760,10 +1772,11 @@ fillRun(g.x + 4, Y14, PT.x - 24, Y14, 0, {step:11, mat:'stone', lavaBelow:true, 
     } else {
       box(x - S/2, fy + H, z, 2, H, S, wallM);
     }
-    if(f < 2){                                                        // hole + ladder up
-      const hy = fy + H;
-      box(x + 12, hy, z + 12, 10, 2, 10, 'stone2');
-      truss(x + 12, fy, z + 16.4, H, {w:7});
+    if(f < 2){
+      // runs up through the hole in the floor above and pokes 4 studs past it,
+      // so you can climb out and step off onto the floor rather than being
+      // stranded level with it
+      truss(x + 12, fy, z + 16.4, H + 4, {w:7});
     }
     // torches
     for(let i=0;i<2;i++) box(x + (i?14:-14), fy + 9, z + (i?14:-14), 1.2, 1.2, 1.2, 'lava', {solid:false});
@@ -1848,7 +1861,8 @@ fillRun(g.x + 4, Y14, PT.x - 24, Y14, 0, {step:11, mat:'stone', lavaBelow:true, 
     });
   }, {r:8});
   // bridge out to stage 15
-  fillRun(x + S/2 + 4, dy, 2470, Y14 + 4, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:60});
+  // ended at 2470, leaving 11.5 studs to the stage 15 pad against an 8.5 reach
+  fillRun(x + S/2 + 4, dy, 2482, Y14 + 4, 0, {step:11, mat:'stone2', lavaBelow:true, lavaDrop:60});
 })();
 
 /* ================================================================
