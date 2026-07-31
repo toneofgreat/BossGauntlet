@@ -1764,7 +1764,9 @@ fillRun(g.x + 4, Y14, PT.x - 24, Y14, 0, {step:11, mat:'stone', lavaBelow:true, 
     const wallM = 'brick';
     box(x, fy + H, z + S/2, S, H, 2, wallM);
     box(x, fy + H, z - S/2, S, H, 2, wallM);
-    box(x + S/2, fy + H, z, 2, H, S, wallM);
+    // the top floor's +X wall is built separately below, with a gap for the coded
+    // door — building the full wall here too left a second wall behind the door
+    if(f < 2) box(x + S/2, fy + H, z, 2, H, S, wallM);
     if(f === 0){
       box(x - S/2, fy + H, z + 11, 2, H, 12, wallM);
       box(x - S/2, fy + H, z - 11, 2, H, 12, wallM);
