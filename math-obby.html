@@ -1932,7 +1932,12 @@ g = stageGate(17, 'Multiply & Divide', 3010, Y17, 0, pick([
   {q:'(28 × 27) ÷ 12', a:63, hint:'28 × 27 = 756. Now divide by 12.'}
 ]), {topic:'MIXED', blurb:'Brackets first, then the division.',
      sub:'THE GREAT DESERT — cross it, then a 6-stud wraparound in the fog',
-     mat:'sandst2', frameMat:'sandst', doorMat:'sandst'});
+     mat:'sandst2', frameMat:'sandst', doorMat:'sandst',
+     // The dunes descend 4 studs each over 16 of them, so the desert floor ends
+     // 60 below the gate. The default death plane is only 55 down, which meant
+     // the bottom of the hill — and everything after it — killed you while you
+     // were stood on solid sand.
+     deathY: Y17 - 85});
 
 // --- the desert: dunes, ruins, palms, quicksand ---
 function quicksand(x, topY, z, w, d){
@@ -1945,7 +1950,10 @@ zone(DX0 - 6, Y17 + 6, DZ, 12, 40, 60, ()=>{ setSky(SKY_DESERT, 200, 800); toast
 for(let i=0;i<16;i++){
   const dx = DX0 + i*18, dy = Y17 - i*4;
   box(dx, dy, DZ + (i%2?12:-12), 26, 6, 26, i%3 ? 'sand' : 'sand2');
-  if(i%4 === 2) quicksand(dx + 9, dy + 0.2, DZ + (i%2?-12:12), 22, 22);
+  // on its own dune, and small enough to walk around. It used to sit at the
+  // opposite z — which is where the next dune down is — so its kill volume
+  // covered that dune's walking surface and killed you on solid sand.
+  if(i%4 === 2) quicksand(dx + 6, dy + 0.2, DZ + (i%2?12:-12), 10, 10);
   if(i%3 === 0) palm(dx + 4, dy, DZ + (i%2?-14:14), 1);
   if(i%5 === 1) rock(dx - 6, dy, DZ + (i%2?18:-18), 1.4);
 }
@@ -3012,7 +3020,9 @@ const TOH = {x:T6.x + 108, z:T6.z, base:Y20 + 44};
   const st21 = {
     n:21, name:'The End', sub:'You beat the Math Obby. More stages coming.',
     solved:true, spawn:new THREE.Vector3(x, y + 2, z), spawnYaw:-Math.PI/2,
-    deathY: y - 70, qz:{q:'', a:''}, door:null,
+    // low enough that climbing back down the King's tower does not kill you on
+    // solid ground — a fall from the top now lands on the tower instead
+    deathY: y - 170, qz:{q:'', a:''}, door:null,
     padVis: checkpointPad(x, y, z + 14, 21)
   };
   STAGES.push(st21);
