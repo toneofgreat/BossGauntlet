@@ -2005,7 +2005,10 @@ for(let i=0;i<3;i++){
   }
   wx18 += 64;
 }
-fillRun(wx18 - 20, Y18 + 6, 3706, Y18 + 6, 0, {step:11, mat:'sandst2', lavaBelow:true, lavaDrop:34});
+// wx18-20 spans only 14 studs, which rounds to a single platform at 3706 and
+// left a 15.5 stud gap off the last wraparound against a 7.8 reach. Starting 8
+// studs earlier gives two platforms (3695, 3706) and a 4.5 stud first hop.
+fillRun(wx18 - 28, Y18 + 6, 3706, Y18 + 6, 0, {step:11, mat:'sandst2', lavaBelow:true, lavaDrop:34});
 
 /* ================================================================
    STAGE 19 — everything so far + THE CAT THERAPY ROOM
