@@ -2168,8 +2168,12 @@ let catFound = 0;
     });
   }, {r:8});
   // exit walkway toward the temple
-  fillRun(x + S/2 + 4, y, 3900, y, z - 12, {step:11, mat:'sandst2'});
-  box(3906, y, z - 12, 20, 2, 24, 'sandst2');
+  // started at +4, which put the first platform 11.8 studs from the room floor
+  // against an 8.5 reach — you stepped out of the door into an impossible jump
+  fillRun(x + S/2, y, 3900, y, z - 12, {step:11, mat:'sandst2'});
+  // reached only to 3916, leaving 9 effective studs to the stage 20 pad against
+  // an 8.5 reach — the last hop out of stage 19 was a coin flip
+  box(3908, y, z - 12, 24, 2, 24, 'sandst2');
 })();
 /* ================================================================
    STAGE 20 — the hardest question, then THE DESERT TEMPLE LOCKDOWN
