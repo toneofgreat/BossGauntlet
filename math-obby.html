@@ -2898,8 +2898,13 @@ const T6 = {x:T5.x + 78, z:T5.z, y:Y20, S:64, H:30};
   const SURF = y + 44;
   // shaft: walls only above head height so the corridor stays walkable
   const shH = SURF - (y + 14);
-  for(const s of [-1,1]) box(EX + 4 + s*11, SURF, EZ, 2, shH, 24, 'sandst2');
-  box(EX + 4, SURF, EZ + 12, 24, shH, 2, 'sandst2');    // open on -Z so you can walk out
+  // The walls used to stop level with the exit ledge, but the truss runs 5 studs
+  // higher. You press into the +Z wall to climb, and at the top there was nothing
+  // left to press against — so you walked straight over it and fell. Carry them
+  // above the ladder instead.
+  const shTop = SURF + 8;
+  for(const s of [-1,1]) box(EX + 4 + s*11, shTop, EZ, 2, shH + 8, 24, 'sandst2');
+  box(EX + 4, shTop, EZ + 12, 24, shH + 8, 2, 'sandst2');   // open on -Z so you can walk out
   // truss against the +Z wall, exit ledge in front of it
   truss(EX + 4, y, EZ + 9, SURF - y + 5, {w:8});
   box(EX + 4, SURF, EZ - 8, 18, 2, 28, 'sandst2');
@@ -2922,7 +2927,12 @@ const TOH = {x:T6.x + 108, z:T6.z, base:Y20 + 44};
   const surfaceY = B;
   // sand ground + a lethal lava moat under the whole tower
   box(X, surfaceY - 4, Z, 150, 8, 150, 'sand', {solid:false});
-  lava(X, surfaceY - 14, Z, 220, 220);
+  // The moat used to be 220 wide centred on the tower, which reached back to
+  // x=4284 and swallowed the temple's escape shaft — the ladder out of the
+  // temple climbs from y=159 to y=208 and passed straight through the lava at
+  // y=188, so you died most of the way up with the exit ledge in sight.
+  // Starts east of the escape ledge and the bridge now.
+  lava(X + 41, surfaceY - 14, Z, 138, 220);
   for(let i=0;i<10;i++) palm(X - 60 + (i%5)*30, surfaceY - 4, Z + (i<5 ? -62 : 62), 1.1);
   // bridge from the escape shaft (comes out at z = Z − 22)
   fillRun(T6.x + 60, surfaceY, X - 40, surfaceY, Z - 22, {step:11, mat:'sandst2'});
