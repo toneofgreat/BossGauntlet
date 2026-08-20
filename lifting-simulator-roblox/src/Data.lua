@@ -35,6 +35,7 @@ local function defaults()
 		dumbbellMulti = false,
 		lavaUnlocked = false,
 		autoUnlocked = false,
+		mega100k = false,    -- permanent x10 once lifetime ever reaches 100K
 		items = {},          -- [itemId] = true
 		auras = {},          -- [auraId] = true
 		titles = {},         -- [titleName] = true
@@ -66,6 +67,7 @@ function Data.SyncAll(player)
 	player:SetAttribute("DumbbellUnlocked", d.dumbbellUnlocked)
 	player:SetAttribute("DumbbellMulti", d.dumbbellMulti)
 	player:SetAttribute("LavaUnlocked", d.lavaUnlocked)
+	player:SetAttribute("Mega100k", d.mega100k)
 	player:SetAttribute("EquippedTitle", d.equippedTitle)
 	player:SetAttribute("EquippedAura", d.equippedAura)
 	player:SetAttribute("Morph", d.morph)
@@ -90,6 +92,7 @@ function Data.RecomputeMulti(player)
 	if d.spaceUnlocked then m = m * 3 end
 	if d.dumbbellMulti then m = m * 50000 end
 	if d.lavaUnlocked then m = m * 40 end
+	if d.mega100k then m = m * 10 end -- permanent 100K-club bonus
 	d.multi = m
 	player:SetAttribute("Multi", m)
 	return m
@@ -129,6 +132,14 @@ function Data.AddPoints(player, n)
 	d.lifetime = d.lifetime + n
 	player:SetAttribute("Lifetime", d.lifetime)
 	Data.SetPoints(player, d.points + n)
+	-- reaching 100K strength (ever) grants a permanent x10 on top of everything
+	if not d.mega100k and d.lifetime >= 100000 then
+		d.mega100k = true
+		Data.RecomputeMulti(player)
+		player:SetAttribute("Mega100k", true)
+		G.Remotes.Notify:FireClient(player, "100K CLUB! Permanent x10 multiplier unlocked!", "green")
+		G.Remotes.StateChanged:FireClient(player)
+	end
 	checkTitles(player, d)
 	G.Lift.CheckSize(player)
 end
@@ -185,6 +196,7 @@ local function serialize(d)
 		dumbbellMulti = d.dumbbellMulti,
 		lavaUnlocked = d.lavaUnlocked,
 		autoUnlocked = d.autoUnlocked,
+		mega100k = d.mega100k,
 		items = d.items,
 		auras = d.auras,
 		titles = d.titles,

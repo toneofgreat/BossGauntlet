@@ -187,6 +187,13 @@ function Lift.CheckSize(player)
 	if scale == current then return end
 	player:SetAttribute("SizeMult", scale)
 	setScales(player, scale, steps, false)
+	-- rebuild auras/title AFTER the 1s grow tween so the rig re-measures the
+	-- resized body parts and everything grows (or shrinks) with the player
+	task.delay(1.1, function()
+		if player.Parent and player:GetAttribute("SizeMult") == scale then
+			G.Auras.Apply(player)
+		end
+	end)
 	if scale > current then
 		local txt = "x" .. tostring(scale)
 		local char = player.Character

@@ -85,10 +85,48 @@ local function spinMotor(fx, bodyPart, centerPart, offsetCF, radPerStep)
 	motor.Part1 = centerPart
 	motor.C0 = offsetCF
 	motor.C1 = CFrame.new()
-	motor.MaxVelocity = radPerStep
-	motor.DesiredAngle = 1e9
+	-- negative speed = counter-rotation
+	if radPerStep < 0 then
+		motor.MaxVelocity = -radPerStep
+		motor.DesiredAngle = -1e9
+	else
+		motor.MaxVelocity = radPerStep
+		motor.DesiredAngle = 1e9
+	end
 	motor.Parent = fx
 	return motor
+end
+
+-- Ring of neon orbs orbiting the player on a spun hub. All distances are in
+-- body units (u = root half-height) so the ring grows with the player.
+-- colorFn(i, n) -> Color3 per orb.
+local function orbitOrbs(fx, root, n, radiusU, orbSizeU, speed, wobbleU, colorFn)
+	local u = root.Size.Y / 2
+	local hub = fxPart(fx, root, "OrbitHub", Vector3.new(0.4, 0.4, 0.4),
+		CFrame.new(0, 0, 0), {NoWeld = true})
+	spinMotor(fx, root, hub, CFrame.new(0, 0, 0), speed)
+	for i = 1, n do
+		local ang = (i / n) * math.pi * 2
+		local orb = Instance.new("Part")
+		orb.Name = "OrbitOrb" .. i
+		orb.Shape = Enum.PartType.Ball
+		local s = u * orbSizeU
+		orb.Size = Vector3.new(s, s, s)
+		orb.Material = Enum.Material.Neon
+		orb.Color = colorFn(i, n)
+		orb.Anchored = false
+		orb.CanCollide = false
+		orb.Massless = true
+		orb.CastShadow = false
+		-- gentle vertical wobble around the ring so it reads as a swirl
+		orb.CFrame = hub.CFrame * CFrame.new(
+			math.cos(ang) * u * radiusU,
+			math.sin(ang * 2) * u * wobbleU,
+			math.sin(ang) * u * radiusU)
+		orb.Parent = fx
+		G.Util.weld(orb, hub)
+	end
+	return hub
 end
 
 local function rainbowSequence()
@@ -171,6 +209,21 @@ local function auraFire(fx, root, torso)
 	light.Brightness = 2
 	light.Range = 6 + u * 6
 	light.Parent = core
+	-- Orbiting fireballs, each trailing its own mini flame
+	local hub = orbitOrbs(fx, root, 4, 2.3, 0.42, 0.032, 0.45, function(i)
+		if i % 2 == 0 then return Color3.fromRGB(255, 150, 40) end
+		return Color3.fromRGB(255, 90, 15)
+	end)
+	emitter(hub, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 130, 30)),
+		Size = shrinkSequence(u * 0.3, 0),
+		Transparency = fadeSequence(0.3, 1),
+		Lifetime = NumberRange.new(0.4, 0.8),
+		Rate = 10,
+		Speed = NumberRange.new(u * 0.5, u * 1),
+		SpreadAngle = Vector2.new(180, 180),
+		LightEmission = 1,
+	})
 end
 
 local function auraWater(fx, root, torso, humanoid)
@@ -208,6 +261,27 @@ local function auraWater(fx, root, torso, humanoid)
 		RotSpeed = NumberRange.new(-40, 40),
 		LightEmission = 0.15,
 	})
+	-- Orbiting water orbs + rising bubbles
+	orbitOrbs(fx, root, 3, 2.1, 0.38, 0.022, 0.6, function()
+		return Color3.fromRGB(70, 160, 255)
+	end)
+	emitter(core, {
+		Color = ColorSequence.new(Color3.fromRGB(190, 230, 255)),
+		Size = shrinkSequence(u * 0.1, u * 0.28),
+		Transparency = fadeSequence(0.35, 1),
+		Lifetime = NumberRange.new(1.2, 2),
+		Rate = 12,
+		Speed = NumberRange.new(u * 1.5, u * 2.5),
+		SpreadAngle = Vector2.new(40, 40),
+		Acceleration = Vector3.new(0, u * 3, 0),
+		LightEmission = 0.4,
+		EmissionDirection = Enum.NormalId.Top,
+	})
+	local wlight = Instance.new("PointLight")
+	wlight.Color = Color3.fromRGB(80, 160, 255)
+	wlight.Brightness = 1.5
+	wlight.Range = 5 + u * 5
+	wlight.Parent = core
 end
 
 local function auraVoid(fx, root)
@@ -259,6 +333,26 @@ local function auraVoid(fx, root)
 		Acceleration = Vector3.new(0, u * 0.8, 0),
 		RotSpeed = NumberRange.new(-25, 25),
 	})
+	-- Spinning dark vortex disc under the feet
+	local vortex = fxPart(fx, root, "VoidVortex",
+		Vector3.new(u * 0.12, u * 3.6, u * 3.6),
+		CFrame.new(0, -u * 2.4, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		{Shape = "Cylinder", Material = Enum.Material.Neon,
+		 Color = Color3.fromRGB(60, 15, 100), Transparency = 0.45, NoWeld = true})
+	spinMotor(fx, root, vortex,
+		CFrame.new(0, -u * 2.4, 0) * CFrame.Angles(0, 0, math.rad(90)), 0.05)
+	-- Purple star specks drifting upward off the vortex
+	emitter(vortex, {
+		Color = ColorSequence.new(Color3.fromRGB(170, 90, 255), Color3.fromRGB(90, 30, 160)),
+		Size = shrinkSequence(u * 0.14, 0),
+		Transparency = fadeSequence(0, 1),
+		Lifetime = NumberRange.new(1.2, 2),
+		Rate = 16,
+		Speed = NumberRange.new(u * 1.5, u * 3),
+		SpreadAngle = Vector2.new(25, 25),
+		Acceleration = Vector3.new(0, u * 2, 0),
+		LightEmission = 1,
+	})
 end
 
 -- The 1-sextillion aura: rainbow sparkles + trail, golden halo, angel wings,
@@ -274,11 +368,16 @@ local function auraRainbowGod(fx, root, torso, head)
 		Size = shrinkSequence(u * 0.55, 0),
 		Transparency = fadeSequence(0, 1),
 		Lifetime = NumberRange.new(0.8, 1.4),
-		Rate = 45,
+		Rate = 70,
 		Speed = NumberRange.new(u * 3, u * 6),
 		SpreadAngle = Vector2.new(180, 180),
 		LightEmission = 1,
 	})
+
+	-- Six rainbow orbs counter-orbiting the body, one per hue
+	orbitOrbs(fx, root, 6, 2.5, 0.4, -0.03, 0.5, function(i, n)
+		return Color3.fromHSV((i - 1) / n, 1, 1)
+	end)
 
 	-- Rainbow trail streaming off the torso
 	local a0 = Instance.new("Attachment")
@@ -406,25 +505,91 @@ local function titleColor(name)
 	return Color3.new(1, 1, 1)
 end
 
+local TITLE_EMOJI = {
+	["Noobie"] = "\u{1F423}",       -- hatching chick
+	["Starter"] = "\u{2B50}",       -- star
+	["Beginner"] = "\u{1F331}",     -- seedling
+	["Rookie"] = "\u{1F949}",       -- bronze medal
+	["Pro"] = "\u{1F3C6}",          -- trophy
+	["Hacker"] = "\u{1F4BB}",       -- laptop
+	["1010101"] = "\u{1F47E}",      -- space invader
+	["Bot"] = "\u{1F916}",          -- robot
+	["Hecker"] = "\u{1F608}",       -- smiling imp
+	["God"] = "\u{26A1}",           -- lightning
+	["The Rock"] = "\u{1F5FF}",     -- moai
+}
+-- Legendary tiers get a shimmering stroke
+local TITLE_LEGEND = { ["God"] = true, ["The Rock"] = true, ["Hecker"] = true }
+
 local function buildTitleTag(fx, head, name, sizeMult)
+	local color = titleColor(name)
+	local emoji = TITLE_EMOJI[name]
+	local text = name
+	if emoji then text = emoji .. " " .. name .. " " .. emoji end
+	-- Studs-based size (UDim2 scale = studs on a BillboardGui): the tag
+	-- physically grows with the player instead of staying a fixed pixel label
+	local w = 6.5 * sizeMult
+	local h = 1.5 * sizeMult
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "TitleTag"
 	bb.Adornee = head
-	bb.Size = UDim2.new(0, 240, 0, 48)
-	-- StudsOffset scales with SizeMult so the tag clears giant heads
-	bb.StudsOffset = Vector3.new(0, 1.4 + 2.1 * sizeMult, 0)
-	bb.MaxDistance = 150
+	bb.Size = UDim2.new(w, 0, h, 0)
+	bb.StudsOffset = Vector3.new(0, head.Size.Y * 1.1 + h * 0.75, 0)
+	bb.MaxDistance = 120 + 180 * sizeMult -- giants are visible from further away
 	bb.LightInfluence = 0
+
+	-- Rounded dark pill behind the text
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(1, 0, 1, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(14, 14, 20)
+	frame.BackgroundTransparency = 0.3
+	frame.BorderSizePixel = 0
+	frame.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)
+	corner.Parent = frame
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color
+	stroke.Thickness = 2.5
+	stroke.Transparency = 0.05
+	stroke.Parent = frame
+	-- Subtle vertical sheen so the pill doesn't look flat
+	local grad = Instance.new("UIGradient")
+	grad.Rotation = 90
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.45, Color3.fromRGB(150, 150, 160)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 90, 100)),
+	})
+	grad.Parent = frame
+
 	local tl = Instance.new("TextLabel")
-	tl.Size = UDim2.new(1, 0, 1, 0)
+	tl.Size = UDim2.new(0.92, 0, 0.74, 0)
+	tl.Position = UDim2.new(0.04, 0, 0.13, 0)
 	tl.BackgroundTransparency = 1
 	tl.Font = Enum.Font.GothamBlack -- bold
-	tl.Text = name
+	tl.Text = text
 	tl.TextScaled = true
-	tl.TextColor3 = titleColor(name)
+	tl.TextColor3 = color
 	tl.TextStrokeColor3 = Color3.new(0, 0, 0)
 	tl.TextStrokeTransparency = 0
-	tl.Parent = bb
+	tl.Parent = frame
+
+	-- Legendary titles shimmer: the stroke hue-cycles around the title color
+	if TITLE_LEGEND[name] then
+		local h0, s0, v0 = Color3.toHSV(color)
+		if s0 < 0.2 then s0 = 0.6 end -- gray-ish colors still get a visible cycle
+		task.spawn(function()
+			local t = 0
+			while bb.Parent do
+				t = t + 0.08
+				stroke.Color = Color3.fromHSV((h0 + math.sin(t) * 0.08) % 1, s0, v0)
+				stroke.Transparency = 0.05 + 0.25 * (0.5 + 0.5 * math.sin(t * 2))
+				task.wait(0.08)
+			end
+		end)
+	end
+
 	bb.Parent = fx
 end
 

@@ -1162,9 +1162,11 @@ local function updateBreakdown()
 	if attrBool("DumbbellMulti") then dumbM = 50000 end
 	local lavaM = 1
 	if attrBool("LavaUnlocked") then lavaM = 40 end
+	local megaM = 1
+	if attrBool("Mega100k") then megaM = 10 end
 	breakdownLabel.Text = "Multi: x" .. fmt(ladder) .. " ladder  \u{00D7}  x" .. fmt(spaceM)
 		.. " space  \u{00D7}  x" .. fmt(dumbM) .. " dumbbell  \u{00D7}  x" .. fmt(lavaM)
-		.. " lava  =  x" .. fmt(attrNum("Multi", 1))
+		.. " lava  \u{00D7}  x" .. fmt(megaM) .. " 100K club  =  x" .. fmt(attrNum("Multi", 1))
 end
 
 -- Availability gate for each rebirth card, mirroring the server rules.
