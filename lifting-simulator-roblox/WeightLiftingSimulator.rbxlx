@@ -8347,6 +8347,45 @@ RunService.Heartbeat:Connect(function(dt)
 	Lighting.FogColor = Lighting.FogColor:Lerp(target.fogColor, a)
 	Lighting.OutdoorAmbient = Lighting.OutdoorAmbient:Lerp(target.ambient, a)
 end)
+
+--------------------------------------------------------------------------------
+-- Click -> lift: fire the Lift remote whenever a held lifting Tool is activated.
+-- (Tool.Activated covers mouse click AND mobile tap while the tool is out.)
+--------------------------------------------------------------------------------
+
+local LiftEvent = Remotes:WaitForChild("Lift")
+
+local hookedTools = setmetatable({}, { __mode = "k" }) -- weak: dead tools drop out
+
+local function hookTool(tool)
+	if not tool:IsA("Tool") then return end
+	if hookedTools[tool] then return end
+	hookedTools[tool] = true
+	tool.Activated:Connect(function()
+		LiftEvent:FireServer()
+	end)
+end
+
+local function hookContainer(container)
+	for _, child in ipairs(container:GetChildren()) do
+		hookTool(child)
+	end
+	container.ChildAdded:Connect(hookTool)
+end
+
+-- Tools live in the Backpack and move into the Character while equipped.
+-- Both containers are recreated on respawn, so hook every new one.
+local function onCharacterForLift(char)
+	hookContainer(char)
+	local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+	if backpack then hookContainer(backpack) end
+end
+
+localPlayer.ChildAdded:Connect(function(child)
+	if child:IsA("Backpack") then hookContainer(child) end
+end)
+localPlayer.CharacterAdded:Connect(onCharacterForLift)
+if localPlayer.Character then onCharacterForLift(localPlayer.Character) end
 ]]></ProtectedString>
 </Properties>
 
