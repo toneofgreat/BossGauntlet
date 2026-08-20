@@ -13,5 +13,9 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "luaparse": "^0.3.1",
+    "puppeteer": "^25.8.0"
   }
 }
