@@ -173,14 +173,17 @@ function build(errors) {
   }
 
   // --- segments (each returns platforms consumed) -------------------------
-  function segJump(d) {
-    const g = rr(d.gap[0], d.gap[1]);
-    const rise = pickRise(g);
-    const lat = rr(-3.5, 3.5);
-    const s = d.size;
+  // opts: {g, lat, size, rise, decoyChance} overrides for themed stages
+  function segJump(d, opts) {
+    opts = opts || {};
+    const g = opts.g !== undefined ? opts.g : rr(d.gap[0], d.gap[1]);
+    const rise = opts.rise !== undefined ? opts.rise : pickRise(g);
+    const lat = opts.lat !== undefined ? opts.lat : rr(-3.5, 3.5);
+    const s = opts.size !== undefined ? opts.size : d.size;
     const t = hopTarget(g, rise, lat, s / 2, s / 2);
     const nd = plat(t.x, t.z, t.top, s, s, 'jump');
-    if (d.decoy && rnd() < d.decoy && Math.abs(lat) * 2 >= s + 1.6) {
+    const decoyChance = opts.decoyChance !== undefined ? opts.decoyChance : d.decoy;
+    if (decoyChance && rnd() < decoyChance && Math.abs(lat) * 2 >= s + 1.6) {
       const p = perp();
       part(2, nd.x - p.x * lat * 2, nd.top - 0.5, nd.z - p.z * lat * 2, s, 1, s);
     }
@@ -261,6 +264,97 @@ function build(errors) {
     const wz = Math.abs(h.x) > 0 ? wallW : len;
     part(4, nd.x + p.x * off, nd.top + 4, nd.z + p.z * off, wx, 8, wz, { exempt: 'hug' });
     return 1;
+  }
+
+  // --- stage themes ---------------------------------------------------------
+  // Every stage inside a difficulty gets a DIFFERENT theme (validator-enforced)
+  // so no two stages of a difficulty play alike. Themes only use hazards that
+  // difficulty has unlocked.
+  function themesFor(d) {
+    const t = ['jumps', 'stairs', 'zigzag', 'tiny', 'longshot', 'walkrun'];
+    if (d.decoy) t.push('decoy');
+    if (d.spin) t.push('spin');
+    if (d.head) t.push('squeeze');
+    if (d.beam) t.push('beams');
+    if (d.checker) t.push('checker');
+    t.push('mixed');
+    return t;
+  }
+
+  function emitThemed(d, theme, budget) {
+    let remaining = budget;
+    let zig = 1;
+    let sinceFeature = 99;
+    const gapMid = (d.gap[0] + d.gap[1]) / 2;
+    while (remaining > 0) {
+      sinceFeature += 1;
+      ctx.sinceSpin += 1;
+      let done = 0;
+      if (theme === 'jumps') {
+        done = segJump(d);
+      } else if (theme === 'stairs') {
+        // climb, climb, drop — a vertical rhythm the flat stages never have
+        const g = rr(d.gap[0], gapMid);
+        const cap = Math.min(5, (COMBO_MAX - g) / 1.3 - 0.15);
+        const rise = (sinceFeature % 3 === 0) ? -rr(3, 6) : Math.min(cap, rr(1.2, 3.2));
+        done = segJump(d, { g, rise: Math.max(rise, -8), lat: rr(-2, 2) });
+      } else if (theme === 'zigzag') {
+        zig = -zig;
+        done = segJump(d, { lat: zig * rr(4, 6) });
+      } else if (theme === 'tiny') {
+        done = segJump(d, {
+          g: rr(d.gap[0], gapMid),
+          size: Math.max(1.4, d.size * 0.72),
+        });
+      } else if (theme === 'longshot') {
+        done = segJump(d, {
+          g: rr(gapMid, d.gap[1]),
+          size: Math.min(d.size * 1.2, d.size + 1),
+          lat: rr(-1.5, 1.5),
+        });
+      } else if (theme === 'walkrun') {
+        if (sinceFeature % 2 === 0 && remaining >= 2) {
+          done = segWalkway(d, Math.min(2, remaining), 8, Math.max(d.size, 4), false);
+        } else {
+          done = segJump(d);
+        }
+      } else if (theme === 'decoy') {
+        const s = d.size;
+        const lat = (rnd() < 0.5 ? 1 : -1) * (s / 2 + 1.3);
+        done = segJump(d, { lat, decoyChance: 0.9 });
+      } else if (theme === 'spin') {
+        if (ctx.sinceSpin > 3 && remaining >= 2) done = segSpinner(d);
+        else done = segJump(d);
+      } else if (theme === 'squeeze') {
+        if (sinceFeature > 2 && remaining >= 4) {
+          sinceFeature = 0;
+          if (d.hug && rnd() < 0.4) done = segHug(d);
+          else done = segWalkway(d, 3, 6, Math.max(d.size, 3.2), true);
+        } else {
+          done = segJump(d);
+        }
+      } else if (theme === 'beams') {
+        if (sinceFeature > 1 && remaining >= 2) { sinceFeature = 0; done = segBeam(d); }
+        else done = segJump(d);
+      } else if (theme === 'checker') {
+        if (sinceFeature > 2 && remaining >= 5) {
+          sinceFeature = 0;
+          done = segChecker(d, Math.min(ri(4, 6), remaining - 1));
+        } else {
+          done = segJump(d);
+        }
+      } else {
+        // mixed — the classic everything-goes stage
+        const roll = rnd();
+        if (d.spin && ctx.sinceSpin > 7 && remaining >= 2 && roll < 0.14) done = segSpinner(d);
+        else if (d.checker && remaining >= 5 && roll < 0.26) done = segChecker(d, Math.min(ri(4, 6), remaining - 1));
+        else if (d.head && remaining >= 4 && roll < 0.38) done = segWalkway(d, 3, 6, Math.max(d.size, 3.2), true);
+        else if (d.beam && remaining >= 2 && roll < 0.5) done = segBeam(d);
+        else if (d.hug && remaining >= 2 && roll < 0.6) done = segHug(d);
+        else done = segJump(d);
+      }
+      remaining -= done;
+    }
   }
 
   function emitGate(d, overNode) {
@@ -524,18 +618,13 @@ function build(errors) {
           remaining -= segWalkway(d, 2, 10, 8, false);
           emitGate(d, stage.path[stage.path.length - 2]);
         }
-        while (remaining > 0) {
-          ctx.sinceSpin += 1;
-          let done = 0;
-          const roll = rnd();
-          if (d.spin && ctx.sinceSpin > 7 && remaining >= 2 && roll < 0.14) done = segSpinner(d);
-          else if (d.checker && remaining >= 5 && roll < 0.26) done = segChecker(d, Math.min(ri(4, 6), remaining - 1));
-          else if (d.head && remaining >= 4 && roll < 0.38) done = segWalkway(d, 3, 6, Math.max(d.size, 3.2), true);
-          else if (d.beam && remaining >= 2 && roll < 0.5) done = segBeam(d);
-          else if (d.hug && remaining >= 2 && roll < 0.6) done = segHug(d);
-          else done = segJump(d);
-          remaining -= done;
-        }
+        // every stage inside a difficulty gets a different theme; the start
+        // offset rotates per difficulty so consecutive difficulties don't
+        // open with the same theme sequence either
+        const avail = themesFor(d);
+        const off = (DIFFS.indexOf(d) * 3) % avail.length;
+        stage.theme = avail[(s - 1 + off) % avail.length];
+        emitThemed(d, stage.theme, remaining);
       }
       emitSign(stage);
       maybeConnector();
@@ -647,6 +736,13 @@ function validate(stages, aabbs, errors) {
       if (last && tower.budgetPlats !== 5 * last.budgetPlats) {
         err(`tower stage ${tower.n}: ${tower.budgetPlats} != 5 x last normal ${last.budgetPlats}`);
       }
+    }
+    // every stage in the difficulty must play differently: distinct themes
+    const seen = new Set();
+    for (const s of normals) {
+      if (!s.theme) { err(`stage ${s.n}: no theme assigned`); continue; }
+      if (seen.has(s.theme)) err(`${d.name}: theme "${s.theme}" repeats (stage ${s.n})`);
+      seen.add(s.theme);
     }
   }
 
