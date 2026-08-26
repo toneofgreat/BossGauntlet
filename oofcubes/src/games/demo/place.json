@@ -1,0 +1,85 @@
+{
+  "meta": {
+    "slug": "demo",
+    "name": "Demo Yard",
+    "icon": "🧪",
+    "description": "Tiny fixture place used by smoke tests."
+  },
+  "spawn": [0, 0.1, -20],
+  "spawnYaw": 0,
+  "killY": -30,
+  "music": "plaza",
+  "lighting": { "skyTop": "#87ceeb", "skyBottom": "#ffe9c9" },
+  "parts": [
+    { "id": "floor", "size": [60, 1, 60], "position": [0, -0.5, 0],
+      "color": "#6aa84f", "material": "grass" },
+
+    { "id": "sign", "size": [5, 3, 0.5], "position": [0, 2.5, -26],
+      "color": "#ffffff", "material": "plastic" },
+
+    { "id": "speedPad", "size": [8, 0.5, 4], "position": [0, 0.25, -16],
+      "color": "#00ffe6", "material": "neon",
+      "behaviors": [ { "type": "speed", "walkSpeed": 30, "duration": 5 } ] },
+
+    { "id": "lava1", "size": [12, 0.5, 4], "position": [-14, 0.25, 6],
+      "color": "#cc0000", "material": "lava",
+      "behaviors": [ { "type": "kill" } ] },
+
+    { "id": "cp1", "size": [8, 0.5, 6], "position": [0, 0.25, -3],
+      "color": "#7ec850", "material": "plastic",
+      "behaviors": [ { "type": "checkpoint", "order": 1 } ] },
+
+    { "id": "bounce1", "size": [6, 0.5, 6], "position": [0, 0.25, 4],
+      "color": "#ff4fd8", "material": "neon",
+      "behaviors": [ { "type": "bounce", "power": 55 } ] },
+
+    { "id": "conveyor1", "size": [8, 0.5, 10], "position": [0, 0.25, 12],
+      "color": "#9fc5e8", "material": "metal",
+      "behaviors": [ { "type": "conveyor", "direction": [0, 0, 1], "speed": 8 } ] },
+
+    { "id": "spinner1", "shape": "cylinder", "size": [10, 0.5, 10], "position": [0, 0.25, 22],
+      "color": "#b45f06", "material": "wood",
+      "behaviors": [ { "type": "spinner", "axis": "y", "speed": 120 } ] },
+
+    { "id": "mover1", "size": [6, 0.5, 6], "position": [10, 0.25, 20],
+      "color": "#a8d8ff", "material": "ice",
+      "behaviors": [ { "type": "movingPlatform",
+                       "waypoints": [ [10, 0.25, 20], [18, 0.25, 20] ],
+                       "speed": 6, "pauseS": 1, "mode": "pingpong" } ] },
+
+    { "id": "btn1", "size": [4, 0.6, 4], "position": [24, 0.3, 20],
+      "color": "#ffd966", "material": "neon",
+      "behaviors": [ { "type": "button", "channel": "gate", "cooldownS": 2 } ] },
+
+    { "id": "door1", "size": [12, 6, 1], "position": [22, 3, 24],
+      "color": "#cccccc", "material": "metal",
+      "behaviors": [ { "type": "door", "channel": "gate", "mode": "open", "openS": 6 } ] },
+
+    { "id": "coin1", "shape": "sphere", "size": [2, 2, 2], "position": [20, 1.5, 27],
+      "color": "#ffd966", "material": "neon",
+      "behaviors": [ { "type": "collectible", "kind": "oofbux", "value": 3, "respawnS": 10 } ] },
+
+    { "id": "tele1", "shape": "cylinder", "size": [4, 0.5, 4], "position": [25, 0.25, 27],
+      "color": "#b16cff", "material": "neon",
+      "behaviors": [ { "type": "teleport", "target": "goal", "cooldownS": 2 } ] },
+
+    { "id": "tower", "shape": "cylinder", "size": [6, 20, 6], "position": [-20, 10, 20],
+      "color": "#999999", "material": "metal" },
+
+    { "id": "goal", "size": [8, 0.5, 8], "position": [-20, 20.25, 25],
+      "color": "#ffd966", "material": "neon",
+      "behaviors": [ { "type": "touchEvent", "event": "goalPad", "once": true } ] },
+
+    { "id": "ramp", "shape": "wedge", "size": [8, 3, 6], "position": [-20, 1.5, 14],
+      "color": "#8d5524", "material": "wood" },
+
+    { "id": "wallN", "size": [60, 6, 1], "position": [0, 3, 30],
+      "color": "#cccccc", "material": "glass", "transparency": 0.5 },
+    { "id": "wallS", "size": [60, 6, 1], "position": [0, 3, -30],
+      "color": "#cccccc", "material": "glass", "transparency": 0.5 },
+    { "id": "wallE", "size": [1, 6, 60], "position": [30, 3, 0],
+      "color": "#cccccc", "material": "glass", "transparency": 0.5 },
+    { "id": "wallW", "size": [1, 6, 60], "position": [-30, 3, 0],
+      "color": "#cccccc", "material": "glass", "transparency": 0.5 }
+  ]
+}

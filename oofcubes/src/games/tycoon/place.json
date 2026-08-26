@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "slug": "tycoon",
+    "name": "Boss Tycoon",
+    "icon": "🏭",
+    "description": "Droppers, upgrades, secret codes — become the Boss."
+  },
+  "spawn": [0, 3, 52],
+  "spawnYaw": 180,
+  "music": "cashflow",
+  "lighting": {},
+  "parts": [
+    { "id": "st-ground", "size": [240, 2, 240], "position": [0, -3, 0],
+      "color": "#4f8f3c", "material": "grass" },
+
+    { "id": "st-base", "size": [100, 2, 120], "position": [0, -1, 0],
+      "color": "#565660", "material": "plastic" },
+
+    { "id": "st-spawnpad", "size": [10, 0.4, 10], "position": [0, 0.2, 52],
+      "color": "#6f6fd9", "material": "neon", "transparency": 0.4 },
+
+    { "id": "st-sign-post", "size": [1, 8, 1], "position": [12, 4, 52],
+      "color": "#7a5a3a", "material": "wood" },
+
+    { "id": "st-sign-board", "size": [10, 4, 0.6], "position": [12, 8, 52],
+      "color": "#1a1a28", "material": "plastic" }
+  ]
+}

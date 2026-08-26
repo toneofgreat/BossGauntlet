@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#17191c">
+<title>OofCubes</title>
+<!-- Suppresses the browser's automatic /favicon.ico request (would 404 and log a
+     console error under the headless smoke harness — no favicon asset exists yet). -->
+<link rel="icon" href="data:,">
+<style>
+  /* Boot-screen CSS is inline and self-contained (spec 06 §5.2.2): the loading screen
+     must paint with no JavaScript at all, so it can never depend on ui/tokens.js.
+     The literals below are the same spec 06 §5.6.1 token values tokens.js emits. */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+               background: #17191c; color: #f2f4f6;
+               font: 400 16px/1.4 "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+               overscroll-behavior: none; }
+  /* The gameplay container input.js hangs its touch overlay on (spec 02 §5.4: dom is
+     "the canvas's parent" — a <canvas> cannot host rendered children of its own). */
+  #oof-stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+  #oof-boot { position: fixed; inset: 0; z-index: 500; background: #17191c;
+              display: flex; flex-direction: column; align-items: center;
+              justify-content: center; gap: 24px; padding: 24px;
+              text-align: center; transition: opacity 300ms ease; }
+  #oof-boot.is-out { opacity: 0; pointer-events: none; }
+  .oof-boot-mark { font-size: 40px; font-weight: 800; letter-spacing: -0.5px; }
+  .oof-boot-mark span { color: #00a2ff; }
+  .oof-boot-cube { width: 48px; height: 48px; perspective: 240px; }
+  /* BOOT_SPIN_STEPS = 8 (spec 06 §5.2.2's cube, quantized). A continuously
+     interpolated transform makes the compositor commit a new full-viewport frame every
+     tick; where compositing is software (SwiftShader under tools/smoke.js, or a phone
+     with no GPU rasterization) that starves the main thread exactly while it is
+     building the WebGL context — measured 8.2 s -> 4.7 s to placeReady on this host.
+     steps() keeps the cube spinning but changes its value only 5x/s, so the compositor
+     commits ~5 frames/s instead of thousands. */
+  .oof-boot-cube > div { width: 100%; height: 100%; border-radius: 8px;
+                         background: #00a2ff; box-shadow: inset 0 -12px 0 rgba(0,0,0,0.25);
+                         animation: oof-boot-spin 1.6s steps(8) infinite; }
+  @keyframes oof-boot-spin {
+    from { transform: rotateX(-24deg) rotateY(0deg); }
+    to   { transform: rotateX(-24deg) rotateY(360deg); }
+  }
+  .oof-boot-bar { width: 240px; height: 8px; border-radius: 999px; background: #2f3338;
+                  overflow: hidden; }
+  .oof-boot-fill { width: 0%; height: 100%; background: #00a2ff; border-radius: 999px;
+                   transition: width 200ms ease; }
+  .oof-boot-tip { color: #aab2ba; font-size: 14px; max-width: 420px; min-height: 40px; }
+  @media (prefers-reduced-motion: reduce) {
+    .oof-boot-cube > div { animation: none; }
+    #oof-boot, .oof-boot-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="oof-stage"><canvas id="oof-canvas"></canvas></div>
+
+<div id="oof-boot">
+  <div class="oof-boot-mark"><span>Oof</span>Cubes</div>
+  <div class="oof-boot-cube"><div></div></div>
+  <div class="oof-boot-bar"><div class="oof-boot-fill" id="oof-boot-fill"></div></div>
+  <div class="oof-boot-tip" id="oof-boot-tip">Loading…</div>
+</div>
+
+<script type="module" src="./src/platform/shell.js"></script>
+</body>
+</html>
