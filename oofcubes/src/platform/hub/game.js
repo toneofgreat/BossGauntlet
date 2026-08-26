@@ -13,12 +13,18 @@ export const meta = {
   version: "1.0.0",
 };
 
-// place.json carries `spawnYaw: 180`, not 0: the shell sets the follow camera's yaw
-// from spawnYaw and the camera currently ends up FACING the avatar rather than behind
-// it, so yaw 0 spawns the player looking south at empty grass with the whole plaza
-// behind the lens. 180 aims the camera north up the plaza (fountain, statue, arches)
-// and makes "forward" walk into the Hub. Flip it back to 0 when that camera seam is
-// fixed — reported with this task.
+// place.json carries `spawnYaw: 180`, not 0, and that is simply where the plaza is:
+// spawn sits at z 34 and the portal arches at z -70, so the player has to face -Z to
+// be looking at anything. A heading of 180 deg is the direction (sin 180, cos 180) =
+// -Z, which aims the camera north up the plaza (fountain, statue, arches) and makes
+// "forward" walk into the Hub.
+//
+// This used to be annotated as a workaround for the camera "ending up FACING the
+// avatar rather than behind it". There was no such camera seam: the follow camera was
+// always behind the avatar, and what looked like a front view was spec 05 §5.1's rig
+// being mounted without its half-turn, which drew the face on the back of the head.
+// Fixed at the rig; do NOT flip this back to 0, which would spawn the player looking
+// at empty grass.
 
 // Tuning constants — spec 06 §6 pins these to this module.
 const PORTAL_DEBOUNCE_S = 1.0; // portal & catalog-door retrigger guard

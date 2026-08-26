@@ -938,8 +938,16 @@ function applyWish() {
   const mz = mv && Number.isFinite(mv.z) ? mv.z : 0;
   const camYaw = camera && typeof camera.getYaw === "function" ? camera.getYaw() : 0;
   const cos = Math.cos(camYaw), sin = Math.sin(camYaw);
-  let wx = mx * cos + mz * sin;
-  let wz = -mx * sin + mz * cos;
+  // A heading t means the direction (sin t, cos t) everywhere in this engine, so
+  // camera-forward is (sin, cos) and camera-RIGHT is forward x up = (-cos, sin).
+  // camera.js already writes that same vector for the shift-lock offset ("right of the
+  // look direction = (cos yaw, 0, -sin yaw)", written there in ORBIT yaw, which is
+  // getYaw() - PI). Spec 03 §5.6 step 2 had the strafe term as +moveX*cos / -moveX*sin,
+  // which is camera-LEFT: holding D walked the avatar left, and both strafe probes in
+  // the suite had been aimed to match it. Spec amended in this commit; moveX = +1 is
+  // the camera's right, per spec 02 §5.4's control-space contract.
+  let wx = mz * sin - mx * cos;
+  let wz = mz * cos + mx * sin;
   const len = Math.sqrt(wx * wx + wz * wz);
   if (len > 1) { wx /= len; wz /= len; }
   const speed = effectTimer > 0 ? effectSpeed : baseWalkSpeed;

@@ -94,20 +94,32 @@ function makeAnchor(name, at) {
 function buildSkeleton() {
   const group = new THREE.Group();
   group.name = "OofRig";
+  // §5.1's mount adapter. Rig-local space faces -Z, but spec 03 §5.6.14 mounts the
+  // avatar with `object3D.rotation.y = yaw`, and a yaw of t aims an Object3D's local
+  // +Z along the heading (sin t, cos t). Mounting the -Z-facing rig straight onto that
+  // drew the face on the BACK of the head: the follow camera sits correctly behind the
+  // avatar and was looking at a smile. `body` carries the half-turn between the two
+  // frames, so everything under it keeps §5.1's -Z-facing coordinates - the limb table,
+  // §5.3's -Z face slot, the positive-X-swings-forward joint rule, §5.4's anchors -
+  // while the "OofRig" root presents the +Z front the engine mounts.
+  const body = new THREE.Group();
+  body.name = "OofRigBody";
+  body.rotation.y = Math.PI;
+  group.add(body);
   const joints = {};
   const meshes = { torso: makeMesh(TORSO.size, TORSO.center) };
-  group.add(meshes.torso);
+  body.add(meshes.torso);
   for (const limb of LIMBS) {
     const pivot = new THREE.Group();
     pivot.name = "OofJoint_" + limb.key;
     pivot.position.set(limb.pivot[0], limb.pivot[1], limb.pivot[2]);
     const mesh = makeMesh(limb.size, limb.offset);
     pivot.add(mesh);
-    group.add(pivot);
+    body.add(pivot);
     joints[limb.key] = pivot;
     meshes[limb.key] = mesh;
   }
-  return { group, joints, meshes };
+  return { group, body, joints, meshes };
 }
 
 // §5.3 — the head's front face is a canvas texture; the other five slots share the head
