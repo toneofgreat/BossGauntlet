@@ -386,19 +386,70 @@ export function init(ctx) {
 }
 
 // A player can arrive somewhere the window has not built: the stage-select teleports
-// there on purpose, a bounce can fling them, and §8.2's probes drop straight onto a far
-// pad. Rather than trust that never happens, re-centre on whichever stage the avatar is
-// actually nearest whenever that stage is outside the live window. Checked a few times
-// a second, not every tick — 90 distance tests are cheap but not free.
+// there on purpose, and a bounce can fling them. This recovers from that.
+//
+// It must NEVER fire during ordinary play, and the first version did. It re-centred on
+// the NEAREST checkpoint by straight-line distance, which is wrong for a chart that
+// snakes: maybeConnector runs a row east to ROW_X_LIMIT, drops south and reverses, so
+// the rows sit ~110 studs apart. Halfway along a 438-stud stage your own checkpoint is
+// ~190 studs behind you while a checkpoint three stages LATER, on the row behind, is
+// ~162 away. On Extreme 1 that deleted stages 60-62 out from under the player on the
+// 11th jump and dropped them into the void — reported from play and reproduced.
+//
+// There is deliberately NO automated regression test for this, because none of the
+// harness's probes can express it. Every probe teleports the avatar to a spot and lets
+// it settle, and a teleport is precisely what this bug survives: the window re-centres,
+// the ground is rebuilt around wherever the avatar now is, and the next sample finds it
+// standing. The failure only exists while the player is in continuous motion across a
+// stage the window drops mid-jump. Two fences were written for it and both went green
+// against this exact function with the guard below disabled; they were removed rather
+// than left to imply cover they do not give. If you touch this function, verify it by
+// playing the chart, not by trusting scenario:obby.
+//
+// Physical proximity is simply not the same question as progress along the chain. So:
+// if the player is anywhere on ground the window has already built, there is nothing to
+// recover from and the window does not move. Only a player who is genuinely nowhere
+// near any live stage gets snapped, and then the nearest checkpoint IS the best guess
+// available.
 const WINDOW_RECHECK_S = 0.25;
+const RECENTRE_MARGIN = 30; // studs of slack around a live stage's own footprint
+const RECENTRE_FALL = 200; // ...and far more below it, so a long fall never re-centres
 let recheckIn = 0;
+const stageBoundsCache = new Map();
+
+// The box a stage's own path occupies. Cheap, and computed once per stage per load.
+function stageBounds(sn) {
+  let b = stageBoundsCache.get(sn);
+  if (b) return b;
+  const path = layout.stages[sn - 1].path;
+  b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+  for (const n of path) {
+    b.minX = Math.min(b.minX, n.x - n.hx); b.maxX = Math.max(b.maxX, n.x + n.hx);
+    b.minY = Math.min(b.minY, n.top); b.maxY = Math.max(b.maxY, n.top);
+    b.minZ = Math.min(b.minZ, n.z - n.hz); b.maxZ = Math.max(b.maxZ, n.z + n.hz);
+  }
+  stageBoundsCache.set(sn, b);
+  return b;
+}
+
+function onLiveGround(p) {
+  for (let sn = world.window[0]; sn <= world.window[1]; sn++) {
+    if (sn < 1 || sn > STAGE_COUNT) continue;
+    const b = stageBounds(sn);
+    if (p[0] >= b.minX - RECENTRE_MARGIN && p[0] <= b.maxX + RECENTRE_MARGIN
+      && p[2] >= b.minZ - RECENTRE_MARGIN && p[2] <= b.maxZ + RECENTRE_MARGIN
+      && p[1] >= b.minY - RECENTRE_FALL && p[1] <= b.maxY + RECENTRE_MARGIN) return true;
+  }
+  return false;
+}
 
 function recentreWindow(dt, ctx) {
   recheckIn -= dt;
   if (recheckIn > 0) return;
   recheckIn = WINDOW_RECHECK_S;
   const p = ctx.player.position();
-  let nearest = 1;
+  if (onLiveGround(p)) return;
+  let nearest = state.current;
   let best = Infinity;
   for (let sn = 1; sn <= STAGE_COUNT; sn++) {
     const cp = layout.stages[sn - 1].cp;
@@ -424,6 +475,7 @@ export function dispose(ctx) {
   destroyUI(ui);
   ui = null;
   if (state) flushSave(ctx, true);
+  stageBoundsCache.clear();
   destroyWorld(ctx);
   layout = null;
   state = null;

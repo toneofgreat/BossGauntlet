@@ -77,12 +77,23 @@ export const LAYOUT = Object.freeze({
   // the rest of §5.1's Buildings rows
   WALLS3_SIZE: [98, 16, 2],
   WALLS3_POS: [0, 8, 58],
+  // The front wall is where you come IN, so it has a doorway; a solid one sealed the
+  // player out of their own plot the moment they bought it. §5.1 always specified this
+  // ("boxes [38,16,2] at [±30,8,58] ... 22-wide door gap at center") and the build had
+  // quietly collapsed it into one [98,16,2] slab. 38 + 22 + 38 = 98, so the two segments
+  // land exactly where the table says. The gap runs full height because the Boss Door
+  // is 16 tall and fills it edge to edge.
+  DOOR_GAP_W: 22,
+  // The roof needs a hatch where the Roof Ramp arrives, or the ramp is a ladder to
+  // nowhere. See the amended §5.1 `roof`/`ladder` rows for why this is a hatch and not
+  // the spec's original roof-edge wedge.
+  ROOF_HATCH: [12, 12], // x by z, centred on the ramp's top step
   WALLS2_SIZE: [2, 16, 118],
   WALLS2_X: 49,
   ROOF_SIZE: [100, 1.5, 120],
   ROOF_POS: [0, 16.5, 0],
-  DOOR_SIZE: [12, 11, 1.2],
-  DOOR_POS: [0, 6, 58],
+  DOOR_SIZE: [22, 16, 0.5],
+  DOOR_POS: [0, 8, 58],
   DOOR_COLOR: "#ff2a6d",
   DOOR_PULSE_HZ: 0.6,
   RAMP_STEPS: 7,

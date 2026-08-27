@@ -226,18 +226,45 @@ function buildArch(ctx, state, p) {
 // The rest of §5.1's Buildings rows. Each is only geometry: what a purchase COSTS and
 // what it requires is config's business, and nothing here reads the save.
 
+// Two segments with a door gap at centre, per §5.1's walls3 row. No lintel: the gap is
+// full height and the Boss Door fills it exactly.
 function buildFrontWall(ctx, state, p) {
-  track(ctx, state, p.id, box(LAYOUT.WALLS3_SIZE, LAYOUT.WALLS3_POS, LAYOUT.WALLS1_COLOR));
-}
-
-function buildSideWalls(ctx, state, p) {
+  const [w, h, t] = LAYOUT.WALLS3_SIZE;
+  const [cx, cy, cz] = LAYOUT.WALLS3_POS;
+  const gapW = LAYOUT.DOOR_GAP_W;
+  const segW = (w - gapW) / 2;
   for (const sx of [-1, 1]) {
-    track(ctx, state, p.id, box(LAYOUT.WALLS2_SIZE, [sx * LAYOUT.WALLS2_X, 8, 0], LAYOUT.WALLS1_COLOR));
+    track(ctx, state, p.id, box(
+      [segW, h, t],
+      [cx + sx * (gapW / 2 + segW / 2), cy, cz],
+      LAYOUT.WALLS1_COLOR,
+    ));
   }
 }
 
 function buildRoof(ctx, state, p) {
-  track(ctx, state, p.id, box(LAYOUT.ROOF_SIZE, LAYOUT.ROOF_POS, LAYOUT.WALLS1_COLOR));
+  const [w, h, d] = LAYOUT.ROOF_SIZE;
+  const [cx, cy, cz] = LAYOUT.ROOF_POS;
+  const [hw, hd] = LAYOUT.ROOF_HATCH;
+  const steps = LAYOUT.RAMP_STEPS;
+  const hx = LAYOUT.RAMP_X;
+  const hz = LAYOUT.RAMP_Z0 + (steps - 1) * LAYOUT.RAMP_STEP_SIZE[2]; // the top step
+  const minX = cx - w / 2, maxX = cx + w / 2;
+  const minZ = cz - d / 2, maxZ = cz + d / 2;
+  const holeX0 = hx - hw / 2, holeX1 = hx + hw / 2;
+  const holeZ0 = hz - hd / 2, holeZ1 = hz + hd / 2;
+  const slab = (x0, x1, z0, z1) => {
+    if (x1 - x0 < 0.01 || z1 - z0 < 0.01) return;
+    track(ctx, state, p.id, box(
+      [x1 - x0, h, z1 - z0],
+      [(x0 + x1) / 2, cy, (z0 + z1) / 2],
+      LAYOUT.WALLS1_COLOR,
+    ));
+  };
+  slab(minX, holeX0, minZ, maxZ);        // everything west of the hatch
+  slab(holeX1, maxX, minZ, maxZ);        // everything east of it
+  slab(holeX0, holeX1, minZ, holeZ0);    // the strip south of it
+  slab(holeX0, holeX1, holeZ1, maxZ);    // and the strip north
 }
 
 // The boss door sits IN the front wall, so it needs the front wall to be there —
