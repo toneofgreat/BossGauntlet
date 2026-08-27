@@ -17,8 +17,13 @@ import { createHud } from "./ui/hud.js";
 import * as saves from "./services/saves.js";
 import * as economy from "./services/economy.js";
 import * as badges from "./services/badges.js";
-import { createNet } from "./services/net.js";
+import { createNet, resolveRelayUrl } from "./services/net.js";
 import { createRemotePlayers } from "./services/remote-players.js";
+import { createAccount } from "./services/account.js";
+import { createGames } from "./services/games.js";
+import { openSignIn } from "./ui/signin.js";
+import { createChat } from "./ui/chat.js";
+import { mountGamesPanel } from "./ui/games-panel.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
 import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
@@ -73,6 +78,8 @@ const PLACES = [
     module: "../games/lifting/game.js", data: "../games/lifting/place.json" },
   { slug: "tycoon",  hidden: false, name: "Boss Tycoon",              icon: "🏭", portalColor: "#3ddc84",
     module: "../games/tycoon/game.js", data: "../games/tycoon/place.json" },
+  { slug: "overtime", hidden: false, name: "Overtime",                 icon: "⏱️", portalColor: "#f7c948",
+    module: "../games/overtime/game.js", data: "../games/overtime/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];
@@ -116,6 +123,12 @@ let currentSlug = null;
 // since the rigs it draws belong to the Place's scene.
 let net = null;
 let remotes = null;
+// Spec 14. Like net, these outlive Places: who you are does not change when you walk
+// through a portal. `chat` is per-session too, but its LOG is cleared per room.
+let account = null;
+let gamesSvc = null;
+let chatUi = null;
+let signInShown = false;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
 let suppressNextHash = false;
@@ -157,6 +170,8 @@ const debugHandle = {
     geometries: renderer ? renderer.three.info.memory.geometries : 0,
     colliders: physics ? physics.getDebugState().colliderCount : 0,
   }),
+  chatTyping: false, // spec 14 §5.4 — true while the chat input has focus
+  account: null,     // { signedIn, username } once the account service exists
   debug: { physics: () => (physics ? physics.getDebugState() : null), eventLog: [] },
 };
 // The single sanctioned window assignment in the codebase (spec 12 §5.7.3 rule 6),
@@ -172,8 +187,14 @@ function reducedMotion() {
   return document.body.classList.contains("oof-reduced-motion");
 }
 
+// Spec 14 §5.6: a published game is a real Place with a real slug, it just is not in
+// the fixed registry — its world came off the server. Registering it here rather than
+// inventing a second load path means goTo, the room key, teardown, the leak check and
+// the hash route all work on it unchanged.
+const dynamicPlaces = new Map(); // slug -> entry with `placeData`
+
 function placeEntry(slug) {
-  return PLACES.find((p) => p.slug === slug) || null;
+  return PLACES.find((p) => p.slug === slug) || dynamicPlaces.get(slug) || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -534,6 +555,50 @@ function onCatalogSelect(item, render) {
 // AUDIO/GRAPHICS/CONTROLS/ACCESSIBILITY/SAVE DATA/footer); this function is reduced to
 // what only the shell can supply — the deps bag (its own module-scope services plus the
 // two callbacks below) — and the one stopgap row that isn't a §5.6.9 row at all.
+// Spec 14 §5.6. Opening a published game replaces the current Place with it, which is
+// exactly what a portal does — the difference is only where the world came from.
+function openGames() {
+  const panel = openPanel({ title: "Games" });
+  mountGamesPanel(panel.bodyEl, {
+    games: gamesService(),
+    account: accountService(),
+    toast: uiToast,
+    onPlay: async (game) => {
+      panel.close();
+      await playPublishedGame(game);
+    },
+  });
+}
+
+async function loadPublishedPlace(game, placeData) {
+  const slug = `studio-${game.id}`;
+  dynamicPlaces.set(slug, {
+    slug, hidden: true, name: game.name, icon: "🎮", portalColor: null,
+    module: null, data: null, placeData,
+  });
+  await goTo(slug);
+}
+
+async function playPublishedGame(game) {
+  try {
+    const full = await gamesService().get(game.id);
+    const studio = await import("./studio/store.js");
+    const imported = studio.importCode(full.code);
+    if (!imported || !imported.ok) {
+      uiToast("That game could not be opened.");
+      return;
+    }
+    // Record the visit AFTER we know the world is good, and never block on it: a
+    // visit that cannot be counted must not stop the game opening (spec 14 §5.7).
+    gamesService().visit(game.id).catch(() => {});
+    const doc = studio.getCreation(imported.id);
+    const placeData = studio.toPlaceData(doc);
+    await loadPublishedPlace(game, placeData);
+  } catch (err) {
+    uiToast((err && err.message) || "Could not reach the server.");
+  }
+}
+
 function openSettings() {
   const panel = openPanel({ title: "Settings" });
   const settings = profileSettings();
@@ -613,6 +678,7 @@ const ui = {
   openPanel: (opts) => safely(() => openPanel(opts), { el: null, bodyEl: null, close() {} }),
   shopGrid: (spec) => safely(() => shopGrid(spec), el("div")),
   openSettings: () => safely(() => openSettings(), undefined),
+  openGames: () => safely(() => openGames(), undefined),
   openCatalog: (tab) => safely(() => openCatalog(tab), Promise.resolve()),
   setHudTitle: (text) => safely(() => (hud ? hud.setTitle(text) : undefined), undefined),
   setHudStat: (key, chip) => safely(() => (hud ? hud.setStat(key, chip) : undefined), undefined),
@@ -797,13 +863,103 @@ function feet() {
 // Spec 13 §4.1. Created on first use rather than at boot so a build with no relay
 // configured never even constructs it; `configured()` is false and every method is a
 // no-op, so the Places below can call it unconditionally.
+// Spec 14 §5.1/§5.2. Lazily built for the same reason netService is: a build with no
+// server configured never constructs one, and every method answers honestly without a
+// request.
+function accountService() {
+  if (account) return account;
+  account = createAccount({
+    onChange: (who) => { debugHandle.account = who; },
+    getRelayUrl: () => {
+      const resolved = resolveRelayUrl(location.search, profileSettings().relayUrl, location.protocol);
+      return resolved.url;
+    },
+  });
+  return account;
+}
+
+function gamesService() {
+  if (gamesSvc) return gamesSvc;
+  gamesSvc = createGames({ account: accountService() });
+  return gamesSvc;
+}
+
+// Spec 14 §5.4. One chat UI for the session; its log is cleared per room.
+//
+// `onFocusChange` is the safety interlock: the engine already ignores keys while an
+// input has focus (input.js's isTypingTarget), and this makes the same fact explicit
+// on the debug handle so a test can assert it rather than infer it.
+// Spec 14 §5.3. Three rules live here, and all three are about not getting in the way:
+//
+//   1. NO SERVER, NO DIALOG. With nothing configured this makes no request and shows
+//      nothing — signing in would be signing in to what?
+//   2. It is not awaited by boot. The game is already playable behind it; making the
+//      boot sequence wait on a network round trip would hold the whole platform hostage
+//      to a server being up.
+//   3. It only appears once per session, and never in front of somebody whose stored
+//      token still works — restore() is asked first, and that is the whole "about once
+//      a month" behaviour.
+async function maybeSignIn() {
+  const acc = accountService();
+  if (!acc.available()) return;
+  if (smokeMode && !new URLSearchParams(location.search).has("signin")) return;
+  try { await acc.restore(); } catch { /* restore never throws, but belt and braces */ }
+  if (acc.signedIn() || signInShown) return;
+  signInShown = true;
+  openSignIn({
+    account: acc,
+    onDone: (username) => {
+      if (username) {
+        uiToast(`Signed in as ${username}`);
+        // The room is told who we are now: re-join so presence and chat carry the
+        // account name rather than the guest one we joined with.
+        if (net && currentSlug) { net.leave(); net.join(currentSlug); }
+      } else if (chatUi) {
+        chatUi.system("Playing as a guest. Your progress is saved in this browser.");
+      }
+    },
+  });
+}
+
+let chatHotkeyBound = false;
+
+// Enter focuses the chat box, the way every game of this shape works. Bound once for
+// the session, and it must never fire while something else already has focus — a
+// dialog's own Enter belongs to that dialog.
+function installChatHotkey() {
+  if (chatHotkeyBound) return;
+  chatHotkeyBound = true;
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.repeat) return;
+    const active = document.activeElement;
+    const tag = active && active.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable)) return;
+    if (!chatUi) return;
+    e.preventDefault();
+    chatUi.focus();
+  });
+}
+
+function ensureChat(n) {
+  if (chatUi) return chatUi;
+  chatUi = createChat({
+    net: n,
+    onFocusChange: (typing) => { debugHandle.chatTyping = !!typing; },
+  });
+  chatUi.mount();
+  return chatUi;
+}
+
 function netService() {
   if (net) return net;
   net = createNet({
     getSearch: () => location.search,
     getProtocol: () => location.protocol,
     getSavedUrl: () => profileSettings().relayUrl || null,
-    getName: () => profileSettings().displayName || null,
+    // A signed-in player's display name IS their account name — the server enforces
+    // that too (spec 14 §5.4), so chat can never be misattributed.
+    getName: () => accountService().username() || profileSettings().displayName || null,
+    getToken: () => accountService().token(),
     getAvatar: () => (avatarService ? avatarService.getConfig() : null),
   });
   return net;
@@ -888,6 +1044,8 @@ function buildCtx(emitter, slug) {
       avatar: createAvatarCtxApi(),
       ui,
       net: netService(),
+      account: accountService(),
+      games: gamesService(),
     },
     time: 0,
     events: emitter,
@@ -1025,6 +1183,15 @@ function teardown() {
   if (rigRoot) rigRoot.visible = false;
 }
 
+// A Place made of nothing but data still has to satisfy the Game API contract
+// (ARCHITECTURE §7), so here it is, satisfied.
+const EMPTY_GAME_MODULE = Object.freeze({
+  meta: { slug: "studio", name: "Published game", icon: "🎮", description: "", version: "1.0.0" },
+  init() {},
+  update() {},
+  dispose() {},
+});
+
 // goTo(slug) — spec 04 §5.6's transition algorithm.
 async function goTo(slug) {
   // §5.6 step 1 keys "a load is in flight" off state === "loading"; a dedicated latch
@@ -1074,16 +1241,17 @@ async function loadPlaceInto(entry, slug) {
   physics.setEnabled(true);
   if (rigRoot) rigRoot.visible = true;
 
-  const result = await withPlaceDataUrl(entry, () =>
-    placeApi.loadPlace(slug, {
-      scene: renderer.scene,
-      rendererApi: renderer,
-      partsApi,
-      physics: physicsForPlace,
-      audio,
-      events,
-    })
-  );
+  const loadDeps = {
+    scene: renderer.scene,
+    rendererApi: renderer,
+    partsApi,
+    physics: physicsForPlace,
+    audio,
+    events,
+  };
+  const result = entry.placeData
+    ? placeApi.loadPlaceData(entry.placeData, loadDeps)
+    : await withPlaceDataUrl(entry, () => placeApi.loadPlace(slug, loadDeps));
   if (!result.ok) {
     finishTransition();
     showLoadError(entry, "E_LOAD", result.errors);
@@ -1098,6 +1266,12 @@ async function loadPlaceInto(entry, slug) {
   // and joins another on the same socket. Both calls are no-ops with no relay set.
   const n = netService();
   n.join(slug);
+  ensureChat(n);
+  installChatHotkey();
+  // The log is per-room: chat is forwarded and forgotten (spec 14 §2), so carrying the
+  // last Place's conversation into this one would be inventing context that nobody
+  // else in this room can see.
+  if (chatUi) chatUi.clear();
   remotes = createRemotePlayers({
     THREE,
     scene: renderer.scene,
@@ -1113,7 +1287,10 @@ async function loadPlaceInto(entry, slug) {
   debugHandle.ctx = nextCtx;
   let mod = null;
   try {
-    mod = await import(entry.module);
+    // A published creation is world data with no code of its own — spec 11 worlds are
+    // parts and behaviours, and behaviours are the engine's. The empty module keeps the
+    // rest of this function (and dispose) from having to care which kind it loaded.
+    mod = entry.placeData ? EMPTY_GAME_MODULE : await import(entry.module);
     mod.init(nextCtx);
   } catch (err) {
     // spec 04 §5.6 step 7: an init throw runs the dispose steps before the screen.
@@ -1540,6 +1717,7 @@ export async function boot() {
       engineLoop.start();
     }
     claimDailyReward(); // spec 07 §5.9 step 5, after the first Place finishes loading
+    maybeSignIn(); // spec 14 §5.3 — deliberately NOT awaited; see the function
     bootStep(BOOT_STEP_COUNT);
     if (bootScreen) bootScreen.setProgress(1);
     fadeBootOnNextFrame = true; // faded on the loop's next rendered frame (§5.2.2)

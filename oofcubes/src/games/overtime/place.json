@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "slug": "overtime",
+    "name": "Overtime",
+    "icon": "⏱️",
+    "description": "A point a second for as long as you stay. Leave and you lose the lot."
+  },
+  "spawn": [0, 1.5, 22],
+  "spawnYaw": 180,
+  "killY": -40,
+  "music": "plaza",
+  "lighting": { "skyTop": "#20304a", "skyBottom": "#f0a860" },
+  "parts": [
+    { "id": "ground", "size": [90, 1, 90], "position": [0, -0.5, 0],
+      "color": "#3a4152", "material": "plastic" },
+
+    { "id": "floor", "size": [56, 1, 56], "position": [0, 0.5, 0],
+      "color": "#f0f2f7", "material": "plastic" },
+    { "id": "inlay", "size": [40, 0.1, 40], "position": [0, 1.05, 0],
+      "color": "#f7c948", "material": "neon", "transparency": 0.55 },
+
+    { "id": "rimN", "size": [56, 1.6, 2], "position": [0, 1.8, -27],
+      "color": "#2b3242", "material": "plastic" },
+    { "id": "rimS", "size": [56, 1.6, 2], "position": [0, 1.8, 27],
+      "color": "#2b3242", "material": "plastic" },
+    { "id": "rimE", "size": [2, 1.6, 56], "position": [27, 1.8, 0],
+      "color": "#2b3242", "material": "plastic" },
+    { "id": "rimW", "size": [2, 1.6, 56], "position": [-27, 1.6, 0],
+      "color": "#2b3242", "material": "plastic" },
+
+    { "id": "pillarNE", "size": [3, 16, 3], "position": [22, 9, -22],
+      "color": "#2b3242", "material": "metal" },
+    { "id": "pillarNW", "size": [3, 16, 3], "position": [-22, 9, -22],
+      "color": "#2b3242", "material": "metal" },
+    { "id": "pillarSE", "size": [3, 16, 3], "position": [22, 9, 22],
+      "color": "#2b3242", "material": "metal" },
+    { "id": "pillarSW", "size": [3, 16, 3], "position": [-22, 9, 22],
+      "color": "#2b3242", "material": "metal" },
+
+    { "id": "lampNE", "size": [2, 2, 2], "position": [22, 17.5, -22],
+      "color": "#fff2c8", "material": "neon", "canCollide": false },
+    { "id": "lampNW", "size": [2, 2, 2], "position": [-22, 17.5, -22],
+      "color": "#fff2c8", "material": "neon", "canCollide": false },
+    { "id": "lampSE", "size": [2, 2, 2], "position": [22, 17.5, 22],
+      "color": "#fff2c8", "material": "neon", "canCollide": false },
+    { "id": "lampSW", "size": [2, 2, 2], "position": [-22, 17.5, 22],
+      "color": "#fff2c8", "material": "neon", "canCollide": false },
+
+    { "id": "dais", "shape": "cylinder", "size": [14, 1, 14], "position": [0, 1.5, 0],
+      "color": "#f7c948", "material": "plastic" },
+    { "id": "daisTop", "shape": "cylinder", "size": [10, 0.4, 10], "position": [0, 2.2, 0],
+      "color": "#ffe9a8", "material": "neon", "transparency": 0.3, "canCollide": false },
+
+    { "id": "signPost", "size": [0.6, 5, 0.6], "position": [0, 3.5, -20],
+      "color": "#2b3242", "material": "metal" },
+    { "id": "signBoard", "size": [16, 5, 0.4], "position": [0, 7.5, -20],
+      "color": "#141824", "material": "plastic" },
+
+    { "id": "benchN", "size": [10, 1, 2], "position": [0, 1.5, -15],
+      "color": "#8d6e63", "material": "wood" },
+    { "id": "benchS", "size": [10, 1, 2], "position": [0, 1.5, 15],
+      "color": "#8d6e63", "material": "wood" },
+    { "id": "benchE", "size": [2, 1, 10], "position": [15, 1.5, 0],
+      "color": "#8d6e63", "material": "wood" },
+    { "id": "benchW", "size": [2, 1, 10], "position": [-15, 1.5, 0],
+      "color": "#8d6e63", "material": "wood" }
+  ]
+}

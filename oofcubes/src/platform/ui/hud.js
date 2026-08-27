@@ -82,7 +82,18 @@ export function createHud(services = {}, events = null) {
     if (api) api.openSettings();
   });
 
-  right.append(avatarBtn, gearBtn);
+  // Spec 14 §5.6 — the Games browser. It sits left of the gear because it is a place
+  // you GO rather than a setting you change.
+  const gamesBtn = el("button", "oof-btn oof-btn-icon", "🎮");
+  gamesBtn.type = "button";
+  gamesBtn.setAttribute("aria-label", "Games");
+  gamesBtn.addEventListener("click", () => {
+    click();
+    const api = ui();
+    if (api && typeof api.openGames === "function") api.openGames();
+  });
+
+  right.append(avatarBtn, gamesBtn, gearBtn);
   root.append(balancePill, titlePill, right);
   document.body.appendChild(root);
 

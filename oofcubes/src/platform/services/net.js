@@ -51,6 +51,7 @@ export function createNet(deps = {}) {
     getSavedUrl: () => null,
     getName: () => null,
     getAvatar: () => null,
+    getToken: () => null, // spec 14: a session token makes the room know who you are
     onStatus: () => {},
     WebSocketImpl: typeof WebSocket === "undefined" ? null : WebSocket,
     ...deps,
@@ -113,7 +114,10 @@ export function createNet(deps = {}) {
       if (ws !== sock) return;
       retryS = RETRY_MIN_S;
       if (!name) name = randomUsername(new Set());
-      send({ t: "join", place, name, avatar: d.getAvatar(), state: publishedState });
+      // The token is optional (spec 14 §5.3 — guests play). When there is one the
+      // server takes the display name off the ACCOUNT rather than this message, so a
+      // name in chat cannot be somebody else's.
+      send({ t: "join", place, name, avatar: d.getAvatar(), state: publishedState, token: d.getToken() });
     });
 
     sock.addEventListener("message", (e) => {
@@ -184,6 +188,11 @@ export function createNet(deps = {}) {
         if (peers.delete(m.id)) emit("bye", { id: m.id });
         return;
       }
+      case "chat":
+        // Straight through to whoever is listening; net.js keeps NO history, because
+        // the server keeps none either (spec 14 §2).
+        emit("chat", { id: m.id, name: m.name, text: m.text });
+        return;
       case "full":
         setStatus("full", `this Place is full (${m.cap} players)`);
         return;
@@ -290,6 +299,9 @@ export function createNet(deps = {}) {
     self: () => ({ id: selfId, name }),
     roster: () => [...peers.values()],
     count: () => peers.size + 1, // §9: the TRUE number, including you, 1 when alone
+    // Outbound for message types the Place or the UI owns rather than net.js — chat
+    // today. Silently does nothing offline, like everything else here.
+    send(obj) { return send(obj); },
     publish(stateObj) {
       const json = JSON.stringify(stateObj === undefined ? null : stateObj);
       if (json === publishedJson) return; // §5.3: only on change
