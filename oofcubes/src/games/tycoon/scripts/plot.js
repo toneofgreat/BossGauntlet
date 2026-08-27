@@ -276,17 +276,39 @@ function buildAura(ctx, state, p) {
   state.auras.push({ tier, ids });
 }
 
+// §5.9 — a helipad, a chopper, and a seat you can actually stand on. The seat carries
+// the engine's movingPlatform behavior, so physics carries the rider for free; the
+// airframe just follows the seat each step at §5.9's three fixed offsets.
 function buildChopper(ctx, state, p) {
-  const y = LAYOUT.CHOPPER_HEIGHT;
-  const body = track(ctx, state, p.id, box(LAYOUT.CHOPPER_BODY_SIZE, [0, y, 0], LAYOUT.CHOPPER_COLOR));
-  const tail = track(ctx, state, p.id, box(LAYOUT.CHOPPER_TAIL_SIZE, [0, y + 0.6, -9], LAYOUT.CHOPPER_COLOR));
-  const rotor = track(ctx, state, p.id, box(LAYOUT.CHOPPER_ROTOR_SIZE, [0, y + 2.2, 0], "#2c2c34", {
-    behaviors: [{ type: "spinner", axis: "y", speed: LAYOUT.ROTOR_SPEED }],
+  const L2 = LAYOUT;
+  track(ctx, state, p.id, box(L2.HELIPAD_SIZE, L2.HELIPAD_POS, L2.HELIPAD_COLOR));
+  track(ctx, state, p.id, box(L2.HELI_H_SIZE, L2.HELI_H_POS, L2.HELI_H_COLOR, {
+    material: "neon", canCollide: false,
   }));
-  const skids = [-2, 2].map((sx) => track(ctx, state, p.id, box(
-    LAYOUT.CHOPPER_SKID_SIZE, [sx, y - 2, 0], "#2c2c34",
-  )));
-  state.chopper = { parts: [body, tail, rotor, ...skids], offsets: [[0, 0, 0], [0, 0.6, -9], [0, 2.2, 0], [-2, -2, 0], [2, -2, 0]], x: 0, z: 0 };
+  const seat = track(ctx, state, p.id, box(L2.HELI_SEAT_SIZE, L2.HELI_SEAT_POS, L2.HELI_H_COLOR, {
+    material: "neon",
+    behaviors: [{
+      type: "movingPlatform",
+      waypoints: L2.HELI_WAYPOINTS.map((w) => w.slice()),
+      speed: L2.HELI_SPEED,
+      pauseS: L2.HELI_PAUSE_S,
+      mode: "cycle",
+    }],
+  }));
+  const body = track(ctx, state, p.id, box(L2.HELI_BODY_SIZE, L2.HELI_SEAT_POS, L2.HELI_BODY_COLOR));
+  const tail = track(ctx, state, p.id, box(L2.HELI_TAIL_SIZE, L2.HELI_SEAT_POS, L2.HELI_BODY_COLOR));
+  const rotor = track(ctx, state, p.id, box(L2.HELI_ROTOR_SIZE, L2.HELI_SEAT_POS, "#2c2c34", {
+    behaviors: [{ type: "spinner", axis: "y", speed: L2.ROTOR_SPEED }],
+  }));
+  state.chopper = {
+    seat,
+    followers: [
+      { id: body, off: L2.HELI_BODY_OFF },
+      { id: tail, off: L2.HELI_TAIL_OFF },
+      { id: rotor, off: L2.HELI_ROTOR_OFF },
+    ],
+    ridingSince: null,
+  };
 }
 
 // §5.10 — the end of the line, and deliberately just a big gold Oof.
@@ -373,17 +395,35 @@ export function updatePlot(ctx, state, dt) {
   }
 
   if (state.chopper) {
-    // Eases toward the boss rather than snapping: a chopper that teleports reads as
-    // a bug, and CHOPPER_FOLLOW is the fraction of the remaining gap closed per second.
-    const p = ctx.player.position();
-    const k = Math.min(1, LAYOUT.CHOPPER_FOLLOW * dt);
-    state.chopper.x += (p[0] - state.chopper.x) * k;
-    state.chopper.z += (p[2] - state.chopper.z) * k;
-    const y = LAYOUT.CHOPPER_HEIGHT;
-    state.chopper.parts.forEach((id, i) => {
-      const off = state.chopper.offsets[i];
-      ctx.engine.parts.setPosition(id, [state.chopper.x + off[0], y + off[1], state.chopper.z + off[2]]);
-    });
+    // The seat is the authority — it is the part the engine is actually moving. Its
+    // live position lives on the mesh (the movingPlatform mover writes there, not to
+    // def.position), which is also exactly what the player can see.
+    const seatRecord = ctx.engine.parts.get(state.chopper.seat);
+    const seatPos = seatRecord && seatRecord.mesh ? seatRecord.mesh.position : null;
+    if (seatPos) {
+      for (const f of state.chopper.followers) {
+        ctx.engine.parts.setPosition(f.id, [
+          seatPos.x + f.off[0], seatPos.y + f.off[1], seatPos.z + f.off[2],
+        ]);
+      }
+      // §5.9's ride detection. Standing ON the seat, not merely near it: the vertical
+      // window opens at the seat surface and runs to head height, and the streak resets
+      // the moment you step off, so a fly-past does not earn it.
+      const p = ctx.player.position();
+      const flat = Math.hypot(p[0] - seatPos.x, p[2] - seatPos.z);
+      const rise = p[1] - seatPos.y;
+      const aboard = flat <= LAYOUT.HELI_RIDE_RADIUS
+        && rise >= LAYOUT.HELI_RIDE_Y_MIN && rise <= LAYOUT.HELI_RIDE_Y_MAX;
+      if (!aboard) {
+        state.chopper.ridingSince = null;
+      } else {
+        state.chopper.ridingSince = (state.chopper.ridingSince || 0) + dt;
+        if (state.chopper.ridingSince >= TUNING.HELI_RIDE_BADGE_TIME) {
+          ctx.services.badges.award("sky-boss");
+          state.chopper.ridingSince = -Infinity; // awarded once; award() is idempotent anyway
+        }
+      }
+    }
   }
 
   refreshPadLabels(ctx, state);

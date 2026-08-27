@@ -2,7 +2,8 @@
 // -> lighting/music -> spawn avatar; the platform events emitter; dispose with leak
 // reporting; place-level region/killY per-tick checks. Owned by docs/specs/
 // 04-place-format-and-game-api.md §5.1 (createEmitter), §5.3 (loadPlace), §5.4
-// (regions/killY), §5.5 (disposePlace).
+// (regions/killY), §5.5 (disposePlace), plus §2's sanctioned additive export
+// loadPlaceData(data, deps) + handle.step(dt) for Oof Studio's playtest (spec 11 §5.8).
 //
 // Dependency-injected by design (loadPlace's `deps` bag below) rather than statically
 // importing parts.js/physics.js/renderer.js/audio.js: every live engine module this
@@ -678,60 +679,71 @@ function mergeLighting(userLighting) {
 // behavior dispatch lives in parts.js (spec 03 §5.7, "reduced scope" per this task's
 // TASKS.md row). Driven by physics.js's existing setContactHandler(fn) hook — the only
 // "call me once per completed physics.step(dt) tick" hook already exported by the
-// engine at M1 (spec 11's handle.step(dt) is an M5-only addition, §2, not available
-// here); its (entered/stayed/exited) payload is unused, only the tick itself matters.
-// SPEC GAP: §5.3/§5.4 do not name how place-level checks get driven before spec 11's
-// handle.step(dt) lands (M1, pre-shell) — see the task report.
+// engine at M1; its (entered/stayed/exited) payload is unused, only the tick itself
+// matters. SPEC GAP: §5.3/§5.4 do not name how place-level checks get driven for a
+// loadPlace handle — see the M1 task report. Spec 11 §5.8's handle.step(dt) has since
+// landed (below) and is the driver for loadPlaceData handles; loadPlace keeps this
+// contact hook, because migrating the shell to step(dt) is a spec 06 change, not an
+// additive one, and a handle never gets both drivers.
 function aabbOverlaps(aMin, aMax, bMin, bMax) {
   return aMin[0] <= bMax[0] && aMax[0] >= bMin[0]
     && aMin[1] <= bMax[1] && aMax[1] >= bMin[1]
     && aMin[2] <= bMax[2] && aMax[2] >= bMin[2];
 }
 
+// One place-level tick: §5.4 points 6-7 for `dt` sim-seconds. Two drivers reach it —
+// physics.js's setContactHandler hook (loadPlace, below) and the handle.step(dt) the
+// caller drives itself (loadPlaceData, spec 11 §5.8) — and exactly one of them is ever
+// wired per handle, so the pass runs once per tick either way.
+function runPlaceTick(handle, deps, dt) {
+  handle.simTime += dt;
+  const center = deps.physics.getPosition();
+  const feet = [center[0], center[1] - FEET_OFFSET, center[2]];
+
+  // Regions (§5.4 point 6): avatar AABB is feet position, 2(x) x 5(y) x 2(z).
+  const aMin = [feet[0] - AVATAR_RADIUS, feet[1], feet[2] - AVATAR_RADIUS];
+  const aMax = [feet[0] + AVATAR_RADIUS, feet[1] + AVATAR_HEIGHT, feet[2] + AVATAR_RADIUS];
+  for (const region of handle.regionTracker) {
+    const overlapping = aabbOverlaps(aMin, aMax, region.min, region.max);
+    if (overlapping && !region.inside) {
+      region.inside = true;
+      deps.events.emit("region:enter", { regionId: region.id });
+      if (region.event) {
+        // §5.2 gives touch:<event> one payload shape, {partId, position, time},
+        // shared by touchEvent/collectible/region sources; a region has no partId
+        // of its own, so its id fills that slot — see specGaps in the task report.
+        deps.events.emit("touch:" + region.event, { partId: region.id, position: feet, time: handle.simTime });
+      }
+    } else if (!overlapping && region.inside) {
+      region.inside = false;
+      deps.events.emit("region:exit", { regionId: region.id });
+    }
+  }
+
+  // killY (§5.4 point 7): the engine's character controller has no void plane of its
+  // own (task guidance) — this is its sole owner. `killedThisLife` guards
+  // re-entrancy directly (independent of physics.js's own dying/grace-timer guard)
+  // so a life spent below the void for several ticks in a row (e.g. across the
+  // respawn delay) calls kill() exactly once.
+  if (feet[1] < handle.data.killY) {
+    if (!handle.killedThisLife) {
+      handle.killedThisLife = true;
+      deps.physics.kill("void");
+    }
+  } else {
+    handle.killedThisLife = false;
+  }
+}
+
 function makePerTickHandler(handle, deps) {
   return function onPhysicsTick() {
-    handle.simTime += SIM_DT;
-    const center = deps.physics.getPosition();
-    const feet = [center[0], center[1] - FEET_OFFSET, center[2]];
-
-    // Regions (§5.4 point 6): avatar AABB is feet position, 2(x) x 5(y) x 2(z).
-    const aMin = [feet[0] - AVATAR_RADIUS, feet[1], feet[2] - AVATAR_RADIUS];
-    const aMax = [feet[0] + AVATAR_RADIUS, feet[1] + AVATAR_HEIGHT, feet[2] + AVATAR_RADIUS];
-    for (const region of handle.regionTracker) {
-      const overlapping = aabbOverlaps(aMin, aMax, region.min, region.max);
-      if (overlapping && !region.inside) {
-        region.inside = true;
-        deps.events.emit("region:enter", { regionId: region.id });
-        if (region.event) {
-          // §5.2 gives touch:<event> one payload shape, {partId, position, time},
-          // shared by touchEvent/collectible/region sources; a region has no partId
-          // of its own, so its id fills that slot — see specGaps in the task report.
-          deps.events.emit("touch:" + region.event, { partId: region.id, position: feet, time: handle.simTime });
-        }
-      } else if (!overlapping && region.inside) {
-        region.inside = false;
-        deps.events.emit("region:exit", { regionId: region.id });
-      }
-    }
-
-    // killY (§5.4 point 7): the engine's character controller has no void plane of its
-    // own (task guidance) — this is its sole owner. `killedThisLife` guards
-    // re-entrancy directly (independent of physics.js's own dying/grace-timer guard)
-    // so a life spent below the void for several ticks in a row (e.g. across the
-    // respawn delay) calls kill() exactly once.
-    if (feet[1] < handle.data.killY) {
-      if (!handle.killedThisLife) {
-        handle.killedThisLife = true;
-        deps.physics.kill("void");
-      }
-    } else {
-      handle.killedThisLife = false;
-    }
+    runPlaceTick(handle, deps, SIM_DT);
   };
 }
 
 // ===================================================================================
 // ===== SECTION: loadPlace(slug, deps) — spec 04 §5.3 ================================
+// =====          loadPlaceData(data, deps) — spec 11 §5.8, sanctioned by 04 §2 ======
 // ===================================================================================
 
 function fmtDelta(n) {
@@ -746,6 +758,117 @@ function captureBaseline(deps) {
       ? deps.physics.getDebugState().colliderCount
       : 0,
   };
+}
+
+// Steps 5-13 of §5.3, written ONCE as a generator so loadPlace and loadPlaceData share
+// this body rather than forking it. It yields at exactly the §5.3-step-7 batch
+// boundaries: loadPlace awaits a microtask there so the loading screen can paint, and
+// loadPlaceData — which has no loading screen, and whose caller reads `result.ok` off
+// the returned value synchronously (spec 11 §5.8 step 5) — drains it without yielding.
+// The drivers wrap it in try/catch and report E_BUILD; the loader never throws (§5.3).
+//
+// `contactDriven` picks which of the two drivers for §5.4's place-level pass this
+// handle gets (see runPlaceTick): true installs physics.js's per-tick contact hook (the
+// shell's path, unchanged since M1), false hangs `step(dt)` on the handle for a caller
+// that owns its own sim step. Never both — that would run regions/killY twice a tick.
+function* buildPlaceSteps(slug, json, deps, t0, baseline, contactDriven) {
+  // step 5: defaults.
+  const parts = json.parts.map((def, i) => applyPartDefaults(def, i));
+  const data = {
+    meta: json.meta,
+    spawn: json.spawn.slice(),
+    spawnYaw: json.spawnYaw !== undefined ? json.spawnYaw : 0,
+    killY: json.killY !== undefined ? json.killY : DEFAULT_KILL_Y,
+    parts,
+    regions: Array.isArray(json.regions) ? json.regions : [],
+    lighting: mergeLighting(json.lighting),
+    music: json.music,
+  };
+
+  // step 6: lighting.
+  if (deps.rendererApi && typeof deps.rendererApi.applyLighting === "function") {
+    deps.rendererApi.applyLighting(data.lighting);
+  }
+
+  // step 7: build parts. A single partsApi.load(allDefs) call — NOT `MAX_PARTS /
+  // BUILD_YIELD_EVERY_PARTS` repeated calls: parts.js's load() clears the whole
+  // world on every call (spec 03, already built), so calling it once per 200-part
+  // chunk would delete the previous chunk rather than append to it, and per-part
+  // addPart() calls never join an instanced batch (spec 03 §5.3), defeating the
+  // instancing this same step relies on for perf. See specGaps in the task report.
+  if (deps.partsApi && typeof deps.partsApi.load === "function") {
+    deps.partsApi.load(data.parts);
+  }
+  const partRecords = new Map();
+  for (let i = 0; i < data.parts.length; i += BUILD_YIELD_EVERY_PARTS) {
+    const chunk = data.parts.slice(i, i + BUILD_YIELD_EVERY_PARTS);
+    for (const part of chunk) {
+      const record = deps.partsApi && typeof deps.partsApi.getPart === "function"
+        ? deps.partsApi.getPart(part.id)
+        : null;
+      partRecords.set(part.id, { id: part.id, def: part, record });
+    }
+    if (i + BUILD_YIELD_EVERY_PARTS < data.parts.length) yield;
+  }
+
+  // step 9: regions.
+  const regionTracker = data.regions.map((r) => ({
+    id: r.id, min: r.min.slice(), max: r.max.slice(), event: r.event || null, inside: false,
+  }));
+
+  // step 10: music.
+  if (data.music && deps.audio && typeof deps.audio.playMusic === "function") {
+    deps.audio.playMusic(data.music, { fadeMs: MUSIC_FADE_MS });
+  }
+
+  // step 11: spawn.
+  if (deps.physics && typeof deps.physics.spawnAt === "function") {
+    deps.physics.spawnAt(data.spawn, data.spawnYaw);
+  }
+
+  // step 12: load budget.
+  const loadMs = performance.now() - t0;
+  if (loadMs > LOAD_BUDGET_MS) {
+    console.warn("[oof] load budget exceeded", slug, loadMs);
+  }
+
+  const handle = {
+    slug,
+    data,
+    partRecords,
+    behaviorRuntimes: [], // unused: behavior execution lives in parts.js (§5.4 note)
+    regionTracker,
+    baseline,
+    loadMs,
+    // Additional bookkeeping beyond §5.3's illustrative handle shape — needed by
+    // disposePlace and the per-tick handler, opaque to callers other than them.
+    simTime: 0,
+    killedThisLife: false,
+    _deps: deps,
+    _disposed: false,
+  };
+
+  if (contactDriven) {
+    if (deps.physics && typeof deps.physics.setContactHandler === "function") {
+      deps.physics.setContactHandler(makePerTickHandler(handle, deps));
+    }
+  } else {
+    // spec 11 §5.8 step 6 / §5.9 point 2: the caller's own sim step runs this right
+    // after physics.step(dt), which is where §5.4 puts the place-level pass anyway.
+    // Deliberately NOT on the loadPlace handle: that one already has the contact hook
+    // above, and a shell that called both would tick regions/killY twice per frame.
+    handle.step = function step(dt) {
+      if (handle._disposed) return;
+      runPlaceTick(handle, deps, typeof dt === "number" && dt > 0 ? dt : SIM_DT);
+    };
+  }
+
+  // step 13.
+  if (deps.events) {
+    deps.events.emit("place:loaded", { slug, partCount: data.parts.length, loadMs });
+  }
+
+  return { ok: true, handle };
 }
 
 export async function loadPlace(slug, deps) {
@@ -789,92 +912,62 @@ export async function loadPlace(slug, deps) {
   // unexpected error from a dependency is caught and reported like every other
   // failure mode above.
   try {
-    // step 5: defaults.
-    const parts = json.parts.map((def, i) => applyPartDefaults(def, i));
-    const data = {
-      meta: json.meta,
-      spawn: json.spawn.slice(),
-      spawnYaw: json.spawnYaw !== undefined ? json.spawnYaw : 0,
-      killY: json.killY !== undefined ? json.killY : DEFAULT_KILL_Y,
-      parts,
-      regions: Array.isArray(json.regions) ? json.regions : [],
-      lighting: mergeLighting(json.lighting),
-      music: json.music,
-    };
-
-    // step 6: lighting.
-    if (deps.rendererApi && typeof deps.rendererApi.applyLighting === "function") {
-      deps.rendererApi.applyLighting(data.lighting);
+    const gen = buildPlaceSteps(slug, json, deps, t0, baseline, true);
+    let next = gen.next();
+    // The yields are step 7's batch boundaries: awaiting a microtask at each one is
+    // what lets the loading screen paint mid-build.
+    while (!next.done) {
+      await Promise.resolve();
+      next = gen.next();
     }
+    return next.value;
+  } catch (err) {
+    return { ok: false, errors: [{ code: "E_BUILD", path: "", message: String(err && err.message || err) }] };
+  }
+}
 
-    // step 7: build parts. A single partsApi.load(allDefs) call — NOT `MAX_PARTS /
-    // BUILD_YIELD_EVERY_PARTS` repeated calls: parts.js's load() clears the whole
-    // world on every call (spec 03, already built), so calling it once per 200-part
-    // chunk would delete the previous chunk rather than append to it, and per-part
-    // addPart() calls never join an instanced batch (spec 03 §5.3), defeating the
-    // instancing this same step relies on for perf. See specGaps in the task report.
-    if (deps.partsApi && typeof deps.partsApi.load === "function") {
-      deps.partsApi.load(data.parts);
-    }
-    const partRecords = new Map();
-    for (let i = 0; i < data.parts.length; i += BUILD_YIELD_EVERY_PARTS) {
-      const chunk = data.parts.slice(i, i + BUILD_YIELD_EVERY_PARTS);
-      for (const part of chunk) {
-        const record = deps.partsApi && typeof deps.partsApi.getPart === "function"
-          ? deps.partsApi.getPart(part.id)
-          : null;
-        partRecords.set(part.id, { id: part.id, def: part, record });
-      }
-      if (i + BUILD_YIELD_EVERY_PARTS < data.parts.length) await Promise.resolve();
-    }
+// ===================================================================================
+// ===== SECTION: loadPlaceData(data, deps) — spec 11 §5.8 ============================
+// ===================================================================================
+// The additive twin of loadPlace that spec 04 §2 sanctions and spec 11 §5.8 (Oof
+// Studio's playtest) is the only caller of: same steps on a place.json-shaped object
+// that is ALREADY in memory, so §5.3's steps 2 and 3 (fetch, JSON.parse) have nothing
+// to do and drop out. Everything else is the same code path — buildPlaceSteps above —
+// so a Studio Place is a real Place load, not a second, weaker one.
+//
+// SPEC AMENDMENT (docs/specs/04-place-format-and-game-api.md §2, amended 2026-08-27
+// with this change): §2 described this as "loadPlace steps 3-13", which reads as an
+// async twin starting at the parse. It is synchronous and it also runs step 1. Both
+// corrections are forced by the callers, not chosen here:
+//   - synchronous, because spec 11 §5.8 step 5 writes `handle = loadPlaceData(...)`
+//     and studio.js reads `result.ok` off the return value on the next line. An async
+//     twin would hand it a Promise, whose `.ok` is undefined, and every playtest would
+//     fail as "Could not start the test". Dropping the awaits costs nothing: the only
+//     await in steps 5-13 is step 7's paint boundary, and a playtest has no loading
+//     screen to paint (and at most MAX_STUDIO_PARTS = 500 parts, spec 11 §6).
+//   - step 1 (t0 + baseline capture) is included, because disposePlace step 6 verifies
+//     scene/geometry/collider counts against `handle.baseline` and spec 11 §5.8 exit 1
+//     requires that dispose to report `leaks: []`. A handle without a baseline would
+//     make dispose throw into its own catch and report "verify:error" every time.
+// The returned handle carries `step(dt)` (spec 04 §2's "per-step handle.step(dt)"),
+// which runs §5.4's place-level region/killY pass for `dt` sim-seconds. The caller must
+// call it once per sim step, right after physics.step(dt) — that is what studio.js's
+// simStep(dt) does via the shell hook (spec 11 §5.9 point 2).
+export function loadPlaceData(data, deps) {
+  const t0 = performance.now();
+  const baseline = captureBaseline(deps);
 
-    // step 9: regions.
-    const regionTracker = data.regions.map((r) => ({
-      id: r.id, min: r.min.slice(), max: r.max.slice(), event: r.event || null, inside: false,
-    }));
+  const validated = validatePlaceData(data);
+  if (!validated.ok) {
+    return { ok: false, errors: validated.errors };
+  }
 
-    // step 10: music.
-    if (data.music && deps.audio && typeof deps.audio.playMusic === "function") {
-      deps.audio.playMusic(data.music, { fadeMs: MUSIC_FADE_MS });
-    }
-
-    // step 11: spawn.
-    if (deps.physics && typeof deps.physics.spawnAt === "function") {
-      deps.physics.spawnAt(data.spawn, data.spawnYaw);
-    }
-
-    // step 12: load budget.
-    const loadMs = performance.now() - t0;
-    if (loadMs > LOAD_BUDGET_MS) {
-      console.warn("[oof] load budget exceeded", slug, loadMs);
-    }
-
-    const handle = {
-      slug,
-      data,
-      partRecords,
-      behaviorRuntimes: [], // unused: behavior execution lives in parts.js (§5.4 note)
-      regionTracker,
-      baseline,
-      loadMs,
-      // Additional bookkeeping beyond §5.3's illustrative handle shape — needed by
-      // disposePlace and the per-tick handler, opaque to callers other than them.
-      simTime: 0,
-      killedThisLife: false,
-      _deps: deps,
-      _disposed: false,
-    };
-
-    if (deps.physics && typeof deps.physics.setContactHandler === "function") {
-      deps.physics.setContactHandler(makePerTickHandler(handle, deps));
-    }
-
-    // step 13.
-    if (deps.events) {
-      deps.events.emit("place:loaded", { slug, partCount: data.parts.length, loadMs });
-    }
-
-    return { ok: true, handle };
+  const slug = data.meta.slug;
+  try {
+    const gen = buildPlaceSteps(slug, data, deps, t0, baseline, false);
+    let next = gen.next();
+    while (!next.done) next = gen.next();
+    return next.value;
   } catch (err) {
     return { ok: false, errors: [{ code: "E_BUILD", path: "", message: String(err && err.message || err) }] };
   }

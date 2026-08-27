@@ -609,6 +609,46 @@ export const STARTER_CATALOG = [
 // slug). This array is the ONLY thing a Place task may edit outside its own folder.
 export const PLACE_REWARDS = [
   // region:place-rewards:start
+  // Weight Lifting Simulator's 4 grant-only auras (spec 09 §3.7/§5.10 — spec 09 §9's
+  // task L1's other deliverable). Field values are transcribed verbatim from
+  // src/games/lifting/scripts/config.js's REWARD_AURAS, whose own comment names this
+  // exact append; `appearance` is §3.6's aura schema, same shape as the STARTER_CATALOG
+  // aura rows above. `trigger` (mega100k / spaceUnlocked / dumbbellMulti /
+  // lavaUnlocked+gdstar) is config.js's own field for state.js to read when to call
+  // grantItem — not part of the §3.2 catalog-item schema, so it is not repeated here.
+  {
+    id: "aura_swole", name: "Swole Aura", type: "aura",
+    price: null, rarity: "rare", grantOnly: true, sourcePlace: "lifting",
+    appearance: {
+      motion: "rise", rate: 10, colors: ["#ff8c1a", "#d94436"],
+      size: [0.18, 0.06], lifetime: 1.2, radius: 1.1, speed: 1.6,
+      height: 0.1, wobble: 0.15,
+    },
+  },
+  {
+    id: "aura_tide", name: "Riptide Aura", type: "aura",
+    price: null, rarity: "epic", grantOnly: true, sourcePlace: "lifting",
+    appearance: {
+      motion: "orbit", count: 7, colors: ["#35a3e0"],
+      size: [0.25, 0.25], radius: 1.7, speed: 120, height: 1.8, bob: 0.5,
+    },
+  },
+  {
+    id: "aura_gravity", name: "Gravity Well", type: "aura",
+    price: null, rarity: "epic", grantOnly: true, sourcePlace: "lifting",
+    appearance: {
+      motion: "pulse", count: 8, colors: ["#6b3fa0", "#0c0c14"],
+      size: [0.2, 0.05], lifetime: 1.4, radius: 1.5, speed: 2.2, height: 0.3,
+    },
+  },
+  {
+    id: "aura_ascended", name: "Ascended Aura", type: "aura",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "lifting",
+    appearance: {
+      motion: "twinkle", count: 20, rate: 16, colors: ["#f7c948", "#ffffff"],
+      size: [0.16, 0.16], lifetime: 0.7, radius: 1.6,
+    },
+  },
   // region:place-rewards:end
 ];
 

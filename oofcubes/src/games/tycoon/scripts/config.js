@@ -97,14 +97,33 @@ export const LAYOUT = Object.freeze({
     Object.freeze({ id: "aura2", color: "#ff6a2a", radius: 18, height: 7, speed: 65, size: [1.6, 1.6, 1.6] }),
     Object.freeze({ id: "aura3", color: "#7fd4f2", radius: 22, height: 10, speed: 90, size: [1.8, 1.8, 1.8] }),
   ]),
-  // §5.9 chopper — parks over the plot and follows the boss around
-  CHOPPER_BODY_SIZE: [6, 3, 12],
-  CHOPPER_TAIL_SIZE: [1.2, 1.2, 8],
-  CHOPPER_ROTOR_SIZE: [18, 0.4, 1.6],
-  CHOPPER_SKID_SIZE: [0.8, 0.8, 10],
-  CHOPPER_COLOR: "#f2d024",
-  CHOPPER_HEIGHT: 26,
-  CHOPPER_FOLLOW: 0.6, // fraction of the gap closed per second
+  // §5.9 chopper. It is a VEHICLE, not scenery: the seat is a movingPlatform on a
+  // fixed circuit and the engine carries whoever is standing on it, which is the
+  // whole point — sky-boss is a badge for RIDING it. The body/tail/rotor are dumb
+  // followers of the seat, repositioned every sim step.
+  HELIPAD_SIZE: [16, 0.5, 16],
+  HELIPAD_POS: [0, 17, -30],
+  HELIPAD_COLOR: "#5a5a64",
+  HELI_H_SIZE: [8, 0.6, 2],
+  HELI_H_POS: [0, 17.1, -30],
+  HELI_H_COLOR: "#ffd23f",
+  HELI_BODY_SIZE: [6, 3, 10],
+  HELI_TAIL_SIZE: [1.5, 1.5, 7],
+  HELI_ROTOR_SIZE: [14, 0.3, 1.5],
+  HELI_SEAT_SIZE: [3, 0.5, 3],
+  HELI_SEAT_POS: [0, 18.4, -27],
+  HELI_BODY_COLOR: "#d0d0d8",
+  HELI_WAYPOINTS: Object.freeze([
+    [0, 18.4, -27], [30, 30, 0], [0, 36, 40], [-30, 30, 0], [0, 18.4, -27],
+  ]),
+  HELI_SPEED: 8,
+  HELI_PAUSE_S: 4,
+  HELI_BODY_OFF: [0, 1.1, -3],
+  HELI_TAIL_OFF: [0, 1.1, -11.5],
+  HELI_ROTOR_OFF: [0, 3.1, -3],
+  HELI_RIDE_RADIUS: 3, // horizontal, from the seat centre
+  HELI_RIDE_Y_MIN: 0,
+  HELI_RIDE_Y_MAX: 4,
   // §5.10 statue
   STATUE_POS: [0, 1, 46],
   STATUE_COLOR: "#f7c948",

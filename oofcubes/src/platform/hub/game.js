@@ -1,15 +1,20 @@
 // src/platform/hub/game.js — the Hub Place: spawn plaza, portal arches into every
-// registered Place, and the Catalog storefront door. Spec 06 §5.3.4 owns this file.
+// registered Place, the Catalog storefront door and the Oof Studio workshop door.
+// Spec 06 §5.3.4 owns this file.
 // It lives in src/platform/ but obeys the Game API contract (ARCHITECTURE §7) exactly
-// and touches the platform only through `ctx` — spec 06 criterion 26.
+// and touches the platform only through `ctx` — spec 06 criterion 26. The one call that
+// cannot (yet) go through ctx is the Oof Studio shelf; see the note above
+// STUDIO_SHELF_MODULE for why, and for the seam that would retire it.
 
 import { buildPortals, buildBadgeWall, buildParkour, buildSigns } from "./scripts/layout.js";
+import { spawnGhosts } from "./scripts/ghosts.js";
+import { applyAmbience } from "./scripts/ambience.js";
 
 export const meta = {
   slug: "hub",
   name: "The Hub",
   icon: "🏙️",
-  description: "Spawn plaza — portals, Catalog, badge wall.",
+  description: "Spawn plaza — portals, Catalog, Oof Studio, badge wall.",
   version: "1.0.0",
 };
 
@@ -28,11 +33,30 @@ export const meta = {
 
 // Tuning constants — spec 06 §6 pins these to this module.
 const PORTAL_DEBOUNCE_S = 1.0; // portal & catalog-door retrigger guard
-// SLICE: ghost wanderers (06 §5.4, hub/scripts/ghosts.js + names.js) are out of the
-// slice, so GHOST_COUNT is 0 here instead of §6's 8. The debug hook keeps §3.7's
-// `ghostCount` and §8's `ghostPositions()` so the hub smoke scenario reads the same
-// shape either way.
-const GHOST_COUNT = 0;
+const GHOST_COUNT = 8; // §6 — hub/scripts/ghosts.js wanderers, §5.4
+
+// Oof Studio is a platform surface, not a Place: it has no PLACES registry row, so it
+// gets no portal arch (a portal's only exit is `platform:navigate { slug }`, and the
+// shell resolves that against PLACES). Spec 11 §5.10 asks the Hub for a "🛠 Oof Studio"
+// card that calls `openMyPlacesShelf({ services })`, and in a Hub that is a plaza
+// rather than a screen, the card is a building you can walk into — exactly the shape
+// spec 06 §5.3.4 step 7 already gave the Catalog. So: a workshop at the plaza's
+// north-west corner (place.json's `studio*` rows) whose doorway trigger fires
+// `touch:studioDoor`, one door event handled the same debounced way as the other.
+//
+// DEVIATION, reported with M5-T08: every other platform surface the Hub opens is
+// behind a `ctx.services.ui` method (`openCatalog`), which is how criterion 26's
+// "the Hub uses ctx only" is kept true. The ui service has no Studio opener and
+// src/platform/shell.js belongs to another task, so this one call reaches the Studio
+// surface's own documented entry point directly. It is a lazy import inside the
+// handler, never a module-scope one: nothing of Oof Studio is fetched, parsed or run
+// until a player actually walks through the workshop door, and shelf.js is built for
+// exactly this (its own header calls itself "the only Studio module the Hub touches",
+// and it defers studio.js — and THREE with it — to a dynamic import of its own).
+// Everything the shelf then does still runs on ctx: it is handed ctx.services and
+// reaches ui / saves / economy through that alone. The clean fix is a
+// `ui.openStudioShelf()` seam beside `openCatalog`, mirroring registerCatalogOpener.
+const STUDIO_SHELF_MODULE = "../studio/shelf.js";
 
 // The secret parkour Badge — a static registry row in spec 07's per-place BADGES
 // region (`hub.cloudclimber`); there is no runtime badges.define().
@@ -44,15 +68,21 @@ let portals = null;
 let parkour = null;
 let signs = null;
 let badgeWall = null;
+let ghosts = null;
+let ambience = "day"; // place.json's own lighting IS the day preset (§5.5), so this
+                       // is already correct before applyAmbience's first call in init
 let lastPortalAt = -PORTAL_DEBOUNCE_S;
 let lastDoorAt = -PORTAL_DEBOUNCE_S;
+let lastStudioAt = -PORTAL_DEBOUNCE_S;
+let shelfMod = null; // set only once the workshop door has actually imported shelf.js
 
 function debounced(now, last) {
   return now - last < PORTAL_DEBOUNCE_S;
 }
 
 // The registry never reaches a Place by import, so the shell publishes it on the Place
-// emitter as `platform:places` { places, visited } — §5.3.4 step 2's bridge. It arrives
+// emitter as `platform:places` { places, visited, settings } — §5.3.4 step 2's bridge
+// (`settings` rides along for the ambience listener below, §5.3.4 step 5). It arrives
 // just AFTER init returns (shell.js), which is why this is a subscription, not a read.
 function onPlaces(ctx, payload) {
   if (!payload || !Array.isArray(payload.places)) return;
@@ -78,6 +108,32 @@ function onCatalogDoor(ctx) {
   ctx.services.ui.openCatalog();
 }
 
+// A Place cannot await anything the shell is waiting on, so this is fire-and-forget:
+// the walk-in already happened, and the shelf opens a frame or two later when the
+// module resolves. A build without src/platform/studio/ (the M5 files are optional to
+// the rest of the product) lands in the catch and says so instead of throwing into the
+// event dispatcher.
+function openStudioShelf(ctx) {
+  return import(STUDIO_SHELF_MODULE).then(
+    (shelf) => {
+      // Held so dispose can take the shelf back down: a player can open it and then walk
+      // out of the Hub through a portal, which the shelf itself never hears about.
+      shelfMod = shelf;
+      return shelf.openMyPlacesShelf({ services: ctx.services });
+    },
+    (err) => {
+      console.warn("[oof] Oof Studio is not installed", err);
+      ctx.services.ui.toast({ variant: "error", title: "Oof Studio isn't installed yet" });
+    }
+  );
+}
+
+function onStudioDoor(ctx) {
+  if (debounced(ctx.time, lastStudioAt)) return;
+  lastStudioAt = ctx.time;
+  openStudioShelf(ctx);
+}
+
 function onCloudTop(ctx) {
   // badges.award is first-award-only, so repeat touches of the cloud do nothing.
   if (ctx.services.badges.award(CLOUD_BADGE) && parkour) parkour.celebrate(ctx.time);
@@ -101,6 +157,7 @@ export function init(ctx) {
   portalSubs = [];
   lastPortalAt = -PORTAL_DEBOUNCE_S;
   lastDoorAt = -PORTAL_DEBOUNCE_S;
+  lastStudioAt = -PORTAL_DEBOUNCE_S;
 
   signs = buildSigns(ctx);
   badgeWall = buildBadgeWall(ctx);
@@ -112,18 +169,28 @@ export function init(ctx) {
     if (portals && payload && payload.slug) portals.forget(payload.slug);
   }));
   subs.push(ctx.events.on("touch:catalogDoor", () => onCatalogDoor(ctx)));
+  subs.push(ctx.events.on("touch:studioDoor", () => onStudioDoor(ctx)));
   subs.push(ctx.events.on("touch:cloudTop", () => onCloudTop(ctx)));
 
-  // SLICE: (5) applyAmbience(ctx, profile.settings.ambience) — 06 §5.5,
-  // hub/scripts/ambience.js — and (6) spawnGhosts(ctx, GHOST_COUNT) — 06 §5.4 — are
-  // out of the slice. The `day` preset of §5.5 is authored into place.json's lighting
-  // (§3.3), so the plaza still boots lit exactly as the day row specifies.
+  // §5.3.4 step 5: the boot ambience preset comes from profile.settings.ambience, but
+  // a Place's ctx has no door to the profile domain (ctx.services.saves is scoped to
+  // place.hub only) — the shell rides the value on the same platform:places bridge
+  // that already exists to hand the Hub the registry (see shell.js's emit and the
+  // report on this gap), so this only ever fires once, right after init returns.
+  subs.push(ctx.events.on("platform:places", (payload) => {
+    ambience = applyAmbience(ctx, payload && payload.settings ? payload.settings.ambience : null);
+  }));
+  // A settings change made while the Hub is loaded re-applies live (§5.5).
+  subs.push(ctx.events.on("platform:settingsChanged", (payload) => {
+    ambience = applyAmbience(ctx, payload && payload.settings ? payload.settings.ambience : null);
+  }));
+  ghosts = spawnGhosts(ctx, GHOST_COUNT);
 
   const handle = debugHandle();
   if (handle) {
     handle.hub = {
-      ghostCount: GHOST_COUNT,
-      ghostPositions: () => [],
+      ghostCount: ghosts.count,
+      ghostPositions: () => (ghosts ? ghosts.positions() : []),
       partCount: () => ctx.engine.parts.count(),
       portalCount: () => (portals ? portals.count : 0),
     };
@@ -132,18 +199,25 @@ export function init(ctx) {
 
 export function update(dt, ctx) {
   if (parkour) parkour.update(dt, ctx.time);
+  if (ghosts) ghosts.update(dt);
 }
 
 export function dispose(ctx) {
   for (const off of subs) off();
   subs = [];
+  // A My Places shelf left open when the Hub goes away would outlive it: it is a
+  // fixed, full-viewport overlay that would sit over the next Place. Only ever a
+  // module the door already imported — dispose imports nothing.
+  if (shelfMod && typeof shelfMod.closeMyPlacesShelf === "function") shelfMod.closeMyPlacesShelf();
   teardownPortals(ctx);
   if (parkour) parkour.dispose(ctx);
   if (signs) signs.dispose(ctx);
   if (badgeWall) badgeWall.dispose(ctx);
+  if (ghosts) ghosts.dispose();
   parkour = null;
   signs = null;
   badgeWall = null;
+  ghosts = null;
   // §5.3.4 clears the hub debug facts; the §3.7 field itself stays declared (criterion
   // 6 reads every §3.7 key), so it goes back to the shell's `null`, not deleted.
   const handle = debugHandle();

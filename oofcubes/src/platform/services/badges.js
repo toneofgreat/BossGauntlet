@@ -73,6 +73,24 @@ export const BADGES = Object.freeze([
   B("tycoon.dropper-collector", "Dropper Collector", "🌈", "Own all 11 droppers."),
   B("tycoon.sky-boss", "Sky Boss", "🚁", "Ride the Boss Chopper."),
   B("tycoon.true-boss", "True Boss", "👑", "Build the Golden Boss Statue."),
+
+  // lifting (spec 09 §5.12) — ids and triggers are normative (the table below); this
+  // registry's job is display metadata (name/icon/description), which §5.12 explicitly
+  // leaves to this file (spec 09 §9's task L5) rather than to the Place's own config.js
+  // (see that file's BADGES export, which carries id + trigger only, on purpose).
+  B("lifting.first-lift", "First Rep", "💪", "Make your first lift in Weight Lifting Simulator."),
+  B("lifting.club-100k", "100K Club", "🏆", "Reach 100,000 Strength."),
+  B("lifting.rebirth1", "Reborn", "🌀", "Complete your first Rebirth."),
+  B("lifting.rebirth2", "Twice Reborn", "🌀", "Complete Rebirth 2."),
+  B("lifting.rebirth3", "Thrice Reborn", "🌀", "Complete Rebirth 3."),
+  B("lifting.rebirth4", "Rebirth Regular", "🌀", "Complete Rebirth 4."),
+  B("lifting.rebirth5", "Rebirth Master", "🌀", "Complete Rebirth 5."),
+  B("lifting.rebirth6", "Final Rebirth", "🌀", "Complete Rebirth 6, the top of the ladder."),
+  B("lifting.dumbbell-multi", "Dumbbell Domination", "🏋️", "Complete the Dumbbell Zone rebirth."),
+  B("lifting.gd-star", "Star Power", "⭐", "Buy the GD Star."),
+  B("lifting.all-items", "Full Inventory", "🎒", "Own all 28 items."),
+  B("lifting.title-rock", "The Rock", "🪨", "Unlock the title \"The Rock\"."),
+  B("lifting.ghost-king", "Ghost King", "👑", "Reach rank 1 on the Top Lifters board."),
 ]);
 
 const defsById = new Map();

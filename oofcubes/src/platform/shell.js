@@ -11,14 +11,14 @@
 // own files land.
 
 import { injectTokens, formatOofbux, TOKENS } from "./ui/tokens.js";
-import { el, button, trapFocus, shopGrid, slider, segmented } from "./ui/kit.js";
+import { el, button, trapFocus, shopGrid } from "./ui/kit.js";
 import { createToaster } from "./ui/toast.js";
 import { createHud } from "./ui/hud.js";
 import * as saves from "./services/saves.js";
 import * as economy from "./services/economy.js";
 import * as badges from "./services/badges.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
-import { mountSaveCodeRows } from "./ui/savecode.js";
+import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
 
 // ---------------------------------------------------------------------------
@@ -57,18 +57,21 @@ const TIPS = [
 
 // The single merged Place registry — spec 06 §5.2.1 / spec 04 §5.6 (validate 04:V5
 // parses THIS literal). Portals are built for every row with portalColor !== null and
-// hidden !== true, in array order: adding a Place is adding one row.
-// SLICE: 06 §5.2.1's `lifting` row (Weight Lifting Simulator) is omitted — the slice
-// ships obby + tycoon, and 04:V5 requires every row to have a real src/games folder.
-// Restoring it is one line, filled in from 06 §5.2.1.
+// hidden !== true, in array order: adding a Place is adding one row. The Hub's own
+// buildPortals (hub/scripts/layout.js) reads this array generically — it lays out
+// however many rows pass the filter, so the `lifting` row below produces its portal
+// arch with no Hub-side change (verified by reading buildPortals: nothing there names
+// a slug or a row count).
 const PLACES = [
-  { slug: "hub",    hidden: true,  name: "The Hub",               icon: "🏙️", portalColor: null,
+  { slug: "hub",     hidden: true,  name: "The Hub",                  icon: "🏙️", portalColor: null,
     module: "./hub/game.js",           data: "./hub/place.json" },
-  { slug: "obby",   hidden: false, name: "Difficulty Chart Obby", icon: "🗼", portalColor: "#e74c3c",
+  { slug: "obby",    hidden: false, name: "Difficulty Chart Obby",    icon: "🗼", portalColor: "#e74c3c",
     module: "../games/obby/game.js",   data: "../games/obby/place.json" },
-  { slug: "tycoon", hidden: false, name: "Boss Tycoon",           icon: "🏭", portalColor: "#3ddc84",
+  { slug: "lifting", hidden: false, name: "Weight Lifting Simulator", icon: "🏋️", portalColor: "#f5c542",
+    module: "../games/lifting/game.js", data: "../games/lifting/place.json" },
+  { slug: "tycoon",  hidden: false, name: "Boss Tycoon",              icon: "🏭", portalColor: "#3ddc84",
     module: "../games/tycoon/game.js", data: "../games/tycoon/place.json" },
-  { slug: "demo",   hidden: true,  name: "Demo Yard",             icon: "🧪", portalColor: null,
+  { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];
 
@@ -104,7 +107,7 @@ let toaster = null;
 let bootScreen = null;
 let transitionOverlay = null;
 
-let state = "loading";    // hub | loading | playing | disposing (spec 04 §5.6)
+let state = "loading";    // hub | loading | playing | disposing (spec 04 §5.6) | studio (spec 11 §5.9)
 let currentSlug = null;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
@@ -520,53 +523,24 @@ function onCatalogSelect(item, render) {
   render();
 }
 
-// Settings — 06 §5.6.9's AUDIO and GRAPHICS sections, spec 07 §5.8's SAVE DATA rows,
-// and a Hub exit. The remaining §5.6.9 rows (ambience, controls, accessibility) land
-// with ui/settings.js; each writes through the same debounced profile path this one does.
+// Settings — spec 06 §5.6.9's full 18-row body lives in ui/settings.js now (all of
+// AUDIO/GRAPHICS/CONTROLS/ACCESSIBILITY/SAVE DATA/footer); this function is reduced to
+// what only the shell can supply — the deps bag (its own module-scope services plus the
+// two callbacks below) — and the one stopgap row that isn't a §5.6.9 row at all.
 function openSettings() {
   const panel = openPanel({ title: "Settings" });
   const settings = profileSettings();
-  const body = panel.bodyEl;
-
-  body.appendChild(el("div", "oof-section-label", "AUDIO"));
-  body.appendChild(slider({
-    label: "Music", min: 0, max: 100, step: 5, value: settings.musicVol,
-    onInput: (v) => {
-      audio.setMusicVolume(v / 100);
-      writeSetting("musicVol", v);
-    },
-  }).el);
-  body.appendChild(slider({
-    label: "Sound effects", min: 0, max: 100, step: 5, value: settings.sfxVol,
-    onInput: (v) => {
-      audio.setSfxVolume(v / 100);
-      writeSetting("sfxVol", v);
-    },
-    onRelease: () => sfx("click"),
-  }).el);
-
-  body.appendChild(el("div", "oof-section-label", "GRAPHICS"));
-  const quality = el("div", "oof-row");
-  quality.appendChild(el("span", null, "Quality"));
-  quality.appendChild(segmented({
-    options: [
-      { id: "auto", label: "Auto" }, { id: "low", label: "Low" },
-      { id: "medium", label: "Medium" }, { id: "high", label: "High" },
-    ],
-    value: settings.quality,
-    onChange: (tier) => {
-      renderer.setQuality(tier);
-      writeSetting("quality", tier);
-    },
-  }).el);
-  body.appendChild(quality);
-
-  mountSaveCodeRows(body, { saves, confirmDialog, toast: uiToast });
+  mountSettingsRows(panel.bodyEl, {
+    settings, writeSetting, applyAccessibility,
+    audio, renderer, input, sfx,
+    saves, confirmDialog, toast: uiToast,
+    version: SHELL_VERSION,
+  });
 
   // Not a §5.6.9 row: the slice's only way out of a Place on a phone (a game's own
   // exit button is per-game-spec, §5.2.4). Removed when the Hub's own exits land.
-  body.appendChild(el("div", "oof-section-label", "PLACE"));
-  body.appendChild(button({
+  panel.bodyEl.appendChild(el("div", "oof-section-label", "PLACE"));
+  panel.bodyEl.appendChild(button({
     label: "Back to the Hub", variant: "secondary",
     onClick: () => {
       panel.close();
@@ -1115,7 +1089,12 @@ async function loadPlaceInto(entry, slug) {
   // publishes it on the Place emitter right after init — this is how the Hub builds
   // one portal per row. Payload documented in the task report as a spec gap: 06 §9
   // names the `platform:places` bridge but not its shape or direction.
-  events.emit("platform:places", { places: getPlaces(), visited: visitedPlaces().slice() });
+  // `settings` rides along for the same reason: a Place's ctx.services.saves is
+  // place-scoped (no door to the "profile" domain), and the Hub's §5.3.4 step 5 needs
+  // profile.settings.ambience at boot — this one-shot bridge is the only way it can
+  // reach it (hub/scripts/ambience.js's own task report flagged the gap; live changes
+  // after boot already reach the Hub through platform:settingsChanged below).
+  events.emit("platform:places", { places: getPlaces(), visited: visitedPlaces().slice(), settings: profileSettings() });
   // §5.2.5 step 10's payload is `{ slug }`; `name` rides along because §5.6.3 hangs
   // the HUD title on this same event and the HUD has no registry access.
   events.emit("platform:placeLoaded", { slug, name: slug === "hub" ? null : entry.name });
@@ -1140,6 +1119,91 @@ function markVisited(slug) {
   visited.push(slug);
   saves.markDirty("profile");
 }
+
+// ===== studio hooks (spec 11, M5) =====
+// The whole of spec 11 §5.9's shell integration lives in this fence: the route
+// pattern, the deps bag §5.1 step 1 requires, and goToStudio() itself. The other three
+// §5.9 points are one line each and have to live where the machinery they hook already
+// is (applyRoute/onHashChange below, and stepOnce/renderFrame in the loop section) —
+// each of those call sites is commented back to this fence. Studio is still never
+// imported at module scope; `studioMod` is only ever assigned inside goToStudio's own
+// lazy `import()`, so Studio costs nothing on the boot path (§5.9 point 1 / §4).
+
+let studioMod = null;     // src/platform/studio/studio.js, set on the first #/studio/... route
+let studioEmitter = null; // stands in for "the Place's live emitter" in the deps bag below —
+                           // Studio opens with no Place loaded, so there is no such emitter to
+                           // hand it; a fresh placeApi.createEmitter() per open is what a real
+                           // Place load would get too (loadPlaceInto's own `events`), it is just
+                           // never bridged onto platformBus the way a Place's is, because nothing
+                           // needs a Studio edit-mode event visible platform-wide.
+
+const STUDIO_HASH_RE = /^#\/studio\/([a-z0-9]{8}|new)$/;
+
+function studioRouteId(hash) {
+  const m = STUDIO_HASH_RE.exec(hash || "");
+  return m ? m[1] : null;
+}
+
+// The eight §5.1 step 1 keys — the SAME live objects loadPlaceInto hands a Place
+// (`physics`/`partsApi` are the physicsForPlace/partsApi facades, not the raw engine
+// modules) — plus two extras beyond that list (reported by src/platform/studio/**'s own
+// task): `avatar` (rigRoot, so edit mode can hide it) and `camera` (cameraCtl, so
+// physics can read a camera yaw during playtest and playtest's own contact events stay
+// on its private sandbox emitter instead of a platform one).
+function studioDeps() {
+  return {
+    scene: renderer.scene,
+    rendererApi: renderer,
+    physics: physicsForPlace,
+    partsApi,
+    audio,
+    input,
+    services: {
+      economy: economy.createCtxApi(),
+      // Unused today — store.js persists creations through saves.js directly, per its
+      // own task's report — carried only for shape parity with a Place's ctx.services.
+      saves: saves.placeSaves("studio"),
+      badges: createBadgesCtxApi("studio"),
+      avatar: createAvatarCtxApi(),
+      ui,
+    },
+    events: studioEmitter,
+    avatar: rigRoot,
+    camera: cameraCtl,
+  };
+}
+
+// goToStudio(id) — §5.9 point 1: dispose any active Place (the normal spec-04 §5.6
+// path), enter state "studio", lazily import studio.js, open it. Mirrors goTo's own
+// loadInFlight guard and pendingSlug drain so a Place nav and a Studio nav can never
+// run their engine mutations (teardown, physics.init, scene builds) concurrently.
+async function goToStudio(id) {
+  if (loadInFlight) {
+    // A Studio nav has nowhere to queue itself the way goTo's pendingSlug does (that
+    // queue holds a Place slug, not a Studio id) — dropped rather than stranded. The
+    // route stays in the address bar, so a manual retry (or browser back/forward)
+    // still reaches it once the in-flight transition finishes.
+    return;
+  }
+  loadInFlight = true;
+  try {
+    teardown(); // dispose any active Place — the same path goTo takes (spec 04 §5.6)
+    setState("studio");
+    debugHandle.currentSlug = null;
+    debugHandle.slug = "studio";
+    studioEmitter = placeApi.createEmitter();
+    studioMod = await import("./studio/studio.js");
+    await studioMod.openStudio({ id, deps: studioDeps() });
+  } finally {
+    loadInFlight = false;
+  }
+  // Drain anything a concurrent goTo() queued into pendingSlug while this ran (mirrors
+  // goTo's own tail — see there for why the recursion happens outside the try/finally).
+  const next = pendingSlug;
+  pendingSlug = null;
+  if (next !== null) await goTo(next);
+}
+// ===== end studio hooks =====
 
 // ---------------------------------------------------------------------------
 // SECTION: hash routing — spec 06 §5.2.4
@@ -1167,6 +1231,13 @@ function writeHash(slug) {
 
 function applyRoute() {
   const hash = location.hash;
+  // studio hooks (spec 11 §5.9 point 1): a #/studio/<id> route never reaches
+  // routeSlug/goTo — Studio is not a PLACES row, it is its own lifecycle.
+  const studioId = studioRouteId(hash);
+  if (studioId) {
+    debugHandle.route = hash;
+    return goToStudio(studioId);
+  }
   const slug = routeSlug(hash);
   if (slug === null) {
     uiToast({ variant: "error", title: "Unknown place", body: hash });
@@ -1179,11 +1250,25 @@ function applyRoute() {
   return goTo(slug);
 }
 
-function onHashChange() {
+async function onHashChange() {
   if (suppressNextHash) {
     suppressNextHash = false;
     debugHandle.route = location.hash;
     return;
+  }
+  // studio hooks (spec 11 §5.9 point 3): leaving a Studio route for anything else
+  // closes Studio first. By now `location.hash` already holds the NEW route (the
+  // browser updates it before this event fires), so closeStudio()'s own routeToHub()
+  // sees a non-Studio hash and no-ops — applyRoute() below is what actually routes.
+  // closeStudio() itself no-ops if Studio is already closed, so this is safe to call
+  // on every non-Studio hashchange rather than tracking "was Studio open" separately.
+  if (studioMod && studioMod.isOpen() && !studioRouteId(location.hash)) {
+    try {
+      await studioMod.closeStudio();
+    } catch (err) {
+      console.warn("[oof] closeStudio failed", err);
+    }
+    studioEmitter = null;
   }
   applyRoute().catch(reportFatal);
 }
@@ -1195,6 +1280,10 @@ function onHashChange() {
 function stepOnce(dt) {
   physics.step(dt); // movers -> dynamics -> character -> contacts -> place routing
   simTime += dt;
+  // studio hooks (spec 11 §5.9 point 2): no-op in edit mode; runs the Place's
+  // behaviour tick in playtest. Character stepping is physics.step(dt) above, same as
+  // any other Place — studio.js's own comment on simStep says as much.
+  if (state === "studio" && studioMod) studioMod.simStep(dt);
   if (avatarService && typeof avatarService.update === "function") avatarService.update(dt);
   if (ctx && gameMod && !updateHalted) {
     ctx.time += dt;
@@ -1221,7 +1310,14 @@ function renderFrame(alpha, frameDt) {
   parts.applyInterpolation(alpha);
   cameraCtl.update(frameDt, t.position);
   if (rigRoot) renderer.setShadowTarget(rigRoot.position);
-  renderer.render(cameraCtl.three);
+  // studio hooks (spec 11 §5.9 point 2): fly-cam integration/gizmo scaling/autosave
+  // are frame-driven, never a timer (§5.1 step 6) — studio.frame() is what ticks them.
+  // getActiveCamera() answers the fly cam in edit mode and null in playtest (and
+  // always null when Studio is closed), where the shell's own follow camera renders —
+  // exactly the "studio.getActiveCamera() ?? engineCamera" §5.9 point 2 asks for.
+  if (state === "studio" && studioMod) studioMod.frame(frameDt);
+  const activeCamera = (state === "studio" && studioMod && studioMod.getActiveCamera()) || cameraCtl.three;
+  renderer.render(activeCamera);
   renderer.notifyFps(engineLoop.getStats().fps);
   if (fadeBootOnNextFrame) {
     fadeBootOnNextFrame = false;

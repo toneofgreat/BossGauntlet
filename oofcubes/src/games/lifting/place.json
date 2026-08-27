@@ -1,0 +1,5686 @@
+{
+  "meta": {
+    "slug": "lifting",
+    "name": "Weight Lifting Simulator",
+    "icon": "🏋️",
+    "description": "Tap to lift. Get huge. Lift the Moon."
+  },
+  "spawn": [
+    0,
+    0.5,
+    24
+  ],
+  "spawnYaw": 180,
+  "killY": -50,
+  "music": "pump",
+  "lighting": {
+    "skyTop": "#6f87b8",
+    "sunIntensity": 0.9
+  },
+  "regions": [
+    {
+      "id": "zone_gym",
+      "min": [
+        -150,
+        -20,
+        -150
+      ],
+      "max": [
+        150,
+        100,
+        150
+      ]
+    },
+    {
+      "id": "zone_space",
+      "min": [
+        -850,
+        -20,
+        -150
+      ],
+      "max": [
+        -550,
+        100,
+        150
+      ]
+    },
+    {
+      "id": "zone_dumbbell",
+      "min": [
+        -150,
+        -20,
+        -850
+      ],
+      "max": [
+        150,
+        100,
+        -550
+      ]
+    },
+    {
+      "id": "zone_lava",
+      "min": [
+        600,
+        -20,
+        -100
+      ],
+      "max": [
+        800,
+        100,
+        100
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "gym-ground",
+      "shape": "box",
+      "size": [
+        300,
+        1,
+        300
+      ],
+      "position": [
+        0,
+        -0.5,
+        0
+      ],
+      "color": "#5c946e",
+      "material": "grass"
+    },
+    {
+      "id": "gym-wall-n",
+      "shape": "box",
+      "size": [
+        300,
+        80,
+        6
+      ],
+      "position": [
+        0,
+        40,
+        -150
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "gym-wall-s",
+      "shape": "box",
+      "size": [
+        300,
+        80,
+        6
+      ],
+      "position": [
+        0,
+        40,
+        150
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "gym-wall-west",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        300
+      ],
+      "position": [
+        -150,
+        40,
+        0
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "gym-wall-east-n",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        142
+      ],
+      "position": [
+        150,
+        40,
+        -79
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "gym-wall-east-s",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        142
+      ],
+      "position": [
+        150,
+        40,
+        79
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "gym-bldg-back",
+      "shape": "box",
+      "size": [
+        120,
+        24,
+        1
+      ],
+      "position": [
+        0,
+        12,
+        -100
+      ],
+      "color": "#96543e",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-bldg-left",
+      "shape": "box",
+      "size": [
+        1,
+        24,
+        84
+      ],
+      "position": [
+        -60,
+        12,
+        -58
+      ],
+      "color": "#96543e",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-bldg-right",
+      "shape": "box",
+      "size": [
+        1,
+        24,
+        84
+      ],
+      "position": [
+        60,
+        12,
+        -58
+      ],
+      "color": "#96543e",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-bldg-front-w",
+      "shape": "box",
+      "size": [
+        52,
+        24,
+        1
+      ],
+      "position": [
+        -34,
+        12,
+        -16
+      ],
+      "color": "#96543e",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-bldg-front-e",
+      "shape": "box",
+      "size": [
+        52,
+        24,
+        1
+      ],
+      "position": [
+        34,
+        12,
+        -16
+      ],
+      "color": "#96543e",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-glass-back",
+      "shape": "box",
+      "size": [
+        120,
+        4,
+        0.3
+      ],
+      "position": [
+        0,
+        14,
+        -99.8
+      ],
+      "color": "#bfe8ff",
+      "material": "glass",
+      "transparency": 0.35
+    },
+    {
+      "id": "gym-glass-left",
+      "shape": "box",
+      "size": [
+        0.3,
+        4,
+        84
+      ],
+      "position": [
+        -59.8,
+        14,
+        -58
+      ],
+      "color": "#bfe8ff",
+      "material": "glass",
+      "transparency": 0.35
+    },
+    {
+      "id": "gym-glass-right",
+      "shape": "box",
+      "size": [
+        0.3,
+        4,
+        84
+      ],
+      "position": [
+        59.8,
+        14,
+        -58
+      ],
+      "color": "#bfe8ff",
+      "material": "glass",
+      "transparency": 0.35
+    },
+    {
+      "id": "gym-glass-front-w",
+      "shape": "box",
+      "size": [
+        52,
+        4,
+        0.3
+      ],
+      "position": [
+        -34,
+        14,
+        -15.8
+      ],
+      "color": "#bfe8ff",
+      "material": "glass",
+      "transparency": 0.35
+    },
+    {
+      "id": "gym-glass-front-e",
+      "shape": "box",
+      "size": [
+        52,
+        4,
+        0.3
+      ],
+      "position": [
+        34,
+        14,
+        -15.8
+      ],
+      "color": "#bfe8ff",
+      "material": "glass",
+      "transparency": 0.35
+    },
+    {
+      "id": "gym-tile-0-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-0-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -56,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-1-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -48,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-2-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -40,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-3-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -32,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-4-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -24,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-5-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -16,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-6-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        -8,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-7-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        0,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-8-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        8,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-9-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        16,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-10-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        24,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-11-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        32,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-12-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        40,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -97
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -91
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -85
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -79
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -73
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -67
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -61
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -55
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -49
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -43
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -37
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -31
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -25
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-13-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        48,
+        0.05,
+        -19
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-0",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -97
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-1",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -91
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-2",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -85
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-3",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -79
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-4",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -73
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-5",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -67
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-6",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -61
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-7",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -55
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-8",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -49
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-9",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -43
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-10",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -37
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-11",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -31
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-12",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -25
+      ],
+      "color": "#26262a",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tile-14-13",
+      "shape": "box",
+      "size": [
+        8,
+        0.1,
+        6
+      ],
+      "position": [
+        56,
+        0.05,
+        -19
+      ],
+      "color": "#343438",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-lifting-ring",
+      "shape": "cylinder",
+      "size": [
+        26,
+        0.3,
+        26
+      ],
+      "position": [
+        -26,
+        0.2,
+        -58
+      ],
+      "color": "#f7c948",
+      "material": "neon",
+      "canCollide": false
+    },
+    {
+      "id": "gym-shrine-1",
+      "shape": "cylinder",
+      "size": [
+        13,
+        2,
+        13
+      ],
+      "position": [
+        50,
+        1,
+        30
+      ],
+      "color": "#f2f4fa",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-shrine-2",
+      "shape": "cylinder",
+      "size": [
+        10,
+        2,
+        10
+      ],
+      "position": [
+        50,
+        3,
+        30
+      ],
+      "color": "#f2f4fa",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-shrine-3",
+      "shape": "cylinder",
+      "size": [
+        3.4,
+        4,
+        3.4
+      ],
+      "position": [
+        50,
+        6,
+        30
+      ],
+      "color": "#f2f4fa",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-shrine-orb",
+      "shape": "sphere",
+      "size": [
+        3,
+        3,
+        3
+      ],
+      "position": [
+        50,
+        10,
+        30
+      ],
+      "color": "#f7c948",
+      "material": "neon",
+      "behaviors": [
+        {
+          "type": "spinner",
+          "axis": "y",
+          "speed": 40
+        }
+      ]
+    },
+    {
+      "id": "gym-board-post-a",
+      "shape": "cylinder",
+      "size": [
+        0.4,
+        10,
+        0.4
+      ],
+      "position": [
+        58,
+        5,
+        -62
+      ],
+      "color": "#33343a",
+      "material": "metal"
+    },
+    {
+      "id": "gym-board-post-b",
+      "shape": "cylinder",
+      "size": [
+        0.4,
+        10,
+        0.4
+      ],
+      "position": [
+        58,
+        5,
+        -54
+      ],
+      "color": "#33343a",
+      "material": "metal"
+    },
+    {
+      "id": "gym-tree-0-trunk",
+      "shape": "cylinder",
+      "size": [
+        1,
+        4,
+        1
+      ],
+      "position": [
+        100,
+        2,
+        60
+      ],
+      "color": "#8c5a3c",
+      "material": "wood"
+    },
+    {
+      "id": "gym-tree-0-top",
+      "shape": "sphere",
+      "size": [
+        5,
+        5,
+        5
+      ],
+      "position": [
+        100,
+        6.5,
+        60
+      ],
+      "color": "#37a04c",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tree-1-trunk",
+      "shape": "cylinder",
+      "size": [
+        1,
+        4,
+        1
+      ],
+      "position": [
+        120,
+        2,
+        95
+      ],
+      "color": "#8c5a3c",
+      "material": "wood"
+    },
+    {
+      "id": "gym-tree-1-top",
+      "shape": "sphere",
+      "size": [
+        5,
+        5,
+        5
+      ],
+      "position": [
+        120,
+        6.5,
+        95
+      ],
+      "color": "#37a04c",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tree-2-trunk",
+      "shape": "cylinder",
+      "size": [
+        1,
+        4,
+        1
+      ],
+      "position": [
+        90,
+        2,
+        125
+      ],
+      "color": "#8c5a3c",
+      "material": "wood"
+    },
+    {
+      "id": "gym-tree-2-top",
+      "shape": "sphere",
+      "size": [
+        5,
+        5,
+        5
+      ],
+      "position": [
+        90,
+        6.5,
+        125
+      ],
+      "color": "#37a04c",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tree-3-trunk",
+      "shape": "cylinder",
+      "size": [
+        1,
+        4,
+        1
+      ],
+      "position": [
+        -100,
+        2,
+        60
+      ],
+      "color": "#8c5a3c",
+      "material": "wood"
+    },
+    {
+      "id": "gym-tree-3-top",
+      "shape": "sphere",
+      "size": [
+        5,
+        5,
+        5
+      ],
+      "position": [
+        -100,
+        6.5,
+        60
+      ],
+      "color": "#37a04c",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tree-4-trunk",
+      "shape": "cylinder",
+      "size": [
+        1,
+        4,
+        1
+      ],
+      "position": [
+        -120,
+        2,
+        95
+      ],
+      "color": "#8c5a3c",
+      "material": "wood"
+    },
+    {
+      "id": "gym-tree-4-top",
+      "shape": "sphere",
+      "size": [
+        5,
+        5,
+        5
+      ],
+      "position": [
+        -120,
+        6.5,
+        95
+      ],
+      "color": "#37a04c",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-tree-5-trunk",
+      "shape": "cylinder",
+      "size": [
+        1,
+        4,
+        1
+      ],
+      "position": [
+        -90,
+        2,
+        125
+      ],
+      "color": "#8c5a3c",
+      "material": "wood"
+    },
+    {
+      "id": "gym-tree-5-top",
+      "shape": "sphere",
+      "size": [
+        5,
+        5,
+        5
+      ],
+      "position": [
+        -90,
+        6.5,
+        125
+      ],
+      "color": "#37a04c",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-lamp-0-pole",
+      "shape": "cylinder",
+      "size": [
+        0.4,
+        10,
+        0.4
+      ],
+      "position": [
+        6,
+        5,
+        20
+      ],
+      "color": "#33343a",
+      "material": "metal"
+    },
+    {
+      "id": "gym-lamp-0-head",
+      "shape": "sphere",
+      "size": [
+        1,
+        1,
+        1
+      ],
+      "position": [
+        6,
+        10.2,
+        20
+      ],
+      "color": "#fff4c2",
+      "material": "neon"
+    },
+    {
+      "id": "gym-lamp-1-pole",
+      "shape": "cylinder",
+      "size": [
+        0.4,
+        10,
+        0.4
+      ],
+      "position": [
+        -6,
+        5,
+        20
+      ],
+      "color": "#33343a",
+      "material": "metal"
+    },
+    {
+      "id": "gym-lamp-1-head",
+      "shape": "sphere",
+      "size": [
+        1,
+        1,
+        1
+      ],
+      "position": [
+        -6,
+        10.2,
+        20
+      ],
+      "color": "#fff4c2",
+      "material": "neon"
+    },
+    {
+      "id": "gym-lamp-2-pole",
+      "shape": "cylinder",
+      "size": [
+        0.4,
+        10,
+        0.4
+      ],
+      "position": [
+        6,
+        5,
+        90
+      ],
+      "color": "#33343a",
+      "material": "metal"
+    },
+    {
+      "id": "gym-lamp-2-head",
+      "shape": "sphere",
+      "size": [
+        1,
+        1,
+        1
+      ],
+      "position": [
+        6,
+        10.2,
+        90
+      ],
+      "color": "#fff4c2",
+      "material": "neon"
+    },
+    {
+      "id": "gym-lamp-3-pole",
+      "shape": "cylinder",
+      "size": [
+        0.4,
+        10,
+        0.4
+      ],
+      "position": [
+        -6,
+        5,
+        90
+      ],
+      "color": "#33343a",
+      "material": "metal"
+    },
+    {
+      "id": "gym-lamp-3-head",
+      "shape": "sphere",
+      "size": [
+        1,
+        1,
+        1
+      ],
+      "position": [
+        -6,
+        10.2,
+        90
+      ],
+      "color": "#fff4c2",
+      "material": "neon"
+    },
+    {
+      "id": "gym-path",
+      "shape": "box",
+      "size": [
+        12,
+        0.15,
+        166
+      ],
+      "position": [
+        0,
+        0.08,
+        67
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-space-pillar-a",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        -50,
+        6,
+        13.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-space-pillar-b",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        -50,
+        6,
+        26.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-space-lintel",
+      "shape": "box",
+      "size": [
+        3,
+        3,
+        16
+      ],
+      "position": [
+        -50,
+        12,
+        20
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-space-fill",
+      "shape": "box",
+      "size": [
+        0.8,
+        12,
+        10
+      ],
+      "position": [
+        -50,
+        6,
+        20
+      ],
+      "color": "#6b3fa0",
+      "material": "neon",
+      "transparency": 0.4,
+      "canCollide": false,
+      "behaviors": [
+        {
+          "type": "touchEvent",
+          "event": "portal_space",
+          "cooldownS": 2
+        }
+      ]
+    },
+    {
+      "id": "gym-portal-dumbbell-pillar-a",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        -50,
+        6,
+        38.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-dumbbell-pillar-b",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        -50,
+        6,
+        51.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-dumbbell-lintel",
+      "shape": "box",
+      "size": [
+        3,
+        3,
+        16
+      ],
+      "position": [
+        -50,
+        12,
+        45
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "gym-portal-dumbbell-fill",
+      "shape": "box",
+      "size": [
+        0.8,
+        12,
+        10
+      ],
+      "position": [
+        -50,
+        6,
+        45
+      ],
+      "color": "#c7cdd9",
+      "material": "neon",
+      "transparency": 0.4,
+      "canCollide": false,
+      "behaviors": [
+        {
+          "type": "touchEvent",
+          "event": "portal_dumbbell",
+          "cooldownS": 2
+        }
+      ]
+    },
+    {
+      "id": "space-ground",
+      "shape": "box",
+      "size": [
+        300,
+        1,
+        300
+      ],
+      "position": [
+        -700,
+        -0.5,
+        0
+      ],
+      "color": "#141625",
+      "material": "plastic"
+    },
+    {
+      "id": "space-wall-n",
+      "shape": "box",
+      "size": [
+        300,
+        80,
+        6
+      ],
+      "position": [
+        -700,
+        40,
+        -150
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "space-wall-s",
+      "shape": "box",
+      "size": [
+        300,
+        80,
+        6
+      ],
+      "position": [
+        -700,
+        40,
+        150
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "space-wall-west",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        300
+      ],
+      "position": [
+        -850,
+        40,
+        0
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "space-wall-east",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        300
+      ],
+      "position": [
+        -550,
+        40,
+        0
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "space-pad",
+      "shape": "box",
+      "size": [
+        10,
+        0.4,
+        10
+      ],
+      "position": [
+        -700,
+        0.2,
+        80
+      ],
+      "color": "#6b3fa0",
+      "material": "neon"
+    },
+    {
+      "id": "space-asteroid-0",
+      "shape": "sphere",
+      "size": [
+        6,
+        6,
+        6
+      ],
+      "position": [
+        -700,
+        4,
+        60
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-1",
+      "shape": "sphere",
+      "size": [
+        6.571428571428571,
+        6.571428571428571,
+        6.571428571428571
+      ],
+      "position": [
+        -657.5735931288071,
+        4,
+        42.42640687119285
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-2",
+      "shape": "sphere",
+      "size": [
+        7.142857142857142,
+        7.142857142857142,
+        7.142857142857142
+      ],
+      "position": [
+        -640,
+        4,
+        3.67394039744206e-15
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-3",
+      "shape": "sphere",
+      "size": [
+        7.714285714285714,
+        7.714285714285714,
+        7.714285714285714
+      ],
+      "position": [
+        -657.5735931288071,
+        4,
+        -42.426406871192846
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-4",
+      "shape": "sphere",
+      "size": [
+        8.285714285714285,
+        8.285714285714285,
+        8.285714285714285
+      ],
+      "position": [
+        -700,
+        4,
+        -60
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-5",
+      "shape": "sphere",
+      "size": [
+        8.857142857142858,
+        8.857142857142858,
+        8.857142857142858
+      ],
+      "position": [
+        -742.4264068711929,
+        4,
+        -42.42640687119286
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-6",
+      "shape": "sphere",
+      "size": [
+        9.428571428571429,
+        9.428571428571429,
+        9.428571428571429
+      ],
+      "position": [
+        -760,
+        4,
+        -1.1021821192326178e-14
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-asteroid-7",
+      "shape": "sphere",
+      "size": [
+        10,
+        10,
+        10
+      ],
+      "position": [
+        -742.4264068711929,
+        4,
+        42.42640687119284
+      ],
+      "color": "#9aa3b8",
+      "material": "plastic"
+    },
+    {
+      "id": "space-starlight-0",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -684.6926627053964,
+        10,
+        36.95518130045147
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-1",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -663.0448186995485,
+        10,
+        15.307337294603593
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-2",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -663.0448186995485,
+        10,
+        -15.307337294603588
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-3",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -684.6926627053964,
+        10,
+        -36.95518130045147
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-4",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -715.3073372946036,
+        10,
+        -36.95518130045148
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-5",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -736.9551813004515,
+        10,
+        -15.307337294603581
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-6",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -736.9551813004515,
+        10,
+        15.3073372946036
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-starlight-7",
+      "shape": "cylinder",
+      "size": [
+        2,
+        20,
+        2
+      ],
+      "position": [
+        -715.3073372946036,
+        10,
+        36.95518130045147
+      ],
+      "color": "#4b56d2",
+      "material": "neon"
+    },
+    {
+      "id": "space-portal-return-pillar-a",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        -700,
+        6,
+        113.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "space-portal-return-pillar-b",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        -700,
+        6,
+        126.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "space-portal-return-lintel",
+      "shape": "box",
+      "size": [
+        3,
+        3,
+        16
+      ],
+      "position": [
+        -700,
+        12,
+        120
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "space-portal-return-fill",
+      "shape": "box",
+      "size": [
+        0.8,
+        12,
+        10
+      ],
+      "position": [
+        -700,
+        6,
+        120
+      ],
+      "color": "#37a04c",
+      "material": "neon",
+      "transparency": 0.4,
+      "canCollide": false,
+      "behaviors": [
+        {
+          "type": "touchEvent",
+          "event": "portal_gym",
+          "cooldownS": 2
+        }
+      ]
+    },
+    {
+      "id": "space-pedestal-0-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        -760,
+        1,
+        -40
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "space-pedestal-0-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        -760,
+        2.15,
+        -40
+      ],
+      "color": "#6b3fa0",
+      "material": "neon"
+    },
+    {
+      "id": "space-pedestal-1-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        -740,
+        1,
+        -80
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "space-pedestal-1-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        -740,
+        2.15,
+        -80
+      ],
+      "color": "#6b3fa0",
+      "material": "neon"
+    },
+    {
+      "id": "space-pedestal-2-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        -660,
+        1,
+        -80
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "space-pedestal-2-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        -660,
+        2.15,
+        -80
+      ],
+      "color": "#6b3fa0",
+      "material": "neon"
+    },
+    {
+      "id": "space-pedestal-3-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        -640,
+        1,
+        -40
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "space-pedestal-3-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        -640,
+        2.15,
+        -40
+      ],
+      "color": "#6b3fa0",
+      "material": "neon"
+    },
+    {
+      "id": "dumbbell-ground",
+      "shape": "box",
+      "size": [
+        300,
+        1,
+        300
+      ],
+      "position": [
+        0,
+        -0.5,
+        -700
+      ],
+      "color": "#2c2f3a",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-wall-n",
+      "shape": "box",
+      "size": [
+        300,
+        80,
+        6
+      ],
+      "position": [
+        0,
+        40,
+        -850
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "dumbbell-wall-s",
+      "shape": "box",
+      "size": [
+        300,
+        80,
+        6
+      ],
+      "position": [
+        0,
+        40,
+        -550
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "dumbbell-wall-west",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        300
+      ],
+      "position": [
+        -150,
+        40,
+        -700
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "dumbbell-wall-east",
+      "shape": "box",
+      "size": [
+        6,
+        80,
+        300
+      ],
+      "position": [
+        150,
+        40,
+        -700
+      ],
+      "color": "#000000",
+      "material": "plastic",
+      "transparency": 1
+    },
+    {
+      "id": "dumbbell-pad",
+      "shape": "box",
+      "size": [
+        10,
+        0.4,
+        10
+      ],
+      "position": [
+        0,
+        0.2,
+        -620
+      ],
+      "color": "#c7cdd9",
+      "material": "neon"
+    },
+    {
+      "id": "dumbbell-giant-bar",
+      "shape": "cylinder",
+      "size": [
+        4,
+        30,
+        4
+      ],
+      "position": [
+        0,
+        6,
+        -700
+      ],
+      "color": "#9aa3b8",
+      "material": "metal",
+      "rotation": [
+        0,
+        0,
+        90
+      ]
+    },
+    {
+      "id": "dumbbell-giant-end-a",
+      "shape": "cylinder",
+      "size": [
+        24,
+        6,
+        24
+      ],
+      "position": [
+        -18,
+        6,
+        -700
+      ],
+      "color": "#2e3345",
+      "material": "metal",
+      "rotation": [
+        0,
+        0,
+        90
+      ]
+    },
+    {
+      "id": "dumbbell-giant-end-b",
+      "shape": "cylinder",
+      "size": [
+        24,
+        6,
+        24
+      ],
+      "position": [
+        18,
+        6,
+        -700
+      ],
+      "color": "#2e3345",
+      "material": "metal",
+      "rotation": [
+        0,
+        0,
+        90
+      ]
+    },
+    {
+      "id": "dumbbell-portal-return-pillar-a",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        0,
+        6,
+        -606.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-portal-return-pillar-b",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        0,
+        6,
+        -593.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-portal-return-lintel",
+      "shape": "box",
+      "size": [
+        3,
+        3,
+        16
+      ],
+      "position": [
+        0,
+        12,
+        -600
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-portal-return-fill",
+      "shape": "box",
+      "size": [
+        0.8,
+        12,
+        10
+      ],
+      "position": [
+        0,
+        6,
+        -600
+      ],
+      "color": "#37a04c",
+      "material": "neon",
+      "transparency": 0.4,
+      "canCollide": false,
+      "behaviors": [
+        {
+          "type": "touchEvent",
+          "event": "portal_gym",
+          "cooldownS": 2
+        }
+      ]
+    },
+    {
+      "id": "dumbbell-pedestal-0-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        -60,
+        1,
+        -740
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-pedestal-0-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        -60,
+        2.15,
+        -740
+      ],
+      "color": "#c7cdd9",
+      "material": "neon"
+    },
+    {
+      "id": "dumbbell-pedestal-1-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        -40,
+        1,
+        -780
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-pedestal-1-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        -40,
+        2.15,
+        -780
+      ],
+      "color": "#c7cdd9",
+      "material": "neon"
+    },
+    {
+      "id": "dumbbell-pedestal-2-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        40,
+        1,
+        -780
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-pedestal-2-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        40,
+        2.15,
+        -780
+      ],
+      "color": "#c7cdd9",
+      "material": "neon"
+    },
+    {
+      "id": "dumbbell-pedestal-3-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        60,
+        1,
+        -740
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "dumbbell-pedestal-3-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        60,
+        2.15,
+        -740
+      ],
+      "color": "#c7cdd9",
+      "material": "neon"
+    },
+    {
+      "id": "lava-ground",
+      "shape": "box",
+      "size": [
+        200,
+        1,
+        200
+      ],
+      "position": [
+        700,
+        -0.5,
+        0
+      ],
+      "color": "#332a2c",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-cavern-wall-n",
+      "shape": "box",
+      "size": [
+        200,
+        48,
+        6
+      ],
+      "position": [
+        700,
+        24,
+        -100
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-cavern-wall-s",
+      "shape": "box",
+      "size": [
+        200,
+        48,
+        6
+      ],
+      "position": [
+        700,
+        24,
+        100
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-cavern-wall-west-n",
+      "shape": "box",
+      "size": [
+        6,
+        48,
+        92
+      ],
+      "position": [
+        600,
+        24,
+        -54
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-cavern-wall-west-s",
+      "shape": "box",
+      "size": [
+        6,
+        48,
+        92
+      ],
+      "position": [
+        600,
+        24,
+        54
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-cavern-wall-east",
+      "shape": "box",
+      "size": [
+        6,
+        48,
+        200
+      ],
+      "position": [
+        800,
+        24,
+        0
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-ceiling",
+      "shape": "box",
+      "size": [
+        200,
+        2,
+        200
+      ],
+      "position": [
+        700,
+        46,
+        0
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-pool-0",
+      "shape": "cylinder",
+      "size": [
+        22,
+        0.4,
+        22
+      ],
+      "position": [
+        650,
+        0.2,
+        -20
+      ],
+      "color": "#ff5722",
+      "material": "neon",
+      "behaviors": [
+        {
+          "type": "kill"
+        }
+      ]
+    },
+    {
+      "id": "lava-pool-1",
+      "shape": "cylinder",
+      "size": [
+        26,
+        0.4,
+        26
+      ],
+      "position": [
+        760,
+        0.2,
+        20
+      ],
+      "color": "#ff5722",
+      "material": "neon",
+      "behaviors": [
+        {
+          "type": "kill"
+        }
+      ]
+    },
+    {
+      "id": "lava-pool-2",
+      "shape": "cylinder",
+      "size": [
+        20,
+        0.4,
+        20
+      ],
+      "position": [
+        700,
+        0.2,
+        -70
+      ],
+      "color": "#ff5722",
+      "material": "neon",
+      "behaviors": [
+        {
+          "type": "kill"
+        }
+      ]
+    },
+    {
+      "id": "lava-pool-3",
+      "shape": "cylinder",
+      "size": [
+        28,
+        0.4,
+        28
+      ],
+      "position": [
+        700,
+        0.2,
+        70
+      ],
+      "color": "#ff5722",
+      "material": "neon",
+      "behaviors": [
+        {
+          "type": "kill"
+        }
+      ]
+    },
+    {
+      "id": "lava-pedestal-0-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        660,
+        1,
+        -60
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-pedestal-0-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        660,
+        2.15,
+        -60
+      ],
+      "color": "#ff8c1a",
+      "material": "neon"
+    },
+    {
+      "id": "lava-pedestal-1-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        740,
+        1,
+        -60
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-pedestal-1-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        740,
+        2.15,
+        -60
+      ],
+      "color": "#ff8c1a",
+      "material": "neon"
+    },
+    {
+      "id": "lava-pedestal-2-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        660,
+        1,
+        60
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-pedestal-2-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        660,
+        2.15,
+        60
+      ],
+      "color": "#ff8c1a",
+      "material": "neon"
+    },
+    {
+      "id": "lava-pedestal-3-base",
+      "shape": "box",
+      "size": [
+        6,
+        2,
+        6
+      ],
+      "position": [
+        740,
+        1,
+        60
+      ],
+      "color": "#1b1b1b",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-pedestal-3-trim",
+      "shape": "box",
+      "size": [
+        6.6,
+        0.3,
+        6.6
+      ],
+      "position": [
+        740,
+        2.15,
+        60
+      ],
+      "color": "#ff8c1a",
+      "material": "neon"
+    },
+    {
+      "id": "lava-tunnel-floor",
+      "shape": "box",
+      "size": [
+        450,
+        1,
+        16
+      ],
+      "position": [
+        375,
+        -0.5,
+        0
+      ],
+      "color": "#5a5450",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-tunnel-wall-n",
+      "shape": "box",
+      "size": [
+        450,
+        24,
+        1
+      ],
+      "position": [
+        375,
+        12,
+        -8
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-tunnel-wall-s",
+      "shape": "box",
+      "size": [
+        450,
+        24,
+        1
+      ],
+      "position": [
+        375,
+        12,
+        8
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-tunnel-roof",
+      "shape": "box",
+      "size": [
+        450,
+        2,
+        16
+      ],
+      "position": [
+        375,
+        24,
+        0
+      ],
+      "color": "#262022",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-gate-pillar-a",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        600,
+        6,
+        -6.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-gate-pillar-b",
+      "shape": "box",
+      "size": [
+        3,
+        12,
+        3
+      ],
+      "position": [
+        600,
+        6,
+        6.5
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-gate-lintel",
+      "shape": "box",
+      "size": [
+        3,
+        3,
+        16
+      ],
+      "position": [
+        600,
+        12,
+        0
+      ],
+      "color": "#8d8d94",
+      "material": "plastic"
+    },
+    {
+      "id": "lava-gate-fill",
+      "shape": "box",
+      "size": [
+        0.8,
+        12,
+        10
+      ],
+      "position": [
+        600,
+        6,
+        0
+      ],
+      "color": "#ff5722",
+      "material": "neon",
+      "transparency": 0.35,
+      "canCollide": true,
+      "behaviors": [
+        {
+          "type": "touchEvent",
+          "event": "portal_lava",
+          "cooldownS": 2
+        }
+      ]
+    }
+  ]
+}

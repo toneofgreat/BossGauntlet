@@ -10,7 +10,15 @@
 const STARTING_BALANCE = 100;
 const FLUSH_DEBOUNCE_MS = 1000;
 const AUTOSAVE_INTERVAL_MS = 10000;
+// The write ceiling is PER DOMAIN, not one flat number (spec 07 §6, amended in this
+// same change). Spec 07's single SAVE_MAX_BYTES predates Oof Studio: a 500-part
+// StudioDoc -- exactly what spec 11 §6's MAX_STUDIO_PARTS advertises -- serialises to
+// ~95,011 bytes, so a creation became permanently unsaveable at ~344 parts, well under
+// the 500 the editor offers. Spec 11 §6 is the more specific statement about that
+// document, so studio domains get its MAX_DOC_BYTES and every other domain keeps spec
+// 07's number.
 const SAVE_MAX_BYTES = 65536;
+const STUDIO_SAVE_MAX_BYTES = 262144; // spec 11 §6 MAX_DOC_BYTES
 // SAVE_CODE_TARGET_CHARS / SAVE_CODE_MAX_CHARS / SAVE_CODE_IMPORT_MAX_CHARS (spec 07
 // §6) belong to the exportSaveCode/importSaveCode budget checks; unused while those
 // stay SLICE stubs (see the export/import section below) and are reintroduced there.
@@ -86,17 +94,44 @@ function domainKind(domain) {
   return domain.startsWith("place.") ? "place" : domain;
 }
 
+// isStudioDomain(domain) — the Oof Studio documents spec 11 §6 sizes: one creation
+// per `place.studio-<id>` envelope, plus the `studio` creation index.
+function isStudioDomain(domain) {
+  return domain === "studio" || domain.startsWith("place.studio-");
+}
+
+// maxBytesFor(domain) — the per-domain write ceiling (spec 07 §6, as amended).
+function maxBytesFor(domain) {
+  return isStudioDomain(domain) ? STUDIO_SAVE_MAX_BYTES : SAVE_MAX_BYTES;
+}
+
+// A domain is "seedless" when saves.js has no shape it may invent for it: every
+// place.<slug>, and any domain registered in CURRENT_VERSIONS without a
+// DOMAIN_DEFAULTS factory ("studio" — the Oof Studio creation index, whose schema
+// belongs to spec 11, not here). Nothing stored yields null, and only setDomain()
+// ever puts one into the cache.
+function seedless(domain) {
+  return domain.startsWith("place.") || !(domain in DOMAIN_DEFAULTS);
+}
+function blankFor(domain) {
+  return seedless(domain) ? null : DOMAIN_DEFAULTS[domain]();
+}
+// "place" is a kind label in CURRENT_VERSIONS/MIGRATIONS, never a domain of its own.
+function knownDomain(domain) {
+  return domain !== "place" && domain in CURRENT_VERSIONS;
+}
+
 // loadDomain(domain) — spec 07 §5.1. Never throws; always returns a valid object (or
-// null for a place.<slug> domain with nothing stored / refused / corrupt).
+// null for a seedless domain — place.<slug> or "studio" — with nothing stored /
+// refused / corrupt).
 function loadDomain(domain) {
-  const isPlace = domain.startsWith("place.");
   let raw = null;
   try {
     raw = localStorage.getItem(keyFor(domain));
   } catch {
     raw = null; // best-effort read; treated the same as "nothing stored"
   }
-  if (raw === null) return isPlace ? null : DOMAIN_DEFAULTS[domain]();
+  if (raw === null) return blankFor(domain);
 
   let parsed;
   let corrupt = false;
@@ -111,7 +146,7 @@ function loadDomain(domain) {
   if (corrupt) {
     try { localStorage.setItem(corruptKeyFor(domain), raw); } catch { /* best-effort, swallow quota errors */ }
     console.error("[oof] corrupt save, reset", domain);
-    return isPlace ? null : DOMAIN_DEFAULTS[domain]();
+    return blankFor(domain);
   }
 
   const cur = CURRENT_VERSIONS[domainKind(domain)];
@@ -121,7 +156,7 @@ function loadDomain(domain) {
     readonly.add(domain);
     console.warn("[oof] save from a newer version, running read-only", domain);
     warningsBuffer.push(`Your ${domain} save is from a newer version and was left untouched.`);
-    return isPlace ? null : DOMAIN_DEFAULTS[domain]();
+    return blankFor(domain);
   }
 
   // schemaVersion < cur: walk the migration ladder one step at a time.
@@ -133,7 +168,7 @@ function loadDomain(domain) {
       // Missing migration step -> treat exactly like corrupt JSON (§5.1 step 2 path).
       try { localStorage.setItem(corruptKeyFor(domain), raw); } catch { /* best-effort */ }
       console.error("[oof] corrupt save, reset", domain);
-      return isPlace ? null : DOMAIN_DEFAULTS[domain]();
+      return blankFor(domain);
     }
     obj = step(obj);
   }
@@ -147,14 +182,47 @@ export function getDomain(domain) {
   if (domain.startsWith("place.")) {
     return cache.has(domain) ? cache.get(domain) : null;
   }
-  if (!(domain in DOMAIN_DEFAULTS) && domain !== "studio") {
+  if (!knownDomain(domain)) {
     throw new TypeError("unknown domain: " + domain);
   }
-  // SLICE: "studio" (Oof Studio index, spec 11 M5 — not in slice scope, SLICE.md) is
-  // registered in CURRENT_VERSIONS above but has no DOMAIN_DEFAULTS factory and is
-  // never preloaded at boot; reading it before anything has written it returns null,
-  // mirroring the place.<slug> "nothing stored yet" case above.
+  // A seedless domain ("studio", the Oof Studio index — spec 11 M5 owns its schema)
+  // reads back null until setDomain() below has put one in the cache, or until
+  // initSaves() adopted one that was already stored: same as the place.<slug>
+  // "nothing stored yet" case above.
   return cache.has(domain) ? cache.get(domain) : null;
+}
+
+// setDomain(domain, obj) — spec 07 §5.1 (added in the same change as the per-domain
+// ceiling). The seeding counterpart to getDomain, and the ONLY way a seedless domain
+// can enter the cache. Without it, store.js had to smuggle the Oof Studio creation
+// index through an invented `place.studio-index` envelope — a slug outside
+// validate.js's key allowlist that then travelled inside account save codes as a fake
+// Place. Stores `obj` BY REFERENCE, so getDomain's "mutate in place, then markDirty"
+// contract holds for the same object afterwards, and marks the domain dirty itself.
+export function setDomain(domain, obj) {
+  if (typeof domain !== "string" || domain.startsWith("place.")) {
+    throw new TypeError("place domains are written through placeSaves(): " + domain);
+  }
+  if (!knownDomain(domain)) throw new TypeError("unknown domain: " + domain);
+  if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
+    throw new TypeError("setDomain needs a plain object: " + domain);
+  }
+  // loadDomain quarantines anything without a valid schemaVersion as corrupt, so a
+  // caller that omitted it gets the current version stamped here rather than a save
+  // that vanishes on the next boot.
+  if (!Number.isInteger(obj.schemaVersion) || obj.schemaVersion < 1) {
+    obj.schemaVersion = CURRENT_VERSIONS[domainKind(domain)];
+  }
+  let json;
+  try {
+    json = JSON.stringify(obj);
+  } catch (err) {
+    throw new Error("save not serializable: " + err.message);
+  }
+  if (json.length > maxBytesFor(domain)) throw new Error("save too large");
+  cache.set(domain, obj);
+  markDirty(domain);
+  return obj;
 }
 
 // markDirty(domain) — spec 07 §5.1: adds to `dirty`, (re)starts a trailing debounce.
@@ -172,7 +240,9 @@ export function flush(domain) {
     return false;
   }
   const obj = cache.get(domain);
-  if (obj === undefined) {
+  // `== null` on purpose: a seedless domain can be cached as null (nothing stored /
+  // corrupt), and writing the string "null" would be quarantined as corrupt on load.
+  if (obj == null) {
     dirty.delete(domain);
     return false;
   }
@@ -233,6 +303,22 @@ export function initSaves() {
     cache.set(domain, loadDomain(domain));
   }
 
+  // Seedless domains ("studio") are adopted only when something has actually written
+  // one: saves.js has no shape to invent for them, so a first boot leaves them absent
+  // rather than writing an empty key.
+  for (const domain of Object.keys(CURRENT_VERSIONS)) {
+    if (!knownDomain(domain) || !seedless(domain)) continue;
+    let present = false;
+    try {
+      present = localStorage.getItem(keyFor(domain)) !== null;
+    } catch {
+      present = false;
+    }
+    if (!present) continue;
+    const obj = loadDomain(domain);
+    if (obj) cache.set(domain, obj);
+  }
+
   cache.get("profile").lastSeenAt = Date.now();
   markDirty("profile");
 
@@ -276,7 +362,10 @@ export function placeSaves(slug) {
       } catch (err) {
         throw new Error("save not serializable: " + err.message);
       }
-      if (json.length > SAVE_MAX_BYTES) throw new Error("save too large");
+      // Per-domain ceiling (spec 07 §6, amended): a studio Place gets spec 11 §6's
+      // MAX_DOC_BYTES, everything else spec 07's SAVE_MAX_BYTES. The message stays
+      // spec 04's verbatim "save too large" either way.
+      if (json.length > maxBytesFor(domain)) throw new Error("save too large");
       cache.set(domain, { schemaVersion: 1, data: JSON.parse(json), updatedAt: Date.now() });
       markDirty(domain);
     },

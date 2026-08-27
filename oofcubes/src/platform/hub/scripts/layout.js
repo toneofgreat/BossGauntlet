@@ -35,6 +35,13 @@ const PLAQUE_GOLD = "#f5c542";
 const RIBBON_COLOR = "#ff4757";
 const PARKOUR_COLOR = "#cfd8dc";
 
+// Oof Studio's workshop fascia — the `studioSign` plate in place.json sits at
+// (-70, 15, -39.1) and these labels ride 0.3 in front of its south face.
+const STUDIO_SIGN_X = -70;
+const STUDIO_SIGN_Z = -38.7;
+const STUDIO_SIGN_TEXT = "OOF STUDIO";
+const STUDIO_GLYPH = "🛠️"; // hammer-and-wrench, emoji presentation
+
 // The rising spiral of §5.3.3: storefront corner -> cloud over the fountain. Gaps are
 // 6-9 units with 3-4 unit rises, clearable at WalkSpeed 16 / Jump 50 with no powerups.
 const PARKOUR_STEPS = [
@@ -378,11 +385,16 @@ export function buildParkour(ctx) {
 }
 
 // ---------------------------------------------------------------------------
-// static-part signage — §5.3.2 rows `shopSign` and `badgeWallSign`
+// static-part signage — §5.3.2 rows `shopSign`, `badgeWallSign` and `studioSign`
 // ---------------------------------------------------------------------------
 
-// Those two rows are authored in place.json as plain plates because the Place schema
+// Those rows are authored in place.json as plain plates because the Place schema
 // (spec 04 §3.1) has no texture field; their canvas text is procedural, here.
+//
+// The workshop's fascia carries two labels rather than one: the 🛠 of spec 11's
+// "🛠 Oof Studio" label needs the emoji font, and fitFont drives a single font
+// template per canvas, so the glyph and the words are separate plates side by side —
+// the same split the portal arches make between their name sign and their icon plate.
 export function buildSigns(ctx) {
   const track = createTracker(ctx);
   track.label(placeLabel(ctx, {
@@ -392,6 +404,16 @@ export function buildSigns(ctx) {
   track.label(placeLabel(ctx, {
     text: "BADGE WALL", worldW: 18, worldH: 2.4, color: PLAQUE_GOLD, font: LABEL_FONT,
     position: [-73.6, 12.5, 0], yawDeg: 90,
+  }));
+  // The workshop faces +z (south, back down the plaza towards spawn), which is the
+  // plane a label mesh already faces, so neither of these takes a yaw.
+  track.label(placeLabel(ctx, {
+    text: STUDIO_GLYPH, worldW: 3.2, worldH: 3.2, color: SIGN_TEXT, font: EMOJI_FONT,
+    maxPx: EMOJI_PX, position: [STUDIO_SIGN_X - 7.4, 15, STUDIO_SIGN_Z],
+  }));
+  track.label(placeLabel(ctx, {
+    text: STUDIO_SIGN_TEXT, worldW: 12, worldH: 2.6, color: PLAQUE_GOLD, font: LABEL_FONT,
+    position: [STUDIO_SIGN_X + 1.6, 15, STUDIO_SIGN_Z],
   }));
   return { dispose: track.dispose };
 }
