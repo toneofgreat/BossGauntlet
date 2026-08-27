@@ -66,6 +66,13 @@ export const BADGES = Object.freeze([
   B("obby.megadeath", "Megadeath Survivor", "💀", "Clear the Megadeath Tower."),
   B("obby.dilly", "Dilly Impossible??", "🌈", "Clear the Dilly Impossible Tower."),
   B("obby.winner", "OBBY WINNER", "🏆", "Touch the gold pad at the top of the obby."),
+
+  // tycoon (spec 10 §5.11)
+  B("tycoon.open-for-business", "Open For Business", "🏭", "Buy your first paid dropper."),
+  B("tycoon.fully-upgraded", "Fully Upgraded", "✖️", "Reach the x9 multiplier."),
+  B("tycoon.dropper-collector", "Dropper Collector", "🌈", "Own all 11 droppers."),
+  B("tycoon.sky-boss", "Sky Boss", "🚁", "Ride the Boss Chopper."),
+  B("tycoon.true-boss", "True Boss", "👑", "Build the Golden Boss Statue."),
 ]);
 
 const defsById = new Map();

@@ -19,6 +19,7 @@ import * as economy from "./services/economy.js";
 import * as badges from "./services/badges.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
 import { mountSaveCodeRows } from "./ui/savecode.js";
+import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
 
 // ---------------------------------------------------------------------------
 // tuning constants — spec 06 §6 (the single source for these numbers)
@@ -396,6 +397,7 @@ function confirmDialog(title, body) {
 // openPanel({ title, onClose }) -> { el, bodyEl, close() } — §5.6.7. Portrait bottom
 // sheet vs landscape drawer is pure CSS (tokens.js); only one panel at a time.
 function openPanel(opts = {}) {
+  closeAvatarEditor(); // one full-screen surface at a time
   if (panelHandle) panelHandle.close();
   const scrim = el("div", "oof-panel-scrim");
   const panel = el("div", "oof-panel");
@@ -443,15 +445,30 @@ function openPanel(opts = {}) {
   return panelHandle;
 }
 
-// The minimal Catalog: the slice's items, buy + equip, through the same shopGrid
-// every in-game shop uses (§5.6.7). SLICE: the tab argument, the tabbed panel and the
-// avatar editor are spec 05 §5.10 — every item is in one list until then; this is the
-// reachability seam §5.6.8 registers a real Catalog through.
+// The Catalog IS the Avatar Editor (spec 05 §5.10): six tabs, a thumbnail grid and a
+// live 3D preview. A 46-item catalogue is not browsable as the one flat list the
+// slice shipped. The old shopGrid panel is kept below as the fallback for the case
+// where the editor cannot open at all (no second WebGL context, mostly).
 function openCatalog(tab) {
   if (!avatarService) {
     uiToast({ variant: "error", title: "Catalog not installed yet" });
     return Promise.resolve();
   }
+  try {
+    return openAvatarEditor({
+      avatar: avatarService,
+      economy,
+      ui,
+      confirmDialog,
+      initialTab: tab,
+    });
+  } catch (err) {
+    console.warn("[oof] avatar editor unavailable, falling back to the list", err);
+    return openCatalogList();
+  }
+}
+
+function openCatalogList() {
   return new Promise((resolve) => {
     const panel = openPanel({ title: "Catalog", onClose: resolve });
     const render = () => {

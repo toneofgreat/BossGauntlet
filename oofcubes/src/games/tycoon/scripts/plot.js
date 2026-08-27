@@ -8,7 +8,7 @@
 // them; splitting them out later is a move, not a rewrite.
 
 import {
-  LAYOUT, TUNING, PURCHASES, MILESTONES, fmt, getPurchase, computeIncome, computeMultiplier,
+  LAYOUT, TUNING, PURCHASES, MILESTONES, CODES, fmt, getPurchase, computeIncome, computeMultiplier,
 } from "./config.js";
 
 const LABEL_PX_PER_UNIT = 48; // canvas resolution of a world-space label plate
@@ -185,9 +185,15 @@ export function buildPurchase(ctx, state, id, opts = {}) {
   else if (p.kind === "upgrader") buildArch(ctx, state, p);
   else if (id === "walls1") buildBackWall(ctx, state, p);
   else if (id === "lights") buildLights(ctx, state, p);
-  // SLICE: the roof/side-wall/boss-door/ramp rows, the auras (§5.8), the Boss
-  // Chopper (§5.9), the Golden Boss Statue (§5.10) and the gear pads (§5.4) build
-  // from §5.1's remaining "Buildings" rows through this same dispatch.
+  else if (id === "walls3") buildFrontWall(ctx, state, p);
+  else if (id === "walls2") buildSideWalls(ctx, state, p);
+  else if (id === "roof") buildRoof(ctx, state, p);
+  else if (id === "laserdoor") buildBossDoor(ctx, state, p);
+  else if (id === "ladder") buildRamp(ctx, state, p);
+  else if (id === "helicopter") buildChopper(ctx, state, p);
+  else if (id === "bossstatue") buildStatue(ctx, state, p);
+  else if (p.kind === "gear") buildGearPad(ctx, state, p);
+  else if (id.startsWith("aura")) buildAura(ctx, state, p);
   repaintPad(ctx, state, p);
 }
 
@@ -215,6 +221,101 @@ function buildArch(ctx, state, p) {
   }
   track(ctx, state, p.id, box(L.ARCH_BEAM_SIZE, [0, L.ARCH_BEAM_Y, p.archZ], L.ARCH_COLOR, extra));
   addLabel(ctx, state, "machine:" + p.id, [0, L.ARCH_BEAM_Y + 3, p.archZ], ["×3 UPGRADER"], L.ARCH_COLOR, 8, 2);
+}
+
+// The rest of §5.1's Buildings rows. Each is only geometry: what a purchase COSTS and
+// what it requires is config's business, and nothing here reads the save.
+
+function buildFrontWall(ctx, state, p) {
+  track(ctx, state, p.id, box(LAYOUT.WALLS3_SIZE, LAYOUT.WALLS3_POS, LAYOUT.WALLS1_COLOR));
+}
+
+function buildSideWalls(ctx, state, p) {
+  for (const sx of [-1, 1]) {
+    track(ctx, state, p.id, box(LAYOUT.WALLS2_SIZE, [sx * LAYOUT.WALLS2_X, 8, 0], LAYOUT.WALLS1_COLOR));
+  }
+}
+
+function buildRoof(ctx, state, p) {
+  track(ctx, state, p.id, box(LAYOUT.ROOF_SIZE, LAYOUT.ROOF_POS, LAYOUT.WALLS1_COLOR));
+}
+
+// The boss door sits IN the front wall, so it needs the front wall to be there —
+// which is what its `requires` row says. It pulses in updatePlot.
+function buildBossDoor(ctx, state, p) {
+  const id = track(ctx, state, p.id, box(LAYOUT.DOOR_SIZE, LAYOUT.DOOR_POS, LAYOUT.DOOR_COLOR, {
+    material: "neon", transparency: 0.25, canCollide: false,
+  }));
+  state.doorPartId = id;
+}
+
+// A stepped ramp rather than a ladder: the character controller climbs steps, and a
+// real ladder would need a climb mode the engine does not have.
+function buildRamp(ctx, state, p) {
+  const rise = (LAYOUT.ROOF_POS[1] + LAYOUT.ROOF_SIZE[1] / 2) / LAYOUT.RAMP_STEPS;
+  for (let i = 0; i < LAYOUT.RAMP_STEPS; i++) {
+    track(ctx, state, p.id, box(
+      LAYOUT.RAMP_STEP_SIZE,
+      [LAYOUT.RAMP_X, rise * (i + 1) - 0.5, LAYOUT.RAMP_Z0 + i * LAYOUT.RAMP_STEP_SIZE[2]],
+      LAYOUT.RAMP_COLOR,
+    ));
+  }
+}
+
+// §5.8 — a ring of blocks orbiting the plot. Positions are written every step by
+// updatePlot; this only creates them and records the tier they belong to.
+function buildAura(ctx, state, p) {
+  const tier = LAYOUT.AURA_TIERS.find((t) => t.id === p.id);
+  if (!tier) return;
+  const ids = [];
+  for (let i = 0; i < LAYOUT.AURA_COUNT; i++) {
+    ids.push(track(ctx, state, p.id, box(tier.size, [tier.radius, tier.height, 0], tier.color, {
+      material: "neon", canCollide: false,
+    })));
+  }
+  state.auras.push({ tier, ids });
+}
+
+function buildChopper(ctx, state, p) {
+  const y = LAYOUT.CHOPPER_HEIGHT;
+  const body = track(ctx, state, p.id, box(LAYOUT.CHOPPER_BODY_SIZE, [0, y, 0], LAYOUT.CHOPPER_COLOR));
+  const tail = track(ctx, state, p.id, box(LAYOUT.CHOPPER_TAIL_SIZE, [0, y + 0.6, -9], LAYOUT.CHOPPER_COLOR));
+  const rotor = track(ctx, state, p.id, box(LAYOUT.CHOPPER_ROTOR_SIZE, [0, y + 2.2, 0], "#2c2c34", {
+    behaviors: [{ type: "spinner", axis: "y", speed: LAYOUT.ROTOR_SPEED }],
+  }));
+  const skids = [-2, 2].map((sx) => track(ctx, state, p.id, box(
+    LAYOUT.CHOPPER_SKID_SIZE, [sx, y - 2, 0], "#2c2c34",
+  )));
+  state.chopper = { parts: [body, tail, rotor, ...skids], offsets: [[0, 0, 0], [0, 0.6, -9], [0, 2.2, 0], [-2, -2, 0], [2, -2, 0]], x: 0, z: 0 };
+}
+
+// §5.10 — the end of the line, and deliberately just a big gold Oof.
+function buildStatue(ctx, state, p) {
+  const [bx, by, bz] = LAYOUT.STATUE_POS;
+  const gold = { material: "metal" };
+  track(ctx, state, p.id, box([14, 2, 14], [bx, by, bz], "#6b6b6b"));
+  track(ctx, state, p.id, box([6, 6, 3], [bx, by + 5, bz], LAYOUT.STATUE_COLOR, gold));
+  track(ctx, state, p.id, box([3.6, 3.6, 3.6], [bx, by + 10, bz], LAYOUT.STATUE_COLOR, gold));
+  for (const sx of [-1, 1]) {
+    track(ctx, state, p.id, box([2, 6, 2], [bx + sx * 4.5, by + 5.5, bz], LAYOUT.STATUE_COLOR, gold));
+    track(ctx, state, p.id, box([2.4, 6, 2.4], [bx + sx * 1.6, by - 1, bz], LAYOUT.STATUE_COLOR, gold));
+  }
+  addLabel(ctx, state, "machine:bossstatue", [bx, by + 14, bz], ["THE BOSS"], LAYOUT.STATUE_COLOR, 10, 2.6);
+}
+
+// A gear pad shows what it sells standing on it, so the plot reads without labels.
+function buildGearPad(ctx, state, p) {
+  const [x, , z] = p.pad;
+  const y = 2.2;
+  if (p.id === "sword") {
+    track(ctx, state, p.id, box([0.5, 4, 0.5], [x, y + 2, z], "#d9b48f", { canCollide: false }));
+    track(ctx, state, p.id, box([2, 0.5, 0.5], [x, y + 0.4, z], "#9b6a3f", { canCollide: false }));
+  } else if (p.id === "magiccarpet") {
+    track(ctx, state, p.id, box([4, 0.3, 6], [x, y, z], "#b01030", { canCollide: false }));
+  } else {
+    const color = p.id === "speedcoil" ? "#35e0e0" : p.id === "gravitycoil" ? "#9a5cff" : "#ff8c1a";
+    track(ctx, state, p.id, box([1.4, 3.4, 1.4], [x, y + 1, z], color, { material: "neon", canCollide: false }));
+  }
 }
 
 function buildBackWall(ctx, state, p) {
@@ -245,10 +346,46 @@ function refreshPadLabels(ctx, state) {
   }
 }
 
-// updatePlot — per-step plot upkeep (§5.15's update order calls it after gear).
-// SLICE: §5.8's orbiting auras, §5.1's pulsing boss door and §5.9's chopper follow +
-// ride badge are the other three things this function runs in the full build.
+// updatePlot — per-step plot upkeep (§5.15's update order calls it after gear):
+// the aura rings orbit, the boss door breathes, and the chopper trails the boss.
+// All of it is driven off sim time, never a timer (ARCHITECTURE §5).
 export function updatePlot(ctx, state, dt) {
+  state.plotTime += dt;
+  const t = state.plotTime;
+
+  for (const aura of state.auras) {
+    const { tier, ids } = aura;
+    for (let i = 0; i < ids.length; i++) {
+      const deg = (360 * i) / ids.length + tier.speed * t;
+      const rad = (deg * Math.PI) / 180;
+      ctx.engine.parts.setPosition(ids[i], [
+        Math.cos(rad) * tier.radius,
+        tier.height + Math.sin(t * 1.2 + i) * 0.8,
+        Math.sin(rad) * tier.radius,
+      ]);
+    }
+  }
+
+  if (state.doorPartId !== null) {
+    // A door you cannot walk through yet should still look alive.
+    const pulse = 0.15 + 0.2 * (0.5 + 0.5 * Math.sin(2 * Math.PI * LAYOUT.DOOR_PULSE_HZ * t));
+    ctx.engine.parts.setTransparency(state.doorPartId, pulse);
+  }
+
+  if (state.chopper) {
+    // Eases toward the boss rather than snapping: a chopper that teleports reads as
+    // a bug, and CHOPPER_FOLLOW is the fraction of the remaining gap closed per second.
+    const p = ctx.player.position();
+    const k = Math.min(1, LAYOUT.CHOPPER_FOLLOW * dt);
+    state.chopper.x += (p[0] - state.chopper.x) * k;
+    state.chopper.z += (p[2] - state.chopper.z) * k;
+    const y = LAYOUT.CHOPPER_HEIGHT;
+    state.chopper.parts.forEach((id, i) => {
+      const off = state.chopper.offsets[i];
+      ctx.engine.parts.setPosition(id, [state.chopper.x + off[0], y + off[1], state.chopper.z + off[2]]);
+    });
+  }
+
   refreshPadLabels(ctx, state);
 }
 
@@ -385,7 +522,12 @@ export function updatePurchases(ctx, state) {
 export function tryPurchase(ctx, state, id) {
   const p = getPurchase(id);
   if (!p) return { ok: false, reason: "owned" };
-  if (state.save.purchased[id]) return { ok: false, reason: "owned" }; // silent
+  if (state.save.purchased[id]) {
+    // Standing on gear you already own is how you pick it up (and put it down):
+    // a pad that does nothing on the second touch reads as broken.
+    if (p.kind === "gear") equipGear(ctx, state, state.save.equipped === id ? null : id);
+    return { ok: false, reason: "owned" };
+  }
   const missing = requirementMissing(state, p);
   if (missing) {
     ctx.services.ui.toast("Requires: " + missing.name, { icon: "🔒" });
@@ -412,8 +554,8 @@ export function applyPurchase(ctx, state, id, opts = {}) {
   state.multiplier = computeMultiplier(state.save);
   state.incomePerSec = computeIncome(state.save);
   buildPurchase(ctx, state, id);
-  // SLICE: §5.6 step 4 (a gear buy adds a hotbar slot, never auto-equips) lands with
-  // §5.13's hotbar and §5.4's gear rows.
+  // §5.6 step 4: buying gear adds a hotbar slot and never auto-equips — being
+  // silently given 30 walk speed is disorienting when you did not ask for it.
   if (!opts.silent) {
     ctx.engine.audio.playSfx("buy");
     ctx.services.ui.toast(p.name + " purchased!", { icon: "🏭" });
@@ -433,6 +575,43 @@ export function checkMilestones(ctx, state) {
     if (m.badgeId) ctx.services.badges.award(m.badgeId);
     ctx.services.ui.toast("Milestone: " + m.label + " +" + m.oofbux + " Oofbux", { icon: "🏅" });
   }
+}
+
+// §5.4 — equip one piece of gear, or none. Ownership is validated rather than
+// trusted: the hotbar is built from the save, but so is everything else, and a
+// corrupted save should not hand out a Magic Carpet.
+export function equipGear(ctx, state, idOrNull) {
+  if (idOrNull !== null) {
+    const p = getPurchase(idOrNull);
+    if (!p || p.kind !== "gear" || !state.save.purchased[idOrNull]) return;
+  }
+  state.save.equipped = idOrNull;
+  const p = idOrNull ? getPurchase(idOrNull) : null;
+  ctx.player.setWalkSpeed(p ? p.walk : 16);
+  ctx.player.setJumpPower(p ? p.jump : 50);
+  ctx.engine.audio.playSfx("click");
+  saveNow(ctx, state);
+}
+
+// §5.11 — redeem a code. Matched case-insensitively after a trim, once each ever.
+export function redeemCode(ctx, state, text) {
+  const key = String(text == null ? "" : text).trim().toUpperCase();
+  const row = CODES.find((c) => c.code === key);
+  if (!row) {
+    ctx.engine.audio.playSfx("error");
+    return { ok: false, message: "Invalid code" };
+  }
+  if (state.save.codes.includes(row.code)) {
+    ctx.engine.audio.playSfx("error");
+    return { ok: false, message: "Already redeemed" };
+  }
+  state.save.codes.push(row.code);
+  if (row.cash) state.save.cash += row.cash;
+  if (row.boost) state.save.boostRemaining = (state.save.boostRemaining || 0) + row.boost;
+  ctx.engine.audio.playSfx(row.sfx || "buy");
+  ctx.services.ui.toast(row.message, { icon: "🎟️" });
+  saveNow(ctx, state);
+  return { ok: true, message: row.message };
 }
 
 // §3.1: the save is written after every purchase, on the §6 autosave interval, and

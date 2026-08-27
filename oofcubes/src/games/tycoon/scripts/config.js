@@ -74,6 +74,40 @@ export const LAYOUT = Object.freeze({
   LIGHT_Y: 15.5,
   LIGHT_COLOR: "#fff2c8",
   LIGHT_XZ: Object.freeze([[20, 20], [-20, 20], [20, -20], [-20, -20], [0, 40], [0, -40]]),
+  // the rest of §5.1's Buildings rows
+  WALLS3_SIZE: [98, 16, 2],
+  WALLS3_POS: [0, 8, 58],
+  WALLS2_SIZE: [2, 16, 118],
+  WALLS2_X: 49,
+  ROOF_SIZE: [100, 1.5, 120],
+  ROOF_POS: [0, 16.5, 0],
+  DOOR_SIZE: [12, 11, 1.2],
+  DOOR_POS: [0, 6, 58],
+  DOOR_COLOR: "#ff2a6d",
+  DOOR_PULSE_HZ: 0.6,
+  RAMP_STEPS: 7,
+  RAMP_X: 44,
+  RAMP_Z0: -20,
+  RAMP_STEP_SIZE: [8, 1, 8],
+  RAMP_COLOR: "#8d8d94",
+  // §5.8 auras — three orbiting rings over the plot, each tier faster and higher
+  AURA_COUNT: 8,
+  AURA_TIERS: Object.freeze([
+    Object.freeze({ id: "aura1", color: "#ffd23f", radius: 14, height: 4, speed: 40, size: [1.4, 1.4, 1.4] }),
+    Object.freeze({ id: "aura2", color: "#ff6a2a", radius: 18, height: 7, speed: 65, size: [1.6, 1.6, 1.6] }),
+    Object.freeze({ id: "aura3", color: "#7fd4f2", radius: 22, height: 10, speed: 90, size: [1.8, 1.8, 1.8] }),
+  ]),
+  // §5.9 chopper — parks over the plot and follows the boss around
+  CHOPPER_BODY_SIZE: [6, 3, 12],
+  CHOPPER_TAIL_SIZE: [1.2, 1.2, 8],
+  CHOPPER_ROTOR_SIZE: [18, 0.4, 1.6],
+  CHOPPER_SKID_SIZE: [0.8, 0.8, 10],
+  CHOPPER_COLOR: "#f2d024",
+  CHOPPER_HEIGHT: 26,
+  CHOPPER_FOLLOW: 0.6, // fraction of the gap closed per second
+  // §5.10 statue
+  STATUE_POS: [0, 1, 46],
+  STATUE_COLOR: "#f7c948",
 
   // The lawn sign — §3.4's st-sign-board carries this line.
   SIGN_TEXT: "BOSS TYCOON — step on glowing pads to buy",
@@ -114,32 +148,89 @@ export const TUNING = Object.freeze({
   MILESTONE_OOFBUX_TOTAL: 385, // documentation invariant over §5.11's FULL table
 });
 
-// SLICE: the Boss Sword (§5.7), auras (§5.8), Boss Chopper (§5.9), Golden Boss
-// Statue (§5.10) and the CODES table with its Codes panel (§5.11, §5.13) are out of
-// the playable slice; the TUNING rows above are the ones those sections read
-// unchanged when they land.
 
 // ---------------------------------------------------------------------------
 // PURCHASES — spec 10 §3.3 record schema, §5.2 pad grid, §5.3/§5.4 costs.
 // ---------------------------------------------------------------------------
 //
-// SLICE: the slice ships the first rows of §5.3/§5.4 — the FREE gray dropper, one
-// paid dropper, the first ×3 upgrader and two decor unlocks. The remaining 25
-// records (d03-d11, u2, the walls/roof/aura/door/ramp/chopper/statue line and all
-// five gear pads) are a pure append of §5.3/§5.4's rows at their §5.2 pad slots;
-// no record below changes shape when they land.
+// Every row of §5.3 and §5.4 at its §5.2 pad slot: 11 droppers, 2 upgraders, 12
+// buildings and 5 gear pads. The cost chain is the spec's, which keeps roughly a
+// 1.5x step per tier — the pacing §5.12 checks.
+
+// ALL_CORE (§5.4): every dropper, both upgraders and the ten core buildings — 24 ids.
+// Gear is deliberately NOT required, so a player who skipped the coils is not locked
+// out of the Chopper.
+export const ALL_CORE = Object.freeze([
+  "d01", "d02", "d03", "d04", "d05", "d06", "d07", "d08", "d09", "d10", "d11",
+  "u1", "u2",
+  "walls1", "lights", "walls3", "roof", "walls2", "aura1", "laserdoor", "aura2", "ladder", "aura3"
+]);
 
 export const PURCHASES = Object.freeze([
+  // droppers — §5.3
   Object.freeze({ id: "d01", kind: "dropper", name: "Gray Dropper", cost: 0,
-    requires: null, pad: [-22, 0.5, 44], value: 4, color: "#9e9e9e", dropZ: 30, side: -1 }),
+    requires: null, pad: [-22,0.5,44], value: 4, color: "#9e9e9e", dropZ: 30, side: -1 }),
   Object.freeze({ id: "d02", kind: "dropper", name: "White Dropper", cost: 120,
-    requires: null, pad: [-22, 0.5, 36], value: 10, color: "#f5f5f5", dropZ: 24, side: 1 }),
+    requires: null, pad: [-22,0.5,36], value: 10, color: "#f5f5f5", dropZ: 24, side: 1 }),
+  Object.freeze({ id: "d03", kind: "dropper", name: "Light Green Dropper", cost: 600,
+    requires: null, pad: [-22,0.5,28], value: 24, color: "#90d970", dropZ: 18, side: -1 }),
+  Object.freeze({ id: "d04", kind: "dropper", name: "Green Dropper", cost: 2500,
+    requires: null, pad: [-22,0.5,20], value: 60, color: "#2e9e3f", dropZ: 12, side: 1 }),
+  Object.freeze({ id: "d05", kind: "dropper", name: "Yellow Dropper", cost: 8000,
+    requires: null, pad: [-22,0.5,12], value: 150, color: "#f2d024", dropZ: 6, side: -1 }),
+  Object.freeze({ id: "d06", kind: "dropper", name: "Orange Dropper", cost: 40000,
+    requires: null, pad: [-22,0.5,4], value: 400, color: "#f28c24", dropZ: 0, side: 1 }),
+  Object.freeze({ id: "d07", kind: "dropper", name: "Red Dropper", cost: 100000,
+    requires: null, pad: [-34,0.5,28], value: 900, color: "#d93025", dropZ: -6, side: -1 }),
+  Object.freeze({ id: "d08", kind: "dropper", name: "Light Blue Dropper", cost: 250000,
+    requires: null, pad: [-34,0.5,20], value: 2000, color: "#7fd4f2", dropZ: -12, side: 1 }),
+  Object.freeze({ id: "d09", kind: "dropper", name: "Blue Dropper", cost: 600000,
+    requires: null, pad: [-34,0.5,12], value: 4500, color: "#2a62d9", dropZ: -18, side: -1 }),
+  Object.freeze({ id: "d10", kind: "dropper", name: "Purple Dropper", cost: 1500000,
+    requires: null, pad: [-34,0.5,4], value: 10000, color: "#8a3fd9", dropZ: -24, side: 1 }),
+  Object.freeze({ id: "d11", kind: "dropper", name: "Rainbow Dropper", cost: 4000000,
+    requires: null, pad: [-34,0.5,-4], value: 25000, color: "RAINBOW", dropZ: -30, side: -1 }),
+  // upgraders — §5.3
   Object.freeze({ id: "u1", kind: "upgrader", name: "Upgrader ×3", cost: 300,
-    requires: null, pad: [-34, 0.5, 44], mult: 3, archZ: 20 }),
+    requires: null, pad: [-34,0.5,44], mult: 3, archZ: 20 }),
+  Object.freeze({ id: "u2", kind: "upgrader", name: "Mega Upgrader ×3", cost: 15000,
+    requires: null, pad: [-34,0.5,36], mult: 3, archZ: -14 }),
+  // buildings — §5.4
   Object.freeze({ id: "walls1", kind: "building", name: "Back Wall", cost: 100,
-    requires: null, pad: [22, 0.5, 44] }),
+    requires: null, pad: [22,0.5,44] }),
   Object.freeze({ id: "lights", kind: "building", name: "Ceiling Lights", cost: 200,
-    requires: null, pad: [22, 0.5, 36] }),
+    requires: null, pad: [22,0.5,36] }),
+  Object.freeze({ id: "walls3", kind: "building", name: "Front Wall", cost: 1000,
+    requires: null, pad: [22,0.5,28] }),
+  Object.freeze({ id: "roof", kind: "building", name: "Roof", cost: 2500,
+    requires: null, pad: [22,0.5,20] }),
+  Object.freeze({ id: "walls2", kind: "building", name: "Side Walls", cost: 5000,
+    requires: null, pad: [22,0.5,12] }),
+  Object.freeze({ id: "aura1", kind: "building", name: "Gold Aura", cost: 10000,
+    requires: null, pad: [22,0.5,4] }),
+  Object.freeze({ id: "laserdoor", kind: "building", name: "Boss Door", cost: 10000,
+    requires: "walls3", pad: [34,0.5,44] }),
+  Object.freeze({ id: "aura2", kind: "building", name: "Fire Aura", cost: 30000,
+    requires: "aura1", pad: [34,0.5,36] }),
+  Object.freeze({ id: "ladder", kind: "building", name: "Roof Ramp", cost: 200000,
+    requires: "walls2", pad: [34,0.5,28] }),
+  Object.freeze({ id: "aura3", kind: "building", name: "Rainbow Aura", cost: 250000,
+    requires: "aura2", pad: [34,0.5,20] }),
+  Object.freeze({ id: "helicopter", kind: "building", name: "Boss Chopper", cost: 10000000,
+    requires: "ALL_CORE", pad: [34,0.5,12] }),
+  Object.freeze({ id: "bossstatue", kind: "building", name: "Golden Boss Statue", cost: 250000000,
+    requires: "helicopter", pad: [34,0.5,4] }),
+  // gear — §5.4, with the stat overrides equipping one applies
+  Object.freeze({ id: "sword", kind: "gear", name: "Boss Sword", cost: 200000,
+    requires: null, pad: [46,0.5,44], walk: 16, jump: 50 }),
+  Object.freeze({ id: "speedcoil", kind: "gear", name: "Speed Coil", cost: 1000000,
+    requires: null, pad: [46,0.5,36], walk: 26, jump: 50 }),
+  Object.freeze({ id: "gravitycoil", kind: "gear", name: "Gravity Coil", cost: 1000000,
+    requires: null, pad: [46,0.5,28], walk: 16, jump: 75 }),
+  Object.freeze({ id: "fusioncoil", kind: "gear", name: "Fusion Coil", cost: 20000000,
+    requires: null, pad: [46,0.5,20], walk: 24, jump: 70 }),
+  Object.freeze({ id: "magiccarpet", kind: "gear", name: "Magic Carpet", cost: 100000000,
+    requires: null, pad: [46,0.5,12], walk: 30, jump: 110 }),
 ]);
 
 const BY_ID = new Map(PURCHASES.map((p) => [p.id, p]));
@@ -149,18 +240,32 @@ const BY_ID = new Map(PURCHASES.map((p) => [p.id, p]));
 // through ctx.services.economy with reason "tycoon:<id>", exactly once ever.
 // ---------------------------------------------------------------------------
 //
-// SLICE: multiplier-9 (u2), all-droppers (d01-d11), helicopter and boss-statue —
-// the other 375 of §5.11's 385 Oofbux — append with the purchases they test, and
-// their rows in badges.js's registry (§5.11 BADGES) come with them.
+// §5.11's five rows, 385 Oofbux in total — the documentation invariant TUNING keeps.
+// Cash never converts to Oofbux any other way: cash is worthless outside this Place.
 
 export const MILESTONES = Object.freeze([
-  Object.freeze({
-    id: "first-dropper",
-    label: "Open for business",
-    test: (save) => !!save.purchased.d02,
-    oofbux: 10,
-    badgeId: "tycoon.open-for-business",
-  }),
+  Object.freeze({ id: "first-dropper", label: "Open for business",
+    test: (save) => !!save.purchased.d02, oofbux: 10, badgeId: "tycoon.open-for-business" }),
+  Object.freeze({ id: "multiplier-9", label: "×9 multiplier",
+    test: (save) => !!save.purchased.u1 && !!save.purchased.u2, oofbux: 25, badgeId: "tycoon.fully-upgraded" }),
+  Object.freeze({ id: "all-droppers", label: "Every dropper",
+    test: (save) => ["d01","d02","d03","d04","d05","d06","d07","d08","d09","d10","d11"].every((id) => save.purchased[id]),
+    oofbux: 50, badgeId: "tycoon.dropper-collector" }),
+  Object.freeze({ id: "helicopter", label: "Boss Chopper",
+    test: (save) => !!save.purchased.helicopter, oofbux: 100, badgeId: null }),
+  Object.freeze({ id: "boss-statue", label: "Golden Boss Statue",
+    test: (save) => !!save.purchased.bossstatue, oofbux: 200, badgeId: "tycoon.true-boss" }),
+]);
+
+// §5.11 CODES — matched after trim().toUpperCase(), each redeemable once. `cash` pays
+// straight into the save; `boost` adds sim-seconds of 2x earnings.
+export const CODES = Object.freeze([
+  Object.freeze({ code: "OOF", cash: 1000, boost: 0, sfx: null, message: "+$1K — welcome, Boss!" }),
+  Object.freeze({ code: "7259", cash: 10000, boost: 0, sfx: null, message: "The giant obby remembers. +$10K" }),
+  Object.freeze({ code: "CRIMSON", cash: 100000, boost: 0, sfx: null, message: "The book was CRIMSON. +$100K" }),
+  Object.freeze({ code: "6420", cash: 1000000, boost: 0, sfx: null, message: "You escaped the lab. +$1M" }),
+  Object.freeze({ code: "BOSSMODE", cash: 0, boost: 600, sfx: null, message: "2× BOOST for 10 minutes!" }),
+  Object.freeze({ code: "DUCK", cash: 5, boost: 0, sfx: "quack", message: "🦆" }),
 ]);
 
 // ---------------------------------------------------------------------------
