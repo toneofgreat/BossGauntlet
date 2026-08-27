@@ -7,7 +7,6 @@
 // STUDIO_SHELF_MODULE for why, and for the seam that would retire it.
 
 import { buildPortals, buildBadgeWall, buildParkour, buildSigns } from "./scripts/layout.js";
-import { spawnGhosts } from "./scripts/ghosts.js";
 import { applyAmbience } from "./scripts/ambience.js";
 
 export const meta = {
@@ -33,7 +32,6 @@ export const meta = {
 
 // Tuning constants — spec 06 §6 pins these to this module.
 const PORTAL_DEBOUNCE_S = 1.0; // portal & catalog-door retrigger guard
-const GHOST_COUNT = 8; // §6 — hub/scripts/ghosts.js wanderers, §5.4
 
 // Oof Studio is a platform surface, not a Place: it has no PLACES registry row, so it
 // gets no portal arch (a portal's only exit is `platform:navigate { slug }`, and the
@@ -68,7 +66,6 @@ let portals = null;
 let parkour = null;
 let signs = null;
 let badgeWall = null;
-let ghosts = null;
 let ambience = "day"; // place.json's own lighting IS the day preset (§5.5), so this
                        // is already correct before applyAmbience's first call in init
 let lastPortalAt = -PORTAL_DEBOUNCE_S;
@@ -184,13 +181,10 @@ export function init(ctx) {
   subs.push(ctx.events.on("platform:settingsChanged", (payload) => {
     ambience = applyAmbience(ctx, payload && payload.settings ? payload.settings.ambience : null);
   }));
-  ghosts = spawnGhosts(ctx, GHOST_COUNT);
 
   const handle = debugHandle();
   if (handle) {
     handle.hub = {
-      ghostCount: ghosts.count,
-      ghostPositions: () => (ghosts ? ghosts.positions() : []),
       partCount: () => ctx.engine.parts.count(),
       portalCount: () => (portals ? portals.count : 0),
     };
@@ -199,7 +193,6 @@ export function init(ctx) {
 
 export function update(dt, ctx) {
   if (parkour) parkour.update(dt, ctx.time);
-  if (ghosts) ghosts.update(dt);
 }
 
 export function dispose(ctx) {
@@ -213,11 +206,9 @@ export function dispose(ctx) {
   if (parkour) parkour.dispose(ctx);
   if (signs) signs.dispose(ctx);
   if (badgeWall) badgeWall.dispose(ctx);
-  if (ghosts) ghosts.dispose();
   parkour = null;
   signs = null;
   badgeWall = null;
-  ghosts = null;
   // §5.3.4 clears the hub debug facts; the §3.7 field itself stays declared (criterion
   // 6 reads every §3.7 key), so it goes back to the shell's `null`, not deleted.
   const handle = debugHandle();

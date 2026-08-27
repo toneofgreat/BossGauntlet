@@ -90,7 +90,7 @@ export const BADGES = Object.freeze([
   B("lifting.gd-star", "Star Power", "⭐", "Buy the GD Star."),
   B("lifting.all-items", "Full Inventory", "🎒", "Own all 28 items."),
   B("lifting.title-rock", "The Rock", "🪨", "Unlock the title \"The Rock\"."),
-  B("lifting.ghost-king", "Ghost King", "👑", "Reach rank 1 on the Top Lifters board."),
+  B("lifting.ghost-king", "Top Lifter", "👑", "Be rank 1 on the Top Lifters board with someone to beat."),
 ]);
 
 const defsById = new Map();

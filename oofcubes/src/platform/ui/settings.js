@@ -41,6 +41,31 @@ function segmentedRow(label, opts) {
   return row;
 }
 
+// A labelled row wrapping a plain text field. The kit has no text input — every other
+// setting is a slider, a segment or a toggle — and the two multiplayer rows below need
+// free text (a URL and a name), so this is the same hand-built wrapper shape.
+//
+// Writes on `change`, not on every keystroke: writeSetting is debounced-write-through
+// to localStorage, and saving a half-typed relay URL would have net.js try to open it.
+function textRow(label, opts) {
+  const row = el("div", "oof-row");
+  row.appendChild(el("span", null, label));
+  const input = el("input", "oof-input");
+  input.type = "text";
+  input.value = opts.value === undefined || opts.value === null ? "" : String(opts.value);
+  if (opts.placeholder) input.placeholder = opts.placeholder;
+  input.setAttribute("aria-label", label);
+  input.setAttribute(
+    "style",
+    "flex:1;min-width:0;margin-left:12px;padding:6px 8px;border-radius:var(--oof-radius-md);" +
+    "border:1px solid var(--oof-line);background:var(--oof-bg-2);color:var(--oof-text);" +
+    "font:inherit;font-size:var(--oof-size-sm)"
+  );
+  input.addEventListener("change", () => opts.onChange(input.value.trim()));
+  row.appendChild(input);
+  return row;
+}
+
 // mountSettingsRows(body, deps) — appends all 18 §5.6.9 rows to an already-open panel's
 // bodyEl. deps mirrors savecode.js's shape (a plain bag the caller assembles from its
 // own module-scope services) plus the engine setters and the two shell-owned callbacks
@@ -163,6 +188,50 @@ export function mountSettingsRows(body, deps = {}) {
       applyAccessibility(settings);
     },
   }).el);
+
+  // ---- MULTIPLAYER (spec 13 §5.1) ------------------------------------------
+  // Both fields are empty by default, and empty means single-player. Nothing here is
+  // filled in for the player: ARCHITECTURE.md §9 makes multiplayer opt-in, and a build
+  // that shipped pointing at somebody's relay would be connecting people to a server
+  // they never chose.
+  body.appendChild(el("div", "oof-section-label", "MULTIPLAYER"));
+  body.appendChild(textRow("Display name", {
+    value: settings.displayName || "",
+    placeholder: "how others see you",
+    onChange: (v) => {
+      writeSetting("displayName", v);
+      if (deps.net && typeof deps.net.setName === "function" && v) deps.net.setName(v);
+    },
+  }));
+  body.appendChild(textRow("Relay server", {
+    value: settings.relayUrl || "",
+    placeholder: "ws://host:8787 — blank to play alone",
+    onChange: (v) => {
+      writeSetting("relayUrl", v);
+      if (toast) {
+        toast(v ? "Relay saved — it connects when you next enter a Place."
+                : "Relay cleared — you are playing alone.");
+      }
+    },
+  }));
+  {
+    const net = deps.net;
+    const status = el(
+      "div",
+      null,
+      !net || !net.configured()
+        ? "No relay set — single-player."
+        : net.online()
+          // §9: a player count shown anywhere must be the true one, including 1.
+          ? `Connected — ${net.count()} player${net.count() === 1 ? "" : "s"} here.`
+          : "Not connected."
+    );
+    status.setAttribute(
+      "style",
+      "margin:2px 0 6px;font-size:var(--oof-size-sm);color:var(--oof-text-dim)"
+    );
+    body.appendChild(status);
+  }
 
   // ---- SAVE DATA (rows 14-17) — spec 07 §5.8's file, mounted not duplicated ----
   mountSaveCodeRows(body, { saves, confirmDialog, toast });

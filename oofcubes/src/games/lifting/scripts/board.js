@@ -14,7 +14,7 @@
 // teardown is a single remove + a single recursive dispose and parts.count() lands back
 // exactly where it started (spec 04 §5.5).
 
-import { GHOSTS, TUNING, fmt, ghostValueFor } from "./config.js";
+import { TUNING, fmt } from "./config.js";
 import { buildItemGroup, spinItemGroup, disposeItemGroup } from "./items.js";
 
 const DEG = Math.PI / 180;
@@ -67,15 +67,22 @@ let ghostKing = false;
 // game.js already accrues the session's dt INTO stats.playSeconds every step (§5.1's
 // update order), so the two terms are the same number — adding ctx.time as well would
 // double-count it. Reported as a spec wording gap.
-function ghostClock(state) {
-  return state.stats.playSeconds;
-}
-
-// 10 ghosts + the player, sorted desc, top 10 kept — and the player is ALWAYS kept: past
-// rank 10 they replace the last row and show their true rank (§5.11).
-export function entries(state) {
-  const clock = ghostClock(state);
-  const rows = GHOSTS.map((g) => ({ name: g.name, value: ghostValueFor(g.base, clock), isPlayer: false }));
+// The board's rows: the other players in this Place's room, plus you. Sorted desc, top
+// 10 kept — and you are ALWAYS kept: past rank 10 you replace the last row and show your
+// true rank (§5.11).
+//
+// §5.11 used to fill this with ten invented rivals whose totals doubled every twenty
+// minutes of your own playtime, so the board always had someone just ahead of you. They
+// are gone (amended 2026-08-27): a leaderboard whose names belong to nobody is a
+// progress bar wearing a scoreboard's clothes, and now that a room can hold twenty real
+// lifters there is a real one to show. `others` comes from the room roster and is empty
+// when you are playing alone or offline — then the board is just you, honestly.
+export function entries(state, others) {
+  const rows = [];
+  for (const o of others || []) {
+    const value = o && o.state && Number.isFinite(o.state.lifetime) ? o.state.lifetime : 0;
+    rows.push({ name: o.name, value, isPlayer: false });
+  }
   rows.push({ name: "You", value: state.lifetime, isPlayer: true });
   rows.sort((a, b) => b.value - a.value);
   const playerRank = rows.findIndex((r) => r.isPlayer) + 1;
@@ -86,13 +93,22 @@ export function entries(state) {
   return top;
 }
 
+// Spec 13 §5's roster, read through ctx like every other service. Absent entirely when
+// the relay was never configured, so every access is guarded and the answer is "nobody".
+function rosterFor(ctx) {
+  const net = ctx.services && ctx.services.net;
+  if (!net || typeof net.roster !== "function") return [];
+  const list = net.roster();
+  return Array.isArray(list) ? list : [];
+}
+
 // ---------------------------------------------------------------------------
 // §5.11 board canvas
 // ---------------------------------------------------------------------------
 
 const MEDAL_TINT = ["#d4af37", "#c8c8cd", "#cd7f32"];
 
-function paintBoard(state) {
+function paintBoard(state, others) {
   if (!board) return;
   const g = board.c2d;
   g.clearRect(0, 0, BOARD_TEX_W, BOARD_TEX_H);
@@ -104,7 +120,7 @@ function paintBoard(state) {
   g.textBaseline = "middle";
   g.fillText("TOP LIFTERS", BOARD_TEX_W / 2, BOARD_HEADER_H / 2);
 
-  const rows = entries(state);
+  const rows = entries(state, others);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const y = BOARD_HEADER_H + i * BOARD_ROW_H;
@@ -197,8 +213,13 @@ export function update(dt, ctx, state) {
   const slot = Math.floor(ctx.time / TUNING.BOARD_REDRAW_S);
   if (slot !== lastBoardSlot) {
     lastBoardSlot = slot;
-    const rows = paintBoard(state);
-    if (!ghostKing && rows && rows[0] && rows[0].isPlayer) {
+    const others = rosterFor(ctx);
+    const rows = paintBoard(state, others);
+    // Rank 1 only counts when there was somebody to outlift. Alone on the board you are
+    // rank 1 the instant you lift anything, which would hand out §5.12's crown for
+    // showing up — exactly the hollowness that retiring the invented rivals was meant to
+    // remove. The badge id stays `ghost-king` because saves carry it.
+    if (!ghostKing && rows && rows.length > 1 && rows[0] && rows[0].isPlayer) {
       ghostKing = true;
       ctx.services.badges.award("ghost-king");
     }

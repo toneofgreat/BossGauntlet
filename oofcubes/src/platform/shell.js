@@ -17,6 +17,8 @@ import { createHud } from "./ui/hud.js";
 import * as saves from "./services/saves.js";
 import * as economy from "./services/economy.js";
 import * as badges from "./services/badges.js";
+import { createNet } from "./services/net.js";
+import { createRemotePlayers } from "./services/remote-players.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
 import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
@@ -109,6 +111,11 @@ let transitionOverlay = null;
 
 let state = "loading";    // hub | loading | playing | disposing (spec 04 §5.6) | studio (spec 11 §5.9)
 let currentSlug = null;
+// Spec 13. One net service for the whole session — it outlives Places, because the
+// connection does: walking a portal changes room, not socket. `remotes` is per-Place,
+// since the rigs it draws belong to the Place's scene.
+let net = null;
+let remotes = null;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
 let suppressNextHash = false;
@@ -535,6 +542,7 @@ function openSettings() {
     audio, renderer, input, sfx,
     saves, confirmDialog, toast: uiToast,
     version: SHELL_VERSION,
+    net: netService(), // spec 13 §5.1 — the relay + display-name rows
   });
 
   // Not a §5.6.9 row: the slice's only way out of a Place on a phone (a game's own
@@ -786,6 +794,31 @@ function feet() {
   return [c[0], c[1] - FEET_OFFSET, c[2]];
 }
 
+// Spec 13 §4.1. Created on first use rather than at boot so a build with no relay
+// configured never even constructs it; `configured()` is false and every method is a
+// no-op, so the Places below can call it unconditionally.
+function netService() {
+  if (net) return net;
+  net = createNet({
+    getSearch: () => location.search,
+    getProtocol: () => location.protocol,
+    getSavedUrl: () => profileSettings().relayUrl || null,
+    getName: () => profileSettings().displayName || null,
+    getAvatar: () => (avatarService ? avatarService.getConfig() : null),
+  });
+  return net;
+}
+
+// What we tell the room our avatar is doing. Deliberately the same four modes spec 05
+// §5.2 derives for the local rig, so a remote avatar animates the way its owner's does.
+function netAnimState() {
+  const v = physics.getVelocity();
+  const speed = Math.hypot(v[0], v[2]);
+  const grounded = typeof physics.isGrounded === "function" ? physics.isGrounded() : true;
+  if (!grounded) return v[1] > 0 ? "jump" : "fall";
+  return speed >= 0.5 ? "walk" : "idle";
+}
+
 function buildCtx(emitter, slug) {
   return {
     engine: {
@@ -854,6 +887,7 @@ function buildCtx(emitter, slug) {
       badges: createBadgesCtxApi(slug),
       avatar: createAvatarCtxApi(),
       ui,
+      net: netService(),
     },
     time: 0,
     events: emitter,
@@ -950,6 +984,11 @@ function teardown() {
   if (!placeHandle) return;
   setState("disposing");
   events.emit("place:disposing", { slug: currentSlug });
+  // Spec 13: leave the room and drop every remote rig BEFORE disposePlace counts what
+  // is left in the scene. A remote avatar still parented when the leak check runs is
+  // indistinguishable from a Place that forgot to clean up after itself.
+  if (remotes) { remotes.dispose(); remotes = null; }
+  if (net) net.leave();
   try {
     if (gameMod && typeof gameMod.dispose === "function") gameMod.dispose(ctx || debugHandle.ctx);
   } catch (err) {
@@ -1054,6 +1093,18 @@ async function loadPlaceInto(entry, slug) {
   currentSlug = slug;
   debugHandle.currentSlug = slug;
   debugHandle.slug = slug;
+
+  // Spec 13 §5.5: the room key IS the Place slug, so walking a portal leaves one room
+  // and joins another on the same socket. Both calls are no-ops with no relay set.
+  const n = netService();
+  n.join(slug);
+  remotes = createRemotePlayers({
+    THREE,
+    scene: renderer.scene,
+    net: n,
+    createRig: (config) => avatarService.createRig(config),
+    feetOffset: FEET_OFFSET,
+  });
 
   // The follow camera adopts the Place's spawnYaw so it starts BEHIND the avatar.
   cameraCtl.setYaw((placeHandle.data.spawnYaw || 0) * DEG);
@@ -1166,6 +1217,7 @@ function studioDeps() {
       badges: createBadgesCtxApi("studio"),
       avatar: createAvatarCtxApi(),
       ui,
+      net: netService(),
     },
     events: studioEmitter,
     avatar: rigRoot,
@@ -1285,6 +1337,10 @@ function stepOnce(dt) {
   // any other Place — studio.js's own comment on simStep says as much.
   if (state === "studio" && studioMod) studioMod.simStep(dt);
   if (avatarService && typeof avatarService.update === "function") avatarService.update(dt);
+  // Spec 13: presence is a sim-step concern (it is throttled against sim time, like
+  // everything else here), and remote rigs are posed from it. Both are no-ops offline.
+  if (net) net.update(dt, feet(), physics.getRenderTransform(1).yaw, netAnimState());
+  if (remotes) remotes.update(dt);
   if (ctx && gameMod && !updateHalted) {
     ctx.time += dt;
     try {

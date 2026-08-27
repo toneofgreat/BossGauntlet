@@ -1,7 +1,7 @@
 // src/games/lifting/scripts/config.js — every frozen table and pure helper Weight
 // Lifting Simulator's logic modules read from. Spec 09 §3.2-3.7 (record schemas),
 // §5.5 (the 28 items, normative), §5.6 (ZONES), §5.7 (REBIRTHS), §5.8 (TITLES),
-// §5.9 (SURGES), §5.10 (REWARD_AURAS), §5.11 (GHOSTS), §5.12 (OOFBUX_AWARDS/BADGES)
+// §5.9 (SURGES), §5.10 (REWARD_AURAS), §5.12 (OOFBUX_AWARDS/BADGES)
 // and §6 (TUNING) own this file. Pure data + pure helper functions only: no imports,
 // no ctx, no DOM — this file is imported under Node by tooling exactly like
 // src/games/obby/scripts/config.js, so nothing here may touch a browser global.
@@ -477,26 +477,12 @@ export const SURGES = Object.freeze([
 ]);
 
 // ---------------------------------------------------------------------------
-// §5.11 GHOSTS — the 10 rival rows. `ghostValueFor` below implements §5.11's
-// `floor(base * 2^(totalPlaySeconds/GHOST_DOUBLE_S))` formula.
+// §5.11's ten invented rivals (NoodleArms … xX_GymDemon_Xx) and their doubling formula
+// are withdrawn (amended 2026-08-27). The TOP LIFTERS board is built from the real
+// players in the room now — see board.js `entries`. Nothing replaced them here because
+// nothing here can know who is online; that is the net service's job, and the board
+// reads it through ctx.
 // ---------------------------------------------------------------------------
-
-function ghost(name, base) {
-  return Object.freeze({ name, base });
-}
-
-export const GHOSTS = Object.freeze([
-  ghost("NoodleArms", 800),
-  ghost("CardioKid", 12e3),
-  ghost("ProteinPete", 90e3),
-  ghost("TinyTitan", 1.4e6),
-  ghost("BuffLuke99", 30e6),
-  ghost("LiftQueen", 900e6),
-  ghost("SwoleSister", 40e9),
-  ghost("IronGolem", 2e12),
-  ghost("MaxRepz", 150e12),
-  ghost("xX_GymDemon_Xx", 8e15),
-]);
 
 // ---------------------------------------------------------------------------
 // §3.7/§5.10 REWARD_AURAS — the 4 grant-only Catalog items this Place defines.
@@ -630,7 +616,6 @@ export const TUNING = Object.freeze({
   CARRY_FORWARD_BASE: 1.0,  // full offset is CARRY_FORWARD_BASE + halfDepth (§5.4)
   SURGE_STEP_MOB: 0.2,
   SURGE_MOB_CAP: 3.0,
-  GHOST_DOUBLE_S: 1200,
   BOARD_REDRAW_S: 5,
   DISPLAY_SCALE: 2,
   DISPLAY_SPIN_DEG_S: 24,
@@ -726,7 +711,3 @@ export function surgeMobilityForSteps(steps) {
   return Math.min(TUNING.SURGE_MOB_CAP, 1 + TUNING.SURGE_STEP_MOB * steps);
 }
 
-// §5.11: "displayed strength = floor(base * 2^(totalPlaySeconds / GHOST_DOUBLE_S))".
-export function ghostValueFor(base, totalPlaySeconds) {
-  return Math.floor(base * Math.pow(2, totalPlaySeconds / TUNING.GHOST_DOUBLE_S));
-}

@@ -166,6 +166,11 @@ export function update(dt, ctx) {
   stateMod.tickSave(dt, ctx, state);
   state.stats.playSeconds += dt;
 
+  // Spec 13 §5.3: publish the one number the room needs from us — our lifetime total,
+  // which is what the TOP LIFTERS board ranks on. publish() ignores an unchanged value,
+  // and is a no-op entirely when no relay is configured, so this costs nothing offline.
+  if (ctx.services.net) ctx.services.net.publish({ lifetime: state.lifetime });
+
   uiTimer += dt;
   if (uiDirty && uiTimer >= UI_REFRESH_S) {
     uiDirty = false;
