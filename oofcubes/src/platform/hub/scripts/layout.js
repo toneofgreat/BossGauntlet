@@ -7,6 +7,11 @@
 const BEACON_DURATION_S = 5; // cloud-badge celebration beacon
 const PARKOUR_BLOCK_COUNT = 15; // jumps incl. the cloud
 const BADGE_WALL_SLOTS = 32; // 4x8 plaque grid (see buildBadgeWall)
+const BADGE_WALL_COLS = 8;
+const BADGE_WALL_PITCH = 4.5;
+const BADGE_WALL_X = -73.9; // the wall's east face
+const PLAQUE_DARK = "#2f3338";  // earned-not-yet
+const PLAQUE_SECRET = "#24272b"; // and you do not get to know what it is
 
 // Portal geometry — §5.3.3. The §5.3.1 zone map fixes three anchors at x = -50/0/+50
 // on z = -70; that is a 50-unit pitch centred on the fountain axis, so the anchors are
@@ -238,21 +243,93 @@ export function buildPortals(ctx, places, visited) {
 // badge wall — §5.3.3 buildBadgeWall
 // ---------------------------------------------------------------------------
 
-// SLICE: the plaque grid (06 §5.3.3 buildBadgeWall — BADGE_WALL_SLOTS = 32 plaques in
-// 4 rows x 8 columns on x = -73.9, gold for earned / dark for unearned / "?" for
-// unearned secrets, "+N" in the last slot past 32 defs, live swap on `badge:awarded`)
-// is deferred with the rest of Badges (SLICE.md). It reads `badges.all()` and
-// `badges.getDef(id)`, which arrive with badges.js (spec 07 §5.7); the slice's badge
-// surface is award/has/list only. The wall, cap, buttresses, bench and sign it hangs
-// on are in place.json, so filling this in is this function's body and nothing else.
+// §5.3.3 — a 4x8 grid of plaques on the wall's east face. Gold for earned, dark for
+// still-locked, and a bare "?" where the badge itself is a secret: the wall is a map
+// of what there is to do without spoiling the jokes. The wall, cap, buttresses, bench
+// and sign it hangs on are all in place.json; this is only what goes on it.
 export function buildBadgeWall(ctx) {
   const registry = ctx.services.badges;
   const ready = registry && typeof registry.all === "function" && typeof registry.getDef === "function";
+  if (!ready) return { slots: BADGE_WALL_SLOTS, count: 0, pending: true, dispose() {} };
+
+  const track = createTracker(ctx);
+  const defs = registry.all();
+  const overflow = Math.max(0, defs.length - BADGE_WALL_SLOTS);
+  // Past 32 definitions the last slot stops being a badge and starts being a count.
+  const shown = overflow > 0 ? defs.slice(0, BADGE_WALL_SLOTS - 1) : defs.slice(0, BADGE_WALL_SLOTS);
+  const bySlot = new Map();
+
+  function slotCenter(i) {
+    const r = Math.floor(i / BADGE_WALL_COLS);
+    const c = i % BADGE_WALL_COLS;
+    return [BADGE_WALL_X, 11 - r * BADGE_WALL_PITCH, -15.75 + c * BADGE_WALL_PITCH];
+  }
+
+  // One plaque = a plate plus a text/emoji decal on its face. Rebuilt rather than
+  // recoloured when a badge lands, because the decal changes with it.
+  function paint(i, def) {
+    const old = bySlot.get(i);
+    if (old) {
+      track.drop(old.id, old.mesh);
+      bySlot.delete(i);
+    }
+    const pos = slotCenter(i);
+    const earned = !!(def && def.earned);
+    const secret = !!(def && def.secret);
+    const id = track.part({
+      id: "hubBadge_" + i,
+      size: [0.5, 3.5, 3.5],
+      position: pos,
+      color: earned ? PLAQUE_GOLD : secret ? PLAQUE_SECRET : PLAQUE_DARK,
+      material: earned ? "metal" : "plastic",
+    });
+    const text = !def ? "" : earned ? def.icon : secret ? "?" : def.name;
+    let mesh = null;
+    if (text) {
+      mesh = track.decal(id, makeLabelMesh(ctx, {
+        text,
+        worldW: 2.5,
+        worldH: 2.5,
+        color: earned ? "#1b1b1b" : "#8b939c",
+        font: LABEL_FONT,
+        maxPx: earned ? 96 : 26,
+      }), 0.2).mesh || null;
+    }
+    bySlot.set(i, { id, mesh, defId: def ? def.id : null });
+  }
+
+  shown.forEach((def, i) => paint(i, def));
+  if (overflow > 0) {
+    const i = BADGE_WALL_SLOTS - 1;
+    const pos = slotCenter(i);
+    const id = track.part({
+      id: "hubBadge_more", size: [0.5, 3.5, 3.5], position: pos,
+      color: PLAQUE_DARK, material: "plastic",
+    });
+    const more = track.decal(id, makeLabelMesh(ctx, {
+      text: "+" + overflow, worldW: 2.5, worldH: 2.5, color: "#8b939c", font: LABEL_FONT, maxPx: 48,
+    }), 0.2);
+    bySlot.set(i, { id, mesh: more && more.mesh ? more.mesh : null, defId: null });
+  }
+
+  // Earn one while standing in front of the wall and you watch it turn gold.
+  const off = ctx.events.on("badge:awarded", (e) => {
+    const badgeId = e && e.badgeId;
+    const at = shown.findIndex((d) => d.id === badgeId);
+    if (at < 0) return;
+    const def = registry.getDef(badgeId);
+    if (def) paint(at, { ...def, earned: Date.now() });
+  });
+
   return {
     slots: BADGE_WALL_SLOTS,
-    count: 0,
-    pending: !ready,
-    dispose() {},
+    count: shown.length,
+    pending: false,
+    dispose() {
+      off();
+      bySlot.clear();
+      track.dispose();
+    },
   };
 }
 

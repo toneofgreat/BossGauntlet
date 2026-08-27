@@ -11,6 +11,7 @@ import { getMaterial } from "../../../engine/parts.js";
 import { paintFace, DEFAULT_FACE_ID } from "./faces.js";
 import { createAnimator, AVATAR_TUNING } from "./animator.js";
 import { getItem, DEFAULT_BODY_COLORS } from "./catalog-data.js";
+import { createAura, createTrail } from "./effects.js";
 
 const FACE_CANVAS_SIZE = AVATAR_TUNING.FACE_CANVAS_SIZE;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -189,9 +190,15 @@ export function buildRig(scene, state) {
   // changes nothing on the avatar. Moving these three functions into attachments.js
   // later is a file move, not a rewrite: they touch only `anchors`, never the rig
   // skeleton, the state or the item schema.
-  // SLICE: auras and trails (§5.5, effects.js) are still deferred — no Catalog row in
-  // the slice selects one.
   const attached = { hat: null, gear: null }; // { group, prims: [{ mesh, base, spin, bob, flicker }] }
+
+  // §5.5's two effect slots. An aura is parented to the rig, so it rides along; a trail
+  // is world-space, because the whole point of a trail is that it stays where you were.
+  const effects = { aura: null, trail: null };
+  // The trail asks how fast we are going rather than reaching into physics for it —
+  // measured off the rig root, which the controller has already moved this tick.
+  const lastPos = { x: 0, y: 0, z: 0, has: false };
+  let planarSpeed = 0;
 
   function primGeometry(prim) {
     const size = Array.isArray(prim.size) ? prim.size : [1, 1, 1];
@@ -285,6 +292,31 @@ export function buildRig(scene, state) {
     }
   }
 
+  // §5.5 — swap one effect slot. Effects are disposed and rebuilt on change rather than
+  // reconfigured: the pools are sized from the spec, so a new spec is a new pool.
+  function applyEffect(slot, itemId) {
+    if (effects[slot]) {
+      effects[slot].dispose();
+      effects[slot] = null;
+    }
+    if (!itemId) return;
+    const item = getItem(itemId);
+    if (!item || !item.appearance) return;
+    if (slot === "aura") {
+      effects.aura = createAura(group, item.appearance);
+      return;
+    }
+    // A trail needs a world-space parent. An off-scene rig (the Editor preview builds
+    // its own scene) simply has nowhere to put one, and goes without.
+    const world = group.parent;
+    if (!world) return;
+    effects.trail = createTrail(world, item.appearance, () => ({
+      pos: [group.position.x, group.position.y, group.position.z],
+      yaw: group.rotation.y,
+      speed: planarSpeed,
+    }));
+  }
+
   // setState(avatarState) — §5.1: re-apply colors/face/hat/gear/aura/trail; idempotent,
   // and only what actually changed is rebuilt.
   function setState(avatarState) {
@@ -292,8 +324,12 @@ export function buildRig(scene, state) {
     const nextEquipped = readEquipped(avatarState);
     const headChanged = applyColors(nextColors);
     const faceChanged = !equipped || equipped.face !== nextEquipped.face;
+    const auraChanged = !equipped || equipped.aura !== nextEquipped.aura;
+    const trailChanged = !equipped || equipped.trail !== nextEquipped.trail;
     equipped = nextEquipped;
     applyAttachments(nextEquipped);
+    if (auraChanged) applyEffect("aura", nextEquipped.aura);
+    if (trailChanged) applyEffect("trail", nextEquipped.trail);
     if (headChanged || faceChanged) paint();
   }
 
@@ -324,12 +360,24 @@ export function buildRig(scene, state) {
       }
     }
     stepAttachments(step);
-    // SLICE: aura/trail particle stepping (§5.5) joins this line with effects.js.
+    if (step > 0) {
+      const dx = group.position.x - lastPos.x;
+      const dz = group.position.z - lastPos.z;
+      planarSpeed = lastPos.has ? Math.hypot(dx, dz) / step : 0;
+      lastPos.x = group.position.x;
+      lastPos.y = group.position.y;
+      lastPos.z = group.position.z;
+      lastPos.has = true;
+    }
+    if (effects.aura) effects.aura.update(step);
+    if (effects.trail) effects.trail.update(step);
   }
 
   function dispose() {
     clearAttachment("hat");
     clearAttachment("gear");
+    applyEffect("aura", null);
+    applyEffect("trail", null);
     if (group.parent) group.parent.remove(group);
     for (const key of LIMB_KEYS) {
       const mesh = meshes[key];

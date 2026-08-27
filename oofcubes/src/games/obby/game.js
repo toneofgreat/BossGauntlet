@@ -7,7 +7,8 @@
 // function names §4's table gives them — a later file move, not a rewrite.
 
 import { buildLayout } from "./scripts/layout.js";
-import { ROSTER, PALETTE, KIND_MAP, REWARDS, MUSIC_BANDS, TUNE } from "./scripts/config.js";
+import { ROSTER, PALETTE, KIND_MAP, REWARDS, BADGES, MUSIC_BANDS, TUNE } from "./scripts/config.js";
+import { createUI, refresh as refreshPanel, destroyUI } from "./scripts/ui.js";
 
 export const meta = {
   slug: "obby",
@@ -23,9 +24,18 @@ const WIN_PAD_COOLDOWN_S = 1; // §5.12: the win pad's touchEvent cooldown
 let layout = null;
 let state = null;
 let subs = [];
-let partIds = [];
-let labelIds = [];
-let labelHeld = []; // { tex, mat, geo } — disposed in dispose(), never garbage alone
+let labelHeld = new Map(); // stageN -> [{ tex, mat, geo }] — disposed with the stage
+let ui = null;
+
+// §5.11's live window. Stage descriptors are cheap; their parts are not, so only the
+// stages either side of the player are ever real.
+const world = {
+  live: new Map(),      // stageN -> engine part ids
+  labels: new Map(),    // stageN -> engine part ids (addCustom label planes)
+  queue: [],            // pending creations, drained MATERIALIZE_PER_TICK per tick
+  window: [0, 0],
+  catchId: null,
+};
 
 // ---------------------------------------------------------------------------
 // §5.12 StagePart -> engine part def (the binding mapping table lives in config.js).
@@ -85,7 +95,7 @@ function drawLabel(spec, big) {
   return canvas;
 }
 
-function makeLabel(ctx, spec) {
+function makeLabel(ctx, spec, stageN) {
   const THREE = ctx.engine.THREE;
   const tex = new THREE.CanvasTexture(drawLabel(spec, spec.w > 12));
   if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
@@ -96,40 +106,118 @@ function makeLabel(ctx, spec) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(spec.pos[0], spec.pos[1], spec.pos[2]);
   mesh.rotation.y = (spec.yaw * Math.PI) / 180;
-  labelHeld.push({ tex, mat, geo });
+  if (!labelHeld.has(stageN)) labelHeld.set(stageN, []);
+  labelHeld.get(stageN).push({ tex, mat, geo });
   return ctx.engine.parts.addCustom(mesh);
 }
 
 // ---------------------------------------------------------------------------
-// §5.11 materialization.
-// SLICE: §5.11's sliding window (WINDOW_BEHIND/AHEAD, MATERIALIZE_PER_TICK, the catch
-// plate) exists because 90 stages are ~7000 parts. The slice's 8 stages are ~150, so
-// every stage is live at once — well inside TUNE.MAX_LIVE_PARTS. setWindow/tickWorld
-// fill in from §5.11 with the remaining §5.3 roster rows.
+// §5.11 windowed materialization. All 90 stages exist as descriptors; only stages
+// [current − WINDOW_BEHIND, current + WINDOW_AHEAD] are ever live parts. The whole
+// world is ~5700 parts, which is past both MAX_LIVE_PARTS and the engine's runtime
+// cap — the window is what makes a 90-stage obby a thing the engine can hold.
 // ---------------------------------------------------------------------------
 
-function buildWorld(ctx) {
-  const defs = [];
-  for (const stage of layout.stages) {
-    stage.parts.forEach((p, i) => defs.push(partDef(stage, p, i)));
-  }
-  partIds = ctx.engine.parts.createMany(defs);
-  for (const stage of layout.stages) {
-    for (const spec of stage.labels) labelIds.push(makeLabel(ctx, spec));
-  }
-}
-
-function destroyWorld(ctx) {
-  for (const id of partIds) ctx.engine.parts.remove(id);
-  for (const id of labelIds) ctx.engine.parts.remove(id);
-  for (const held of labelHeld) {
+function releaseStage(ctx, sn) {
+  for (const id of world.live.get(sn) || []) ctx.engine.parts.remove(id);
+  for (const id of world.labels.get(sn) || []) ctx.engine.parts.remove(id);
+  for (const held of labelHeld.get(sn) || []) {
     held.tex.dispose();
     held.mat.dispose();
     held.geo.dispose();
   }
-  partIds = [];
-  labelIds = [];
-  labelHeld = [];
+  world.live.delete(sn);
+  world.labels.delete(sn);
+  labelHeld.delete(sn);
+}
+
+function drainQueue(ctx, max) {
+  let made = 0;
+  while (world.queue.length && made < max) {
+    const item = world.queue.shift();
+    // The window can move on between enqueue and drain; a stage that left is not built.
+    if (!world.live.has(item.n)) continue;
+    if (item.def) world.live.get(item.n).push(ctx.engine.parts.create(item.def));
+    else world.labels.get(item.n).push(makeLabel(ctx, item.label, item.n));
+    made += 1;
+  }
+}
+
+// §5.11 step 5 — a wide, invisible kill plate under the live window. place.json's
+// killY is the last resort below it; this one catches a fall while the stage that
+// owns the real kill floor may not even be materialized.
+function repositionCatch(ctx) {
+  if (world.catchId !== null) {
+    ctx.engine.parts.remove(world.catchId);
+    world.catchId = null;
+  }
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity;
+  for (let sn = world.window[0]; sn <= world.window[1]; sn++) {
+    for (const p of layout.stages[sn - 1].parts) {
+      if (p.kind === "killFloor") continue;
+      minX = Math.min(minX, p.pos[0] - p.size[0] / 2);
+      maxX = Math.max(maxX, p.pos[0] + p.size[0] / 2);
+      minZ = Math.min(minZ, p.pos[2] - p.size[2] / 2);
+      maxZ = Math.max(maxZ, p.pos[2] + p.size[2] / 2);
+      minY = Math.min(minY, p.pos[1] - p.size[1] / 2);
+    }
+  }
+  if (!Number.isFinite(minY)) return;
+  const m = TUNE.CATCH_MARGIN;
+  world.catchId = ctx.engine.parts.create({
+    id: "obbycatch",
+    shape: "box",
+    size: [Math.min(2000, maxX - minX + 2 * m), 2, Math.min(2000, maxZ - minZ + 2 * m)],
+    position: [(minX + maxX) / 2, minY - TUNE.CATCH_DROP, (minZ + maxZ) / 2],
+    rotation: [0, 0, 0],
+    color: "#000000",
+    material: "plastic",
+    transparency: 1,
+    anchored: true,
+    canCollide: false,
+    behaviors: [{ type: "kill" }],
+  });
+}
+
+// `sync` drains the whole queue before returning — used on init and after a teleport,
+// where the player is about to stand somewhere that must already be solid.
+function setWindow(ctx, n, sync) {
+  const lo = Math.max(1, n - TUNE.WINDOW_BEHIND);
+  const hi = Math.min(STAGE_COUNT, n + TUNE.WINDOW_AHEAD);
+  if (lo === world.window[0] && hi === world.window[1]) {
+    if (sync) drainQueue(ctx, Infinity);
+    return;
+  }
+  world.window = [lo, hi];
+  for (const sn of [...world.live.keys()]) {
+    if (sn < lo || sn > hi) releaseStage(ctx, sn);
+  }
+  world.queue = world.queue.filter((item) => item.n >= lo && item.n <= hi);
+
+  // Nearest stage first: if the drain is spread over ticks, the ground under the
+  // player appears before the scenery two stages ahead of them.
+  const order = [];
+  for (let sn = lo; sn <= hi; sn++) order.push(sn);
+  order.sort((a, b) => Math.abs(a - n) - Math.abs(b - n) || a - b);
+  for (const sn of order) {
+    if (world.live.has(sn)) continue;
+    world.live.set(sn, []);
+    world.labels.set(sn, []);
+    const stage = layout.stages[sn - 1];
+    stage.parts.forEach((p, i) => world.queue.push({ n: sn, def: partDef(stage, p, i) }));
+    for (const spec of stage.labels) world.queue.push({ n: sn, label: spec });
+  }
+  if (sync) drainQueue(ctx, Infinity);
+  repositionCatch(ctx);
+}
+
+function destroyWorld(ctx) {
+  for (const sn of [...world.live.keys()]) releaseStage(ctx, sn);
+  if (world.catchId !== null) ctx.engine.parts.remove(world.catchId);
+  world.queue = [];
+  world.window = [0, 0];
+  world.catchId = null;
+  labelHeld = new Map();
 }
 
 // ---------------------------------------------------------------------------
@@ -180,28 +268,50 @@ function cpYaw(n) {
   return layout.stages[n - 1].cp[3];
 }
 
-// §5.9.8 bands are numbered in the full 90-stage roster, so they are read through the
-// row's `srcN` (see config.js ROSTER).
+// §5.9.8 bands are spec stage numbers, which is what the roster now uses directly.
 function bandTrack(n) {
-  const src = stageRow(n).srcN;
-  const band = MUSIC_BANDS.find((b) => src <= b.maxStage);
+  const band = MUSIC_BANDS.find((b) => n <= b.maxStage);
   return (band || MUSIC_BANDS[MUSIC_BANDS.length - 1]).track;
+}
+
+// The stage-select's teleport (§5.14). Unlike a checkpoint touch this can jump the
+// whole chart, so the window is rebuilt synchronously — the pad has to be real before
+// the avatar is standing on it.
+function goToStage(ctx, n) {
+  const target = Math.max(1, Math.min(state.best, Math.round(n)));
+  if (!Number.isFinite(target)) return;
+  setWindow(ctx, target, true);
+  state.current = target;
+  ctx.player.setCheckpoint(cpFeet(target));
+  ctx.player.teleport(cpFeet(target), cpYaw(target));
+  ctx.engine.audio.playMusic(bandTrack(target));
+  state.dirty = true;
+  refreshHud(ctx);
+}
+
+function refreshUi() {
+  if (ui) refreshPanel(ui, { current: state.current, best: state.best });
 }
 
 function refreshHud(ctx) {
   ctx.services.ui.setHudStat("stage", { icon: "🏁", label: "Stage", value: `${state.current}/${STAGE_COUNT}` });
   ctx.services.ui.setHudStat("oofs", { icon: "💀", label: "Oofs", value: String(state.oofs) });
+  refreshUi();
 }
 
 // First-completion pay for every stage in (state.paid, done] — normally exactly one.
-// SLICE: §5.9.2 step 5's badge awards are deferred with the rest of Badges (SLICE.md);
-// config.js already carries §5.9.7's table for them.
+// §5.9.2 step 5: a first completion pays, and any badge whose stage it just passed
+// fires with it. Both walk the same (paid, done] window, so a run that jumps ahead
+// cannot skip a badge either — award() is idempotent, so a repeat pass is free.
 function payThrough(ctx, done) {
   if (done <= state.paid) return;
   let total = 0;
   for (let m = state.paid + 1; m <= done; m++) {
     const row = stageRow(m);
     total += REWARDS[row.diff] * (row.tower ? 5 : 1);
+    for (const badge of BADGES) {
+      if (badge.atStageComplete === m) ctx.services.badges.award(badge.id);
+    }
   }
   state.paid = done;
   if (total <= 0) return;
@@ -220,6 +330,7 @@ function onCheckpoint(ctx, n) {
     ctx.services.ui.toast(`Checkpoint! Stage ${n} — ${stageRow(n).name}`, { icon: "🏁" });
   }
   payThrough(ctx, n - 1);
+  setWindow(ctx, n, false); // the drain rides the next few ticks; +2 ahead buys the time
   ctx.engine.audio.playMusic(bandTrack(n));
   refreshHud(ctx);
   state.dirty = true;
@@ -230,6 +341,7 @@ function onWin(ctx) {
   payThrough(ctx, STAGE_COUNT);
   if (!state.winner) {
     state.winner = true;
+    ctx.services.badges.award("winner");
     ctx.services.economy.award(TUNE.WIN_OOFBUX, "obby:winner");
     ctx.services.ui.toast(`YOU BEAT THE OBBY! +${TUNE.WIN_OOFBUX} Oofbux`, { icon: "🏆" });
     ctx.engine.audio.playSfx("win");
@@ -254,7 +366,11 @@ export function init(ctx) {
   state = sanitize(ctx.services.saves.load());
   state.lastSaveAt = -1e9;
   state.dirty = false;
-  buildWorld(ctx);
+  setWindow(ctx, state.current, true);
+  ui = createUI(
+    ROSTER.map((row) => ({ n: row.n, name: row.name, color: PALETTE[row.diff].color })),
+    { teleport: (n) => goToStage(ctx, n) }
+  );
 
   // Pad ids are `cp<n>` (§5.12), so the stage number rides on the event's partId. The
   // engine's `checkpoint` behavior is deliberately not used: its monotonic order would
@@ -269,13 +385,44 @@ export function init(ctx) {
   refreshHud(ctx);
 }
 
+// A player can arrive somewhere the window has not built: the stage-select teleports
+// there on purpose, a bounce can fling them, and §8.2's probes drop straight onto a far
+// pad. Rather than trust that never happens, re-centre on whichever stage the avatar is
+// actually nearest whenever that stage is outside the live window. Checked a few times
+// a second, not every tick — 90 distance tests are cheap but not free.
+const WINDOW_RECHECK_S = 0.25;
+let recheckIn = 0;
+
+function recentreWindow(dt, ctx) {
+  recheckIn -= dt;
+  if (recheckIn > 0) return;
+  recheckIn = WINDOW_RECHECK_S;
+  const p = ctx.player.position();
+  let nearest = 1;
+  let best = Infinity;
+  for (let sn = 1; sn <= STAGE_COUNT; sn++) {
+    const cp = layout.stages[sn - 1].cp;
+    const dx = cp[0] - p[0];
+    const dy = cp[1] - p[1];
+    const dz = cp[2] - p[2];
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < best) { best = d; nearest = sn; }
+  }
+  if (nearest >= world.window[0] && nearest <= world.window[1]) return;
+  setWindow(ctx, nearest, true); // sync: the ground under them has to be there now
+}
+
 export function update(dt, ctx) {
+  recentreWindow(dt, ctx);
+  drainQueue(ctx, TUNE.MATERIALIZE_PER_TICK);
   flushSave(ctx, false);
 }
 
 export function dispose(ctx) {
   for (const off of subs) off();
   subs = [];
+  destroyUI(ui);
+  ui = null;
   if (state) flushSave(ctx, true);
   destroyWorld(ctx);
   layout = null;

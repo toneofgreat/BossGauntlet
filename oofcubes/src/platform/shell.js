@@ -16,7 +16,9 @@ import { createToaster } from "./ui/toast.js";
 import { createHud } from "./ui/hud.js";
 import * as saves from "./services/saves.js";
 import * as economy from "./services/economy.js";
+import * as badges from "./services/badges.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
+import { mountSaveCodeRows } from "./ui/savecode.js";
 
 // ---------------------------------------------------------------------------
 // tuning constants — spec 06 §6 (the single source for these numbers)
@@ -501,10 +503,9 @@ function onCatalogSelect(item, render) {
   render();
 }
 
-// Settings — SLICE: rows 1-5 of 06 §5.6.9 (the AUDIO and GRAPHICS sections) plus a
-// Hub exit. Rows 6-18 (ambience, controls, accessibility, save data) are filled in
-// from §5.6.9 when ui/settings.js lands; each writes through the same debounced
-// profile path this one does.
+// Settings — 06 §5.6.9's AUDIO and GRAPHICS sections, spec 07 §5.8's SAVE DATA rows,
+// and a Hub exit. The remaining §5.6.9 rows (ambience, controls, accessibility) land
+// with ui/settings.js; each writes through the same debounced profile path this one does.
 function openSettings() {
   const panel = openPanel({ title: "Settings" });
   const settings = profileSettings();
@@ -542,6 +543,8 @@ function openSettings() {
     },
   }).el);
   body.appendChild(quality);
+
+  mountSaveCodeRows(body, { saves, confirmDialog, toast: uiToast });
 
   // Not a §5.6.9 row: the slice's only way out of a Place on a phone (a game's own
   // exit button is per-game-spec, §5.2.4). Removed when the Hub's own exits land.
@@ -623,38 +626,10 @@ const ui = {
 // SECTION: services
 // ---------------------------------------------------------------------------
 
-// SLICE: badges.js (spec 07 §5.7 — the 23-badge registry, the 10-Oofbux award bonus,
-// event-fed counters, streaks and `tick`) is out of the slice (SLICE.md, "Badges /
-// daily / save codes"). Games still call ctx.services.badges, so the shell keeps the
-// earned set in the same `oofcubes.v1.badges` domain badges.js will adopt: awarding
-// records, toasts and emits, and `has`/`list` answer from that domain. No Oofbux
-// bonus and no registry lookups until §5.7's own module lands.
-function badgeDomain() {
-  return saves.getDomain("badges");
-}
-
-function fullBadgeId(slug, badgeId) {
-  return String(badgeId).includes(".") ? String(badgeId) : slug + "." + badgeId;
-}
-
-function awardBadge(slug, badgeId) {
-  const id = fullBadgeId(slug, badgeId);
-  const domain = badgeDomain();
-  if (domain.earned[id]) return false;
-  domain.earned[id] = Date.now();
-  saves.markDirty("badges");
-  sfx("badge");
-  uiToast({ variant: "badge", icon: "🏅", title: "Badge earned!", body: id });
-  if (events) events.emit("badge:awarded", { badgeId: id });
-  return true;
-}
-
+// Badges are spec 07 §5.7's own module now. The shell's job is to hand a Place its
+// slug-scoped view and to re-bind the counters on every Place transition.
 function createBadgesCtxApi(slug) {
-  return Object.freeze({
-    award: (badgeId) => awardBadge(slug, badgeId),
-    has: (badgeId) => !!badgeDomain().earned[fullBadgeId(slug, badgeId)],
-    list: () => Object.keys(badgeDomain().earned),
-  });
+  return badges.createCtxApi(slug);
 }
 
 // SLICE: services/avatar.js (spec 05 §4) lands with the avatar+Catalog task. Until it
@@ -1060,6 +1035,7 @@ async function loadPlaceInto(entry, slug) {
   serviceView = createServiceView();
   saves.bindEvents(serviceView, slug);
   economy.bindEvents(serviceView, slug);
+  badges.bindEvents(serviceView, slug);
   if (avatarService && typeof avatarService.bindEvents === "function") {
     avatarService.bindEvents(serviceView, slug);
   }
@@ -1214,6 +1190,7 @@ function stepOnce(dt) {
       reportFatal(err);
     }
   }
+  badges.tick(dt); // §5.7.4 playtime, accrued in sim seconds and flushed in chunks
   input.endStep();
   debugHandle.time = simTime;
 }
@@ -1281,7 +1258,7 @@ function applyAccessibility(settings) {
 async function initServices() {
   const { warnings } = saves.initSaves();
   economy.initEconomy({ ui });
-  // SLICE: badges.js (07 §5.7) is deferred; the shell's badge shim above stands in.
+  badges.initBadges({ ui, economy });
   try {
     avatarService = await import("./services/avatar.js");
   } catch (err) {
@@ -1315,8 +1292,8 @@ function buildUi(warnings) {
   toaster = createToaster();
   // §5.2.2 step 5's economy:changed -> pill wiring lives in the HUD itself, through
   // economy.onChange (the platform-side subscription that survives travel). The other
-  // half of that step — badge:awarded -> sfx `badge` — is played by the badge shim
-  // above at award time, and must not be doubled here.
+  // half of that step is badge:awarded -> the `badge` sfx, and ONLY the sfx: badges.js
+  // owns the toast, so playing one here as well would double it.
   hud = createHud({ economy, avatar: hudAvatarAdapter(), audio, ui }, platformBus);
   platformBus.on("platform:navigate", (payload) => {
     if (payload && payload.slug) navigate(payload.slug);
@@ -1331,12 +1308,13 @@ function buildUi(warnings) {
   });
 }
 
-// spec 07 §5.9 step 5. claimDaily is a slice stub that never claims yet (07 §5.6 is
-// deferred with badges), so this is the wiring, not the reward.
+// spec 07 §5.9 step 5. The shell is what joins economy to badges here, deliberately:
+// §5.7.3 keeps the dependency one-way, so economy never learns that badges exist.
 function claimDailyReward() {
   const daily = economy.claimDaily();
   if (daily && daily.claimed) {
     uiToast({ icon: "🎁", title: `Daily reward +${daily.amount} Oofbux`, body: `Day ${daily.streak}` });
+    badges.checkStreak(daily.streak);
   }
 }
 

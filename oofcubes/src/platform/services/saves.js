@@ -389,28 +389,154 @@ export function decodeSaveCode(str) {
 }
 
 // ===== account save codes — spec 07 §5.4/§5.6.4. ====================================
-// SLICE: exportSaveCode/importSaveCode/applyImport are stubs in this build. The slice
-// (SLICE.md, "Badges / daily / save codes" row) is the single-device economy+saves
-// loop; cross-device account transfer is deferred. encodeSaveCode/decodeSaveCode and
-// the crc32/base64url primitives above are already fully implemented (they're generic,
-// reusable — spec 11's studio codes ride the same encoder), so the full account
-// export/import only needs its own assembly+validation logic (spec 07 §5.4 steps
-// 1-10, §5.6.4 steps 1-5) layered on top of what already works here.
+// The account-domain specialisations of the generic encoder above. A code is the
+// whole profile in one paste-able string: no compression (see §5.4 — async, a Safari
+// floor, and a harder Node-side check, all to save bytes that already fit).
+
+const SAVE_CODE_TARGET_CHARS = 6000; // §6 — over this warns, still works
+const SAVE_CODE_MAX_CHARS = 16000; // and over THIS is a bug, so it fails loudly
+const SAVE_CODE_PAYLOAD_V = 1;
+// Mirrors economy.js §6. Duplicated rather than imported: saves.js sits UNDER economy
+// in the dependency order, and a cycle between them would be a worse trade than a
+// number that is checked in both places.
+const MAX_BALANCE = 1000000000;
+const IMPORT_SLUG_RE = /^[a-z][a-z0-9-]{1,23}$/;
+const IMPORT_BADGE_RE = /^[a-z][a-z0-9-]*\.[a-z0-9-]{1,32}$/;
 
 // exportSaveCode() -> { ok, code, chars } | { ok:false, error } — spec 07 §5.4.
 export function exportSaveCode() {
-  return { ok: false, error: "Save codes aren't available in this build yet." };
+  flushAll(); // the code has to reflect persisted truth, not a pending write
+  const payload = { v: SAVE_CODE_PAYLOAD_V, exportedAt: Date.now(), places: {} };
+  for (const domain of ["profile", "economy", "avatar", "badges"]) {
+    const obj = cache.get(domain);
+    if (obj) payload[domain] = JSON.parse(JSON.stringify(obj));
+  }
+  // Diagnostics do not travel: the transaction log is the bulk of a big save and
+  // means nothing on another device.
+  if (payload.economy) payload.economy.log = [];
+  for (const [domain, obj] of cache) {
+    if (!domain.startsWith("place.") || !obj) continue;
+    payload.places[domain.slice("place.".length)] = JSON.parse(JSON.stringify(obj));
+  }
+  let code;
+  try {
+    code = encodeSaveCode("account", payload);
+  } catch (err) {
+    return { ok: false, error: "Could not build a save code from this profile." };
+  }
+  if (code.length > SAVE_CODE_MAX_CHARS) return { ok: false, error: "Save too large to export" };
+  if (code.length > SAVE_CODE_TARGET_CHARS) console.warn("[oof] save code over target", code.length);
+  return { ok: true, code, chars: code.length };
 }
 
-// importSaveCode(code) -> { ok, parsed, summary } | { ok:false, error } — spec 07 §5.4.
-// Validation only, no mutation, same as the full version's contract.
+// importSaveCode(code) -> { ok, parsed, summary } | { ok:false, error }. Validation
+// ONLY: nothing is written until the UI has shown the summary and the player agreed.
 export function importSaveCode(code) {
-  return { ok: false, error: "Save codes aren't available in this build yet." };
+  const text = String(code == null ? "" : code).replace(/\s+/g, "");
+  if (!text) return { ok: false, error: "Paste a save code first." };
+  const m = SAVE_CODE_FULL_RE.exec(text);
+  if (!m) return { ok: false, error: "Not a save code (should start with OOF1.)." };
+  const [, version, domain, payload, checksum] = m;
+  if (domain !== "account") return { ok: false, error: "That's not an account save code." };
+  if (version !== "1") return { ok: false, error: "This code is from a newer version of OofCubes." };
+  if (crc32(domain + "." + payload) !== checksum) {
+    return { ok: false, error: "Code is damaged (checksum mismatch) — copy it again." };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(fromBase64Url(payload));
+  } catch {
+    return { ok: false, error: "Code is damaged (unreadable content)." };
+  }
+  const plain = (v) => v && typeof v === "object" && !Array.isArray(v);
+  const versioned = (v) => plain(v) && Number.isInteger(v.schemaVersion) && v.schemaVersion >= 1;
+  if (!plain(parsed) || parsed.v !== SAVE_CODE_PAYLOAD_V) return { ok: false, error: "Code content is invalid." };
+  for (const domainName of ["profile", "economy", "avatar", "badges"]) {
+    if (parsed[domainName] !== undefined && !versioned(parsed[domainName])) {
+      return { ok: false, error: "Code content is invalid." };
+    }
+  }
+  if (parsed.places !== undefined) {
+    if (!plain(parsed.places)) return { ok: false, error: "Code content is invalid." };
+    for (const [slug, obj] of Object.entries(parsed.places)) {
+      if (!IMPORT_SLUG_RE.test(slug) || !versioned(obj)) return { ok: false, error: "Code content is invalid." };
+    }
+  }
+  // A save from a FUTURE version cannot be migrated down, so it is refused rather
+  // than silently flattened. Older ones are fine: applyImport runs them up the ladder.
+  const tooNew = (kind, obj) => obj && obj.schemaVersion > CURRENT_VERSIONS[kind];
+  for (const domainName of ["profile", "economy", "avatar", "badges"]) {
+    if (tooNew(domainName, parsed[domainName])) {
+      return { ok: false, error: "This code is from a newer version of OofCubes." };
+    }
+  }
+  for (const obj of Object.values(parsed.places || {})) {
+    if (tooNew("place", obj)) return { ok: false, error: "This code is from a newer version of OofCubes." };
+  }
+
+  // Sanity clamps. A hand-edited code is the expected case here, not the exception:
+  // it must not be able to mint Oofbux or invent badge ids.
+  const econ = parsed.economy;
+  if (econ) {
+    const int = (v, dflt) => (Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : dflt);
+    econ.balance = Math.min(MAX_BALANCE, int(econ.balance, 100));
+    econ.lifetimeEarned = int(econ.lifetimeEarned, 0);
+    econ.lifetimeSpent = int(econ.lifetimeSpent, 0);
+    econ.log = [];
+  }
+  if (parsed.badges && plain(parsed.badges.earned)) {
+    for (const id of Object.keys(parsed.badges.earned)) {
+      if (!IMPORT_BADGE_RE.test(id)) delete parsed.badges.earned[id];
+    }
+  }
+
+  const summary = {
+    balance: econ ? econ.balance : 0,
+    badgeCount: parsed.badges && plain(parsed.badges.earned) ? Object.keys(parsed.badges.earned).length : 0,
+    places: Object.keys(parsed.places || {}),
+    exportedAt: parsed.exportedAt || null,
+  };
+  return { ok: true, parsed, summary };
 }
 
-// applyImport(parsed) — spec 07 §5.6.4 (backup + replace + flushAll + reload). Since
-// importSaveCode() above never returns {ok:true}, nothing calls this yet in the slice;
-// it's a safe no-op so the module's export surface (spec 07 §4) still matches exactly.
+// applyImport(parsed) — §5.6.4. REPLACE, not merge, with an automatic backup: a merge
+// of two accounts has no right answer, and losing the device you imported ONTO is the
+// failure that would actually hurt, so the old state is written down first.
 export function applyImport(parsed) {
-  console.warn("[oof] applyImport: save codes are not implemented in this build");
+  if (!parsed || typeof parsed !== "object") return;
+  const domains = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(KEY_PREFIX)) continue;
+    const short = key.slice(KEY_PREFIX.length);
+    if (short === "backup") continue;
+    try {
+      domains[short] = JSON.parse(localStorage.getItem(key));
+    } catch {
+      domains[short] = localStorage.getItem(key);
+    }
+  }
+  // resetAll clears every oofcubes.v1.* key INCLUDING backup, so the backup is
+  // written after the wipe, not before it.
+  resetAll();
+  try {
+    localStorage.setItem(KEY_PREFIX + "backup", JSON.stringify({ backedUpAt: Date.now(), domains }));
+  } catch (err) {
+    console.error("[oof] could not write the pre-import backup", err);
+  }
+  for (const domain of ["profile", "economy", "avatar", "badges"]) {
+    if (parsed[domain]) {
+      cache.set(domain, parsed[domain]);
+      dirty.add(domain);
+    }
+  }
+  for (const [slug, obj] of Object.entries(parsed.places || {})) {
+    cache.set("place." + slug, obj);
+    dirty.add("place." + slug);
+  }
+  flushAll();
+  // A reload is the honest way to adopt a whole new account: every service holds
+  // state built from the old one, and re-deriving it in place is a much longer list
+  // of things to get wrong than starting over.
+  if (typeof location !== "undefined" && location.reload) location.reload();
 }
