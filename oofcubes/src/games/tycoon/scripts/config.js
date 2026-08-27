@@ -7,6 +7,7 @@
 // section's tables, never re-derived.
 // ---------------------------------------------------------------------------
 
+const LAYOUT_RAMP_STEP = Object.freeze([8, 1, 8]); // the Roof Ramp tread; the roof hatch is cut to match
 export const LAYOUT = Object.freeze({
   // Belt (always present, even before any dropper). Top surface y = 1.5.
   BELT_SIZE: [6, 1, 68],
@@ -87,7 +88,11 @@ export const LAYOUT = Object.freeze({
   // The roof needs a hatch where the Roof Ramp arrives, or the ramp is a ladder to
   // nowhere. See the amended §5.1 `roof`/`ladder` rows for why this is a hatch and not
   // the spec's original roof-edge wedge.
-  ROOF_HATCH: [12, 12], // x by z, centred on the ramp's top step
+  // Exactly the top step's footprint, so the step plugs the hatch flush (both tops sit at
+  // y 17.25) and you walk off the stair onto the roof over a seamless join. A wider hatch
+  // leaves an open ring around the stair, which is just a hole to fall down while walking
+  // the roof -- trading the ceiling you could not get through for a floor you fall out of.
+  ROOF_HATCH: [LAYOUT_RAMP_STEP[0], LAYOUT_RAMP_STEP[2]],
   WALLS2_SIZE: [2, 16, 118],
   WALLS2_X: 49,
   ROOF_SIZE: [100, 1.5, 120],
@@ -99,7 +104,7 @@ export const LAYOUT = Object.freeze({
   RAMP_STEPS: 7,
   RAMP_X: 44,
   RAMP_Z0: -20,
-  RAMP_STEP_SIZE: [8, 1, 8],
+  RAMP_STEP_SIZE: LAYOUT_RAMP_STEP,
   RAMP_COLOR: "#8d8d94",
   // §5.8 auras — three orbiting rings over the plot, each tier faster and higher
   AURA_COUNT: 8,
