@@ -93,7 +93,37 @@ export function createHud(services = {}, events = null) {
     if (api && typeof api.openGames === "function") api.openGames();
   });
 
-  right.append(avatarBtn, gamesBtn, gearBtn);
+  // Spec 15: who is here, and who your friends are. Both are places you look at
+  // other people, so they sit together left of the gear.
+  const playersBtn = el("button", "oof-btn oof-btn-icon", "👥");
+  playersBtn.type = "button";
+  playersBtn.setAttribute("aria-label", "Players here");
+  playersBtn.addEventListener("click", () => {
+    click();
+    const api = ui();
+    if (api && typeof api.openPlayers === "function") api.openPlayers();
+  });
+
+  const friendsBtn = el("button", "oof-btn oof-btn-icon", "🤝");
+  friendsBtn.type = "button";
+  friendsBtn.setAttribute("aria-label", "Friends");
+  friendsBtn.addEventListener("click", () => {
+    click();
+    const api = ui();
+    if (api && typeof api.openFriends === "function") api.openFriends();
+  });
+
+  // Spec 16 — the boombox code box.
+  const boomBtn = el("button", "oof-btn oof-btn-icon", "🎵");
+  boomBtn.type = "button";
+  boomBtn.setAttribute("aria-label", "Boombox");
+  boomBtn.addEventListener("click", () => {
+    click();
+    const api = ui();
+    if (api && typeof api.openBoombox === "function") api.openBoombox();
+  });
+
+  right.append(avatarBtn, gamesBtn, playersBtn, friendsBtn, boomBtn, gearBtn);
   root.append(balancePill, titlePill, right);
   document.body.appendChild(root);
 

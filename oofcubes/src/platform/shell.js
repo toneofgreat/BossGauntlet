@@ -24,6 +24,11 @@ import { createGames } from "./services/games.js";
 import { openSignIn } from "./ui/signin.js";
 import { createChat } from "./ui/chat.js";
 import { mountGamesPanel } from "./ui/games-panel.js";
+import { createFriends } from "./services/friends.js";
+import { mountPlayerList } from "./ui/playerlist.js";
+import { mountFriendsPanel } from "./ui/friends-panel.js";
+import { createInviteToast } from "./ui/invite-toast.js";
+import { createBoombox } from "./ui/boombox.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
 import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
@@ -129,6 +134,10 @@ let account = null;
 let gamesSvc = null;
 let chatUi = null;
 let signInShown = false;
+let friendsSvc = null;
+let inviteToast = null;
+let unbindInvites = null;
+let boombox = null;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
 let suppressNextHash = false;
@@ -557,6 +566,52 @@ function onCatalogSelect(item, render) {
 // two callbacks below) — and the one stopgap row that isn't a §5.6.9 row at all.
 // Spec 14 §5.6. Opening a published game replaces the current Place with it, which is
 // exactly what a portal does — the difference is only where the world came from.
+// Spec 16. The boombox is a platform toy rather than a Place feature: you carry it
+// between Places, so it lives here with the rest of the shell UI.
+function boomboxService() {
+  if (boombox) return boombox;
+  boombox = createBoombox({
+    audio,
+    toast: uiToast,
+    openPanel,
+    // What to hand back when the boombox stops: whatever this Place asked for.
+    placeTrack: () => (placeHandle && placeHandle.data ? placeHandle.data.music || null : null),
+  });
+  return boombox;
+}
+
+function openBoombox() {
+  boomboxService().open();
+}
+
+function openPlayers() {
+  const panel = openPanel({ title: "Players here" });
+  const list = mountPlayerList(panel.bodyEl, {
+    net: netService(),
+    account: accountService(),
+    friends: friendsService(),
+    toast: uiToast,
+    myAvatar: () => (avatarService ? avatarService.getState() : null),
+  });
+  const close = panel.close;
+  panel.close = () => { list.dispose(); close(); };
+}
+
+function openFriends() {
+  const panel = openPanel({ title: "Friends" });
+  mountFriendsPanel(panel.bodyEl, {
+    friends: friendsService(),
+    account: accountService(),
+    toast: uiToast,
+    onJoin: (friend) => {
+      panel.close();
+      // Joining a friend is just going where they are. Published games get their own
+      // dynamic slug, and those are already routable, so this needs no special case.
+      goTo(friend.place).catch(() => uiToast(`Could not join ${friend.username}`));
+    },
+  });
+}
+
 function openGames() {
   const panel = openPanel({ title: "Games" });
   mountGamesPanel(panel.bodyEl, {
@@ -679,6 +734,9 @@ const ui = {
   shopGrid: (spec) => safely(() => shopGrid(spec), el("div")),
   openSettings: () => safely(() => openSettings(), undefined),
   openGames: () => safely(() => openGames(), undefined),
+  openPlayers: () => safely(() => openPlayers(), undefined),
+  openFriends: () => safely(() => openFriends(), undefined),
+  openBoombox: () => safely(() => openBoombox(), undefined),
   openCatalog: (tab) => safely(() => openCatalog(tab), Promise.resolve()),
   setHudTitle: (text) => safely(() => (hud ? hud.setTitle(text) : undefined), undefined),
   setHudStat: (key, chip) => safely(() => (hud ? hud.setStat(key, chip) : undefined), undefined),
@@ -869,7 +927,15 @@ function feet() {
 function accountService() {
   if (account) return account;
   account = createAccount({
-    onChange: (who) => { debugHandle.account = who; },
+    onChange: (who) => {
+      debugHandle.account = who;
+      // Re-join the room so the SERVER learns the account id. The Place loads and joins
+      // before the async session restore can finish, so without this the socket stays
+      // signed-in-nowhere: chat would be attributed to a placeholder name and an invite
+      // could not find you, because invites are addressed to an account rather than a
+      // connection (spec 15 §3.3).
+      if (who.signedIn && net && currentSlug) { net.leave(); net.join(currentSlug); }
+    },
     getRelayUrl: () => {
       const resolved = resolveRelayUrl(location.search, profileSettings().relayUrl, location.protocol);
       return resolved.url;
@@ -882,6 +948,24 @@ function gamesService() {
   if (gamesSvc) return gamesSvc;
   gamesSvc = createGames({ account: accountService() });
   return gamesSvc;
+}
+
+// Spec 15. Bound to the socket once, because an invite is pushed to a player who is
+// already in a game and there is no other way to reach them.
+function friendsService() {
+  if (friendsSvc) return friendsSvc;
+  friendsSvc = createFriends({ account: accountService(), net: netService() });
+  if (!unbindInvites) unbindInvites = friendsSvc.bind(netService());
+  if (!inviteToast) inviteToast = createInviteToast();
+  friendsSvc.on("invite", (invite) => {
+    inviteToast.show(invite, (yes) => {
+      // Saying no sends nothing anywhere. There is no "they declined" message in this
+      // protocol on purpose (spec 15 §5.4).
+      if (!yes) return;
+      if (invite.place) goTo(invite.place).catch(() => uiToast("Could not go there"));
+    });
+  });
+  return friendsSvc;
 }
 
 // Spec 14 §5.4. One chat UI for the session; its log is cleared per room.
@@ -902,21 +986,31 @@ function gamesService() {
 async function maybeSignIn() {
   const acc = accountService();
   if (!acc.available()) return;
-  if (smokeMode && !new URLSearchParams(location.search).has("signin")) return;
+  // Restore ALWAYS, including under ?smoke=1. Who you are is not a UI concern: chat
+  // attribution, the player list, friends and visits all read it, and skipping this was
+  // leaving a seeded session signed out — which is exactly how the first run of
+  // scenario:friends failed.
   try { await acc.restore(); } catch { /* restore never throws, but belt and braces */ }
   if (acc.signedIn() || signInShown) return;
+  // Only the DIALOG is suppressed under smoke: a modal nobody can answer would stall
+  // every other scenario. `?signin` opts back in for the one that tests it.
+  if (smokeMode && !new URLSearchParams(location.search).has("signin")) return;
   signInShown = true;
   openSignIn({
     account: acc,
     onDone: (username) => {
+      signInShown = false;
       if (username) {
-        uiToast(`Signed in as ${username}`);
+        uiToast(`Welcome, ${username}`);
         // The room is told who we are now: re-join so presence and chat carry the
-        // account name rather than the guest one we joined with.
+        // account name rather than the placeholder we joined with.
         if (net && currentSlug) { net.leave(); net.join(currentSlug); }
-      } else if (chatUi) {
-        chatUi.system("Playing as a guest. Your progress is saved in this browser.");
+        return;
       }
+      // No name means the dialog was closed some other way (the shell can call close()).
+      // Signing in is required now, so put it straight back up rather than leaving the
+      // player nameless in a platform that needs a name for chat, friends and visits.
+      maybeSignIn();
     },
   });
 }
@@ -1268,6 +1362,9 @@ async function loadPlaceInto(entry, slug) {
   n.join(slug);
   ensureChat(n);
   installChatHotkey();
+  // Built here, not lazily on first panel open: an invite has to be able to arrive
+  // while you are simply playing, which is the whole point of it.
+  friendsService();
   // The log is per-room: chat is forwarded and forgotten (spec 14 §2), so carrying the
   // last Place's conversation into this one would be inventing context that nobody
   // else in this room can see.

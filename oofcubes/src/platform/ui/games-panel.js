@@ -72,7 +72,7 @@ export function mountGamesPanel(body, deps = {}) {
       onClick: () => { if (typeof onPlay === "function") onPlay(game); },
     });
 
-    r.append(place, mid, play.el);
+    r.append(place, mid, play);
     return r;
   }
 

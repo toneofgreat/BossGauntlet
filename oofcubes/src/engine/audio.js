@@ -254,7 +254,44 @@ const cashflow = {
 
 // The 4 tracks, spec 02 §5.5.10. Track<->Place binding lives in each Place's
 // place.json `music` field, never here.
-export const TRACKS = Object.freeze({ plaza, ascent, pump, cashflow });
+// The boombox track (spec 16). Slow, swung, and deliberately sparse: it plays ON TOP of
+// whatever Place music is already going, so it has to sit under it rather than fight it.
+// A ii-V-I-vi in F major at 78 bpm with a triangle lead and a soft send — the same
+// synthesis every other track uses, just at low energy.
+const chill = {
+  id: "chill",
+  title: "Chill",
+  bpm: 78,
+  bars: 8,
+  swing: 0.18,
+  bass: "pulse8",
+  chords: [
+    ["G2", "Bb3", "D4", "F4"],
+    ["C3", "E4", "G4", "Bb4"],
+    ["F2", "A3", "C4", "E4"],
+    ["D3", "F4", "A4", "C5"],
+  ],
+  roots: ["G1", "C2", "F1", "D2"],
+  leadVoice: { type: "triangle", cut: 2200, v: 0.13, a: 0.05, d: 0.3, s: 0.5, r: 0.5, send: 0.42 },
+  lead: [
+    [0, 0, "D5", 2], [0, 2, "F5", 1.5],
+    [1, 0, "E5", 2], [1, 2.5, "G5", 1.5],
+    [2, 0, "A5", 1.5], [2, 2, "F5", 2],
+    [3, 0, "E5", 3],
+    [4, 0, "D5", 2], [4, 2, "C5", 1.5],
+    [5, 0, "Bb4", 2], [5, 2.5, "D5", 1.5],
+    [6, 0, "F5", 1.5], [6, 2, "E5", 2],
+    [7, 0, "D5", 4],
+  ],
+  // Brushed and sparse: a kick on 1 and 3 with hats off the beat. The boombox plays OVER
+  // a Place track, so anything busier turns two songs into noise.
+  drums(bar) {
+    if (bar % 4 === 3) return "k..h..h.k..h..hc";
+    return "k..h..h.k..h..h.";
+  },
+};
+
+export const TRACKS = Object.freeze({ plaza, ascent, pump, cashflow, chill });
 
 export function createAudio() {
   // ---- instance state (per spec 02 §5.5: one createAudio() per page lifetime, but

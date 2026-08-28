@@ -242,6 +242,19 @@ function buildFrontWall(ctx, state, p) {
   }
 }
 
+// §5.1 walls2 — the two long side walls.
+//
+// This was deleted by accident on 2026-08-27 while the front wall was being given its
+// doorway: that edit replaced everything between buildFrontWall and buildRoof, and this
+// function was sitting in the middle of it. Nothing caught it, because the crash only
+// happens once walls2 is in a save -- and then it happens on EVERY load, so the Place
+// never opens again. scenario:tycoon now loads a save that owns every purchase.
+function buildSideWalls(ctx, state, p) {
+  for (const sx of [-1, 1]) {
+    track(ctx, state, p.id, box(LAYOUT.WALLS2_SIZE, [sx * LAYOUT.WALLS2_X, 8, 0], LAYOUT.WALLS1_COLOR));
+  }
+}
+
 function buildRoof(ctx, state, p) {
   const [w, h, d] = LAYOUT.ROOF_SIZE;
   const [cx, cy, cz] = LAYOUT.ROOF_POS;

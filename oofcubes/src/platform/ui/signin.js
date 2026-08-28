@@ -7,10 +7,15 @@
 //      you have forgotten one. There is no email here and nothing to recover an account
 //      with (ARCHITECTURE.md §9.3), so the only fair moment to say so is while you are
 //      choosing.
-//   2. **"Play as guest" is a real, visible option**, not a link hidden in a corner.
-//      Nothing in this platform requires an account: a guest keeps every bit of their
-//      progress, because progress is local (§8). What they give up is publishing and
-//      being counted as a visit, and the button says exactly that.
+//   2. **You do not get past it without a name** (amended 2026-08-27 at the owner's
+//      request; spec 14 §5.3). It used to offer "Play as guest". It no longer does:
+//      chat, the player list, friends and visit counts all need somebody to point at,
+//      and half the platform behaving differently for the unnamed was worse than
+//      simply asking. There is no Escape hatch and no dismiss button.
+//
+//      This is only reachable when a server is configured at all. With none, there is
+//      no account system, this screen never opens, and everything still plays — that
+//      part has not changed and `ARCHITECTURE.md` §9.2 still requires it.
 
 import { el, button, trapFocus } from "./kit.js";
 
@@ -54,15 +59,13 @@ export function openSignIn(deps = {}) {
 
   const primary = button({ label: "Create my name", variant: "primary", onClick: submit });
   const swap = button({ label: "I already have a name", variant: "secondary", onClick: toggleMode });
-  const guest = button({ label: "Play as guest", variant: "ghost", onClick: () => finish(null) });
 
-  const guestNote = el("div", null,
-    "As a guest you keep all your progress — it is saved in this browser either way. "
-    + "You just cannot publish games, and your visits are not counted.");
-  guestNote.setAttribute("style", "color:var(--oof-text-dim);font-size:var(--oof-size-sm)");
+  const why = el("div", null,
+    "Your name is what other people see when you chat, and it is how friends find you.");
+  why.setAttribute("style", "color:var(--oof-text-dim);font-size:var(--oof-size-sm)");
 
   card.append(title, blurb, nameInput.row, passInput.row, warn, message,
-    primary.el, swap.el, guest.el, guestNote);
+    primary, swap, why);
   scrim.appendChild(card);
   document.body.appendChild(scrim);
   const releaseFocus = trapFocus ? trapFocus(card) : null;
@@ -98,8 +101,8 @@ export function openSignIn(deps = {}) {
     mode = mode === MODE_NEW ? MODE_BACK : MODE_NEW;
     const isNew = mode === MODE_NEW;
     title.textContent = isNew ? "Who are you?" : "Welcome back";
-    primary.el.textContent = isNew ? "Create my name" : "Sign in";
-    swap.el.textContent = isNew ? "I already have a name" : "I need a new name";
+    primary.textContent = isNew ? "Create my name" : "Sign in";
+    swap.textContent = isNew ? "I already have a name" : "I need a new name";
     warn.style.display = isNew ? "" : "none";
     passInput.input.autocomplete = isNew ? "new-password" : "current-password";
     message.textContent = "";
@@ -107,10 +110,9 @@ export function openSignIn(deps = {}) {
 
   function setBusy(on) {
     busy = on;
-    primary.el.disabled = on;
-    swap.el.disabled = on;
-    guest.el.disabled = on;
-    primary.el.textContent = on
+    primary.disabled = on;
+    swap.disabled = on;
+    primary.textContent = on
       ? "Just a moment…"
       : (mode === MODE_NEW ? "Create my name" : "Sign in");
   }
@@ -141,11 +143,14 @@ export function openSignIn(deps = {}) {
     if (typeof onDone === "function") onDone(username);
   }
 
-  // Escape means "play as guest" — the same as the button, because a dialog you cannot
-  // dismiss in front of a game you can already play would be a lie about being optional.
+  // Escape is swallowed rather than closing. There is nowhere to go: the platform needs
+  // a name to put in chat, on the player list and on a friend request, and letting the
+  // dialog be dismissed would leave the player in a half-state where those things fail
+  // for reasons they cannot see.
   scrim.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.preventDefault(); finish(null); }
+    if (e.key === "Escape") e.preventDefault();
   });
 
+  // Exposed for the shell, not for a close button: nothing in the UI dismisses this.
   return { close: () => finish(null) };
 }

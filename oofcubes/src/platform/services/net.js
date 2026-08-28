@@ -188,6 +188,15 @@ export function createNet(deps = {}) {
         if (peers.delete(m.id)) emit("bye", { id: m.id });
         return;
       }
+      case "invite":
+        // Straight out to whoever is listening. The server has already checked that this
+        // came from a friend and rate limited it (spec 15 §5.4); net.js does not second
+        // guess that, it just delivers.
+        emit("invite", { from: m.from, name: m.name, place: m.place });
+        return;
+      case "inviteSent":
+        emit("inviteSent", { to: m.to, delivered: m.delivered });
+        return;
       case "chat":
         // Straight through to whoever is listening; net.js keeps NO history, because
         // the server keeps none either (spec 14 §2).
@@ -208,6 +217,10 @@ export function createNet(deps = {}) {
   function addPeer(r) {
     const rec = {
       id: r.id,
+      // The ACCOUNT id, distinct from the connection id: friendships are between
+      // accounts (spec 15 §2), so a player list that dropped this could show somebody
+      // and then have no way to send them a request.
+      accountId: r.accountId || null,
       name: r.name || "",
       avatar: r.avatar || null,
       place: r.place || place,

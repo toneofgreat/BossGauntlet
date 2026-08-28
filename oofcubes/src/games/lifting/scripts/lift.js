@@ -108,14 +108,20 @@ function animPose(t) {
 }
 
 // §5.4's carry pose, recomputed every sim step: chest height + half the item, one item
-// half-depth in front of the torso, facing wherever the avatar faces. The rig's yaw is
+// half-depth BEHIND the torso, facing wherever the avatar faces. The rig's yaw is
 // read-only here — the shell owns it.
+//
+// Behind, not in front (amended 2026-08-27 at the owner's request): everything you pick
+// up rides on your back. The lift itself is unchanged, because the rep animation already
+// drives `pose.fwd` from 1 to 0 as the item goes overhead — negating the base offset means
+// it now travels from your back to over your head, which is what carrying something heavy
+// actually looks like. A planet held out in front was also hiding half the screen.
 function poseHeld() {
   if (!held || !ctxRef) return;
   const feet = ctxRef.player.position();
   const avatar = ctxRef.player.avatar;
   const yaw = avatar ? avatar.rotation.y : 0;
-  const carryF = TUNING.CARRY_FORWARD_BASE + held.halfDepth;
+  const carryF = TUNING.CARRY_SIDE * (TUNING.CARRY_FORWARD_BASE + held.halfDepth);
   const carryY = TUNING.CARRY_HEIGHT_BASE + held.halfHeight;
   const pose = animPose(animT);
   const fwd = carryF * pose.fwd;

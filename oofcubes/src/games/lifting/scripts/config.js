@@ -614,6 +614,10 @@ export const TUNING = Object.freeze({
   LIFT_OVERHEAD_RISE: 3.0,
   CARRY_HEIGHT_BASE: 2.2,   // full offset is CARRY_HEIGHT_BASE + halfHeight (§5.4)
   CARRY_FORWARD_BASE: 1.0,  // full offset is CARRY_FORWARD_BASE + halfDepth (§5.4)
+  // -1 puts the carried item on the avatar BACK; +1 is the original in-front pose.
+  // A constant rather than a flipped sign in lift.js so the choice is visible here with
+  // the rest of the carry numbers.
+  CARRY_SIDE: -1,
   SURGE_STEP_MOB: 0.2,
   SURGE_MOB_CAP: 3.0,
   BOARD_REDRAW_S: 5,
