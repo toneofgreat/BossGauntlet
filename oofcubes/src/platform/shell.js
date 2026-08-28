@@ -29,6 +29,8 @@ import { mountPlayerList } from "./ui/playerlist.js";
 import { mountFriendsPanel } from "./ui/friends-panel.js";
 import { createInviteToast } from "./ui/invite-toast.js";
 import { createBoombox } from "./ui/boombox.js";
+import { createBuild } from "./services/build.js";
+import { mountOofTools } from "./ui/ooftools.js";
 import { getAllItems } from "./services/avatar/catalog-data.js";
 import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
@@ -138,6 +140,7 @@ let friendsSvc = null;
 let inviteToast = null;
 let unbindInvites = null;
 let boombox = null;
+let buildSvc = null;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
 let suppressNextHash = false;
@@ -180,6 +183,10 @@ const debugHandle = {
     colliders: physics ? physics.getDebugState().colliderCount : 0,
   }),
   chatTyping: false, // spec 14 §5.4 — true while the chat input has focus
+  // spec 18 §8: how many parts the shared build currently holds, so a scenario can assert
+  // on the build itself rather than inferring it from a total part count that everything
+  // else in the Place also contributes to.
+  buildCount: () => 0,
   account: null,     // { signedIn, username } once the account service exists
   debug: { physics: () => (physics ? physics.getDebugState() : null), eventLog: [] },
 };
@@ -568,6 +575,27 @@ function onCatalogSelect(item, render) {
 // exactly what a portal does — the difference is only where the world came from.
 // Spec 16. The boombox is a platform toy rather than a Place feature: you carry it
 // between Places, so it lives here with the rest of the shell UI.
+// Spec 18. One per session, re-attached each Place load — the parts belong to the
+// room, so they are cleared and rebuilt from the server's `welcome` on every arrival.
+function buildService() {
+  if (!buildSvc) {
+    buildSvc = createBuild({ net: netService() });
+    debugHandle.buildCount = () => buildSvc.count();
+  }
+  return buildSvc;
+}
+
+function openOofTools() {
+  const panel = openPanel({ title: "OofTools" });
+  const tools = mountOofTools(panel.bodyEl, {
+    build: buildService(),
+    playerPos: () => feet(),
+    toast: uiToast,
+  });
+  const close = panel.close;
+  panel.close = () => { tools.dispose(); close(); };
+}
+
 function boomboxService() {
   if (boombox) return boombox;
   boombox = createBoombox({
@@ -737,6 +765,10 @@ const ui = {
   openPlayers: () => safely(() => openPlayers(), undefined),
   openFriends: () => safely(() => openFriends(), undefined),
   openBoombox: () => safely(() => openBoombox(), undefined),
+  openOofTools: () => safely(() => openOofTools(), undefined),
+  // Spec 18: a Place decides who may build (Overtime hands it to whoever leads), and
+  // the SERVER enforces it. This only says whether to show the button.
+  setBuilder: (on) => safely(() => (hud ? hud.setBuilder(!!on) : undefined), undefined),
   openCatalog: (tab) => safely(() => openCatalog(tab), Promise.resolve()),
   setHudTitle: (text) => safely(() => (hud ? hud.setTitle(text) : undefined), undefined),
   setHudStat: (key, chip) => safely(() => (hud ? hud.setStat(key, chip) : undefined), undefined),
@@ -1240,6 +1272,8 @@ function teardown() {
   // is left in the scene. A remote avatar still parented when the leak check runs is
   // indistinguishable from a Place that forgot to clean up after itself.
   if (remotes) { remotes.dispose(); remotes = null; }
+  if (buildSvc) buildSvc.detach();
+  if (hud) hud.setBuilder(false);
   if (net) net.leave();
   try {
     if (gameMod && typeof gameMod.dispose === "function") gameMod.dispose(ctx || debugHandle.ctx);
@@ -1406,6 +1440,10 @@ async function loadPlaceInto(entry, slug) {
   }
   gameMod = mod;
   ctx = nextCtx;
+  // Spec 18: after ctx exists, because the build needs the engine to draw into. The
+  // room's parts arrive with the socket's welcome and are rebuilt from scratch on every
+  // arrival, so this is also what clears the last Place's build.
+  buildService().attach(ctx);
   setState(slug === "hub" ? "hub" : "playing");
 
   writeHash(slug);
@@ -1615,6 +1653,7 @@ function stepOnce(dt) {
   // everything else here), and remote rigs are posed from it. Both are no-ops offline.
   if (net) net.update(dt, feet(), physics.getRenderTransform(1).yaw, netAnimState());
   if (remotes) remotes.update(dt);
+  if (buildSvc) buildSvc.update(dt);
   if (ctx && gameMod && !updateHalted) {
     ctx.time += dt;
     try {

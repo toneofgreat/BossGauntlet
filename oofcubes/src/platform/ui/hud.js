@@ -123,7 +123,20 @@ export function createHud(services = {}, events = null) {
     if (api && typeof api.openBoombox === "function") api.openBoombox();
   });
 
-  right.append(avatarBtn, gamesBtn, playersBtn, friendsBtn, boomBtn, gearBtn);
+  // Spec 18 — OofTools. Hidden until a Place hands you the tools, because a button
+  // that is always there and usually refuses is worse than one that appears when it
+  // means something.
+  const toolsBtn = el("button", "oof-btn oof-btn-icon", "🛠");
+  toolsBtn.type = "button";
+  toolsBtn.setAttribute("aria-label", "OofTools");
+  toolsBtn.style.display = "none";
+  toolsBtn.addEventListener("click", () => {
+    click();
+    const api = ui();
+    if (api && typeof api.openOofTools === "function") api.openOofTools();
+  });
+
+  right.append(avatarBtn, gamesBtn, playersBtn, friendsBtn, boomBtn, toolsBtn, gearBtn);
   root.append(balancePill, titlePill, right);
   document.body.appendChild(root);
 
@@ -227,5 +240,12 @@ export function createHud(services = {}, events = null) {
   }
 
   paintAvatar();
-  return { el: root, setTitle, setStat, removeStat, clearStats, refreshAvatar: paintAvatar, destroy };
+  function setBuilder(on) {
+    toolsBtn.style.display = on ? "" : "none";
+  }
+
+  return {
+    el: root, setTitle, setStat, removeStat, clearStats, setBuilder,
+    refreshAvatar: paintAvatar, destroy,
+  };
 }

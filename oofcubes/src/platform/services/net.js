@@ -160,7 +160,9 @@ export function createNet(deps = {}) {
         peers.clear();
         for (const r of m.peers || []) addPeer(r);
         setStatus("online");
-        emit("welcome", { id: selfId, room: m.room, count: peers.size + 1 });
+        // `build` rides along: spec 18 puts the room's existing parts in the welcome so
+        // somebody arriving late sees the same world as everybody already there.
+        emit("welcome", { id: selfId, room: m.room, count: peers.size + 1, build: m.build || [] });
         return;
       }
       case "peer":
@@ -188,6 +190,13 @@ export function createNet(deps = {}) {
         if (peers.delete(m.id)) emit("bye", { id: m.id });
         return;
       }
+      case "build":
+        // Straight through to services/build.js, which owns what the parts look like.
+        emit("build", m);
+        return;
+      case "buildFull":
+        emit("buildFull", { cap: m.cap });
+        return;
       case "invite":
         // Straight out to whoever is listening. The server has already checked that this
         // came from a friend and rate limited it (spec 15 §5.4); net.js does not second

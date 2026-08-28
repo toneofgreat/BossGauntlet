@@ -214,6 +214,113 @@ function createSegments(core) {
     return 1;
   }
 
+  // §5.6 "wrap" — the Not Possible wraparound (added 2026-08-28).
+  //
+  // A half ring of maximal hops orbiting a pillar. It is built by placing platforms on
+  // a circle directly rather than through hopTarget, because hopTarget's job is to walk
+  // FORWARD along the row and this deliberately goes sideways and round.
+  //
+  // Two properties make that safe to do by hand:
+  //
+  //   * The geometry is solved from the gap, not guessed. For `steps` hops across 180
+  //     degrees, adjacent platforms are a chord 2*R*sin(pi/(2*steps)) apart, so the
+  //     radius is chosen to make the EDGE gap exactly d.gMax. Every hop in the ring is
+  //     therefore the same length as every other jump the tier asks for, and the route
+  //     gate (08:R3) measures it the same way.
+  //   * It is a HALF circle, so it exits on the far side of the pillar — back on the
+  //     row's centre line, 2R further along the heading. The lateral leash and the
+  //     connector logic downstream never see the detour.
+  //
+  // The pillar is scenery, but it is placed and sized to be the thing you are going
+  // around: it is what makes a ring of jumps read as a wraparound rather than as a
+  // clumsy arc.
+  // §5.6 "wrap" — the Not Possible wraparound (added 2026-08-28).
+  //
+  // A half ring of maximal hops orbiting a pillar, exiting on the far side: back on the
+  // row's centre line, 2R further along the heading, so the lateral leash and the
+  // connector logic downstream never see the detour.
+  //
+  // The radius is found by SIMULATING the ring and measuring it, not by geometry on
+  // paper. Two earlier attempts got this wrong in different ways, and both are worth
+  // knowing about before touching it:
+  //
+  //   1. `chord - size` is not the gap 08:R3 measures. That rule subtracts half-extents
+  //      per AXIS and takes the hypotenuse of the remainder, which for a diagonal chord
+  //      is meaningfully shorter — it produced 8.07-stud hops in a tier declaring 8.65.
+  //   2. Modelling the axis rule exactly still misses, because plat() snaps every
+  //      coordinate to the lattice through F(). The rounding moved hops to 8.93, over
+  //      the jump envelope entirely.
+  //
+  // So: place the ring for a candidate radius, round it exactly as plat() will, measure
+  // the worst hop INCLUDING the entry hop from the node we are standing on, and binary
+  // search until that worst hop is the tier's gMax. What the gate measures is what the
+  // search optimises, so the two cannot drift apart.
+  // 08:R3 measures a hop as the centre-to-centre distance minus each footprint's
+  // RAY-BOX exit distance along the line between them (validate.js obbyEdgeDist) -- not
+  // an axis-wise subtraction. On a diagonal that is a bigger bite out of the distance,
+  // and getting it wrong is what put two earlier versions of this ring outside the tier.
+  // edgeDist() at the top of this file is the same function; this just names the pairing.
+  function wrapGap(a, b) {
+    const vx = b.x - a.x;
+    const vz = b.z - a.z;
+    const len = Math.hypot(vx, vz);
+    if (len < 1e-9) return 0;
+    const ux = vx / len;
+    const uz = vz / len;
+    return Math.max(0, len - edgeDist(a.hx, a.hz, ux, uz) - edgeDist(b.hx, b.hz, ux, uz));
+  }
+
+  function wrapRing(R, steps, dir, from, h, size) {
+    const C = { x: F(from.x + h.ux * R), z: F(from.z + h.uz * R) };
+    const a0 = Math.atan2(from.x - C.x, from.z - C.z);
+    const half = size / 2;
+    let prev = { x: from.x, z: from.z, hx: from.hx, hz: from.hz };
+    let worst = 0;
+    const pts = [];
+    for (let i = 1; i <= steps; i++) {
+      const a = a0 + dir * (Math.PI / steps) * i;
+      const x = F(C.x + Math.sin(a) * R);
+      const z = F(C.z + Math.cos(a) * R);
+      worst = Math.max(worst, wrapGap(prev, { x, z, hx: half, hz: half }));
+      pts.push({ x, z });
+      prev = { x, z, hx: half, hz: half };
+    }
+    return { worst, pts, C };
+  }
+
+  function segWrap(steps) {
+    const d = st.d;
+    const h = st.heading;
+    const from = st.node;
+    const size = d.size;
+    const dir = rng() < 0.5 ? 1 : -1;
+    // Monotonic in R: a wider ring means longer hops, so a plain bisection converges.
+    let lo = size;
+    let hi = 200;
+    for (let k = 0; k < 60; k++) {
+      const mid = (lo + hi) / 2;
+      if (wrapRing(mid, steps, dir, from, h, size).worst > d.gMax) hi = mid; else lo = mid;
+    }
+    const ring = wrapRing(lo, steps, dir, from, h, size);
+    // If the rounding leaves a hop under the tier's floor there is nothing to gain by
+    // forcing it — fall back to an ordinary maximal jump rather than emit a ring the
+    // route gate will reject.
+    const top = from.top;
+    let ok = true;
+    let prev = { x: from.x, z: from.z, hx: from.hx, hz: from.hz };
+    for (const p of ring.pts) {
+      const g = wrapGap(prev, { x: p.x, z: p.z, hx: size / 2, hz: size / 2 });
+      if (g < d.gMin - 0.05 || g > d.gMax + 0.01) { ok = false; break; }
+      prev = { x: p.x, z: p.z, hx: size / 2, hz: size / 2 };
+    }
+    if (!ok) return segJump();
+    // The pillar is scenery, but it is placed and sized to be the thing you are going
+    // around: it is what makes a ring of jumps read as a wraparound.
+    part("deco", [ring.C.x, top + 7, ring.C.z], [Math.max(4, lo * 0.5), 18, Math.max(4, lo * 0.5)]);
+    for (const p of ring.pts) plat(p.x, p.z, top, size, size, "jump");
+    return steps;
+  }
+
   function segWalkway(nParts, len, w, headhitter) {
     const [sx, sz] = orient(len, w);
     let mid = null;
@@ -301,7 +408,7 @@ function createSegments(core) {
     return 1;
   }
 
-  return { segJump, segWalkway, segSpinner, segBeam, segChecker, segHug };
+  return { segJump, segWalkway, segSpinner, segBeam, segChecker, segHug, segWrap };
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +417,7 @@ function createSegments(core) {
 
 function createStages(core, seg) {
   const { st, rng, rr, ri, perp, orient, part, pushNode, plat, hopTarget } = core;
-  const { segJump, segWalkway, segSpinner, segBeam, segChecker, segHug } = seg;
+  const { segJump, segWalkway, segSpinner, segBeam, segChecker, segHug, segWrap } = seg;
 
   function placeCheckpoint(gap, rise) {
     const t = hopTarget(gap, rise, 0, 3, 3);
@@ -457,6 +564,15 @@ function createStages(core, seg) {
       const cap = Math.min(5, (FEAS.COMBO_MAX - g) / 1.3 - 0.15);
       const rise = iter % 3 === 2 ? Math.max(-8, -rr(3, 6)) : Math.min(cap, rr(1.2, 3.2));
       return segJump({ g, rise, lat: rr(-2, 2) });
+    }
+    if (theme === "wrap") {
+      // Alternates rings with ordinary maximal jumps, so the stage is not one long
+      // carousel — the ring is the punctuation, not the sentence.
+      if (st.sinceFeature > 2 && remaining >= 6) {
+        st.sinceFeature = 0;
+        return segWrap(rng() < 0.5 ? 4 : 6);
+      }
+      return segJump();
     }
     if (theme === "beams") {
       if (st.sinceFeature > 1 && remaining >= 2) { st.sinceFeature = 0; return segBeam(); }

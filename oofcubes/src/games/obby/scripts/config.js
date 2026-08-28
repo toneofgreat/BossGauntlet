@@ -110,7 +110,10 @@ export const DIFFS = Object.freeze([
     decoy: 0.32, spin: 24, head: true, beam: 1.5, checker: true, hug: true, glitch: true,
   }),
   Object.freeze({
-    idx: 19, name: "Megadeath", color: "#1a0000", count: 3, special: 0, tower: 88,
+    // Was #1a0000, a red so dark it read as black next to NIL's grey and Dilly's
+    // near-black — three unreadable tiers in a row at the end of the chart. Lightened
+    // 2026-08-28 at the owner's request; it is now plainly red.
+    idx: 19, name: "Megadeath", color: "#e0564a", count: 3, special: 0, tower: 88,
     p0: 48, p1: 52, gMin: 8, gMax: 8.5, size: 1.8,
     decoy: 0.35, spin: 24, head: true, beam: 1.5, checker: true, hug: true, glitch: false,
   }),
@@ -118,6 +121,32 @@ export const DIFFS = Object.freeze([
     idx: 20, name: "Dilly Impossible", color: "#14000a", count: 2, special: 0, tower: 90,
     p0: 55, p1: 55, gMin: 8.2, gMax: 8.7, size: 1.6,
     decoy: 0.4, spin: 24, head: true, beam: 1.5, checker: true, hug: true, glitch: false,
+  }),
+  // §5.2 NOT POSSIBLE (added 2026-08-28) — the chart's last difficulty.
+  //
+  // Read the gap numbers before changing them. `maxJumpGap(0)` is 8.733 studs: that is
+  // the furthest this avatar can EVER jump on flat ground, from spec 03's gravity, walk
+  // speed and jump velocity. Dilly Impossible already asks 8.7. There is no room left
+  // above it, and a longer gap would not be a harder jump — it would be an unreachable
+  // one, which the route gate (08:R3) rejects and a player could never pass.
+  //
+  // So this tier is not harder by distance. It is harder because EVERY hop is the
+  // maximum one: gMin equals gMax, so there is no short jump to breathe on. The
+  // platforms are the smallest in the chart (1.4), half the landings have a decoy
+  // beside them, the spinners are the fastest, glitch cubes are on, and it owns the
+  // wraparound theme — a ring of maximal hops orbiting a pillar, with nothing under it.
+  Object.freeze({
+    idx: 21, name: "Not Possible", color: "#ff36c8", count: 2, special: 0, tower: 93,
+    // 8.65, not 8.7. §5.5 GAP_MAX is 8.7 and the lattice rounding in F() can add a
+    // hundredth, so pinning both ends at the ceiling puts some hops a whisker over it and
+    // 08:R3 rejects the chart. 8.65 keeps every jump maximal and legal — and the tier is
+    // not hard because of one long jump anyway, it is hard because there is no short one.
+    // A band, not a single number, and a narrow one: 8.3 is the highest FLOOR in the
+    // chart (Dilly Impossible's is 8.2), so there is no easy hop anywhere in the tier.
+    // The width exists because a 6-step wraparound ring cannot be uniform — its hops
+    // vary by about a third of a stud around the circle — while a 4-step ring is exact.
+    p0: 58, p1: 58, gMin: 8.3, gMax: 8.65, size: 1.4,
+    decoy: 0.5, spin: 26, head: true, beam: 1.4, checker: true, hug: true, glitch: true,
   }),
 ]);
 
@@ -229,6 +258,9 @@ export const ROSTER = Object.freeze([
   Object.freeze({ n: 88, diff: "Megadeath", name: "Megadeath Tower", theme: "tower", tower: true, plats: 260 }),
   Object.freeze({ n: 89, diff: "Dilly Impossible", name: "Dilly Impossible 1", theme: "jumps", tower: false, plats: 55 }),
   Object.freeze({ n: 90, diff: "Dilly Impossible", name: "Dilly Impossible Tower", theme: "tower", tower: true, plats: 275 }),
+  Object.freeze({ n: 91, diff: "Not Possible", name: "Not Possible 1", theme: "wrap", tower: false, plats: 58 }),
+  Object.freeze({ n: 92, diff: "Not Possible", name: "Not Possible 2", theme: "mixed", tower: false, plats: 58 }),
+  Object.freeze({ n: 93, diff: "Not Possible", name: "Not Possible Tower", theme: "tower", tower: true, plats: 290 }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -255,8 +287,9 @@ export const PALETTE = Object.freeze({
   Terrifying: Object.freeze({ mat: "neon", color: "#7f00ff", t: 0 }),
   Catastrophic: Object.freeze({ mat: "neon", color: "#ffffff", t: 0 }),
   NIL: Object.freeze({ mat: "glass", color: "#4a4a4a", t: 0.3 }),
-  Megadeath: Object.freeze({ mat: "plastic", color: "#1a0000", t: 0 }),
+  Megadeath: Object.freeze({ mat: "plastic", color: "#e0564a", t: 0 }),
   "Dilly Impossible": Object.freeze({ mat: "plastic", color: "#14000a", t: 0 }),
+  "Not Possible": Object.freeze({ mat: "neon", color: "#ff36c8", t: 0 }),
 });
 
 // ---------------------------------------------------------------------------
@@ -298,6 +331,7 @@ export const REWARDS = Object.freeze({
   "Cake Walk": 2, Effortless: 3, Easy: 4, Medium: 6, Hard: 8, Difficult: 10,
   Challenging: 12, Intense: 15, Remorseless: 18, Insane: 22, Extreme: 26,
   Terrifying: 30, Catastrophic: 40, NIL: 50, Megadeath: 75, "Dilly Impossible": 100,
+  "Not Possible": 150,
 });
 
 // ---------------------------------------------------------------------------
@@ -326,7 +360,9 @@ export const BADGES = Object.freeze([
   Object.freeze({ id: "nil", name: "Undefined Behavior", icon: "🌫️", atStageComplete: 85 }),
   Object.freeze({ id: "megadeath", name: "Megadeath Survivor", icon: "💀", atStageComplete: 88 }),
   Object.freeze({ id: "dilly", name: "Dilly Impossible??", icon: "🌈", atStageComplete: 90 }),
-  Object.freeze({ id: "winner", name: "OBBY WINNER", icon: "🏆", atStageComplete: 90 }),
+  Object.freeze({ id: "notpossible", name: "Not Possible?!", icon: "🩷", atStageComplete: 93 }),
+  // The winner badge follows the END of the chart, which is 93 now, not 90.
+  Object.freeze({ id: "winner", name: "OBBY WINNER", icon: "🏆", atStageComplete: 93 }),
 ]);
 
 // ---------------------------------------------------------------------------

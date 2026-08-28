@@ -109,7 +109,7 @@ function leaderIdOf(roster, myScore, myId) {
 
 export function init(ctx) {
   const THREE = ctx.engine.THREE;
-  state = { score: 0, publishIn: 0, labelIn: 0 };
+  state = { score: 0, publishIn: 0, labelIn: 0, hadTools: null };
   labels = new Map();
 
   root = new THREE.Group();
@@ -160,6 +160,20 @@ export function update(dt, ctx) {
   const myScore = Math.floor(state.score);
   const leaderId = leaderIdOf(roster, myScore, myId);
   const iLead = leaderId === myId;
+
+  // Spec 18: the yellow number IS the permission. Whoever leads gets OofTools, and
+  // loses them the moment somebody passes them — the button appears and disappears
+  // with the lead, and the server refuses build ops from anyone who is not leading
+  // anyway, so this only decides whether to offer it.
+  if (iLead !== state.hadTools) {
+    state.hadTools = iLead;
+    if (ctx.services.ui && typeof ctx.services.ui.setBuilder === "function") {
+      ctx.services.ui.setBuilder(iLead);
+    }
+    if (iLead && ctx.services.ui && typeof ctx.services.ui.toast === "function") {
+      ctx.services.ui.toast("You are leading — OofTools unlocked (🛠)");
+    }
+  }
 
   if (selfLabel) setLabel(selfLabel, clock(myScore), iLead ? LEADER_COLOR : OTHER_COLOR);
   if (ui) {

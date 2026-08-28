@@ -39,8 +39,7 @@ export function openSignIn(deps = {}) {
   title.setAttribute("style", "font-size:var(--oof-size-lg);font-weight:800");
 
   const blurb = el("div", null,
-    "Pick a name and a password. You will only need to type the password again about "
-    + "once a month.");
+    "Pick a name and a password. You only do this once — this device stays signed in.");
   blurb.setAttribute("style", "color:var(--oof-text-dim);font-size:var(--oof-size-sm)");
 
   const nameInput = field("Name", "text", "3-20 letters, numbers or _");
