@@ -110,10 +110,13 @@ export const DIFFS = Object.freeze([
     decoy: 0.32, spin: 24, head: true, beam: 1.5, checker: true, hug: true, glitch: true,
   }),
   Object.freeze({
-    // Was #1a0000, a red so dark it read as black next to NIL's grey and Dilly's
+    // #1a0000 -> #e0564a -> #ff9e93. The first was a red so dark it read as black next
+    // to NIL's grey and Dilly's near-black; the second was readable but still a mid
+    // red, and the owner asked twice, so this is a pale salmon that cannot be mistaken
+    // for any of the dark tiers around it.
     // near-black — three unreadable tiers in a row at the end of the chart. Lightened
     // 2026-08-28 at the owner's request; it is now plainly red.
-    idx: 19, name: "Megadeath", color: "#e0564a", count: 3, special: 0, tower: 88,
+    idx: 19, name: "Megadeath", color: "#ff9e93", count: 3, special: 0, tower: 88,
     p0: 48, p1: 52, gMin: 8, gMax: 8.5, size: 1.8,
     decoy: 0.35, spin: 24, head: true, beam: 1.5, checker: true, hug: true, glitch: false,
   }),
@@ -287,7 +290,7 @@ export const PALETTE = Object.freeze({
   Terrifying: Object.freeze({ mat: "neon", color: "#7f00ff", t: 0 }),
   Catastrophic: Object.freeze({ mat: "neon", color: "#ffffff", t: 0 }),
   NIL: Object.freeze({ mat: "glass", color: "#4a4a4a", t: 0.3 }),
-  Megadeath: Object.freeze({ mat: "plastic", color: "#e0564a", t: 0 }),
+  Megadeath: Object.freeze({ mat: "plastic", color: "#ff9e93", t: 0 }),
   "Dilly Impossible": Object.freeze({ mat: "plastic", color: "#14000a", t: 0 }),
   "Not Possible": Object.freeze({ mat: "neon", color: "#ff36c8", t: 0 }),
 });
@@ -361,8 +364,11 @@ export const BADGES = Object.freeze([
   Object.freeze({ id: "megadeath", name: "Megadeath Survivor", icon: "💀", atStageComplete: 88 }),
   Object.freeze({ id: "dilly", name: "Dilly Impossible??", icon: "🌈", atStageComplete: 90 }),
   Object.freeze({ id: "notpossible", name: "Not Possible?!", icon: "🩷", atStageComplete: 93 }),
-  // The winner badge follows the END of the chart, which is 93 now, not 90.
-  Object.freeze({ id: "winner", name: "OBBY WINNER", icon: "🏆", atStageComplete: 93 }),
+  // The winner badge follows the END of the chart, which is 93 now, not 90. It is the
+  // only row with `grants`: spec 21 §5 pays the Bunny Suit for finishing the chart, and
+  // the award loop grants it alongside the badge rather than needing its own hook.
+  Object.freeze({ id: "winner", name: "OBBY WINNER", icon: "🏆", atStageComplete: 93,
+    grants: "hat_bunny" }),
 ]);
 
 // ---------------------------------------------------------------------------

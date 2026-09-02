@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "slug": "trollobby",
+    "name": "Troll Obby",
+    "icon": "😈",
+    "description": "Long, hard, and cheating. Popups, ambushes, a fake finish and a boss — and no checkpoints at all."
+  },
+  "spawn": [-8, 10.1, 0],
+  "spawnYaw": 90,
+  "killY": -25,
+  "music": "ascent",
+  "lighting": {
+    "skyTop": "#4a1140",
+    "skyBottom": "#c0518f",
+    "ambient": "#c9a3c0",
+    "ambientIntensity": 0.78,
+    "sunColor": "#ffd6f2",
+    "sunIntensity": 1.0,
+    "sunDirection": [-0.4, -1, -0.35],
+    "fog": { "color": "#8d3671", "near": 230, "far": 900 }
+  },
+  "parts": [
+    { "id": "voidFloor", "size": [1200, 4, 400], "position": [400, -40, 0],
+      "color": "#2a0a24", "material": "plastic", "canCollide": false }
+  ]
+}

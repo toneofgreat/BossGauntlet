@@ -36,6 +36,9 @@ const TORSO = Object.freeze({ center: [0, 3, 0], size: [2, 2, 1] });
 // (§5.4, task M2-T12) hangs hat/gear prim groups off them.
 const HAT_ANCHOR = [0, 0.5, 0];    // head-local: the top face of the 1-unit head
 const GEAR_ANCHOR = [0, -2, 0];    // rightArm-pivot-local: the hand end of the arm
+// torso-local. A shirt sits ON the torso, so its prims are sized a hair larger than
+// the torso itself rather than co-planar with it, which would z-fight.
+const SHIRT_ANCHOR = [0, 0, 0];
 
 // BoxGeometry material slots run +X, -X, +Y, -Y, +Z, -Z; the rig faces -Z, so the face
 // texture belongs to slot 5.
@@ -143,9 +146,11 @@ export function buildRig(scene, state) {
   const anchors = {
     hat: makeAnchor("HatAnchor", HAT_ANCHOR),
     gear: makeAnchor("GearAnchor", GEAR_ANCHOR),
+    shirt: makeAnchor("ShirtAnchor", SHIRT_ANCHOR),
   };
   meshes.head.add(anchors.hat);
   joints.rightArm.add(anchors.gear);
+  meshes.torso.add(anchors.shirt);
 
   const rig = {
     group, joints, meshes, anchors,
@@ -268,6 +273,7 @@ export function buildRig(scene, state) {
   function applyAttachments(next) {
     applySlot("hat", next.hat);
     applySlot("gear", next.gear);
+    applySlot("shirt", next.shirt);
     rig.gearEquipped = Boolean(next.gear);
   }
 

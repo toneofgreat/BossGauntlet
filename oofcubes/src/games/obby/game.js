@@ -310,7 +310,16 @@ function payThrough(ctx, done) {
     const row = stageRow(m);
     total += REWARDS[row.diff] * (row.tower ? 5 : 1);
     for (const badge of BADGES) {
-      if (badge.atStageComplete === m) ctx.services.badges.award(badge.id);
+      if (badge.atStageComplete !== m) continue;
+      ctx.services.badges.award(badge.id);
+      // spec 21 §5 — a badge may carry an item. grantItem is idempotent (spec 05 §5.9),
+      // so re-passing the stage costs nothing and never re-toasts a second suit.
+      if (!badge.grants) continue;
+      const had = ctx.services.avatar.owns(badge.grants);
+      const res = ctx.services.avatar.grantItem(badge.grants, "obby");
+      if (res && res.ok && !had) {
+        ctx.services.ui.toast("Bunny Suit unlocked! Wear it from the Catalog.", { icon: "🐰" });
+      }
     }
   }
   state.paid = done;

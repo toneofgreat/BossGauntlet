@@ -91,6 +91,12 @@ export const BADGES = Object.freeze([
   B("lifting.all-items", "Full Inventory", "🎒", "Own all 28 items."),
   B("lifting.title-rock", "The Rock", "🪨", "Unlock the title \"The Rock\"."),
   B("lifting.ghost-king", "Top Lifter", "👑", "Be rank 1 on the Top Lifters board with someone to beat."),
+
+  // trollobby (spec 21). One badge, because there is one thing to do: finish it. It
+  // is also the only badge in the registry that pays an item — the crate, which the
+  // Place hands out on every completion so the 1-in-4,500 is reachable by running it
+  // again rather than being a number nobody can ever hit.
+  B("trollobby.winner", "Troll Slayer", "😈", "Beat the Troll Obby — no checkpoints, all the way."),
 ]);
 
 const defsById = new Map();

@@ -24,9 +24,17 @@ export const BOOMBOX_CODES = Object.freeze({
 
 export function createBoombox(deps = {}) {
   const { audio, toast, onState } = deps;
+
+  // You have to be HOLDING it. Reported by the owner: the code box played music with
+  // no boombox equipped, which made the item pointless — the gear was decoration and
+  // the button was the whole feature. `isHolding` is supplied by the shell from the
+  // avatar's equipped gear slot, so this is the same fact the world is drawing.
+  const holding = () => (typeof deps.isHolding === "function" ? !!deps.isHolding() : true);
+  const NOT_HOLDING = "Equip the Boombox first — it is in the Catalog under Gear.";
   let playing = null; // the code currently playing, or null
 
   function play(code) {
+    if (!holding()) return { ok: false, error: NOT_HOLDING };
     const entry = BOOMBOX_CODES[String(code).trim()];
     if (!entry) return { ok: false, error: "No song with that code." };
     if (!audio || typeof audio.playMusic !== "function") {
@@ -50,7 +58,11 @@ export function createBoombox(deps = {}) {
     const panel = deps.openPanel({ title: "Boombox" });
     const body = panel.bodyEl;
 
-    const blurb = el("div", null, "Type a song code and press Play.");
+    // Say it up front rather than only when Play is pressed: a panel that looks usable
+    // and then refuses reads as broken.
+    const blurb = el("div", null, holding()
+      ? "Type a song code and press Play."
+      : NOT_HOLDING);
     blurb.setAttribute("style", "color:var(--oof-text-dim);font-size:var(--oof-size-sm);margin-bottom:8px");
 
     const input = el("input", "oof-input");

@@ -53,7 +53,7 @@ function defaultState() {
   return {
     schemaVersion: SCHEMA_VERSION,
     bodyColors: { ...DEFAULT_BODY_COLORS },
-    equipped: { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null },
+    equipped: { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null },
     owned: [...DEFAULT_OWNED],
     sources,
   };
@@ -102,7 +102,7 @@ function sanitize(raw) {
   const rawColors = raw.bodyColors && typeof raw.bodyColors === "object" ? raw.bodyColors : {};
   for (const limb of LIMB_KEYS) bodyColors[limb] = normalizeLimb(limb, rawColors[limb], ownedSet);
 
-  const equipped = { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null };
+  const equipped = { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null };
   const rawEquipped = raw.equipped && typeof raw.equipped === "object" ? raw.equipped : {};
   for (const slot of EQUIP_SLOTS) {
     const id = rawEquipped[slot];
@@ -238,7 +238,7 @@ function randomGhostState() {
   return {
     schemaVersion: SCHEMA_VERSION,
     bodyColors,
-    equipped: { face, hat, gear: null, aura: null, trail: null },
+    equipped: { face, hat, gear: null, aura: null, trail: null, shirt: null },
     owned,
     sources,
   };

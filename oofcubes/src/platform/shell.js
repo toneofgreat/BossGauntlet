@@ -29,9 +29,11 @@ import { mountPlayerList } from "./ui/playerlist.js";
 import { mountFriendsPanel } from "./ui/friends-panel.js";
 import { createInviteToast } from "./ui/invite-toast.js";
 import { createBoombox } from "./ui/boombox.js";
+import { createCrate } from "./ui/crate.js";
 import { createBuild } from "./services/build.js";
+import { createGearActions } from "./services/gear-actions.js";
 import { mountOofTools } from "./ui/ooftools.js";
-import { getAllItems } from "./services/avatar/catalog-data.js";
+import { getAllItems, getItem } from "./services/avatar/catalog-data.js";
 import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
 
@@ -87,6 +89,8 @@ const PLACES = [
     module: "../games/tycoon/game.js", data: "../games/tycoon/place.json" },
   { slug: "overtime", hidden: false, name: "Overtime",                 icon: "⏱️", portalColor: "#f7c948",
     module: "../games/overtime/game.js", data: "../games/overtime/place.json" },
+  { slug: "trollobby", hidden: false, name: "Troll Obby",               icon: "😈", portalColor: "#ff36c8",
+    module: "../games/trollobby/game.js", data: "../games/trollobby/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];
@@ -141,6 +145,8 @@ let inviteToast = null;
 let unbindInvites = null;
 let boombox = null;
 let buildSvc = null;
+let gearSvc = null;
+let gearBound = false;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
 let suppressNextHash = false;
@@ -577,6 +583,25 @@ function onCatalogSelect(item, render) {
 // between Places, so it lives here with the rest of the shell UI.
 // Spec 18. One per session, re-attached each Place load — the parts belong to the
 // room, so they are cleared and rebuilt from the server's `welcome` on every arrival.
+// Spec 20 — gear you can use. Bound to `action1`, which is E on a keyboard and the
+// engine's second touch button on a phone, so it works on both without a new control.
+function gearService() {
+  if (gearSvc) return gearSvc;
+  gearSvc = createGearActions({
+    avatar: avatarService,
+    toast: uiToast,
+    sfx,
+    openBoombox: () => openBoombox(),
+  });
+  return gearSvc;
+}
+
+function bindGearButton() {
+  if (gearBound) return;
+  gearBound = true;
+  input.onAction("action1", () => gearService().use());
+}
+
 function buildService() {
   if (!buildSvc) {
     buildSvc = createBuild({ net: netService() });
@@ -596,6 +621,43 @@ function openOofTools() {
   panel.close = () => { tools.dispose(); close(); };
 }
 
+const GEAR_BUTTON_LABEL = Object.freeze({
+  gear_balloon: "🎈",
+  gear_torch: "🔦",
+  gear_sword: "⚔",
+  gear_finger: "👉",
+  gear_boombox: "🎵",
+});
+
+function refreshGearButton() {
+  if (!input || typeof input.setActionButton !== "function") return;
+  const st = avatarService && typeof avatarService.getState === "function"
+    ? avatarService.getState() : null;
+  const gear = st && st.equipped ? st.equipped.gear : null;
+  // setActionButton takes just the label — the engine has one primary action button.
+  try { input.setActionButton(gear ? (GEAR_BUTTON_LABEL[gear] || "✋") : null); }
+  catch { /* an engine without the label API is not worth failing a Place load for */ }
+}
+
+let crateSvc = null;
+
+function openCrate(opts = {}) {
+  // Rebuilt per call rather than cached: the getCrates/takeCrate pair belongs to the
+  // Place that is running RIGHT NOW, and a cached service would keep answering with
+  // the previous Place's counters after a navigation.
+  crateSvc = createCrate({
+    avatar: createAvatarCtxApi(),
+    economy: { award: (n, why) => economy.award(n, why) },
+    toast: uiToast,
+    openPanel,
+    sfx: (n) => audio.playSfx(n),
+    itemName: (id) => { const it = getItem(id); return it ? it.name : id; },
+    getCrates: opts.getCrates,
+    takeCrate: opts.takeCrate,
+  });
+  return crateSvc.open();
+}
+
 function boomboxService() {
   if (boombox) return boombox;
   boombox = createBoombox({
@@ -604,7 +666,27 @@ function boomboxService() {
     openPanel,
     // What to hand back when the boombox stops: whatever this Place asked for.
     placeTrack: () => (placeHandle && placeHandle.data ? placeHandle.data.music || null : null),
+    // Spec 16 §5.3: the boombox only works while it is the equipped gear. Read from the
+    // avatar service, which is the same state the world draws the item from.
+    isHolding: () => {
+      if (!avatarService || typeof avatarService.getState !== "function") return false;
+      const st = avatarService.getState();
+      return !!(st && st.equipped && st.equipped.gear === "gear_boombox");
+    },
   });
+  // Spec 20 §6: taking it off stops the music. Without this the gate is only on the
+  // Play button — you could start a track, unequip, and keep the sound, which is the
+  // same "the item is decoration" problem the gate exists to fix.
+  if (avatarService && typeof avatarService.onChange === "function") {
+    avatarService.onChange(() => {
+      if (!boombox || !boombox.playing()) return;
+      const st = avatarService.getState();
+      const held = !!(st && st.equipped && st.equipped.gear === "gear_boombox");
+      if (held) return;
+      boombox.stop(placeHandle && placeHandle.data ? placeHandle.data.music || null : null);
+      uiToast("Boombox put away.", { icon: "🎵" });
+    });
+  }
   return boombox;
 }
 
@@ -765,6 +847,10 @@ const ui = {
   openPlayers: () => safely(() => openPlayers(), undefined),
   openFriends: () => safely(() => openFriends(), undefined),
   openBoombox: () => safely(() => openBoombox(), undefined),
+  // Spec 21 §4. The Place owns the crate COUNT (crates are what it pays out) and
+  // passes it in; the platform owns the odds table and the granting, because those
+  // touch the catalogue and the ledger.
+  openCrate: (opts) => safely(() => openCrate(opts), undefined),
   openOofTools: () => safely(() => openOofTools(), undefined),
   // Spec 18: a Place decides who may build (Overtime hands it to whoever leads), and
   // the SERVER enforces it. This only says whether to show the button.
@@ -1273,6 +1359,7 @@ function teardown() {
   // indistinguishable from a Place that forgot to clean up after itself.
   if (remotes) { remotes.dispose(); remotes = null; }
   if (buildSvc) buildSvc.detach();
+  if (gearSvc) gearSvc.detach();
   if (hud) hud.setBuilder(false);
   if (net) net.leave();
   try {
@@ -1444,6 +1531,11 @@ async function loadPlaceInto(entry, slug) {
   // room's parts arrive with the socket's welcome and are rebuilt from scratch on every
   // arrival, so this is also what clears the last Place's build.
   buildService().attach(ctx);
+  gearService().attach(ctx);
+  bindGearButton();
+  // Label the action button with whatever is in hand, so the control says what it does
+  // rather than being a mystery key.
+  refreshGearButton();
   setState(slug === "hub" ? "hub" : "playing");
 
   writeHash(slug);
@@ -1654,6 +1746,7 @@ function stepOnce(dt) {
   if (net) net.update(dt, feet(), physics.getRenderTransform(1).yaw, netAnimState());
   if (remotes) remotes.update(dt);
   if (buildSvc) buildSvc.update(dt);
+  if (gearSvc) gearSvc.update(dt);
   if (ctx && gameMod && !updateHalted) {
     ctx.time += dt;
     try {
