@@ -25,16 +25,27 @@ const RETRY_MAX_S = 30;
 
 const SEND_INTERVAL_S = 1 / SEND_HZ;
 
+// §5.1 step 3 / ARCHITECTURE §9.2 (amended 2026-09-03): the published build is served
+// from platyfy.com, and there — and only there — an unconfigured page uses the official
+// relay. A dev checkout, a LAN copy and every test run on some other host and get no
+// default, so they open no socket unless asked to.
+export const OFFICIAL_RELAY = "wss://relay.platyfy.com";
+export function isOfficialHost(hostname) {
+  const h = (hostname || "").toLowerCase();
+  return h === "platyfy.com" || h.endsWith(".platyfy.com");
+}
+
 // §5.1: only a real websocket URL, and never ws:// from an https: page — that fails as
 // mixed content with a console message the player will never see, so refuse it here
 // where we can say why.
-export function resolveRelayUrl(search, saved, protocol) {
+export function resolveRelayUrl(search, saved, protocol, hostname) {
   let url = null;
   try {
     const q = new URLSearchParams(search || "");
     url = q.get("relay") || null;
   } catch { url = null; }
   if (!url) url = saved || null;
+  if (!url && isOfficialHost(hostname)) url = OFFICIAL_RELAY;
   if (!url) return { url: null, reason: "no relay configured" };
   if (!/^wss?:\/\//i.test(url)) return { url: null, reason: `not a ws:// or wss:// URL: ${url}` };
   if (protocol === "https:" && /^ws:\/\//i.test(url)) {
@@ -49,6 +60,7 @@ export function createNet(deps = {}) {
     getSearch: () => (typeof location === "undefined" ? "" : location.search),
     getProtocol: () => (typeof location === "undefined" ? "http:" : location.protocol),
     getSavedUrl: () => null,
+    getHostname: () => (typeof location === "undefined" ? "" : location.hostname),
     getName: () => null,
     getAvatar: () => null,
     getToken: () => null, // spec 14: a session token makes the room know who you are
@@ -97,7 +109,7 @@ export function createNet(deps = {}) {
 
   function connect() {
     if (disposed || !place) return;
-    const resolved = resolveRelayUrl(d.getSearch(), d.getSavedUrl(), d.getProtocol());
+    const resolved = resolveRelayUrl(d.getSearch(), d.getSavedUrl(), d.getProtocol(), d.getHostname());
     url = resolved.url;
     if (!url) { setStatus("offline", resolved.reason); return; }
     if (!d.WebSocketImpl) { setStatus("offline", "no WebSocket in this environment"); return; }
@@ -316,7 +328,7 @@ export function createNet(deps = {}) {
 
     // --- the §4.1 facade a Place sees ---
     online: () => status === "online",
-    configured: () => !!resolveRelayUrl(d.getSearch(), d.getSavedUrl(), d.getProtocol()).url,
+    configured: () => !!resolveRelayUrl(d.getSearch(), d.getSavedUrl(), d.getProtocol(), d.getHostname()).url,
     status: () => status,
     self: () => ({ id: selfId, name }),
     roster: () => [...peers.values()],

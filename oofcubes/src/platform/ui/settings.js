@@ -15,6 +15,7 @@
 
 import { el, button, slider, segmented, toggle } from "./kit.js";
 import { mountSaveCodeRows } from "./savecode.js";
+import { isOfficialHost } from "../services/net.js";
 
 const FALLBACK_VERSION = "0.1.0"; // spec 06 §6 SHELL_VERSION — pass deps.version to avoid drift
 
@@ -190,10 +191,11 @@ export function mountSettingsRows(body, deps = {}) {
   }).el);
 
   // ---- MULTIPLAYER (spec 13 §5.1) ------------------------------------------
-  // Both fields are empty by default, and empty means single-player. Nothing here is
-  // filled in for the player: ARCHITECTURE.md §9 makes multiplayer opt-in, and a build
-  // that shipped pointing at somebody's relay would be connecting people to a server
-  // they never chose.
+  // Both fields are empty by default. On platyfy.com an empty relay field means the
+  // OFFICIAL relay (ARCHITECTURE §9.2, amended 2026-09-03 — it is this platform's own
+  // server, not somebody else's); everywhere else empty means single-player, so a dev
+  // checkout never connects anyone to a server they never chose.
+  const officialDefault = isOfficialHost(typeof location === "undefined" ? "" : location.hostname);
   body.appendChild(el("div", "oof-section-label", "MULTIPLAYER"));
   body.appendChild(textRow("Display name", {
     value: settings.displayName || "",
@@ -205,12 +207,16 @@ export function mountSettingsRows(body, deps = {}) {
   }));
   body.appendChild(textRow("Relay server", {
     value: settings.relayUrl || "",
-    placeholder: "ws://host:8787 — blank to play alone",
+    placeholder: officialDefault
+      ? "blank = the official server"
+      : "ws://host:8787 — blank to play alone",
     onChange: (v) => {
       writeSetting("relayUrl", v);
       if (toast) {
         toast(v ? "Relay saved — it connects when you next enter a Place."
-                : "Relay cleared — you are playing alone.");
+                : officialDefault
+                  ? "Relay cleared — back to the official server."
+                  : "Relay cleared — you are playing alone.");
       }
     },
   }));

@@ -1055,7 +1055,7 @@ function accountService() {
       if (who.signedIn && net && currentSlug) { net.leave(); net.join(currentSlug); }
     },
     getRelayUrl: () => {
-      const resolved = resolveRelayUrl(location.search, profileSettings().relayUrl, location.protocol);
+      const resolved = resolveRelayUrl(location.search, profileSettings().relayUrl, location.protocol, location.hostname);
       return resolved.url;
     },
   });
