@@ -1991,15 +1991,25 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
   draw();
 })();
 </script>
-<!-- GLOBAL play counts (everyone's plays, via Abacus counter) + sort most-played to top -->
+<!-- GLOBAL play counts (everyone's plays, on our own counter at plays.platyfy.com) +
+     sort most-played to top. A game launched within the last 7 days (data-launched on
+     its card, YYYY-MM-DD) is boosted to sit between 1st and 2nd place, so new games
+     get a week in the spotlight instead of starting at the bottom.
+     Counts were migrated from the old Abacus namespace (platyfy-tw-2026) on 2026-09-03
+     and live in a Durable Object now — a redeploy of this site never resets them. -->
 <script>
 (function(){
-  var NS='platyfy-tw-2026';                 // shared namespace = global across all visitors
-  var BASE='https://abacus.jasoncameron.dev';
+  var BASE='https://plays.platyfy.com';
   var CACHE='platyfy_global_cache';          // local cache only for instant display before the network responds
+  var BOOST_DAYS=7;
   function keyFor(h){return h.replace(/[^a-z0-9]/gi,'-').toLowerCase().replace(/^-+|-+$/g,'').slice(0,64);}
   function label(n){return '▶ '+(n==null?'…':Number(n).toLocaleString())+(n===1?' play':' plays');}
-  function valOf(j){var v=j&&(j.value!=null?j.value:j.count);return typeof v==='number'?v:0;}
+  function isNew(c){
+    var d=c.getAttribute('data-launched');if(!d)return false;
+    var t=Date.parse(d+'T00:00:00');if(isNaN(t))return false;
+    var age=Date.now()-t;
+    return age>=0&&age<BOOST_DAYS*24*60*60*1000;
+  }
   function run(){
     try{
       var cache={};try{cache=JSON.parse(localStorage.getItem(CACHE))||{};}catch(e){cache={};}
@@ -2013,27 +2023,34 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
         c.appendChild(badge);c._badge=badge;
         c.addEventListener('click',function(){
           // record this play for EVERYONE (keepalive lets the request finish during navigation)
-          try{fetch(BASE+'/hit/'+NS+'/'+keyFor(href),{keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
+          try{fetch(BASE+'/hit/'+keyFor(href),{method:'POST',keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
           cache[href]=(cache[href]||0)+1;badge.textContent=label(cache[href]);
           try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
         });
       });
       function resort(){
-        cards.sort(function(a,b){return (cache[b._href]||0)-(cache[a._href]||0);});
-        cards.forEach(function(c){grid.appendChild(c);});
+        var sorted=cards.slice().sort(function(a,b){return (cache[b._href]||0)-(cache[a._href]||0);});
+        // the new-game boost: fresh cards slot in from position 2, in their own play order
+        var fresh=sorted.filter(isNew);
+        if(fresh.length&&sorted.length>fresh.length){
+          var rest=sorted.filter(function(c){return !isNew(c);});
+          sorted=[rest[0]].concat(fresh,rest.slice(1));
+        }
+        sorted.forEach(function(c){grid.appendChild(c);});
       }
       resort(); // instant order from cache
-      // pull the real GLOBAL counts for every game
-      Promise.all(cards.map(function(c){
-        return fetch(BASE+'/get/'+NS+'/'+keyFor(c._href),{mode:'cors'})
-          .then(function(r){return r.ok?r.json():{value:0};})  // 404 = never played yet = 0
-          .then(valOf)
-          .catch(function(){return null;});                    // network error = keep cached
-      })).then(function(vals){
-        cards.forEach(function(c,i){if(vals[i]!=null){cache[c._href]=vals[i];c._badge.textContent=label(vals[i]);}});
-        try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
-        resort();
-      });
+      // pull the real GLOBAL counts, all in one request
+      fetch(BASE+'/counts',{mode:'cors'})
+        .then(function(r){return r.json();})
+        .then(function(all){
+          cards.forEach(function(c){
+            var v=all[keyFor(c._href)];
+            if(typeof v==='number'){cache[c._href]=v;c._badge.textContent=label(v);}
+          });
+          try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
+          resort();
+        })
+        .catch(function(){});                // network error = keep cached order
     }catch(e){console.error('play-count',e);}
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run);

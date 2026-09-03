@@ -1,0 +1,26 @@
+# platyfy-plays — the permanent play counter behind the platyfy.com card grid.
+# It replaces the third-party Abacus counter, which rate-limited every page load and
+# could reset or disappear at any time. Counts live in a Durable Object on the same
+# Cloudflare account as relay.platyfy.com, so a redeploy of the site never touches them.
+name = "platyfy-plays"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# No workers.dev deployment — the real address is the custom domain below.
+workers_dev = false
+
+[[routes]]
+pattern = "plays.platyfy.com"
+custom_domain = true
+
+[[durable_objects.bindings]]
+name = "PLAYS"
+class_name = "Plays"
+
+# SQLite-backed: the only Durable Object class the Workers free plan allows.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Plays"]
+
+[observability]
+enabled = true
