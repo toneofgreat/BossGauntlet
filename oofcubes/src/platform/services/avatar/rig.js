@@ -37,8 +37,16 @@ const TORSO = Object.freeze({ center: [0, 3, 0], size: [2, 2, 1] });
 const HAT_ANCHOR = [0, 0.5, 0];    // head-local: the top face of the 1-unit head
 const GEAR_ANCHOR = [0, -2, 0];    // rightArm-pivot-local: the hand end of the arm
 // torso-local. A shirt sits ON the torso, so its prims are sized a hair larger than
-// the torso itself rather than co-planar with it, which would z-fight.
+// the torso itself rather than co-planar with it, which would z-fight. The torso is
+// 2 x 2 x 1, so a wrapping prim is ~2.06 wide and ~1.06 deep — a prim SMALLER than
+// that is inside the opaque torso and invisible, which rule 20:G2 now rejects (both
+// original shirts shipped that way and nobody ever saw one).
 const SHIRT_ANCHOR = [0, 0, 0];
+// Pants prims default to the same torso anchor (the hip band). A prim carrying
+// `limb: "leftLeg" | "rightLeg"` is routed to that LEG'S JOINT instead — leg-pivot
+// local, pivot at the hip, the leg mesh spanning y 0..-2 at x ±0.5 within a 1x2x1
+// box — so pant legs swing with the walk cycle instead of standing rigid.
+const PANTS_ANCHOR = [0, 0, 0];
 
 // BoxGeometry material slots run +X, -X, +Y, -Y, +Z, -Z; the rig faces -Z, so the face
 // texture belongs to slot 5.
@@ -74,6 +82,10 @@ function readEquipped(state) {
     gear: eq.gear || null,
     aura: eq.aura || null,
     trail: eq.trail || null,
+    // The slot list's THIRD copy (avatar.js EQUIP_SLOTS, applyAttachments, here) — this
+    // one silently ate shirts: a slot missing here reads as null and never draws.
+    shirt: eq.shirt || null,
+    pants: eq.pants || null,
   };
 }
 
@@ -147,10 +159,20 @@ export function buildRig(scene, state) {
     hat: makeAnchor("HatAnchor", HAT_ANCHOR),
     gear: makeAnchor("GearAnchor", GEAR_ANCHOR),
     shirt: makeAnchor("ShirtAnchor", SHIRT_ANCHOR),
+    pants: makeAnchor("PantsAnchor", PANTS_ANCHOR),
+  };
+  // Per-limb anchors for `limb`-routed clothing prims (pant legs). On the JOINTS, not
+  // the meshes, so they inherit the walk swing.
+  const limbAnchors = {
+    leftLeg: makeAnchor("PantsLeftLegAnchor", [0, 0, 0]),
+    rightLeg: makeAnchor("PantsRightLegAnchor", [0, 0, 0]),
   };
   meshes.head.add(anchors.hat);
   joints.rightArm.add(anchors.gear);
   meshes.torso.add(anchors.shirt);
+  meshes.torso.add(anchors.pants);
+  joints.leftLeg.add(limbAnchors.leftLeg);
+  joints.rightLeg.add(limbAnchors.rightLeg);
 
   const rig = {
     group, joints, meshes, anchors,
@@ -224,6 +246,7 @@ export function buildRig(scene, state) {
     if (!prims || !prims.length) return null;
     const group = new THREE.Group();
     group.name = "OofAttach_" + item.id;
+    const legGroups = {}; // limbKey -> Group, created only when a prim routes there
     const records = [];
     for (const prim of prims) {
       const mesh = new THREE.Mesh(
@@ -237,7 +260,16 @@ export function buildRig(scene, state) {
       // `rotation` applies" — THREE builds it in the XY plane, so tip it onto XZ first.
       const baseX = prim.shape === "torus" ? -Math.PI / 2 : 0;
       mesh.rotation.set(baseX + rot[0] * DEG, rot[1] * DEG, rot[2] * DEG);
-      group.add(mesh);
+      // `limb` routing (pants): the prim rides that leg's joint instead of the torso.
+      if (prim.limb === "leftLeg" || prim.limb === "rightLeg") {
+        if (!legGroups[prim.limb]) {
+          legGroups[prim.limb] = new THREE.Group();
+          legGroups[prim.limb].name = "OofAttach_" + item.id + "_" + prim.limb;
+        }
+        legGroups[prim.limb].add(mesh);
+      } else {
+        group.add(mesh);
+      }
       records.push({
         mesh,
         baseY: mesh.position.y,
@@ -246,13 +278,16 @@ export function buildRig(scene, state) {
         flicker: prim.flicker && Number.isFinite(prim.flicker.amp) ? prim.flicker : null,
       });
     }
-    return { group, prims: records };
+    return { group, legGroups, prims: records };
   }
 
   function clearAttachment(slot) {
     const current = attached[slot];
     if (!current) return;
     if (current.group.parent) current.group.parent.remove(current.group);
+    for (const g of Object.values(current.legGroups || {})) {
+      if (g.parent) g.parent.remove(g);
+    }
     // Materials come from the engine's shared cache (see the getMaterial import) and
     // are never this rig's to dispose; the geometries are.
     for (const record of current.prims) record.mesh.geometry.dispose();
@@ -267,6 +302,9 @@ export function buildRig(scene, state) {
     const built = buildAttachment(getItem(itemId));
     if (!built) return;
     anchors[slot].add(built.group);
+    for (const [limb, g] of Object.entries(built.legGroups || {})) {
+      if (limbAnchors[limb]) limbAnchors[limb].add(g);
+    }
     attached[slot] = built;
   }
 
@@ -274,6 +312,7 @@ export function buildRig(scene, state) {
     applySlot("hat", next.hat);
     applySlot("gear", next.gear);
     applySlot("shirt", next.shirt);
+    applySlot("pants", next.pants);
     rig.gearEquipped = Boolean(next.gear);
   }
 

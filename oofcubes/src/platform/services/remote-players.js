@@ -96,9 +96,12 @@ export function createRemotePlayers(deps) {
       let e = drawn.get(peer.id);
       if (!e) { e = spawn(peer); if (!e) continue; }
       const at = net.interpolated(peer) || { pos: peer.pos, yaw: peer.yaw };
-      // The rig root sits at the FEET, the same offset the shell applies to the local
-      // player — otherwise every remote avatar floats by half its height.
-      e.root.position.set(at.pos[0], at.pos[1] - (deps.feetOffset || 0), at.pos[2]);
+      // The broadcast position IS the feet (shell.js publishes feet(), spec 13 §5.3),
+      // and a rig root also sits at the feet — so the sample is used as-is. Subtracting
+      // a feet offset here was the waist-deep-in-the-ground bug: the shell had already
+      // converted the physics capsule centre to feet before publishing, and this line
+      // converted it a second time.
+      e.root.position.set(at.pos[0], at.pos[1], at.pos[2]);
       e.root.rotation.y = at.yaw;
       if (e.rig && typeof e.rig.setAnimState === "function") {
         e.rig.setAnimState({ mode: peer.anim || "idle", speed: peer.anim === "walk" ? 16 : 0 });

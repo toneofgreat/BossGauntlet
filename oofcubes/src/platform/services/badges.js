@@ -97,6 +97,13 @@ export const BADGES = Object.freeze([
   // Place hands out on every completion so the 1-in-4,500 is reachable by running it
   // again rather than being a number nobody can ever hit.
   B("trollobby.winner", "Troll Slayer", "😈", "Beat the Troll Obby — no checkpoints, all the way."),
+
+  // bossfight (spec 22 §6). One per boss plus the sweep — kills pay Oofbux through the
+  // Place's own first-kill latch, so these carry no bux of their own.
+  B("bossfight.grass", "Lawn Mower", "🌱", "Put Mossback back in the ground."),
+  B("bossfight.wood", "Timber!", "🪵", "Bring Timberjaw down."),
+  B("bossfight.lava", "Magma Slayer", "🌋", "Cool Magmarok off for good."),
+  B("bossfight.all", "Boss of Bosses", "👑", "Beat all three bosses of the valley."),
 ]);
 
 const defsById = new Map();

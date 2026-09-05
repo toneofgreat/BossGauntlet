@@ -291,7 +291,48 @@ const chill = {
   },
 };
 
-export const TRACKS = Object.freeze({ plaza, ascent, pump, cashflow, chill });
+// "Clash" (Boss Battles) — spec 22 owns this one. A minor at 140, the drive16 bass in
+// full sprint and a sawtooth lead that keeps landing on the raised seventh (G#) so the
+// loop never resolves: a fight should feel one bar from over the whole time.
+const clash = {
+  id: "clash",
+  title: "Clash",
+  bpm: 140,
+  bars: 8,
+  swing: 0,
+  bass: "drive16",
+  chords: [
+    ["A2", "C3", "E3", "A3"],
+    ["F2", "A2", "C3", "F3"],
+    ["G2", "B2", "D3", "G3"],
+    ["E2", "G#2", "B2", "E3"],
+  ],
+  roots: ["A1", "F1", "G1", "E1"],
+  leadVoice: {
+    type: "sawtooth", cut: 3600, v: 0.15, a: 0.004, d: 0.09, s: 0.5, r: 0.15, detune: 14, send: 0.2,
+  },
+  lead: [
+    [0, 0, "A4", 0.5], [0, 0.5, "C5", 0.5], [0, 1, "E5", 0.5], [0, 1.5, "C5", 0.5],
+    [0, 2, "A4", 1], [0, 3, "E5", 1],
+    [1, 0, "F5", 0.75], [1, 0.75, "E5", 0.25], [1, 1, "D5", 0.5], [1, 1.5, "C5", 0.5], [1, 2, "D5", 2],
+    [2, 0, "G5", 0.5], [2, 0.5, "F5", 0.5], [2, 1, "E5", 0.5], [2, 1.5, "D5", 0.5],
+    [2, 2, "E5", 1], [2, 3, "B4", 1],
+    [3, 0, "E5", 1], [3, 1, "G#4", 0.5], [3, 1.5, "B4", 0.5], [3, 2, "E5", 2],
+    [4, 0, "A5", 0.5], [4, 0.5, "G5", 0.5], [4, 1, "E5", 0.5], [4, 1.5, "C5", 0.5],
+    [4, 2, "A4", 1], [4, 3, "C5", 1],
+    [5, 0, "F5", 1], [5, 1, "A5", 1], [5, 2, "G5", 0.5], [5, 2.5, "F5", 0.5], [5, 3, "E5", 1],
+    [6, 0, "G5", 0.5], [6, 0.5, "A5", 0.5], [6, 1, "B5", 1], [6, 2, "G5", 1], [6, 3, "D5", 1],
+    [7, 0, "E5", 1.5], [7, 1.5, "G#4", 0.5], [7, 2, "B4", 1], [7, 3, "E5", 1],
+  ],
+  // A sprint with a backbeat; the eighth bar is the fill that says "phase two".
+  drums(bar) {
+    if (bar % 8 === 7) return "k.s.k.s.kstststs";
+    if (bar % 2 === 1) return "k.h.s.h.k.h.s.hh";
+    return "k..hk..hk..hks..";
+  },
+};
+
+export const TRACKS = Object.freeze({ plaza, ascent, pump, cashflow, chill, clash });
 
 export function createAudio() {
   // ---- instance state (per spec 02 §5.5: one createAudio() per page lifetime, but

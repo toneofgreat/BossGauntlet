@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "slug": "bossfight",
+    "name": "Boss Battles",
+    "icon": "⚔️",
+    "description": "Three bosses, one valley: grass, wood, lava. Beat them in order — the first kill of each pays out."
+  },
+  "spawn": [0, 4.32, 0],
+  "spawnYaw": 90,
+  "killY": -20,
+  "music": "clash",
+  "lighting": {
+    "skyTop": "#2e4a7a",
+    "skyBottom": "#e8926b",
+    "ambient": "#c9b8a3",
+    "ambientIntensity": 0.8,
+    "sunColor": "#ffddb0",
+    "sunIntensity": 1.05,
+    "sunDirection": [-0.35, -1, -0.3],
+    "fog": { "color": "#8a7a6b", "near": 200, "far": 850 }
+  },
+  "parts": [
+    { "id": "voidFloor", "size": [700, 4, 300], "position": [130, -32, 0],
+      "color": "#141821", "material": "plastic", "canCollide": false }
+  ]
+}

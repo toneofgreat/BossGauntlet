@@ -17,8 +17,10 @@ const HEX_RE = /^#[0-9a-f]{6}$/i;
 const LIMB_KEYS = Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg"]);
 // §3.1's equipped slots. The slot name IS the item type (§3.2), which is what makes
 // `equipped[item.type] = id` in equip() well-defined.
-const EQUIP_SLOTS = Object.freeze(["face", "hat", "gear", "aura", "trail"]);
-const CLEARABLE_SLOTS = Object.freeze(["hat", "gear", "aura", "trail"]);
+// shirt/pants joined 2026-09-05 — shirt existed as an item type since M11 but was
+// missing HERE, so a saved shirt equip was silently dropped on every load.
+const EQUIP_SLOTS = Object.freeze(["face", "hat", "gear", "aura", "trail", "shirt", "pants"]);
+const CLEARABLE_SLOTS = Object.freeze(["hat", "gear", "aura", "trail", "shirt", "pants"]);
 const BUY_REASON_PREFIX = "catalog:";     // spec 07 §5.5's source token for purchases
 
 // ---- module state (private) --------------------------------------------------------
@@ -53,7 +55,7 @@ function defaultState() {
   return {
     schemaVersion: SCHEMA_VERSION,
     bodyColors: { ...DEFAULT_BODY_COLORS },
-    equipped: { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null },
+    equipped: { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null },
     owned: [...DEFAULT_OWNED],
     sources,
   };
@@ -102,7 +104,7 @@ function sanitize(raw) {
   const rawColors = raw.bodyColors && typeof raw.bodyColors === "object" ? raw.bodyColors : {};
   for (const limb of LIMB_KEYS) bodyColors[limb] = normalizeLimb(limb, rawColors[limb], ownedSet);
 
-  const equipped = { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null };
+  const equipped = { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null };
   const rawEquipped = raw.equipped && typeof raw.equipped === "object" ? raw.equipped : {};
   for (const slot of EQUIP_SLOTS) {
     const id = rawEquipped[slot];
@@ -238,7 +240,7 @@ function randomGhostState() {
   return {
     schemaVersion: SCHEMA_VERSION,
     bodyColors,
-    equipped: { face, hat, gear: null, aura: null, trail: null, shirt: null },
+    equipped: { face, hat, gear: null, aura: null, trail: null, shirt: null, pants: null },
     owned,
     sources,
   };

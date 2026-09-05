@@ -19,6 +19,8 @@ const TABS = [
   { id: "face", label: "Faces" },
   { id: "hat", label: "Hats" },
   { id: "gear", label: "Gear" },
+  { id: "shirt", label: "Shirts" },
+  { id: "pants", label: "Pants" },
   { id: "aura", label: "Auras" },
   { id: "trail", label: "Trails" },
 ];

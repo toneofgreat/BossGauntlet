@@ -32,9 +32,10 @@ Plus the **Hub** — the social space you spawn into, with portals to every Plac
 
 ## Hosting
 
-Static hosting via GitHub Pages (same pipeline as platyfy.com). Saves are local, with
-export codes to move them between devices — there is no accounts backend and no cloud
-save.
+Static hosting via GitHub Pages (same pipeline as platyfy.com), plus one small
+Cloudflare Worker at wss://relay.platyfy.com — the multiplayer relay and accounts
+server (spec 19). Game progress stays local with export codes; the server stores
+accounts, published games and visit counts, never anyone's progress.
 
 ## Multiplayer
 
@@ -44,9 +45,10 @@ along than they would be alone. Every avatar that is not yours is a live person 
 `ARCHITECTURE.md` §9 forbids inventing, replaying or padding players, which is why the
 hub's fake wanderers and the leaderboard's fake rivals were deleted rather than kept.
 
-**It is off until you point it at a relay**, and a fresh install opens no sockets at
-all. To play together you need one small server running somewhere both players can
-reach.
+**On platyfy.com it is ON by default** — the page uses the official relay at
+wss://relay.platyfy.com, so opening the same Place as a friend puts you in the same
+room, and sign-in is required (a name and a password; there is no password reset).
+A dev checkout or LAN copy opens no sockets until you point it at a relay.
 
 ### Run the server
 

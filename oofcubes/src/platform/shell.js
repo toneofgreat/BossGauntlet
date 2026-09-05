@@ -91,6 +91,8 @@ const PLACES = [
     module: "../games/overtime/game.js", data: "../games/overtime/place.json" },
   { slug: "trollobby", hidden: false, name: "Troll Obby",               icon: "😈", portalColor: "#ff36c8",
     module: "../games/trollobby/game.js", data: "../games/trollobby/place.json" },
+  { slug: "bossfight", hidden: false, name: "Boss Battles",             icon: "⚔️", portalColor: "#ff5a1f",
+    module: "../games/bossfight/game.js", data: "../games/bossfight/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];
@@ -1172,7 +1174,15 @@ function netService() {
     // that too (spec 14 §5.4), so chat can never be misattributed.
     getName: () => accountService().username() || profileSettings().displayName || null,
     getToken: () => accountService().token(),
-    getAvatar: () => (avatarService ? avatarService.getConfig() : null),
+    // The FULL look, not getConfig() — that HUD adapter is only { headColor, face },
+    // and broadcasting it meant every remote player was drawn as a default rig no
+    // matter what they wore (found 2026-09-05, while testing the new clothes). A rig
+    // needs bodyColors + equipped and nothing else; owned/sources stay private.
+    getAvatar: () => {
+      if (!avatarService) return null;
+      const s = avatarService.getState();
+      return { schemaVersion: s.schemaVersion, bodyColors: s.bodyColors, equipped: s.equipped };
+    },
   });
   return net;
 }
@@ -1495,7 +1505,6 @@ async function loadPlaceInto(entry, slug) {
     scene: renderer.scene,
     net: n,
     createRig: (config) => avatarService.createRig(config),
-    feetOffset: FEET_OFFSET,
   });
 
   // The follow camera adopts the Place's spawnYaw so it starts BEHIND the avatar.

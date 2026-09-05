@@ -28,6 +28,7 @@ export const SOURCE_CAPS = Object.freeze({
   studio: null,
   lifting: 900,
   tycoon: 1200,
+  bossfight: 700,
 });
 
 const REASON_RE = /^[a-z][a-z0-9:._-]*$/;
