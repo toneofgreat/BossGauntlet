@@ -1631,6 +1631,8 @@ function studioDeps() {
       avatar: createAvatarCtxApi(),
       ui,
       net: netService(),
+      account: accountService(),
+      games: gamesService(), // spec 23: the AI block endpoint rides the games service
     },
     events: studioEmitter,
     avatar: rigRoot,

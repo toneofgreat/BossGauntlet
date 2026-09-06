@@ -23,6 +23,7 @@ const MUSIC_IDS = ["plaza", "ascent", "pump", "cashflow"]; // spec 02 TRACKS ids
 const BEHAVIOR_TYPES = [
   "kill", "checkpoint", "bounce", "speed", "conveyor", "spinner",
   "movingPlatform", "button", "door", "collectible", "teleport", "touchEvent",
+  "text", // 2026-09-06 (spec 04 §3.2) — APPEND-ONLY: pack.js encodes these by index
 ];
 
 // Quantisation (§3.4 "Quantization contract"): positions/sizes to 0.05 studs,

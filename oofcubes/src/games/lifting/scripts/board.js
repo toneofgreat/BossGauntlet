@@ -95,6 +95,52 @@ export function entries(state, others) {
 
 // Spec 13 §5's roster, read through ctx like every other service. Absent entirely when
 // the relay was never configured, so every access is guarded and the answer is "nobody".
+// ---------------------------------------------------------------------------
+// §5.11.1 (amended 2026-09-06): the ALL-TIME board. With a server and a signed-in
+// account the board shows the global top 10 ever claimed, not just this room; the
+// room-roster board below stays as the offline/guest fallback (ARCHITECTURE §9.2).
+// ---------------------------------------------------------------------------
+
+const GLOBAL_FETCH_S = 60;   // how often the top list refreshes
+const GLOBAL_SUBMIT_S = 30;  // how often a GROWN best may be claimed upward
+
+let globalRows = null;   // rows ready for paintBoard, or null -> roster fallback
+let lastFetchAt = -1e9;
+let lastSubmitAt = -1e9;
+let lastSentBest = 0;
+
+function accountName(ctx) {
+  const a = ctx.services && ctx.services.account;
+  return a && typeof a.username === "function" ? a.username() : null;
+}
+
+function tickGlobalBoard(ctx, state) {
+  const games = ctx.services && ctx.services.games;
+  if (!games || typeof games.liftingTop !== "function" || !games.available()) return;
+  const me = accountName(ctx);
+  const t = ctx.time;
+  if (me && state.lifetime > lastSentBest && t - lastSubmitAt >= GLOBAL_SUBMIT_S) {
+    lastSubmitAt = t;
+    lastSentBest = state.lifetime;
+    games.liftingScore(state.lifetime).catch(() => { lastSentBest = 0; }); // retry later
+  }
+  if (t - lastFetchAt >= GLOBAL_FETCH_S) {
+    lastFetchAt = t;
+    games.liftingTop().then((out) => {
+      if (!out || !Array.isArray(out.top)) return;
+      const rows = out.top.map((r, i) => ({
+        name: r.name, value: r.strength, rank: i + 1,
+        isPlayer: Boolean(me && r.name === me),
+      })).slice(0, BOARD_ROWS);
+      if (out.you && out.you.rank > BOARD_ROWS && rows.length === BOARD_ROWS) {
+        rows[BOARD_ROWS - 1] = { name: "You", value: out.you.strength, rank: out.you.rank, isPlayer: true };
+      }
+      globalRows = rows.length ? rows : null;
+      lastBoardSlot = -1; // repaint on the next tick with the fresh list
+    }).catch(() => { /* keep whatever we had; the fallback still paints */ });
+  }
+}
+
 function rosterFor(ctx) {
   const net = ctx.services && ctx.services.net;
   if (!net || typeof net.roster !== "function") return [];
@@ -118,9 +164,9 @@ function paintBoard(state, others) {
   g.font = "bold 44px system-ui, sans-serif";
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.fillText("TOP LIFTERS", BOARD_TEX_W / 2, BOARD_HEADER_H / 2);
+  g.fillText(globalRows ? "ALL-TIME TOP LIFTERS" : "TOP LIFTERS", BOARD_TEX_W / 2, BOARD_HEADER_H / 2, BOARD_TEX_W - 24);
 
-  const rows = entries(state, others);
+  const rows = globalRows || entries(state, others);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const y = BOARD_HEADER_H + i * BOARD_ROW_H;
@@ -197,6 +243,10 @@ export function init(ctx, state) {
   displays = nextDisplays;
   lastBoardSlot = -1;
   ghostKing = false;
+  globalRows = null;
+  lastFetchAt = -1e9;
+  lastSubmitAt = -1e9;
+  lastSentBest = 0;
 }
 
 export function update(dt, ctx, state) {
@@ -213,6 +263,7 @@ export function update(dt, ctx, state) {
   const slot = Math.floor(ctx.time / TUNING.BOARD_REDRAW_S);
   if (slot !== lastBoardSlot) {
     lastBoardSlot = slot;
+    tickGlobalBoard(ctx, state);
     const others = rosterFor(ctx);
     const rows = paintBoard(state, others);
     // Rank 1 only counts when there was somebody to outlift. Alone on the board you are
@@ -235,4 +286,8 @@ export function dispose(ctx) {
   displays = [];
   lastBoardSlot = -1;
   ghostKing = false;
+  globalRows = null;
+  lastFetchAt = -1e9;
+  lastSubmitAt = -1e9;
+  lastSentBest = 0;
 }

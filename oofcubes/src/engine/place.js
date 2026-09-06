@@ -137,6 +137,7 @@ export function createEmitter() {
 export const BEHAVIOR_TYPES = Object.freeze([
   "kill", "checkpoint", "bounce", "speed", "conveyor", "spinner",
   "movingPlatform", "button", "door", "collectible", "teleport", "touchEvent",
+  "text", // 2026-09-06 (spec 04 §3.2) — APPEND-ONLY: pack.js encodes these by index
 ]);
 const BEHAVIOR_TYPE_SET = new Set(BEHAVIOR_TYPES);
 
@@ -385,6 +386,14 @@ const BEHAVIOR_SCHEMAS = {
       event: (e, p, v) => checkPattern(e, p, v, ID_RE, "id charset"),
       once: (e, p, v) => checkBoolean(e, p, v),
       cooldownS: (e, p, v) => checkNumber(e, p, v, 0, 600),
+    },
+  },
+  // spec 04 §3.2 (added 2026-09-06): purely visual — a text sprite above the part.
+  text: {
+    required: ["text"],
+    props: {
+      text: (e, p, v) => checkStringLen(e, p, v, 1, 60),
+      size: (e, p, v) => checkNumber(e, p, v, 0.5, 8),
     },
   },
 };

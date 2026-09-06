@@ -765,8 +765,57 @@ function buildStudio(id) {
     onApplyColor: (hex) => editor.applyProps(editor.selection(), "color", hex),
     onApplyMaterial: (name) => editor.applyProps(editor.selection(), "material", name),
     getSelectionCount: () => editor.selection().filter((sid) => sid !== editor.spawnId).length,
+    onAiBlock: () => openAiBlockDialog(),
   });
   props = createPropPanel(root, { editor, partsApi: deps.partsApi, narrow });
+
+  // ---- the AI block (spec 23) ------------------------------------------------------
+  // The server owns the once-a-day latch and every clamp; this is a prompt box and
+  // honest messages for the ways it can say no.
+  async function openAiBlockDialog() {
+    const u = ui();
+    const games = deps && deps.services && deps.services.games;
+    const account = deps && deps.services && deps.services.account;
+    if (!u || !u.dialog) return;
+    if (!games || !games.available()) { toast("No server is set up — the AI block needs one."); return; }
+    if (!account || !account.signedIn()) { toast("Sign in first — your daily AI block belongs to your account."); return; }
+    const input = document.createElement("input");
+    input.maxLength = 200;
+    input.placeholder = "a spinning golden star that says WOW";
+    input.setAttribute("style", "width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;"
+      + "border-radius:8px;border:1px solid var(--oof-line, #333a48);background:var(--oof-panel2, #1a1f2b);"
+      + "color:var(--oof-text, #f2f4fa);font-family:inherit;font-size:14px;");
+    const wrap = document.createElement("div");
+    wrap.appendChild(input);
+    setTimeout(() => { try { input.focus(); } catch { /* fine */ } }, 50);
+    const choice = await u.dialog({
+      title: "✨ AI Block — one a day",
+      body: "Describe the block you want. The AI builds ONE part from the shapes and behaviors the Studio already has.",
+      bodyEl: wrap,
+      buttons: [
+        { id: "make", label: "Make it", variant: "primary" },
+        { id: "cancel", label: "Cancel", variant: "secondary" },
+      ],
+    });
+    if (choice !== "make") return;
+    const prompt = input.value.trim();
+    if (!prompt) { toast("Describe the block first."); return; }
+    toast("Asking the AI…");
+    let out;
+    try {
+      out = await games.aiBlock(prompt);
+    } catch (err) {
+      toast((err && err.message) || "The AI could not be reached");
+      return;
+    }
+    if (!out || !out.part) { toast("The AI answered nothing usable — your daily use was not spent."); return; }
+    const id = editor.addAiPart(out.part);
+    if (id) {
+      if (deps.audio) deps.audio.playSfx("sparkle", { volume: 0.6 });
+      toast("Your AI block landed next to the spawn pad. That was today’s one!");
+    }
+  }
+
   worldPanel = createWorldPanel(root, { editor, audio: deps.audio, narrow });
   buildToolBar();
 
@@ -874,6 +923,7 @@ function installDebugHandle() {
       domNodes: document.querySelectorAll("[id^=oof-studio]").length,
     }),
     select: (ids) => editor.setSelection(ids),
+    addAiPart: (spec) => editor.addAiPart(spec), // spec 23 — scenario probe
     selection: () => editor.selection(),
     setTool: (mode) => editor.setTool(mode),
     setGrid: (g) => editor.setGrid(g),

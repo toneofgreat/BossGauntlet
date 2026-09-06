@@ -95,6 +95,16 @@ export const BEHAVIOR_PARAM_SCHEMAS = Object.freeze({
     ],
   },
 
+  // added 2026-09-06 — spec 04 §3.2's text row (spec 11 §3.5)
+  text: {
+    label: "Text", icon: "🔤",
+    params: [
+      { key: "text", type: "string", pattern: "^.{1,60}$", required: true,
+        help: "Floats above the part" },
+      { key: "size", type: "number", min: 0.5, max: 8, default: 2 },
+    ],
+  },
+
   teleport: {
     label: "Teleport", icon: "🌀",
     params: [

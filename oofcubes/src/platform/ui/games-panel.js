@@ -62,7 +62,9 @@ export function mountGamesPanel(body, deps = {}) {
     // The count is the size of a set of accounts (spec 14 §5.7) — say "visit", singular
     // at 1, and never round or embellish it.
     const by = el("div", null,
-      `by ${game.authorName} · ${game.visits} ${game.visits === 1 ? "visit" : "visits"}`);
+      `by ${game.authorName} · ${game.visits} ${game.visits === 1 ? "visit" : "visits"}`
+      // §5.8.1: a lock or handshake so an author can SEE what they set. "everyone" is
+      + (game.visibility === "friends" ? " · 🤝 friends only" : game.visibility === "private" ? " · 🔒 private" : ""));
     by.setAttribute("style", "font-size:var(--oof-size-sm);color:var(--oof-text-dim)");
     mid.append(name, by);
 

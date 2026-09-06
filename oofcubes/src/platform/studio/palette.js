@@ -136,6 +136,15 @@ export function createPalette(container, opts = {}) {
     shapeButtons.set(entry.shape, btn);
   }
 
+  // ---- the AI block (spec 23): one prompt a day, the server does the designing ----
+  if (opts.onAiBlock) {
+    const aiBtn = el("button", squareButton(60, "font-size:24px;"), "✨");
+    aiBtn.title = "AI Block — describe it, get it (once a day)";
+    aiBtn.setAttribute("aria-label", "AI Block");
+    aiBtn.addEventListener("click", () => { closePopover(); opts.onAiBlock(); });
+    root.appendChild(aiBtn);
+  }
+
   root.appendChild(el("div", narrow
     ? "width:1px;height:44px;background:" + LINE + ";flex:none;"
     : "height:1px;width:60px;background:" + LINE + ";flex:none;"));

@@ -49,6 +49,7 @@ const PART_DESPAWN_Y = -500; // PART_DESPAWN_Y
 const KNOWN_BEHAVIOR_TYPES = new Set([
   "kill", "checkpoint", "bounce", "speed", "conveyor", "spinner",
   "movingPlatform", "button", "door", "collectible", "teleport", "touchEvent",
+  "text", // 2026-09-06 (spec 04 §3.2) — APPEND-ONLY: pack.js encodes these by index
 ]);
 
 // ---- module state -------------------------------------------------------------------
@@ -313,6 +314,39 @@ export function stepDynamics(dt) {
 
 // ---- part construction (shared by load()'s individual path and addPart/createMany) -
 
+// The `text` behavior (spec 04 §3.2, 2026-09-06): a canvas sprite floating just above
+// the part. It is a CHILD of the mesh so movers and spinners carry it for free — and
+// because buildMesh scales the mesh (unit geometry x size), the sprite counter-scales,
+// or a 2-stud label on a 40-stud slab would be a 2x40-stud smear.
+function attachTextBehavior(record) {
+  const def = record.def;
+  const b = (def.behaviors || []).find((x) => x && x.type === "text");
+  if (!b || typeof b.text !== "string" || !b.text) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const g = canvas.getContext("2d");
+  g.fillStyle = "rgba(14,16,24,0.68)";
+  g.fillRect(0, 8, 256, 48);
+  g.fillStyle = "#f2f4fa";
+  g.font = "bold 30px system-ui, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  // Drawn onto a canvas, never injected anywhere — the build.js precedent.
+  g.fillText(b.text, 128, 32, 240);
+  const tex = new THREE.CanvasTexture(canvas);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  const h = Number.isFinite(b.size) ? Math.min(8, Math.max(0.5, b.size)) : 2;
+  const w = Math.min(h * 4, 26); // canvas is 4:1
+  const sx = def.size[0] || 1, sy = def.size[1] || 1, sz = def.size[2] || 1;
+  sprite.scale.set(w / sx, h / sy, 1 / sz);
+  sprite.position.set(0, 0.5 + (h * 0.75) / sy, 0); // mesh-local: the box spans ±0.5
+  record.mesh.add(sprite);
+  record.textFx = { tex, mat };
+}
+
 function buildIndividualPart(def) {
   const mesh = buildMesh(def);
   sceneRef?.add(mesh);
@@ -324,6 +358,7 @@ function buildIndividualPart(def) {
     ownMaterial: false, // true once setEmissiveIntensity has cloned mesh.material
     dyn: null, custom: false,
   };
+  attachTextBehavior(record);
   partsById.set(def.id, record);
   if (def.anchored === false) {
     record.dyn = makeDynState(def);
@@ -369,6 +404,11 @@ function buildInstancedBatch(defs) {
 function removePartInternal(id) {
   const record = partsById.get(id);
   if (!record) return;
+  if (record.textFx) {
+    record.textFx.mat.dispose();
+    record.textFx.tex.dispose();
+    record.textFx = null;
+  }
   if (record.mesh) {
     sceneRef?.remove(record.mesh);
     addedObjects.delete(record.mesh);
@@ -429,6 +469,7 @@ export function clear() {
   addedObjects.clear();
   for (const record of partsById.values()) {
     if (record.colliderId != null) physicsRef.removeCollider(record.colliderId);
+    if (record.textFx) { record.textFx.mat.dispose(); record.textFx.tex.dispose(); }
   }
   partsById.clear();
   dynamicIds.clear();

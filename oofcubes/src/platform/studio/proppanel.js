@@ -5,6 +5,7 @@
 // Style note: see palette.js's header — §5.6's token names are not the ones the shipped
 // UI kit defines, so every colour is var(--spec-11-name, <§5.6 fallback>).
 
+import { censor } from "../services/censor.js";
 import { BEHAVIOR_PARAM_SCHEMAS } from "./behaviors-schema.js";
 import { STUDIO_COLORS } from "./palette.js";
 
@@ -426,7 +427,12 @@ export function createPropPanel(container, opts = {}) {
           input.value = behavior[param.key] === undefined ? "" : String(behavior[param.key]);
           return;
         }
-        write(text);
+        // The text behavior's string is DISPLAYED text (spec 04 §3.2), so it goes
+        // through the spec 17 filter at write time — a published creation's code is
+        // opaque to the server, so this is where the filter can actually run.
+        const cleaned = param.key === "text" ? censor(text) : text;
+        if (cleaned !== text) input.value = cleaned;
+        write(cleaned);
       });
       return input;
     }

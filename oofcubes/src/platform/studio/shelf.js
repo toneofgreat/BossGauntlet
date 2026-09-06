@@ -253,6 +253,21 @@ export function openMyPlacesShelf(deps = {}) {
       if (ui && ui.toast) ui.toast("Sign in first — a published game needs an author.");
       return;
     }
+    // spec 14 §5.8.1: who can play it. Asked every time — republishing is how you
+    // CHANGE it, so the current answer must never be assumed.
+    const visibility = ui && ui.dialog
+      ? await ui.dialog({
+        title: `Who can play “${entry.name}”?`,
+        body: "Friends only uses your friends list. Private means only you. Publish again any time to change it.",
+        buttons: [
+          { id: "everyone", label: "🌍 Everyone", variant: "primary" },
+          { id: "friends", label: "🤝 Friends only" },
+          { id: "private", label: "🔒 Private" },
+          { id: "cancel", label: "Cancel", variant: "secondary" },
+        ],
+      })
+      : "everyone";
+    if (!visibility || visibility === "cancel") return;
     const wasTitle = btn.title;
     btn.disabled = true;
     btn.title = "Publishing…";
@@ -264,13 +279,13 @@ export function openMyPlacesShelf(deps = {}) {
         name: entry.name,
         code: exported.code,
         gameId: publishedIds.get(entry.id) || null,
+        visibility,
       });
       publishedIds.set(entry.id, published.id);
       rememberPublished();
       if (ui && ui.toast) {
-        ui.toast(published.updated
-          ? `Updated “${entry.name}” in Games`
-          : `Published “${entry.name}” to Games`);
+        const who = visibility === "everyone" ? "everyone" : visibility === "friends" ? "your friends" : "only you";
+        ui.toast((published.updated ? `Updated “${entry.name}”` : `Published “${entry.name}”`) + ` — visible to ${who}`);
       }
     } catch (err) {
       if (ui && ui.toast) ui.toast((err && err.message) || "Could not publish");

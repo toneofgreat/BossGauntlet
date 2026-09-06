@@ -517,6 +517,26 @@ export function createEditor(doc, deps) {
   }
 
   Object.assign(ed, {
+    // spec 23: one server-clamped part, dropped a few studs from the spawn pad so it
+    // is always somewhere findable. The spec arrives already validated and censored;
+    // this only gives it an id, a spot, and the studio defaults the server does not own.
+    addAiPart(spec) {
+      const sp = partOf(SPAWN_ID);
+      const at = sp ? sp.position : [0, 0, 0];
+      const def = {
+        id: "s" + doc.editor.nextPartNum++,
+        shape: spec.shape, size: spec.size.slice(),
+        position: [round2(at[0] + 6), round2(at[1] + spec.size[1] / 2 + 2), round2(at[2] + 6)],
+        rotation: [0, 0, 0],
+        color: spec.color, material: spec.material, transparency: spec.transparency,
+        anchored: true, canCollide: true,
+        behaviors: Array.isArray(spec.behaviors) ? spec.behaviors : [],
+      };
+      if (!ed.addParts([def])) return null;
+      ed.setSelection([def.id]);
+      return def.id;
+    },
+
     addParts(defs) {
       if (doc.world.parts.length + defs.length > MAX_STUDIO_PARTS) {
         if (deps.audio) deps.audio.playSfx("error", { volume: 0.5 });

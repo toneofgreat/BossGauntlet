@@ -22,22 +22,50 @@ export function createGames(deps = {}) {
     // The top `GAMES_TOP` by visits when `q` is empty; name matches otherwise. Either
     // way the server decides the order — see spec 14 §4.
     async list(q) {
-      const query = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
-      const out = await call(`/api/games${query}`, undefined, "GET");
+      // The token rides along so the server can include friends-only games this
+      // account may see (spec 14 §5.8.1); a guest sees only "everyone".
+      const params = new URLSearchParams();
+      if (q && q.trim()) params.set("q", q.trim());
+      const acc = account();
+      if (acc && acc.signedIn()) params.set("token", acc.token());
+      const qs = params.toString();
+      const out = await call(`/api/games${qs ? "?" + qs : ""}`, undefined, "GET");
       return { games: out.games || [], total: out.total || 0 };
     },
 
     async get(id) {
-      const out = await call(`/api/games/${encodeURIComponent(id)}`, undefined, "GET");
+      const acc = account();
+      const tok = acc && acc.signedIn() ? `?token=${encodeURIComponent(acc.token())}` : "";
+      const out = await call(`/api/games/${encodeURIComponent(id)}${tok}`, undefined, "GET");
       return out.game;
     },
 
     // Publishing needs an account, because a game has an author. The caller is expected
     // to have said so in the UI already; this is the backstop.
-    async publish({ name, code, gameId }) {
+    async publish({ name, code, gameId, visibility }) {
       const acc = account();
       if (!acc || !acc.signedIn()) throw new Error("Sign in to publish");
-      return call("/api/games", { token: acc.token(), name, code, gameId });
+      return call("/api/games", { token: acc.token(), name, code, gameId, visibility });
+    },
+
+    // The Studio AI block (spec 23). One per account per UTC day; the server owns the
+    // latch and the clamping — what comes back is a ready-to-add part or a readable no.
+    async aiBlock(prompt) {
+      const acc = account();
+      if (!acc || !acc.signedIn()) throw new Error("Sign in first");
+      return call("/api/ai-block", { token: acc.token(), prompt });
+    },
+
+    // spec 09 §5.11.1 — the all-time Top Lifters board.
+    async liftingTop() {
+      const acc = account();
+      const tok = acc && acc.signedIn() ? `?token=${encodeURIComponent(acc.token())}` : "";
+      return call(`/api/lifting/top${tok}`, undefined, "GET");
+    },
+    async liftingScore(strength) {
+      const acc = account();
+      if (!acc || !acc.signedIn()) return null; // nothing to attach the row to
+      return call("/api/lifting/score", { token: acc.token(), strength });
     },
 
     // Recorded once per account per game, server-side. A guest still gets to play — the
