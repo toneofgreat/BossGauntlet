@@ -215,7 +215,8 @@ function bigBtn(label, onTap) {
 }
 function buildActionButtons(ctx) {
   const wrap = document.createElement("div");
-  wrap.setAttribute("style", "position:fixed;left:12px;bottom:40px;z-index:40;display:flex;flex-direction:column;gap:8px;pointer-events:none;");
+  // Raised clear of the "Press Enter to chat" line at the very bottom (2026-09-13).
+  wrap.setAttribute("style", "position:fixed;left:12px;bottom:92px;z-index:40;display:flex;flex-direction:column;gap:8px;pointer-events:none;");
   const shopBtn = bigBtn("🛠 Upgrades", () => openShop(ctx));
   const treadBtn = bigBtn("⬆ Treadmill", () => buyNextTreadmill(ctx));
   wrap.append(shopBtn, treadBtn);
