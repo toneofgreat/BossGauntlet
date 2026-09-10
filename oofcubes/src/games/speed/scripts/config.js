@@ -177,3 +177,30 @@ export const WALK_MAX_BUFFED = 92;
 export function walkForBuffed(speed, shoes, paceMult) {
   return Math.min(WALK_MAX_BUFFED, walkFor(speed, shoes) * (paceMult || 1));
 }
+
+// ---------------------------------------------------------------------------------
+// Special ABILITIES (spec 24 §11, added 2026-09-12). Five active, triggered powers you
+// activate with the on-screen ⚡ button, each on its own cooldown. Dropped from crates at
+// ABILITY_DROP (1%) — rare and exciting. You equip ONE at a time. Unlike buffs (passive
+// multipliers), these fire on demand: freeze the Keepers chasing you, blink to safety,
+// drop a decoy, or jinx nearby players. `look` is the two-tone for the badge.
+// ---------------------------------------------------------------------------------
+export const ABILITY_DROP = 0.01; // 1% per crate crack
+export const ABILITIES = Object.freeze([
+  Object.freeze({ id: "a_freeze", name: "Boss Freeze", icon: "❄️", look: ["#35a3e0", "#d0f2ff"], cooldownS: 300, kind: "freeze", durS: 4,
+    blurb: "Freeze EVERY chasing Keeper solid for 4 seconds. 5-min cooldown." }),
+  Object.freeze({ id: "a_shock", name: "Shockwave", icon: "⚡", look: ["#f5cd30", "#fff59e"], cooldownS: 300, kind: "shock", radius: 24, durS: 3,
+    blurb: "Stun every Keeper near you for 3 seconds. 5-min cooldown." }),
+  Object.freeze({ id: "a_blink", name: "Blink", icon: "💨", look: ["#7ac74f", "#d8f5c8"], cooldownS: 180, kind: "blink", dist: 28,
+    blurb: "Dash 28 studs toward safety in a blink. 3-min cooldown." }),
+  Object.freeze({ id: "a_decoy", name: "Hologram Decoy", icon: "🪞", look: ["#6b3fa0", "#d0b0ff"], cooldownS: 240, kind: "decoy", durS: 5,
+    blurb: "Leave a decoy the Keepers chase for 5 seconds. 4-min cooldown." }),
+  Object.freeze({ id: "a_jinx", name: "Jinx", icon: "😵", look: ["#e0245e", "#ffb0c8"], cooldownS: 240, kind: "jinx", radius: 18, durS: 2,
+    blurb: "Stun nearby PLAYERS for 2 seconds — and rattle the Keepers. 4-min cooldown." }),
+]);
+export function abilityById(id) { return ABILITIES.find((a) => a.id === id) || null; }
+
+export function rollAbility(luck = 1, rand = Math.random) {
+  if (rand() < ABILITY_DROP * luck) return ABILITIES[Math.floor(rand() * ABILITIES.length) % ABILITIES.length];
+  return null;
+}

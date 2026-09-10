@@ -14,19 +14,26 @@ export const SPAWN = Object.freeze([18, FLOOR_TOP + 0.2, 0]); // open avenue, cl
 export const SPAWN_YAW = 90;
 export const KILL_Y = -20;
 
-export const LANE_HALF_Z = 9;
+export const LANE_HALF_Z = 12; // wider now — it is one open danger field, not lanes
 export const WALL_H = 12;
 
 export const TREAD = Object.freeze({ cx: 0, cz: 0, w: 10, d: 16 });
 export const UPGRADE_PAD = Object.freeze({ cx: 0, cz: 12 });
 
-const ZONE_PITCH = 66;
-const ZONE0_X = 34;
-const LANE_LEN = 48;
+// The SAFE ZONE is everything x < SAFE_X (the treadmill base). Keepers can chase you all
+// the way back but never cross this line; reach it carrying a crate and it is yours.
+export const SAFE_X = 26;
 
-export function zoneEntranceX(i) { return ZONE0_X + i * ZONE_PITCH; }
-export function zonePedestalX(i) { return zoneEntranceX(i) + LANE_LEN; }
-export function zoneKeeperHomeX(i) { return zoneEntranceX(i) + LANE_LEN * 0.55; }
+const ZONE_PITCH = 40;   // crates are closer together now — one continuous gauntlet
+const ZONE0_X = 44;      // first crate x
+
+// Crates sit along +x with no gates or safe gaps between them (spec 24 §11). The Keeper
+// guards its crate; grabbing a crate wakes it and every Keeper between it and safety.
+export function zonePedestalX(i) { return ZONE0_X + i * ZONE_PITCH; }
+export function zoneEntranceX(i) { return zonePedestalX(i); } // kept for the smoke helper
+// The Keeper guards its crate from just BEHIND it (the far side from safety), so
+// grabbing gives you a head start to turn and flee — it isn't an instant tag.
+export function zoneKeeperHomeX(i) { return zonePedestalX(i) + 9; }
 
 const C = Object.freeze({
   plaza: "#2f333f", plazaTrim: "#464c5c", wall: "#3a4050", wallTrim: "#4a5165",
@@ -172,36 +179,40 @@ export function buildWorld(treadmillId) {
   parts.push(part("upgradepost", { shape: "cylinder", size: [0.8, 4, 0.8], position: [UPGRADE_PAD.cx - 3.7, FLOOR_TOP + 2, UPGRADE_PAD.cz], color: C.plazaTrim, material: "metal" }));
   parts.push(part("upgradesign", { size: [3.4, 1.6, 0.3], position: [UPGRADE_PAD.cx - 3.7, FLOOR_TOP + 4.4, UPGRADE_PAD.cz], color: C.pad, material: "neon", canCollide: false }));
 
+  // ---- the SAFE-ZONE boundary: a big glowing gate at SAFE_X ----
+  // Cross back over this line carrying a crate and it is yours; Keepers never pass it.
+  for (const side of [-1, 1]) {
+    parts.push(part("safepost", { size: [2, WALL_H + 2, 2], position: [SAFE_X, FLOOR_TOP + (WALL_H + 2) / 2, side * (LANE_HALF_Z + 0.5)], color: "#3ddc84", material: "metal" }));
+  }
+  parts.push(part("safearch", { size: [2.4, 2, LANE_HALF_Z * 2 + 2], position: [SAFE_X, FLOOR_TOP + WALL_H + 1, 0], color: "#3ddc84", material: "neon", canCollide: false }));
+  parts.push(part("safeline", { size: [1.2, 0.3, LANE_HALF_Z * 2], position: [SAFE_X, FLOOR_TOP + 0.2, 0], color: "#3ddc84", material: "neon", canCollide: false }));
+  parts.push(part("safesign", { size: [7, 2.4, 0.4], position: [SAFE_X, FLOOR_TOP + WALL_H - 2, LANE_HALF_Z - 0.4], color: "#0f2a18", canCollide: false }));
+  // a faint danger tint over the whole field past the safe line
+  parts.push(part("dangerfloor", { size: [floorLen - SAFE_X, 0.16, LANE_HALF_Z * 2], position: [(SAFE_X + floorLen - 20) / 2 + 10, FLOOR_TOP + 0.09, 0], color: "#3a1520", canCollide: false }));
+
   const zones = [];
   for (let i = 0; i < ZONES.length; i++) {
     const zone = ZONES[i];
-    const ex = zoneEntranceX(i);
     const px = zonePedestalX(i);
-    parts.push(part("zonefloor", { size: [LANE_LEN + 8, 0.22, LANE_HALF_Z * 2], position: [(ex + px) / 2, FLOOR_TOP + 0.11, 0], color: zone.color, canCollide: false }));
+    // a coloured disc under each crate so its zone still reads
+    parts.push(part("zonedisc" + i, { shape: "cylinder", size: [22, 0.2, 22], position: [px, FLOOR_TOP + 0.12, 0], color: zone.color, canCollide: false }));
 
-    const entranceId = idFor("entrance" + i);
-    parts.push({ id: entranceId, size: [3, 0.4, LANE_HALF_Z * 2 - 2], position: [ex, FLOOR_TOP + 0.2, 0], color: "#f2f4fa", material: "neon", canCollide: false, behaviors: [{ type: "touchEvent", event: "sp_zone" + i, cooldownS: 0.5 }] });
-    for (const side of [-1, 1]) {
-      parts.push(part("gatepost" + i, { size: [1.4, 10, 1.4], position: [ex, FLOOR_TOP + 5, side * (LANE_HALF_Z - 0.4)], color: zone.color, material: "metal" }));
-    }
-    parts.push(part("gatetop" + i, { size: [2.2, 1.6, LANE_HALF_Z * 2], position: [ex, FLOOR_TOP + 10, 0], color: zone.color, material: "neon", canCollide: false }));
-    parts.push(part("sign" + i, { size: [5, 2.4, 0.4], position: [ex, FLOOR_TOP + 7, LANE_HALF_Z - 0.6], color: C.sign, canCollide: false }));
-
-    parts.push(part("pedbase" + i, { shape: "cylinder", size: [6, 1, 6], position: [px, FLOOR_TOP + 0.5, 0], color: C.pedTrim, material: "metal", canCollide: true }));
-    parts.push(part("pedestal" + i, { shape: "cylinder", size: [4.6, 2, 4.6], position: [px, FLOOR_TOP + 1.6, 0], color: C.pedestal, material: "metal" }));
-    parts.push(part("pedglow" + i, { shape: "cylinder", size: [4.8, 0.2, 4.8], position: [px, FLOOR_TOP + 2.6, 0], color: zone.color, material: "neon", canCollide: false }));
+    // A LOW walkable plinth so you can run right up and grab the crate — the crate sits
+    // at capsule height, its sensor generous, and nothing tall blocks the approach.
+    parts.push(part("plinth" + i, { shape: "cylinder", size: [7, 0.6, 7], position: [px, FLOOR_TOP + 0.3, 0], color: C.pedTrim, material: "metal", canCollide: true }));
+    parts.push(part("plinthglow" + i, { shape: "cylinder", size: [7.3, 0.2, 7.3], position: [px, FLOOR_TOP + 0.65, 0], color: zone.color, material: "neon", canCollide: false }));
     const crateId = idFor("crate" + i);
-    parts.push({ id: crateId, size: [3, 3, 3], position: [px, FLOOR_TOP + 4.1, 0], color: C.crate, material: "wood", canCollide: false, behaviors: [{ type: "touchEvent", event: "sp_crate" + i, cooldownS: 0.4 }] });
-    parts.push(part("cratelid" + i, { size: [3.3, 0.5, 3.3], position: [px, FLOOR_TOP + 5.7, 0], color: C.crateTrim, material: "neon", canCollide: false }));
-    parts.push(part("crateband1" + i, { size: [3.2, 0.5, 3.2], position: [px, FLOOR_TOP + 4.1, 0], color: C.crateTrim, canCollide: false }));
-    parts.push(part("crateband2" + i, { size: [0.5, 3.2, 3.2], position: [px, FLOOR_TOP + 4.1, 0], color: C.crateDark, canCollide: false }));
+    parts.push({ id: crateId, size: [3.6, 3.6, 3.6], position: [px, FLOOR_TOP + 2.4, 0], color: C.crate, material: "wood", canCollide: false, behaviors: [{ type: "touchEvent", event: "sp_crate" + i, cooldownS: 0.4 }] });
+    parts.push(part("cratelid" + i, { size: [3.9, 0.5, 3.9], position: [px, FLOOR_TOP + 4.3, 0], color: C.crateTrim, material: "neon", canCollide: false }));
+    parts.push(part("crateband1" + i, { size: [3.7, 0.5, 3.7], position: [px, FLOOR_TOP + 2.4, 0], color: C.crateTrim, canCollide: false }));
+    parts.push(part("crateband2" + i, { size: [0.5, 3.7, 3.7], position: [px, FLOOR_TOP + 2.4, 0], color: C.crateDark, canCollide: false }));
 
     const keeper = keeperParts(i, zone);
     for (const k of keeper) parts.push(k.def);
-    zoneScenery(parts, i, zone, ex, px);
+    zoneScenery(parts, i, zone, px - 26, px);
 
-    zones.push({ key: zone.key, entranceId, crateId, entranceX: ex, pedestalX: px, keeperHomeX: zoneKeeperHomeX(i), keeper: keeper.map((k) => ({ id: k.def.id, off: k.off })) });
+    zones.push({ key: zone.key, crateId, pedestalX: px, keeperHomeX: zoneKeeperHomeX(i), keeper: keeper.map((k) => ({ id: k.def.id, off: k.off })) });
   }
 
-  return { parts, tread, upgradeId, zones, floorLen };
+  return { parts, tread, upgradeId, zones, floorLen, safeX: SAFE_X };
 }

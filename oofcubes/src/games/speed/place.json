@@ -8,7 +8,7 @@
   "spawn": [18, 4.2, 0],
   "spawnYaw": 90,
   "killY": -20,
-  "music": "pump",
+  "music": "clash",
   "lighting": {
     "skyTop": "#2f6fd0",
     "skyBottom": "#bfe0ff",
