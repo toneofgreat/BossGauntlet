@@ -1118,6 +1118,11 @@ async function maybeSignIn() {
   signInShown = true;
   openSignIn({
     account: acc,
+    // If a stored session exists but restore did not sign us in (a slow or briefly
+    // unreachable server on a cold new tab), come up as "welcome back" with the name
+    // filled in — so recovering the same account and its friends is the default and
+    // accidentally making a new empty account is the deliberate off-path choice.
+    returningName: acc.storedUsername ? acc.storedUsername() : null,
     onDone: (username) => {
       signInShown = false;
       if (username) {

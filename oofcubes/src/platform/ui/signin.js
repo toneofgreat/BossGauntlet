@@ -24,7 +24,12 @@ const MODE_BACK = "back";
 
 export function openSignIn(deps = {}) {
   const { account, onDone } = deps;
-  let mode = MODE_NEW;
+  // A returning player (there was a stored session we could not restore — server slow,
+  // offline, a rare expiry) starts on the SIGN-IN side with their name filled in, so the
+  // obvious action recovers their account rather than creating a new empty one. Only a
+  // genuinely new device (no stored name) defaults to "create".
+  const returningName = deps.returningName || null;
+  let mode = returningName ? MODE_BACK : MODE_NEW;
   let busy = false;
 
   const scrim = el("div", "oof-panel-scrim");
@@ -67,8 +72,21 @@ export function openSignIn(deps = {}) {
     primary, swap, why);
   scrim.appendChild(card);
   document.body.appendChild(scrim);
+
+  // Returning player: render the sign-in side, name pre-filled, and focus the password
+  // so all they do is type it. The name is still editable if they truly want a new one.
+  if (returningName) {
+    title.textContent = "Welcome back";
+    blurb.textContent = `Signing back in as ${returningName}. Type your password.`;
+    primary.textContent = "Sign in";
+    swap.textContent = "I need a new name";
+    warn.style.display = "none";
+    nameInput.input.value = returningName;
+    passInput.input.autocomplete = "current-password";
+  }
+
   const releaseFocus = trapFocus ? trapFocus(card) : null;
-  nameInput.input.focus();
+  if (returningName) passInput.input.focus(); else nameInput.input.focus();
 
   // Enter submits from either field — this is a two-field form and reaching for the
   // mouse to finish it would be silly.

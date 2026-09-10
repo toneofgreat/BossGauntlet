@@ -156,6 +156,12 @@ export function createAccount(deps = {}) {
     // Why the last restore did not sign you in, for diagnosis. Null when it worked.
     lastError: () => lastError,
 
+    // The name on the STORED session, even while signed-out — so a sign-in dialog that
+    // comes up after a transient restore failure can default to "welcome back" with the
+    // name pre-filled, instead of dropping a returning player into "create a new name"
+    // and quietly making them a different account with none of their friends.
+    storedUsername: () => { const s = readStored(); return s ? s.username || null : null; },
+
     async register(username, password) { return adopt(await call("/api/register", { username, password })); },
     async login(username, password) { return adopt(await call("/api/login", { username, password })); },
 
