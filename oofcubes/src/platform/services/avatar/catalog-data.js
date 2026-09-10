@@ -675,9 +675,14 @@ export const STARTER_CATALOG = [
     id: "aura_supernova", name: "Supernova", type: "aura",
     price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "The Flash crate",
     appearance: {
-      motion: "pulse", count: 24, rate: 0, colors: ["#ffffff", "#ffd93d", "#ff8c00", "#7af0ff", "#ff36c8", "#3ddc84"],
-      size: [0.18,0.18], lifetime: 1.5, radius: 2.0, speed: 3, height: 0.5, bob: 0, wobble: 0,
-      sub: {"motion":"orbit","count":16,"speed":360,"height":3.1,"radius":2.2,"size":[0.26,0.26],"bob":0.7},
+      motion: "pulse", count: 0, rate: 0, colors: ["#ffffff", "#ffd93d", "#ff8c00", "#7af0ff", "#ff36c8", "#3ddc84"],
+      size: [0.18,0.18], lifetime: 1.3, radius: 2.1, speed: 3.2, height: 0.4, bob: 0, wobble: 0,
+      rings: 3, core: true, coreSize: 1.5, coreHeight: 3.6, sub: null,
+      subs: [
+        {"motion":"orbit","spectrum":true,"count":16,"speed":260,"radius":2.4,"height":1.7,"size":[0.24,0.24],"bob":0.5},
+        {"motion":"orbit","spectrum":true,"count":18,"speed":-330,"radius":2.15,"height":2.7,"size":[0.22,0.22],"bob":0.6},
+        {"motion":"orbit","spectrum":true,"count":12,"speed":300,"radius":1.55,"height":3.5,"size":[0.26,0.26],"bob":0.5}
+      ],
     },
   },
 

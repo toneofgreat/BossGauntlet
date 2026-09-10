@@ -80,12 +80,14 @@ function createOrbit(group, spec, sprites) {
   let t = 0;
   const count = sprites.length;
   const size = spec.size ? spec.size[0] : 0.2;
-  for (const s of sprites) {
+  sprites.forEach((s, i) => {
     s.visible = true;
     s.scale.set(size, size, 1);
-    s.material.color.set(spec.colors[0]);
+    // Default: one colour for the whole ring. `spectrum` paints each mote its own
+    // colour from the list, cycling — a rainbow orbit (Supernova).
+    s.material.color.set(spec.spectrum ? spec.colors[i % spec.colors.length] : spec.colors[0]);
     s.material.opacity = 1;
-  }
+  });
   return {
     update(dt) {
       t += dt;
@@ -186,31 +188,59 @@ function createTwinkle(group, spec, sprites) {
   };
 }
 
-// A flat ring that grows out of the avatar and fades, restarting every `lifetime`.
+// Flat ring(s) that grow out of the avatar and fade, restarting every `lifetime`.
+// `rings` (default 1) stacks several shockwaves, evenly staggered in phase and each a
+// different colour from the list, so they read as a rolling burst. `core` adds a bright
+// central sprite that breathes with the cycle — together they make the Supernova core.
 function createPulse(group, spec, held) {
-  const geo = new THREE.TorusGeometry(spec.radius || 1, 0.05, 8, 32);
-  const mat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(spec.colors[0]),
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const ring = new THREE.Mesh(geo, mat);
-  ring.rotation.x = -Math.PI / 2; // torus builds in XY; lay it flat
-  ring.position.y = spec.height || 0;
-  group.add(ring);
-  held.geometries.push(geo);
-  held.materials.push(mat);
   const lifetime = spec.lifetime || 1;
+  const baseR = spec.radius || 1;
+  const ringCount = Math.max(1, spec.rings || 1);
+  const rings = [];
+  for (let r = 0; r < ringCount; r++) {
+    const geo = new THREE.TorusGeometry(baseR, 0.05, 8, 32);
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(spec.colors[r % spec.colors.length]),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2; // torus builds in XY; lay it flat
+    mesh.position.y = spec.height || 0;
+    group.add(mesh);
+    held.geometries.push(geo);
+    held.materials.push(mat);
+    rings.push({ mesh, mat, phase: (r / ringCount) * lifetime });
+  }
+  let core = null;
+  if (spec.core) {
+    core = makeSprite();
+    core.material.color.set(spec.colors[0]);
+    core.position.set(0, (spec.height || 0) + (spec.coreHeight || 1.6), 0);
+    core.visible = true;
+    group.add(core);
+    held.sprites.push(core);
+  }
+  const coreSize = spec.coreSize || 0.9;
   let t = 0;
   return {
     update(dt) {
       t += dt;
-      if (t >= lifetime) t -= lifetime;
-      const k = t / lifetime;
-      const grow = 1 + ((spec.speed || 0) * t) / Math.max(0.001, spec.radius || 1);
-      ring.scale.set(grow, grow, 1);
-      mat.opacity = 1 - k;
+      for (const rg of rings) {
+        const tt = (t + rg.phase) % lifetime;
+        const k = tt / lifetime;
+        const grow = 1 + ((spec.speed || 0) * tt) / Math.max(0.001, baseR);
+        rg.mesh.scale.set(grow, grow, 1);
+        rg.mat.opacity = 1 - k;
+      }
+      if (core) {
+        // 0..1..0 breath synced to the ring cycle: the core swells as a wave leaves.
+        const beat = 0.5 - 0.5 * Math.cos((2 * Math.PI * (t % lifetime)) / lifetime);
+        const cs = coreSize * (0.72 + 0.5 * beat);
+        core.scale.set(cs, cs, 1);
+        core.material.opacity = 0.6 + 0.4 * beat;
+      }
     },
   };
 }
@@ -237,16 +267,19 @@ export function createAura(parent, spec) {
   else if (spec.motion === "twinkle") movers.push(createTwinkle(group, spec, sprites));
   else if (spec.motion === "pulse") {
     movers.push(createPulse(group, spec, held));
-    // §5.8's aura_storm is the one two-emitter aura: rings plus a ring of orbiters.
-    if (spec.sub && spec.sub.motion === "orbit" && spec.sub.count > 0) {
+    // aura_storm is a two-emitter aura (rings + one ring of orbiters); Supernova stacks
+    // several counter-rotating orbit rings via `subs`. Accept either shape.
+    const subs = Array.isArray(spec.subs) ? spec.subs : spec.sub ? [spec.sub] : [];
+    for (const sub of subs) {
+      if (!sub || sub.motion !== "orbit" || !(sub.count > 0)) continue;
       const subSprites = [];
-      for (let i = 0; i < spec.sub.count; i++) {
+      for (let i = 0; i < sub.count; i++) {
         const s = makeSprite();
         group.add(s);
         subSprites.push(s);
         held.sprites.push(s);
       }
-      movers.push(createOrbit(group, { ...spec.sub, colors: spec.colors }, subSprites));
+      movers.push(createOrbit(group, { ...sub, colors: sub.colors || spec.colors }, subSprites));
     }
   }
 
