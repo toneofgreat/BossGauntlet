@@ -50,6 +50,7 @@ let cooldown = [];            // per-crate: seconds until it can be stolen again
 let abilityReady = {};        // ability id -> sim time it is off cooldown
 let jinxedUntil = 0;          // you are stunned by another player's Jinx until this time
 let onTreadmill = false;
+let lastMusic = "clash";  // Place music switches to chill out in the Void/Flash end-game
 let runT = 0;
 let hudAt = 0;
 let panelOpen = false;
@@ -615,6 +616,7 @@ export function init(ctx) {
   keeperFreezeUntil = 0; decoy = null; jinxedUntil = 0; carryIds = [];
   abilityReady = {};
   runT = 0; hudAt = 0; onTreadmill = false; panelOpen = false;
+  lastMusic = "clash"; // place.json starts on clash; the end-game switches to voidchill
   loadSave(ctx);
 
   world = buildWorld(save.treadmill);
@@ -657,6 +659,14 @@ export function update(dt, ctx) {
   const p = ctx.player.position();
   const e = eff();
   const safe = p[0] < safeX;
+
+  // Out in the Void/Flash end-game the frantic track gives way to a calm, dreamy one.
+  // Hysteresis (enter at 300, leave at 270) so it never flickers at the boundary.
+  const wantMusic = (lastMusic === "voidchill" ? p[0] >= 270 : p[0] >= 300) ? "voidchill" : "clash";
+  if (wantMusic !== lastMusic) {
+    try { ctx.engine.audio.playMusic(wantMusic); } catch { /* audio may be muted */ }
+    lastMusic = wantMusic;
+  }
 
   // incoming Jinx from another player freezes us
   readIncomingJinx(ctx, p);

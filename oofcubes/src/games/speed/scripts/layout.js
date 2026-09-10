@@ -14,7 +14,7 @@ export const SPAWN = Object.freeze([18, FLOOR_TOP + 0.2, 0]); // open avenue, cl
 export const SPAWN_YAW = 90;
 export const KILL_Y = -20;
 
-export const LANE_HALF_Z = 12; // wider now — it is one open danger field, not lanes
+export const LANE_HALF_Z = 30; // a WIDE open field — room to juke the Keepers sideways
 export const WALL_H = 12;
 
 export const TREAD = Object.freeze({ cx: 0, cz: 0, w: 10, d: 16 });

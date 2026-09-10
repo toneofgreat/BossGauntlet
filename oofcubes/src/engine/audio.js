@@ -332,7 +332,43 @@ const clash = {
   },
 };
 
-export const TRACKS = Object.freeze({ plaza, ascent, pump, cashflow, chill, clash });
+// "Drift" (Speed's Void + Flash zones) — an ORIGINAL slow, dreamy lofi piece. Written to
+// sit calm and spacious after the frantic clash track, so reaching the end-game feels
+// like floating out into the quiet. Am7-Fmaj7-Cmaj7-Em7 at 70 bpm, soft triangle lead,
+// almost no drums. Not a copy of any existing song — the same synth every track uses.
+const voidchill = {
+  id: "voidchill",
+  title: "Drift",
+  bpm: 70,
+  bars: 8,
+  swing: 0.16,
+  bass: "pulse8",
+  chords: [
+    ["A2", "C4", "E4", "G4"],
+    ["F2", "A3", "C4", "E4"],
+    ["C3", "E4", "G4", "B4"],
+    ["E2", "G3", "B3", "D4"],
+  ],
+  roots: ["A1", "F1", "C2", "E1"],
+  leadVoice: { type: "triangle", cut: 2000, v: 0.12, a: 0.06, d: 0.35, s: 0.5, r: 0.6, send: 0.5 },
+  lead: [
+    [0, 0, "E5", 2], [0, 2, "A5", 2],
+    [1, 0, "C5", 1.5], [1, 2, "A4", 2],
+    [2, 0, "E5", 2], [2, 2, "G5", 1.5],
+    [3, 0, "B4", 1.5], [3, 2, "D5", 2],
+    [4, 0, "A5", 2], [4, 2, "E5", 1.5],
+    [5, 0, "F5", 2], [5, 2, "C5", 2],
+    [6, 0, "G5", 1.5], [6, 2, "E5", 2],
+    [7, 0, "B4", 4],
+  ],
+  // barely-there percussion: a soft kick on the one, a single hat every eighth bar.
+  drums(bar) {
+    if (bar % 8 === 7) return "k.......h.......";
+    return "k...............";
+  },
+};
+
+export const TRACKS = Object.freeze({ plaza, ascent, pump, cashflow, chill, clash, voidchill });
 
 export function createAudio() {
   // ---- instance state (per spec 02 §5.5: one createAudio() per page lifetime, but
