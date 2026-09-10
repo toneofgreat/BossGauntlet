@@ -65,3 +65,115 @@ export function fmt(n) {
   while (n >= 1000 && u < units.length - 1) { n /= 1000; u++; }
   return (n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : Math.floor(n)) + units[u];
 }
+
+// ---------------------------------------------------------------------------------
+// Treadmills (spec 24 §4, expanded 2026-09-11). Seventeen tiers in the owner's order,
+// rusty up to the LIGHTNING treadmill at the top. Each multiplies how fast the belt
+// trains you (`gain`) and costs steeply more (Coins). You always own `rusty`; the rest
+// are bought at the shop. `belt`/`stripe`/`rail`/`mat`/`glow` drive the look in
+// layout.js so every tier is visibly a different, better machine.
+// ---------------------------------------------------------------------------------
+export const TREADMILLS = Object.freeze([
+  Object.freeze({ id: "rusty",    name: "Rusty Treadmill",       gain: 1.0,  cost: 0,        belt: "#5a4a3a", stripe: "#3a2f24", rail: "#6b5a45", mat: "metal",   glow: null }),
+  Object.freeze({ id: "dirt",     name: "Dirt Treadmill",        gain: 1.4,  cost: 400,      belt: "#6b4a2c", stripe: "#4a3320", rail: "#7a5a3a", mat: "plastic", glow: null }),
+  Object.freeze({ id: "wooden",   name: "Wooden Treadmill",      gain: 1.9,  cost: 1400,     belt: "#8a5a34", stripe: "#5f3d20", rail: "#a06a3a", mat: "wood",    glow: null }),
+  Object.freeze({ id: "metal",    name: "Metal Treadmill",       gain: 2.6,  cost: 4200,     belt: "#7d8694", stripe: "#565d70", rail: "#9aa3b8", mat: "metal",   glow: null }),
+  Object.freeze({ id: "stone",    name: "Stone Treadmill",       gain: 3.5,  cost: 12000,    belt: "#5c6478", stripe: "#3b4152", rail: "#8a93a6", mat: "plastic", glow: null }),
+  Object.freeze({ id: "dplate",   name: "Diamond-Plate Treadmill", gain: 4.8, cost: 34000,   belt: "#9aa3b8", stripe: "#6b7386", rail: "#c7cdd9", mat: "metal",   glow: null }),
+  Object.freeze({ id: "gold",     name: "Gold Treadmill",        gain: 6.5,  cost: 95000,    belt: "#e0b23a", stripe: "#9c7a12", rail: "#f5cd30", mat: "metal",   glow: "#ffd93d" }),
+  Object.freeze({ id: "diamond",  name: "Diamond Treadmill",     gain: 8.8,  cost: 260000,   belt: "#59d6e6", stripe: "#2a9fb5", rail: "#bff2fa", mat: "glass",   glow: "#7af0ff" }),
+  Object.freeze({ id: "cherry",   name: "Cherry Treadmill",      gain: 12,   cost: 700000,   belt: "#e86a9c", stripe: "#b03c6c", rail: "#ffc0d8", mat: "wood",    glow: "#ff9ec8" }),
+  Object.freeze({ id: "speedster", name: "Speedster Treadmill",  gain: 16,   cost: 1.9e6,    belt: "#2f7fff", stripe: "#1a4fbf", rail: "#8fc0ff", mat: "neon",    glow: "#40a0ff" }),
+  Object.freeze({ id: "hacker",   name: "Hacker Treadmill",      gain: 22,   cost: 5.2e6,    belt: "#0f1a10", stripe: "#1f8f2a", rail: "#3ddc84", mat: "neon",    glow: "#3ddc84" }),
+  Object.freeze({ id: "devil",    name: "Devil Treadmill",       gain: 30,   cost: 1.4e7,    belt: "#1b0e0e", stripe: "#c0281a", rail: "#ff5a2f", mat: "lava",    glow: "#ff3a1a" }),
+  Object.freeze({ id: "heavenly", name: "Heavenly Treadmill",    gain: 41,   cost: 3.8e7,    belt: "#fbf6e8", stripe: "#e6cf7a", rail: "#fff4c0", mat: "neon",    glow: "#fff0b0" }),
+  Object.freeze({ id: "godly",    name: "Godly Treadmill",       gain: 56,   cost: 1.0e8,    belt: "#ffe58a", stripe: "#e0a622", rail: "#fffbe0", mat: "neon",    glow: "#ffd93d" }),
+  Object.freeze({ id: "tornado",  name: "Tornado Treadmill",     gain: 76,   cost: 2.8e8,    belt: "#7d8fb0", stripe: "#4a5a80", rail: "#c9d6f0", mat: "neon",    glow: "#a0c0ff" }),
+  Object.freeze({ id: "flash",    name: "Flash Treadmill",       gain: 103,  cost: 7.6e8,    belt: "#ffe23a", stripe: "#c0a012", rail: "#fff59e", mat: "neon",    glow: "#ffee00" }),
+  Object.freeze({ id: "lightning", name: "Lightning Treadmill",  gain: 140,  cost: 2.1e9,    belt: "#3a5cff", stripe: "#e8f0ff", rail: "#bfd4ff", mat: "neon",    glow: "#7ab0ff" }),
+]);
+export function treadmillById(id) { return TREADMILLS.find((t) => t.id === id) || TREADMILLS[0]; }
+export function treadmillIndex(id) { const i = TREADMILLS.findIndex((t) => t.id === id); return i < 0 ? 0 : i; }
+
+// ---------------------------------------------------------------------------------
+// Buffs / abilities (spec 24 §9, added 2026-09-11). Ten commons, five rares that are
+// "kinda OP", three godlies that are OP — dropped from crates at 30% / 5% / 0.5%. You
+// equip at most THREE (never while a Keeper is chasing you). Each carries multipliers
+// that stack multiplicatively while equipped:
+//   train — Speed gained on the belt · pace — run-speed (helps beat Keepers)
+//   coin  — crate Coins · luck — chance of a buff drop · keeperSlow — Keepers run slower
+// `look` is a two-tone [core, glow] for the detailed icon drawn in the bottom bar.
+// ---------------------------------------------------------------------------------
+export const BUFF_RARITY = Object.freeze({
+  common: { label: "Common", tint: "#7ac74f", chance: 0.30 },
+  rare: { label: "Rare", tint: "#35a3e0", chance: 0.05 },
+  godly: { label: "Godly", tint: "#f7c948", chance: 0.005 },
+});
+
+const buff = (id, name, rarity, icon, eff, look, blurb) => Object.freeze({ id, name, rarity, icon, eff: Object.freeze(eff), look, blurb });
+
+export const BUFFS = Object.freeze([
+  // ---- 10 commons (small, friendly boosts) ----
+  buff("c_boots", "Swift Boots", "common", "👟", { pace: 1.10 }, ["#7ac74f", "#c8f0a8"], "Light on your feet: +10% pace."),
+  buff("c_energy", "Energy Drink", "common", "🥤", { train: 1.15 }, ["#e0562f", "#ffb37a"], "+15% Speed gained on the belt."),
+  buff("c_coin", "Lucky Coin", "common", "🪙", { coin: 1.15 }, ["#e0b23a", "#fff0a0"], "+15% Coins from crates."),
+  buff("c_magnet", "Coin Magnet", "common", "🧲", { coin: 1.12 }, ["#d94436", "#ffb0a8"], "+12% Coins from crates."),
+  buff("c_feather", "Feather", "common", "🪶", { pace: 1.08 }, ["#c7cdd9", "#ffffff"], "+8% pace, weightless."),
+  buff("c_spark", "Spark Plug", "common", "🔌", { train: 1.12 }, ["#f5cd30", "#fff59e"], "+12% training speed."),
+  buff("c_clover", "Clover", "common", "🍀", { luck: 1.20 }, ["#37a04c", "#9ee0a8"], "+20% chance of a buff drop."),
+  buff("c_wind", "Tailwind", "common", "🌬️", { pace: 1.09 }, ["#8bd0e6", "#d8f2fa"], "+9% pace on a good breeze."),
+  buff("c_gears", "Oiled Gears", "common", "⚙️", { train: 1.13 }, ["#8a93a6", "#d0d6e0"], "+13% training speed."),
+  buff("c_piggy", "Piggy Bank", "common", "🐷", { coin: 1.18 }, ["#ff9ec8", "#ffd0e4"], "+18% Coins from crates."),
+  // ---- 5 rares (kinda OP) ----
+  buff("r_rocket", "Rocket Skates", "rare", "🚀", { pace: 1.45 }, ["#35a3e0", "#bff2fa"], "+45% pace — leave Keepers behind."),
+  buff("r_goldmine", "Gold Mine", "rare", "⛏️", { coin: 1.6 }, ["#e0b23a", "#fff0a0"], "+60% Coins from every crate."),
+  buff("r_fortune", "Fortune Idol", "rare", "🔮", { luck: 2.2 }, ["#6b3fa0", "#d0b0ff"], "×2.2 buff-drop chance."),
+  buff("r_turbo", "Turbo Core", "rare", "🌀", { train: 1.7 }, ["#2f7fff", "#a0c8ff"], "+70% training speed."),
+  buff("r_phantom", "Phantom Cloak", "rare", "👻", { keeperSlow: 0.30 }, ["#5c6478", "#c9d6f0"], "Keepers run 30% slower at you."),
+  // ---- 3 godlies (OP, and they look amazing) ----
+  buff("g_flash", "The Flash", "godly", "⚡", { pace: 2.4, keeperSlow: 0.15 }, ["#ffe23a", "#fff7c0"], "×2.4 pace. Nothing catches you."),
+  buff("g_midas", "Midas Heart", "godly", "💛", { coin: 3.0, luck: 1.5 }, ["#ffd93d", "#fffbe0"], "×3 Coins and ×1.5 luck. Everything is gold."),
+  buff("g_destiny", "Destiny", "godly", "🌟", { luck: 3.0, keeperSlow: 0.45, train: 1.5 }, ["#7ab0ff", "#e8f0ff"], "×3 luck, half-speed Keepers, +50% training."),
+]);
+export function buffById(id) { return BUFFS.find((b) => b.id === id) || null; }
+export const MAX_EQUIPPED = 3;
+
+// A crate's buff roll (spec 24 §9). One draw, biased by `luck`: godly band first, then
+// rare, then common, else nothing. Returns a buff or null.
+export function rollBuff(luck = 1, rand = Math.random) {
+  const gC = BUFF_RARITY.godly.chance * luck;
+  const rC = BUFF_RARITY.rare.chance * luck;
+  const cC = BUFF_RARITY.common.chance * luck;
+  const r = rand();
+  let pool = null;
+  if (r < gC) pool = "godly";
+  else if (r < gC + rC) pool = "rare";
+  else if (r < gC + rC + cC) pool = "common";
+  if (!pool) return null;
+  const options = BUFFS.filter((b) => b.rarity === pool);
+  return options[Math.floor(rand() * options.length) % options.length];
+}
+
+// The combined effect of a set of equipped buff ids — multipliers multiply, keeperSlow
+// adds and is capped at 0.85 so a Keeper is never fully frozen.
+export function combinedEffect(equippedIds) {
+  const e = { train: 1, pace: 1, coin: 1, luck: 1, keeperSlow: 0 };
+  for (const id of equippedIds || []) {
+    const b = buffById(id);
+    if (!b) continue;
+    if (b.eff.train) e.train *= b.eff.train;
+    if (b.eff.pace) e.pace *= b.eff.pace;
+    if (b.eff.coin) e.coin *= b.eff.coin;
+    if (b.eff.luck) e.luck *= b.eff.luck;
+    if (b.eff.keeperSlow) e.keeperSlow = Math.min(0.85, e.keeperSlow + b.eff.keeperSlow);
+  }
+  return e;
+}
+
+// Run-pace with a buff pace multiplier. Buffed pace may exceed the base WALK_MAX (so a
+// pace buff really does out-run a fast Keeper) but is still capped under the engine's
+// hard 100 ceiling.
+export const WALK_MAX_BUFFED = 92;
+export function walkForBuffed(speed, shoes, paceMult) {
+  return Math.min(WALK_MAX_BUFFED, walkFor(speed, shoes) * (paceMult || 1));
+}
