@@ -11,7 +11,7 @@
 
 import {
   ZONES, walkForBuffed, gainPerSec, fmt,
-  motorCost, shoesCost, AUTO_RUN_COST, MOTOR_MAX, SHOES_MAX, CRATE_COOLDOWN_S,
+  motorCost, shoesCost, MOTOR_MAX, SHOES_MAX, CRATE_COOLDOWN_S,
   TREADMILLS, treadmillById, treadmillIndex,
   BUFFS, buffById, BUFF_RARITY, MAX_EQUIPPED, rollBuff, combinedEffect,
 } from "./scripts/config.js";
@@ -45,6 +45,7 @@ let panelOpen = false;
 let welcomed = false;
 let buffBar = null;      // the fixed bottom-of-screen equipped-buffs bar
 let openInventory = null; // set to a fn while a Place is live
+let actionButtons = null; // the fixed on-screen Shop / Upgrade-Treadmill buttons (mobile)
 
 // ---------------------------------------------------------------------------------
 
@@ -146,6 +147,65 @@ function refreshBuffBar() {
         + "color:rgba(255,255,255,.3);font-size:20px;", "＋"));
     }
   }
+}
+
+// ---------------------------------------------------------------------------------
+// On-screen buttons (spec 24 §10, mobile pass): a Shop button and a one-tap Upgrade-
+// Treadmill button, so nothing needs a keyboard or finding a pad. Big, tappable, fixed.
+// ---------------------------------------------------------------------------------
+
+function nextTreadmill() { return TREADMILLS[treadmillIndex(save.treadmill) + 1] || null; }
+
+function buyNextTreadmill(ctx) {
+  const next = nextTreadmill();
+  if (!next || save.coins < next.cost) { ctx.engine.audio.playSfx("denied"); return false; }
+  save.coins -= next.cost;
+  save.treadmill = next.id;
+  recolorTreadmill(ctx);
+  saveNow(ctx);
+  ctx.engine.audio.playSfx("purchase");
+  ctx.services.ui.toast(`New treadmill: ${next.name}!`, { icon: "🏃", duration: 4 });
+  refreshActionButtons();
+  emitState(ctx);
+  return true;
+}
+
+function bigBtn(label, onTap) {
+  const b = document.createElement("button");
+  b.setAttribute("style", "min-height:44px;padding:10px 14px;border-radius:12px;border:none;cursor:pointer;"
+    + "font:inherit;font-weight:800;font-size:14px;white-space:nowrap;pointer-events:auto;"
+    + "background:rgba(14,16,24,.78);color:#f2f4fa;border:1px solid rgba(255,255,255,.14);"
+    + "box-shadow:0 2px 8px rgba(0,0,0,.35);backdrop-filter:blur(4px);");
+  b.textContent = label;
+  b.addEventListener("click", onTap);
+  return b;
+}
+
+function buildActionButtons(ctx) {
+  const wrap = document.createElement("div");
+  wrap.setAttribute("style", "position:fixed;left:12px;bottom:40px;z-index:40;display:flex;flex-direction:column;gap:8px;pointer-events:none;");
+  const shopBtn = bigBtn("🛠 Upgrades", () => openShop(ctx));
+  const treadBtn = bigBtn("⬆ Treadmill", () => buyNextTreadmill(ctx));
+  wrap.append(shopBtn, treadBtn);
+  document.body.appendChild(wrap);
+  actionButtons = { wrap, treadBtn };
+  refreshActionButtons();
+}
+
+function refreshActionButtons() {
+  if (!actionButtons) return;
+  const b = actionButtons.treadBtn;
+  const next = nextTreadmill();
+  if (!next) {
+    b.textContent = "⬆ Treadmill: MAXED ⚡";
+    b.style.opacity = "0.6"; b.disabled = true;
+    return;
+  }
+  const afford = save.coins >= next.cost;
+  b.disabled = false;
+  b.textContent = `⬆ ${next.name.replace(" Treadmill", "")} — ${fmt(next.cost)} 🪙`;
+  b.style.opacity = afford ? "1" : "0.65";
+  b.style.background = afford ? "rgba(34,120,60,.85)" : "rgba(14,16,24,.78)";
 }
 
 function openInventoryPanel(ctx) {
@@ -361,11 +421,7 @@ function openShop(ctx) {
       row.append(mid);
       const afford = save.coins >= next.cost;
       row.append(DOM.btn(`${fmt(next.cost)} 🪙`, () => {
-        if (save.coins < next.cost) return;
-        save.coins -= next.cost; save.treadmill = next.id;
-        recolorTreadmill(ctx); saveNow(ctx); ctx.engine.audio.playSfx("purchase");
-        ctx.services.ui.toast(`New treadmill: ${next.name}!`, { icon: "🏃", duration: 4 });
-        repaint(); emitState(ctx);
+        if (buyNextTreadmill(ctx)) repaint();
       }, !afford));
       card.append(row);
     }
@@ -376,8 +432,8 @@ function openShop(ctx) {
       save.motor, MOTOR_MAX, motorCost(save.motor), () => { save.motor++; });
     upgRow(upgWrap, "Running Shoes", `Turn Speed into pace — beat faster Keepers. Level ${save.shoes}.`,
       save.shoes, SHOES_MAX, shoesCost(save.shoes), () => { save.shoes++; });
-    upgRow(upgWrap, "Auto-Run", "The treadmill runs on its own — no holding needed.",
-      save.auto ? 1 : 0, null, AUTO_RUN_COST, () => { save.auto = true; });
+    // Auto-Run used to be a purchase; the treadmill now runs for you just by standing on
+    // it (the mobile pass), so there is nothing to buy here any more.
   }
   repaint();
 }
@@ -389,9 +445,10 @@ function hud(ctx) {
   ui.setHudStat("spSpeed", { icon: "🏃", label: "Speed", value: fmt(save.speed) });
   ui.setHudStat("spCoins", { icon: "🪙", label: "Coins", value: fmt(save.coins) });
   ui.setHudStat("spTier", { icon: "🏭", label: "Treadmill", value: treadmillById(save.treadmill).name.replace(" Treadmill", "") });
+  refreshActionButtons();
   const reached = save.reached.filter(Boolean).length;
   ui.setHudStat("spZones", { icon: "🏁", label: "Zones", value: `${reached}/${ZONES.length}` });
-  if (onTreadmill) ui.setHudStat("spTread", { icon: "⚡", label: "Treadmill", value: save.auto ? "auto-running" : "hold E to run" });
+  if (onTreadmill) ui.setHudStat("spTread", { icon: "⚡", label: "Treadmill", value: "training…" });
   else ui.removeHudStat("spTread");
 }
 
@@ -443,6 +500,7 @@ export function init(ctx) {
 
   buffBar = buildBuffBar();
   refreshBuffBar();
+  buildActionButtons(ctx);
   openInventory = () => openInventoryPanel(ctx);
 
   try { ctx.player.setWalkSpeed(walkForBuffed(save.speed, save.shoes, eff().pace)); } catch { /* fine */ }
@@ -451,7 +509,7 @@ export function init(ctx) {
   emitState(ctx);
   if (!welcomed) {
     welcomed = true;
-    ctx.services.ui.toast("Hold E on the treadmill to build Speed, then out-run the Keepers to their crates. Crates drop buffs — equip 3 from the bar below!", { icon: "🏃", duration: 8 });
+    ctx.services.ui.toast("Stand on the treadmill to build Speed — it runs for you. Out-run the Keepers to their crates, and equip buffs from the bar below!", { icon: "🏃", duration: 8 });
   }
 }
 
@@ -465,11 +523,10 @@ export function update(dt, ctx) {
     && Math.abs(p[2] - TREAD.cz) <= TREAD.d / 2 + 0.5 && p[1] <= FLOOR_TOP + 4;
   onTreadmill = onBelt;
   if (onBelt) {
-    const running = save.auto || (ctx.engine.input && ctx.engine.input.isDown && ctx.engine.input.isDown("action1"));
-    if (running) {
-      save.speed += trainRate() * dt;
-      try { ctx.player.setWalkSpeed(walkForBuffed(save.speed, save.shoes, e.pace)); } catch { /* fine */ }
-    }
+    // Auto-run (spec 24 §10, mobile pass): just STANDING on the belt trains you — no key
+    // to hold, so it plays identically on a phone with only a joystick and taps.
+    save.speed += trainRate() * dt;
+    try { ctx.player.setWalkSpeed(walkForBuffed(save.speed, save.shoes, e.pace)); } catch { /* fine */ }
   }
 
   for (let i = 0; i < world.zones.length; i++) {
@@ -514,6 +571,8 @@ export function dispose(ctx) {
   subs = [];
   if (buffBar && buffBar.parentNode) buffBar.parentNode.removeChild(buffBar);
   buffBar = null;
+  if (actionButtons && actionButtons.wrap && actionButtons.wrap.parentNode) actionButtons.wrap.parentNode.removeChild(actionButtons.wrap);
+  actionButtons = null;
   openInventory = null;
   if (ctx && ctx.services && ctx.services.ui) {
     for (const k of ["spSpeed", "spCoins", "spTier", "spZones", "spTread"]) ctx.services.ui.removeHudStat(k);
