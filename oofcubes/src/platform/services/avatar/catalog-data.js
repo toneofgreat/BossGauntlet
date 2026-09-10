@@ -633,6 +633,51 @@ export const STARTER_CATALOG = [
     },
   },
 
+  // ---- five "very cool" auras (added 2026-09-13 for Speed's Void/Flash crates). The
+  // last, Supernova, is the best in the whole Catalog — a pulsing core wrapped in a fast
+  // rainbow orbit of a dozen bright motes. ----------------------------------------------
+  {
+    id: "aura_comet", name: "Comet Halo", type: "aura",
+    price: 4200, rarity: "rare", grantOnly: false, sourcePlace: null,
+    appearance: {
+      motion: "orbit", count: 7, rate: 0, colors: ["#7af0ff", "#ffffff"], size: [0.3,0.3],
+      lifetime: 0, radius: 1.7, speed: 220, height: 2.4, bob: 0.4, wobble: 0, sub: null,
+    },
+  },
+  {
+    id: "aura_inferno", name: "Inferno", type: "aura",
+    price: 6500, rarity: "epic", grantOnly: false, sourcePlace: null,
+    appearance: {
+      motion: "rise", count: 0, rate: 16, colors: ["#ff2a00", "#ff5a1f", "#ffd93d"], size: [0.32,0.32],
+      lifetime: 1.1, radius: 1.2, speed: 4, height: 3.4, bob: 0, wobble: 0.35, sub: null,
+    },
+  },
+  {
+    id: "aura_galaxy", name: "Galaxy Swirl", type: "aura",
+    price: 9000, rarity: "legendary", grantOnly: false, sourcePlace: null,
+    appearance: {
+      motion: "orbit", count: 11, rate: 0, colors: ["#6b3fa0", "#35a3e0", "#ff36c8"], size: [0.28,0.28],
+      lifetime: 0, radius: 2.1, speed: 150, height: 2.6, bob: 0.7, wobble: 0, sub: null,
+    },
+  },
+  {
+    id: "aura_prism", name: "Prism Burst", type: "aura",
+    price: 11000, rarity: "legendary", grantOnly: false, sourcePlace: null,
+    appearance: {
+      motion: "twinkle", count: 16, rate: 0, colors: ["#ff0000", "#ff8c00", "#ffee00", "#3ddc84", "#35a3e0", "#6b3fa0", "#ff36c8"],
+      size: [0.24,0.24], lifetime: 0, radius: 1.9, speed: 1.4, height: 2.5, bob: 0.3, wobble: 0, sub: null,
+    },
+  },
+  {
+    id: "aura_supernova", name: "Supernova", type: "aura",
+    price: 25000, rarity: "legendary", grantOnly: false, sourcePlace: null,
+    appearance: {
+      motion: "pulse", count: 18, rate: 0, colors: ["#ffffff", "#ffd93d", "#7af0ff", "#ff36c8", "#3ddc84"],
+      size: [0.16,0.16], lifetime: 1.4, radius: 1.7, speed: 3, height: 0.4, bob: 0, wobble: 0,
+      sub: {"motion":"orbit","count":12,"speed":300,"height":2.8,"radius":1.9,"size":[0.22,0.22],"bob":0.5},
+    },
+  },
+
   // ---- trails (§3.7) — what you leave behind as you move -----------------------------
   {
     id: "trail_bubble", name: "Bubble Trail", type: "trail",

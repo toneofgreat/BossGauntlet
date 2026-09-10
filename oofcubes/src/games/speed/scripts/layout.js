@@ -26,10 +26,19 @@ export const SAFE_X = 26;
 
 const ZONE_PITCH = 40;   // crates are closer together now — one continuous gauntlet
 const ZONE0_X = 44;      // first crate x
+// The Void (index 6) and Flash (index 7) sit far out past a big gap — an epic run into a
+// vast dark expanse, then a bigger blazing one. The gaps are long but capped so the run
+// back stays possible with the top treadmills, shoes and abilities (a literal 100x/25x
+// — 4,000 then 100,000 studs — would be an 18-minute run and past float precision).
+const EPIC_GAP = Object.freeze({ 6: 120, 7: 220 });
 
 // Crates sit along +x with no gates or safe gaps between them (spec 24 §11). The Keeper
 // guards its crate; grabbing a crate wakes it and every Keeper between it and safety.
-export function zonePedestalX(i) { return ZONE0_X + i * ZONE_PITCH; }
+export function zonePedestalX(i) {
+  let x = ZONE0_X;
+  for (let k = 1; k <= i; k++) x += EPIC_GAP[k] || ZONE_PITCH;
+  return x;
+}
 export function zoneEntranceX(i) { return zonePedestalX(i); } // kept for the smoke helper
 // The Keeper guards its crate from just BEHIND it (the far side from safety), so
 // grabbing gives you a head start to turn and flee — it isn't an instant tag.
@@ -83,7 +92,101 @@ function buildTreadmill(parts, tm) {
     const g = { id: idFor("tm_glow"), size: [0.3, 0.14, bd - 1], position: [bx + side * (bw / 2 - 0.6), deckY + 0.58, bz], color: tm.glow || tm.stripe, material: "neon", canCollide: false };
     parts.push(g); glowIds.push(g.id);
   }
+
+  // Each treadmill wears its OWN detail (added 2026-09-13) — not just a recolour. These
+  // are decorative parts unique to the tier, hung around the machine.
+  buildTreadmillDetail(parts, tm, bx, bz, bw, bd);
+
   return { beltIds, stripeIds, glowIds, screenId: screen.id };
+}
+
+// A distinct ornament set per treadmill tier. Engine parts are box/cylinder/sphere/wedge
+// only (no cone/torus), so every flourish is built from those.
+function buildTreadmillDetail(parts, tm, bx, bz, bw, bd) {
+  const y0 = FLOOR_TOP;
+  const frontZ = bz + bd / 2;   // the console end
+  const backZ = bz - bd / 2;    // the motor end
+  const dp = (o) => parts.push(part("tm_det_" + tm.id, { canCollide: false, ...o }));
+  const L = bx - bw / 2 - 0.4, R = bx + bw / 2 + 0.4; // rail lines
+  switch (tm.id) {
+    case "rusty":
+      for (const [x, z] of [[L, backZ + 3], [R, bz], [bx - 2, frontZ - 1]]) dp({ shape: "sphere", size: [0.9, 0.7, 0.9], position: [x, y0 + 1.4, z], color: "#7a3a1a" });
+      dp({ shape: "cylinder", size: [0.3, 1, 0.3], position: [R, y0 + 2.6, backZ + 2], rotation: [0, 0, 40], color: "#3a2f24", material: "metal" }); // a loose bolt sticking out
+      break;
+    case "dirt":
+      for (const [x, z] of [[L, bz + 2], [R, bz - 2], [bx + 2, backZ + 2]]) dp({ shape: "sphere", size: [1, 0.8, 1], position: [x, y0 + 1.1, z], color: "#4a3320" });
+      dp({ shape: "cylinder", size: [0.2, 1.2, 0.2], position: [L, y0 + 2, bz + 2], color: "#37a04c" }); // a weed
+      dp({ shape: "sphere", size: [0.8, 0.8, 0.8], position: [L, y0 + 2.6, bz + 2], color: "#2f8f4a" });
+      break;
+    case "wooden":
+      for (let i = 0; i < 3; i++) dp({ size: [0.2, 0.1, bd - 2], position: [bx - 2 + i * 2, y0 + 1.35, bz], color: "#5f3d20", material: "wood" }); // grain lines
+      dp({ shape: "sphere", size: [0.6, 0.6, 0.6], position: [bx + 1.5, y0 + 1.4, bz + 3], color: "#4a3320", material: "wood" }); // a knot
+      break;
+    case "metal":
+      for (const [x, z] of [[L, backZ + 2], [L, frontZ - 2], [R, backZ + 2], [R, frontZ - 2]]) dp({ shape: "sphere", size: [0.5, 0.5, 0.5], position: [x, y0 + 1.5, z], color: "#c7cdd9", material: "metal" }); // rivets
+      dp({ shape: "cylinder", size: [1.2, 0.3, 1.2], position: [bx - 3, y0 + 3.7, frontZ - 0.2], rotation: [90, 0, 0], color: "#20242e", material: "metal" }); // a gauge
+      break;
+    case "stone":
+      for (const [x, z, s] of [[L, bz + 3, 1], [R, bz - 3, 1.2], [bx + 2, backZ + 2, 0.9]]) dp({ size: [1.4 * s, 1.2 * s, 1.4 * s], position: [x, y0 + 1.2, z], rotation: [0, x * 30, 0], color: "#4a5165" }); // rough chunks
+      break;
+    case "dplate":
+      for (let i = 0; i < 5; i++) dp({ shape: "wedge", size: [0.5, 0.4, 0.5], position: [bx - 3 + i * 1.5, y0 + 1.4, bz + 2], rotation: [0, 45, 0], color: "#c7cdd9", material: "metal" }); // tread bumps
+      break;
+    case "gold":
+      dp({ size: [2, 0.5, 0.6], position: [bx, y0 + 4.6, frontZ - 0.2], color: "#ffd93d", material: "metal" }); // crown base
+      for (const x of [-0.7, 0, 0.7]) dp({ size: [0.4, 0.7, 0.5], position: [bx + x, y0 + 5.1, frontZ - 0.2], color: "#ffd93d", material: "metal" }); // crown points
+      for (const [x, z] of [[L, bz + 2], [R, bz - 2]]) dp({ shape: "cylinder", size: [0.7, 0.15, 0.7], position: [x, y0 + 1.5, z], rotation: [90, 0, 0], color: "#f5cd30", material: "metal" }); // coins
+      break;
+    case "diamond":
+      for (const [x, z] of [[L, bz + 3], [R, bz - 3], [bx, backZ + 1.5]]) dp({ shape: "wedge", size: [0.8, 1.4, 0.8], position: [x, y0 + 2.6, z], rotation: [180, x * 40, 0], color: "#7af0ff", material: "glass" }); // gem shards
+      break;
+    case "cherry":
+      dp({ shape: "cylinder", size: [0.3, 3, 0.3], position: [L, y0 + 2.5, backZ + 3], rotation: [0, 0, 20], color: "#6b4423", material: "wood" }); // branch
+      for (const [x, z] of [[L - 0.5, backZ + 3.5], [L + 0.6, backZ + 2], [R, bz + 1], [bx + 2, frontZ - 1]]) dp({ shape: "sphere", size: [0.6, 0.6, 0.6], position: [x, y0 + 3.6, z], color: "#ff9ec8", material: "neon" }); // blossoms
+      break;
+    case "speedster":
+      for (let i = 0; i < 4; i++) dp({ size: [1.8 - i * 0.3, 0.2, 0.2], position: [R + 0.6, y0 + 2.5, bz - 2 + i * 1.3], color: "#40a0ff", material: "neon" }); // speed lines
+      dp({ shape: "wedge", size: [bw + 1, 0.4, 1.2], position: [bx, y0 + 3.4, backZ - 0.4], rotation: [200, 0, 0], color: "#1a4fbf", material: "neon" }); // spoiler
+      break;
+    case "hacker":
+      for (let i = 0; i < 6; i++) dp({ size: [0.4 + (i % 3) * 0.4, 0.5, 0.1], position: [L - 0.5, y0 + 1.4 + i * 0.8, bz - 2 + (i % 2) * 3], color: "#3ddc84", material: "neon" }); // code bars
+      break;
+    case "devil":
+      for (const x of [-1, 1]) dp({ shape: "wedge", size: [0.6, 1.6, 0.6], position: [bx + x * 1.4, y0 + 5, frontZ - 0.2], rotation: [0, 0, x * 18], color: "#ff3a1a", material: "lava" }); // horns
+      dp({ shape: "cylinder", size: [0.3, 4, 0.3], position: [bx, y0 + 2, backZ - 1], rotation: [30, 0, 0], color: "#c0281a", material: "lava" }); // tail
+      dp({ shape: "sphere", size: [0.7, 1, 0.7], position: [bx, y0 + 4, backZ - 2.5], color: "#ff5a2f", material: "lava" }); // tail tip
+      break;
+    case "heavenly":
+      dp({ shape: "cylinder", size: [2.4, 0.2, 2.4], position: [bx, y0 + 6, bz], rotation: [90, 0, 0], color: "#fff0b0", material: "neon" }); // halo (flat ring-ish)
+      for (const x of [-1, 1]) dp({ shape: "wedge", size: [2.6, 3, 0.4], position: [bx + x * (bw / 2 + 1.4), y0 + 3.4, bz], rotation: [0, x * 90, 0], color: "#fbf6e8", material: "neon" }); // wings
+      break;
+    case "godly":
+      dp({ size: [2.6, 0.6, 0.7], position: [bx, y0 + 5.4, frontZ - 0.2], color: "#ffd93d", material: "neon" });
+      for (const x of [-1, -0.5, 0, 0.5, 1]) dp({ shape: "wedge", size: [0.4, 1, 0.5], position: [bx + x * 1, y0 + 6, frontZ - 0.2], color: "#fffbe0", material: "neon" }); // radiant crown
+      break;
+    case "tornado":
+      for (let i = 0; i < 5; i++) dp({ shape: "cylinder", size: [2.4 - i * 0.4, 0.6, 2.4 - i * 0.4], position: [bx, y0 + 4 + i * 1.2, bz], rotation: [0, i * 40, 0], color: "#a0c0ff", material: "neon" }); // funnel
+      break;
+    case "flash":
+      for (const [x, z] of [[L - 0.5, bz + 2], [R + 0.5, bz - 2], [bx, backZ - 0.5]]) {
+        dp({ shape: "wedge", size: [0.5, 1.6, 0.3], position: [x, y0 + 3, z], rotation: [0, 0, 25], color: "#ffee00", material: "neon" });
+        dp({ shape: "wedge", size: [0.5, 1.6, 0.3], position: [x + 0.4, y0 + 1.8, z], rotation: [0, 0, -25], color: "#ffee00", material: "neon" });
+      }
+      break;
+    case "lightning":
+      // the ultimate: a storm cloud over the deck with electric arcs shooting down
+      dp({ shape: "sphere", size: [4, 1.6, 3], position: [bx, y0 + 8, bz], color: "#2a3550" });
+      dp({ shape: "sphere", size: [2.6, 1.2, 2.2], position: [bx - 1.6, y0 + 8.2, bz + 1], color: "#3a4560" });
+      dp({ shape: "sphere", size: [2.6, 1.2, 2.2], position: [bx + 1.6, y0 + 8.2, bz - 1], color: "#3a4560" });
+      for (const [x, z, r] of [[bx - 1, bz + 2, 12], [bx + 1.4, bz - 2, -14], [bx, backZ + 2, 8]]) {
+        dp({ shape: "wedge", size: [0.5, 2.4, 0.4], position: [x, y0 + 6, z], rotation: [0, 0, r], color: "#7ab0ff", material: "neon" });
+        dp({ shape: "wedge", size: [0.5, 2.4, 0.4], position: [x + 0.5, y0 + 3.6, z], rotation: [0, 0, -r], color: "#e8f0ff", material: "neon" });
+      }
+      for (const side of [-1, 1]) dp({ shape: "sphere", size: [0.6, 0.6, 0.6], position: [bx + side * (bw / 2 + 0.4), y0 + 3.2, frontZ - 0.6], color: "#3a5cff", material: "neon" }); // charged rail caps
+      break;
+    default:
+      break;
+  }
 }
 
 // ---- a Keeper: a proper single-eyed guard robot -----------------------------------
@@ -154,6 +257,27 @@ function zoneScenery(parts, i, zone, ex, px) {
       put({ shape: "sphere", size: [2.2, 2.2, 2.2], position: [x, FLOOR_TOP + 13.5, z], color: zone.color, material: "neon" });
     }
     for (let s = 0; s < 6; s++) put({ size: [0.5, 0.5, LANE_HALF_Z * 2], position: [midX - 20 + s * 8, FLOOR_TOP + 8, 0], color: "#fff59e", material: "neon" });
+  } else if (zone.key === "void") {
+    // a vast dark expanse: a black overlay, a black hole with a glowing accretion band,
+    // drifting planets, and stars scattered high overhead.
+    put({ size: [180, 0.14, LANE_HALF_Z * 2], position: [px + 40, FLOOR_TOP + 0.16, 0], color: "#05030f" });
+    put({ shape: "sphere", size: [14, 14, 14], position: [px + 30, FLOOR_TOP + 18, 0], color: "#0a0616" }); // the black hole
+    put({ shape: "cylinder", size: [24, 0.5, 24], position: [px + 30, FLOOR_TOP + 18, 0], rotation: [70, 0, 20], color: "#7a3fd0", material: "neon" }); // accretion band
+    put({ shape: "cylinder", size: [19, 0.4, 19], position: [px + 30, FLOOR_TOP + 18, 0], rotation: [70, 0, 20], color: "#35a3e0", material: "neon" });
+    for (const [x, z, s, c] of [[px + 8, -18, 4, "#35a3e0"], [px + 60, 16, 6, "#c02a6a"], [px + 90, -14, 5, "#e0b23a"]]) put({ shape: "sphere", size: [s, s, s], position: [x, FLOOR_TOP + 12, z], color: c });
+    for (let s = 0; s < 40; s++) put({ shape: "sphere", size: [0.5, 0.5, 0.5], position: [px - 20 + s * 6, FLOOR_TOP + 8 + (s % 7) * 2.5, ((s * 53) % 34) - 17], color: "#ffffff", material: "neon" });
+  } else if (zone.key === "flash") {
+    // THE ultimate: a blinding blaze — a golden expanse, a GIANT sun, and lightning
+    // pillars marching off into the light. The best-looking place in the game.
+    put({ size: [640, 0.16, LANE_HALF_Z * 2], position: [px + 320, FLOOR_TOP + 0.18, 0], color: "#ffe23a", material: "neon" });
+    put({ shape: "sphere", size: [46, 46, 46], position: [px + 120, FLOOR_TOP + 34, 0], color: "#fff59e", material: "neon" }); // the giant sun
+    put({ shape: "sphere", size: [58, 58, 58], position: [px + 120, FLOOR_TOP + 34, 0], color: "#ffd93d" });
+    for (let s = 0; s < 16; s++) {
+      const gx = px + 20 + s * 38;
+      put({ shape: "cylinder", size: [2, WALL_H + 8, 2], position: [gx, FLOOR_TOP + (WALL_H + 8) / 2, (s % 2 ? 1 : -1) * (LANE_HALF_Z - 1)], color: "#fffbe0", material: "neon" });
+      put({ shape: "wedge", size: [1, 4, 0.6], position: [gx, FLOOR_TOP + 7, (s % 2 ? 1 : -1) * (LANE_HALF_Z - 3)], rotation: [0, 0, 20], color: "#3a5cff", material: "neon" }); // a bolt
+    }
+    for (let s = 0; s < 30; s++) put({ shape: "sphere", size: [0.7, 0.7, 0.7], position: [px + 10 + s * 20, FLOOR_TOP + 6 + (s % 5) * 3, ((s * 47) % 30) - 15], color: "#ffffff", material: "neon" });
   }
 }
 
@@ -162,7 +286,8 @@ export function buildWorld(treadmillId) {
   const parts = [];
   const tm = treadmillById(treadmillId);
   const lastX = zonePedestalX(ZONES.length - 1);
-  const floorLen = lastX + 30;
+  // extra floor past the last (Flash) crate so its blazing expanse is walkable spectacle
+  const floorLen = lastX + 700;
 
   parts.push(part("ground", { size: [floorLen, 4, LANE_HALF_Z * 2 + 4], position: [floorLen / 2 - 20, FLOOR_TOP - 2, 0], color: C.plaza }));
   for (const side of [-1, 1]) {
@@ -195,7 +320,8 @@ export function buildWorld(treadmillId) {
     const zone = ZONES[i];
     const px = zonePedestalX(i);
     // a coloured disc under each crate so its zone still reads
-    parts.push(part("zonedisc" + i, { shape: "cylinder", size: [22, 0.2, 22], position: [px, FLOOR_TOP + 0.12, 0], color: zone.color, canCollide: false }));
+    const discR = zone.key === "flash" ? 44 : zone.key === "void" ? 34 : 22;
+    parts.push(part("zonedisc" + i, { shape: "cylinder", size: [discR, 0.2, discR], position: [px, FLOOR_TOP + 0.12, 0], color: zone.color, canCollide: false }));
 
     // A LOW walkable plinth so you can run right up and grab the crate — the crate sits
     // at capsule height, its sensor generous, and nothing tall blocks the approach.

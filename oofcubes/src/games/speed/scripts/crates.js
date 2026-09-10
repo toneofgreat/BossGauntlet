@@ -63,6 +63,22 @@ export const TABLES = Object.freeze({
     item(7, "epic", "aura_void", "🌀", "Void Aura"),
     item(3, "legendary", "hat_crown", "👑", "Crown"),
   ]),
+  // The two end-game crates (2026-09-13) — huge Coins and the five new auras, the Flash
+  // crate holding SUPERNOVA, the best aura in the game.
+  void: Object.freeze([
+    coins(40, "common", 45000, "💎"),
+    coins(33, "uncommon", 110000, "💎"),
+    coins(15, "rare", 260000, "💎"),
+    item(8, "epic", "aura_comet", "☄️", "Comet Halo"),
+    item(4, "legendary", "aura_galaxy", "🌌", "Galaxy Swirl"),
+  ]),
+  flash: Object.freeze([
+    coins(38, "common", 160000, "💎"),
+    coins(33, "uncommon", 380000, "💎"),
+    coins(16, "rare", 900000, "💎"),
+    item(9, "epic", "aura_prism", "🌈", "Prism Burst"),
+    item(4, "legendary", "aura_supernova", "🌟", "SUPERNOVA — the best aura in the game"),
+  ]),
 });
 
 export function tableFor(zoneKey) { return TABLES[zoneKey] || TABLES.grass; }

@@ -51,6 +51,11 @@ export const ZONES = Object.freeze([
   Object.freeze({ key: "storm", name: "Storm Flats", icon: "⛈️", keeper: 45, firstReachOofbux: 220, color: "#5866a8", sky: "#3a4363" }),
   Object.freeze({ key: "volcano", name: "Volcano Rim", icon: "🌋", keeper: 52, firstReachOofbux: 340, color: "#e0562f", sky: "#5a2418" }),
   Object.freeze({ key: "light", name: "Lightspeed Gate", icon: "✨", keeper: 59, firstReachOofbux: 500, color: "#ffd93d", sky: "#101018" }),
+  // The two end-game areas (added 2026-09-13). The Void is a vast dark expanse far past
+  // the last gate; the Flash is bigger still — the ultimate. Both need top treadmills,
+  // shoes and buffs (their Keepers run faster than base pace, so a pace buff is required).
+  Object.freeze({ key: "void", name: "The Void", icon: "🕳️", keeper: 68, firstReachOofbux: 700, color: "#2a1a4a", sky: "#05030f" }),
+  Object.freeze({ key: "flash", name: "The Flash Zone", icon: "🌟", keeper: 80, firstReachOofbux: 1000, color: "#ffe23a", sky: "#fffbe0" }),
 ]);
 
 // A crate you have reached goes on cooldown so a zone is a repeatable grind, not a
@@ -134,6 +139,26 @@ export const BUFFS = Object.freeze([
   buff("g_flash", "The Flash", "godly", "⚡", { pace: 2.4, keeperSlow: 0.15 }, ["#ffe23a", "#fff7c0"], "×2.4 pace. Nothing catches you."),
   buff("g_midas", "Midas Heart", "godly", "💛", { coin: 3.0, luck: 1.5 }, ["#ffd93d", "#fffbe0"], "×3 Coins and ×1.5 luck. Everything is gold."),
   buff("g_destiny", "Destiny", "godly", "🌟", { luck: 3.0, keeperSlow: 0.45, train: 1.5 }, ["#7ab0ff", "#e8f0ff"], "×3 luck, half-speed Keepers, +50% training."),
+
+  // ---- 10 more commons (added 2026-09-13) ----
+  buff("c_skate", "Roller Skate", "common", "🛼", { pace: 1.11 }, ["#35a3e0", "#bff2fa"], "+11% pace."),
+  buff("c_coffee", "Espresso", "common", "☕", { train: 1.14 }, ["#6b4423", "#c8946a"], "+14% training speed."),
+  buff("c_ticket", "Golden Ticket", "common", "🎫", { coin: 1.14 }, ["#e0b23a", "#fff0a0"], "+14% Coins from crates."),
+  buff("c_horse", "Lucky Horse", "common", "🐴", { luck: 1.18 }, ["#8c5a3c", "#d9b48f"], "+18% buff-drop chance."),
+  buff("c_wing", "Wing Pin", "common", "🪽", { pace: 1.09 }, ["#c7cdd9", "#ffffff"], "+9% pace."),
+  buff("c_battery", "Battery", "common", "🔋", { train: 1.12 }, ["#37a04c", "#9ee0a8"], "+12% training speed."),
+  buff("c_ring", "Gold Ring", "common", "💍", { coin: 1.16 }, ["#e0b23a", "#fff0a0"], "+16% Coins from crates."),
+  buff("c_star2", "Wishing Star", "common", "⭐", { luck: 1.15 }, ["#f5cd30", "#fff59e"], "+15% buff-drop chance."),
+  buff("c_kite", "Kite", "common", "🪁", { pace: 1.08 }, ["#e0245e", "#ffb0c8"], "+8% pace on the breeze."),
+  buff("c_bell", "Coin Bell", "common", "🔔", { coin: 1.13 }, ["#e0b23a", "#fff0a0"], "+13% Coins from crates."),
+  // ---- 5 more rares ----
+  buff("r_jet", "Jet Pack", "rare", "🛩️", { pace: 1.5 }, ["#35a3e0", "#bff2fa"], "+50% pace."),
+  buff("r_vault", "Bank Vault", "rare", "🏦", { coin: 1.7 }, ["#e0b23a", "#fff0a0"], "+70% Coins from crates."),
+  buff("r_charm", "Evil-Eye Charm", "rare", "🧿", { luck: 2.4 }, ["#2f7fff", "#a0c8ff"], "×2.4 buff-drop chance."),
+  buff("r_reactor", "Reactor Core", "rare", "☢️", { train: 1.8 }, ["#37a04c", "#c8f0a8"], "+80% training speed."),
+  buff("r_wraith", "Wraith Veil", "rare", "🫥", { keeperSlow: 0.32 }, ["#5c6478", "#c9d6f0"], "Keepers run 32% slower at you."),
+  // ---- 1 more godly ----
+  buff("g_cosmos", "Cosmos", "godly", "🌌", { coin: 3.5, luck: 2.0, pace: 1.4 }, ["#6b3fa0", "#d0b0ff"], "×3.5 Coins, ×2 luck, +40% pace. The universe on your side."),
 ]);
 export function buffById(id) { return BUFFS.find((b) => b.id === id) || null; }
 export const MAX_EQUIPPED = 3;
