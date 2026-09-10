@@ -104,6 +104,16 @@ export const BADGES = Object.freeze([
   B("bossfight.wood", "Timber!", "🪵", "Bring Timberjaw down."),
   B("bossfight.lava", "Magma Slayer", "🌋", "Cool Magmarok off for good."),
   B("bossfight.all", "Boss of Bosses", "👑", "Beat all three bosses of the valley."),
+
+  // speed (spec 24). One per zone reached plus the sweep; Oofbux comes from the Place's
+  // first-reach award, so these carry only the flat badge bonus.
+  B("speed.zone1", "First Steps", "🌱", "Reach the Grassy Track crate."),
+  B("speed.zone2", "Picking Up Pace", "🌬️", "Reach the Windy Ridge crate."),
+  B("speed.zone3", "City Sprinter", "🌆", "Reach the Neon City crate."),
+  B("speed.zone4", "Storm Chaser", "⛈️", "Reach the Storm Flats crate."),
+  B("speed.zone5", "Firewalker", "🌋", "Reach the Volcano Rim crate."),
+  B("speed.zone6", "Lightspeed", "✨", "Reach the Lightspeed Gate crate."),
+  B("speed.all", "Untouchable", "🏃", "Out-run every Keeper in Speed Simulator."),
 ]);
 
 const defsById = new Map();

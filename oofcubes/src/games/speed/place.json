@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "slug": "speed",
+    "name": "Speed Simulator",
+    "icon": "🏃",
+    "description": "Run the treadmill for Speed, out-run each zone's Keeper to crack its crate, and spend the Coins on a faster treadmill."
+  },
+  "spawn": [18, 4.2, 0],
+  "spawnYaw": 90,
+  "killY": -20,
+  "music": "pump",
+  "lighting": {
+    "skyTop": "#2f6fd0",
+    "skyBottom": "#bfe0ff",
+    "ambient": "#cfe0f0",
+    "ambientIntensity": 0.85,
+    "sunColor": "#fff4e0",
+    "sunIntensity": 1.05,
+    "sunDirection": [-0.3, -1, -0.35],
+    "fog": { "color": "#bcd4ea", "near": 240, "far": 900 }
+  },
+  "parts": [
+    { "id": "voidFloor", "size": [900, 4, 60], "position": [420, -30, 0],
+      "color": "#141821", "material": "plastic", "canCollide": false }
+  ]
+}
