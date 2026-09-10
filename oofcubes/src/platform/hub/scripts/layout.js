@@ -221,6 +221,30 @@ export function buildPortals(ctx, places, visited) {
   const seen = visited || [];
   const ribbons = new Map();
 
+  // A grass apron under the whole portal row (added 2026-09-12). The static Hub ground
+  // is 240 wide (x ±120), but the row spreads PORTAL_SPACING_X per portal centred on 0 —
+  // with seven portals the outermost land at x ±150, off the grass and over the void, so
+  // the Difficulty Chart Obby and Speed Simulator portals could not be reached. This
+  // apron is SIZED TO THE ROW, so it always covers however many portals exist and reaches
+  // back to overlap the plaza. Flush with the main ground (top at y 0).
+  if (rows.length) {
+    const halfSpan = Math.abs(portalAnchorX(0, rows.length)); // leftmost portal |x|
+    const apronW = halfSpan * 2 + 60;      // + room for the ±8 pillars and standing space
+    const apronZFront = 40;                // reach back toward the plaza to overlap it
+    const apronDepth = (apronZFront - (PORTAL_Z - 14));
+    track.part({
+      id: "hubPortalApron", size: [apronW, 4, apronDepth],
+      position: [0, -2, (apronZFront + (PORTAL_Z - 14)) / 2],
+      color: "#4caf50", material: "grass",
+    });
+    // a paved runway strip down the middle so the walk to the portals reads as a path
+    track.part({
+      id: "hubPortalPath", size: [Math.min(apronW - 12, 120), 0.3, apronDepth - 6],
+      position: [0, 0.16, (apronZFront + (PORTAL_Z - 14)) / 2], color: "#7d8694",
+      material: "plastic", canCollide: false,
+    });
+  }
+
   rows.forEach((place, i) => {
     const x = portalAnchorX(i, rows.length);
     buildOneArch(track, ctx, place, x);
