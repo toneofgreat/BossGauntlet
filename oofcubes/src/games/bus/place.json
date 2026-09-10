@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "slug": "bus",
+    "name": "The Bus Ride",
+    "icon": "🚌",
+    "description": "Earn a point a second stuck on the bus. Spend them to poke a rider, or to drive — but crash and everyone dies and it all resets."
+  },
+  "spawn": [9, 4.3, 0],
+  "spawnYaw": 90,
+  "killY": -20,
+  "music": "pump",
+  "lighting": {
+    "skyTop": "#3f7fd0", "skyBottom": "#cfe6ff",
+    "ambient": "#dfeaf5", "ambientIntensity": 0.9,
+    "sunColor": "#fff4e0", "sunIntensity": 1.05,
+    "sunDirection": [-0.35, -1, -0.25],
+    "fog": { "color": "#cfe0f0", "near": 260, "far": 900 }
+  },
+  "parts": [
+    { "id": "backdrop", "size": [900, 4, 400], "position": [200, -40, 0],
+      "color": "#8fb4d8", "material": "plastic", "canCollide": false }
+  ]
+}

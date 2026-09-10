@@ -117,6 +117,13 @@ export const BADGES = Object.freeze([
   B("speed.zone8", "Flashpoint", "🌟", "Steal from The Flash Zone."),
   B("speed.zone9", "Big Bang", "💥", "Steal from The Big Bang — the finale past the sun."),
   B("speed.all", "Untouchable", "🏃", "Out-run every Keeper in Speed Simulator."),
+
+  // bus (spec 25) — The Bus Ride.
+  B("bus.ride", "Fare Paid", "🎟️", "Rack up 30 Points just by riding the bus."),
+  B("bus.needle", "Pincushion", "🪡", "Throw a needle at a fellow rider."),
+  B("bus.drive", "Behind the Wheel", "🚌", "Spend 100 Points to drive the bus."),
+  B("bus.survive", "Legendary Driver", "🏆", "Drive a full run without crashing."),
+  B("bus.crash", "Everyone Died", "💥", "Crash the bus and reset the whole ride."),
 ]);
 
 const defsById = new Map();

@@ -95,6 +95,8 @@ const PLACES = [
     module: "../games/bossfight/game.js", data: "../games/bossfight/place.json" },
   { slug: "speed",     hidden: false, name: "Speed Simulator",          icon: "🏃", portalColor: "#22d3ee",
     module: "../games/speed/game.js",   data: "../games/speed/place.json" },
+  { slug: "bus",       hidden: false, name: "The Bus Ride",             icon: "🚌", portalColor: "#f5c518",
+    module: "../games/bus/game.js",     data: "../games/bus/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];
