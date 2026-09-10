@@ -664,8 +664,8 @@ export const STARTER_CATALOG = [
     id: "aura_prism", name: "Prism Burst", type: "aura",
     price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "The Flash crate",
     appearance: {
-      motion: "twinkle", count: 16, rate: 0, colors: ["#ff0000", "#ff8c00", "#ffee00", "#3ddc84", "#35a3e0", "#6b3fa0", "#ff36c8"],
-      size: [0.24,0.24], lifetime: 0, radius: 1.9, speed: 1.4, height: 2.5, bob: 0.3, wobble: 0, sub: null,
+      motion: "twinkle", count: 16, rate: 14, colors: ["#ff0000", "#ff8c00", "#ffee00", "#3ddc84", "#35a3e0", "#6b3fa0", "#ff36c8"],
+      size: [0.24,0.24], lifetime: 1.2, radius: 1.9, speed: 1.4, height: 2.5, bob: 0.3, wobble: 0, sub: null,
     },
   },
   {

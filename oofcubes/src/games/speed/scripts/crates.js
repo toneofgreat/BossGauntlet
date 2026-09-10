@@ -70,6 +70,7 @@ export const TABLES = Object.freeze({
     coins(33, "uncommon", 110000, "💎"),
     coins(15, "rare", 260000, "💎"),
     item(8, "epic", "aura_comet", "☄️", "Comet Halo"),
+    item(6, "epic", "aura_inferno", "🔥", "Inferno"),
     item(4, "legendary", "aura_galaxy", "🌌", "Galaxy Swirl"),
   ]),
   flash: Object.freeze([
