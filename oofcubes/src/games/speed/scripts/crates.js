@@ -80,6 +80,15 @@ export const TABLES = Object.freeze({
     item(9, "epic", "aura_prism", "🌈", "Prism Burst"),
     item(4, "legendary", "aura_supernova", "🌟", "SUPERNOVA — the best aura in the game"),
   ]),
+  // The Big Bang (2026-09-10) — the finale past the sun. Coins are ~30x the Flash crate's,
+  // and it is the hardest place in the game to reach the best aura.
+  bang: Object.freeze([
+    coins(38, "common", 4800000, "💎"),
+    coins(33, "uncommon", 11400000, "💎"),
+    coins(16, "rare", 27000000, "💎"),
+    item(9, "epic", "aura_galaxy", "🌌", "Galaxy Swirl"),
+    item(4, "legendary", "aura_supernova", "🌟", "SUPERNOVA — the best aura in the game"),
+  ]),
 });
 
 export function tableFor(zoneKey) { return TABLES[zoneKey] || TABLES.grass; }

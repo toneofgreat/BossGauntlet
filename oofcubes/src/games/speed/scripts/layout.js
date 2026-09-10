@@ -30,7 +30,7 @@ const ZONE0_X = 44;      // first crate x
 // vast dark expanse, then a bigger blazing one. The gaps are long but capped so the run
 // back stays possible with the top treadmills, shoes and abilities (a literal 100x/25x
 // — 4,000 then 100,000 studs — would be an 18-minute run and past float precision).
-const EPIC_GAP = Object.freeze({ 6: 120, 7: 220 });
+const EPIC_GAP = Object.freeze({ 6: 120, 7: 220, 8: 780 });
 
 // Crates sit along +x with no gates or safe gaps between them (spec 24 §11). The Keeper
 // guards its crate; grabbing a crate wakes it and every Keeper between it and safety.
@@ -278,6 +278,21 @@ function zoneScenery(parts, i, zone, ex, px) {
       put({ shape: "wedge", size: [1, 4, 0.6], position: [gx, FLOOR_TOP + 7, (s % 2 ? 1 : -1) * (LANE_HALF_Z - 3)], rotation: [0, 0, 20], color: "#3a5cff", material: "neon" }); // a bolt
     }
     for (let s = 0; s < 30; s++) put({ shape: "sphere", size: [0.7, 0.7, 0.7], position: [px + 10 + s * 20, FLOOR_TOP + 6 + (s % 5) * 3, ((s * 47) % 30) - 15], color: "#ffffff", material: "neon" });
+  } else if (zone.key === "bang") {
+    // THE finale, past the sun: the Big Bang — a blinding white singularity ringed by
+    // rainbow accretion bands, erupting into newborn galaxies and rainbow light pillars.
+    // Bigger than the sun; a dark cosmic floor makes every colour blaze.
+    const cols = ["#ff2a6d", "#ff8c1a", "#ffe23a", "#3ddc84", "#35a3e0", "#a05cff"];
+    put({ size: [640, 0.16, LANE_HALF_Z * 2], position: [px + 300, FLOOR_TOP + 0.18, 0], color: "#0c0210" }); // dark cosmic floor
+    put({ shape: "sphere", size: [76, 76, 76], position: [px + 150, FLOOR_TOP + 46, 0], color: "#fff6f0", material: "neon" }); // white-hot core
+    put({ shape: "sphere", size: [94, 94, 94], position: [px + 150, FLOOR_TOP + 46, 0], color: "#ffcdf2" }); // outer glow
+    cols.forEach((c, r) => put({ shape: "cylinder", size: [46 + r * 8, 0.5, 46 + r * 8], position: [px + 150, FLOOR_TOP + 46, 0], rotation: [74, 0, r * 12], color: c, material: "neon" })); // rainbow accretion rings
+    for (const [x, z, s, ci] of [[px + 44, -20, 6, 5], [px + 96, 18, 7, 4], [px + 250, -16, 8, 0], [px + 320, 16, 6, 3]]) put({ shape: "sphere", size: [s, s, s], position: [x, FLOOR_TOP + 16, z], color: cols[ci], material: "neon" }); // newborn galaxies
+    for (let s = 0; s < 16; s++) {
+      const gx = px + 22 + s * 38;
+      put({ shape: "cylinder", size: [1.8, WALL_H + 10, 1.8], position: [gx, FLOOR_TOP + (WALL_H + 10) / 2, (s % 2 ? 1 : -1) * (LANE_HALF_Z - 1)], color: cols[s % cols.length], material: "neon" }); // rainbow pillars
+    }
+    for (let s = 0; s < 40; s++) put({ shape: "sphere", size: [0.7, 0.7, 0.7], position: [px + 10 + s * 15, FLOOR_TOP + 7 + (s % 6) * 3, ((s * 47) % 34) - 17], color: cols[s % cols.length], material: "neon" }); // coloured newborn stars
   }
 }
 
@@ -286,7 +301,7 @@ export function buildWorld(treadmillId) {
   const parts = [];
   const tm = treadmillById(treadmillId);
   const lastX = zonePedestalX(ZONES.length - 1);
-  // extra floor past the last (Flash) crate so its blazing expanse is walkable spectacle
+  // extra floor past the last (Big Bang) crate so its blazing expanse is walkable spectacle
   const floorLen = lastX + 700;
 
   parts.push(part("ground", { size: [floorLen, 4, LANE_HALF_Z * 2 + 4], position: [floorLen / 2 - 20, FLOOR_TOP - 2, 0], color: C.plaza }));
@@ -320,7 +335,7 @@ export function buildWorld(treadmillId) {
     const zone = ZONES[i];
     const px = zonePedestalX(i);
     // a coloured disc under each crate so its zone still reads
-    const discR = zone.key === "flash" ? 44 : zone.key === "void" ? 34 : 22;
+    const discR = zone.key === "bang" ? 48 : zone.key === "flash" ? 44 : zone.key === "void" ? 34 : 22;
     parts.push(part("zonedisc" + i, { shape: "cylinder", size: [discR, 0.2, discR], position: [px, FLOOR_TOP + 0.12, 0], color: zone.color, canCollide: false }));
 
     // A LOW walkable plinth so you can run right up and grab the crate — the crate sits

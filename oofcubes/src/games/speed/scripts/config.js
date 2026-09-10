@@ -56,6 +56,13 @@ export const ZONES = Object.freeze([
   // shoes and buffs (their Keepers run faster than base pace, so a pace buff is required).
   Object.freeze({ key: "void", name: "The Void", icon: "🕳️", keeper: 68, firstReachOofbux: 700, color: "#2a1a4a", sky: "#05030f" }),
   Object.freeze({ key: "flash", name: "The Flash Zone", icon: "🌟", keeper: 80, firstReachOofbux: 1000, color: "#ffe23a", sky: "#fffbe0" }),
+  // Past the sun: THE finale (added 2026-09-10). The Big Bang — a blinding singularity
+  // erupting into newborn rainbow galaxies, and a Keeper at the very edge of what is
+  // beatable. Its crate pays ~30x the Flash's Coins. (A literal "15x the sun Keeper"
+  // would be ~1200 studs/sec — utterly unbeatable, since the engine caps run-pace near
+  // 100 [WALK_MAX_BUFFED 92]; so its Keeper is instead the fastest a run can still out-pace
+  // at max shoes + the best pace buff. Same honesty as §12's capped 100x/25x lengths.)
+  Object.freeze({ key: "bang", name: "The Big Bang", icon: "💥", keeper: 90, firstReachOofbux: 1500, color: "#ff5ccb", sky: "#12001a" }),
 ]);
 
 // A crate you have reached goes on cooldown so a zone is a repeatable grind, not a

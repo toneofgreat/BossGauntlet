@@ -114,7 +114,8 @@ export const BADGES = Object.freeze([
   B("speed.zone5", "Firewalker", "🌋", "Reach the Volcano Rim crate."),
   B("speed.zone6", "Lightspeed", "✨", "Reach the Lightspeed Gate crate."),
   B("speed.zone7", "Into the Void", "🕳️", "Steal from The Void."),
-  B("speed.zone8", "Flashpoint", "🌟", "Steal from The Flash Zone — the ultimate."),
+  B("speed.zone8", "Flashpoint", "🌟", "Steal from The Flash Zone."),
+  B("speed.zone9", "Big Bang", "💥", "Steal from The Big Bang — the finale past the sun."),
   B("speed.all", "Untouchable", "🏃", "Out-run every Keeper in Speed Simulator."),
 ]);
 

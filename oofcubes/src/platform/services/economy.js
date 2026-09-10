@@ -29,7 +29,7 @@ export const SOURCE_CAPS = Object.freeze({
   lifting: 900,
   tycoon: 1200,
   bossfight: 700,
-  speed: 1500,     // spec 24 §6/§11 — first-reach zone awards; max single 1000 (Flash)
+  speed: 1500,     // spec 24 §6/§11 — first-reach zone awards; max single 1500 (Big Bang)
 });
 
 const REASON_RE = /^[a-z][a-z0-9:._-]*$/;
