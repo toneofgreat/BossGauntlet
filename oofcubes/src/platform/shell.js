@@ -151,6 +151,15 @@ let boombox = null;
 let buildSvc = null;
 let gearSvc = null;
 let gearBound = false;
+// The Time Hammer (catalog gear_timehammer, spec 25): a platform-wide "use" button that
+// survives travel, plus a 45s cooldown ticked in stepOnce (module scope, so it does NOT
+// reset when you change Place). `hammerSeen` dedupes incoming hits by peer:stamp.
+let hammerBtn = null;
+let hammerCd = 0;
+let hammerLabelSec = -1;
+const hammerSeen = new Set();
+const HAMMER_ID = "gear_timehammer";
+const HAMMER_CD_S = 45;
 let pendingSlug = null;
 let loadInFlight = false; // a transition is running (see goTo)
 let suppressNextHash = false;
@@ -641,6 +650,94 @@ function refreshGearButton() {
   // setActionButton takes just the label — the engine has one primary action button.
   try { input.setActionButton(gear ? (GEAR_BUTTON_LABEL[gear] || "✋") : null); }
   catch { /* an engine without the label API is not worth failing a Place load for */ }
+}
+
+// ---- The Time Hammer: a cross-Place usable item (catalog gear_timehammer). ----------
+// Owned + equipped in the gear slot, it puts a button on screen in EVERY Place. Tapping
+// it flings the nearest other player into the void (they fall past killY and die), over
+// the same presence channel Speed's jinx uses — the TARGET launches its own avatar, since
+// a client only ever moves itself. 45-second cooldown that survives travel.
+function buildHammerButton() {
+  if (hammerBtn || typeof document === "undefined") return;
+  const b = document.createElement("button");
+  b.type = "button";
+  b.style.cssText =
+    "position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:58;"
+    + "font:700 16px system-ui,sans-serif;color:#fff;background:linear-gradient(180deg,#7c3aed,#4c1d95);"
+    + "border:2px solid #c4b5fd;border-radius:14px;padding:12px 18px;cursor:pointer;"
+    + "box-shadow:0 4px 14px rgba(0,0,0,.4);display:none;touch-action:manipulation;user-select:none;";
+  b.textContent = "🔨 Time Hammer";
+  b.addEventListener("click", useHammer);
+  document.body.appendChild(b);
+  hammerBtn = b;
+  if (avatarService && typeof avatarService.onChange === "function") avatarService.onChange(refreshHammerButton);
+  refreshHammerButton();
+}
+
+function refreshHammerButton() {
+  if (!hammerBtn) return;
+  const st = avatarService && typeof avatarService.getState === "function" ? avatarService.getState() : null;
+  const owns = avatarService && typeof avatarService.owns === "function" && avatarService.owns(HAMMER_ID);
+  const equipped = !!(st && st.equipped && st.equipped.gear === HAMMER_ID);
+  hammerBtn.style.display = owns && equipped ? "block" : "none";
+  hammerLabelSec = -1;
+  updateHammerLabel();
+}
+
+function updateHammerLabel() {
+  if (!hammerBtn) return;
+  if (hammerCd > 0) { hammerBtn.textContent = "🔨 " + Math.ceil(hammerCd) + "s"; hammerBtn.style.opacity = "0.55"; }
+  else { hammerBtn.textContent = "🔨 Time Hammer"; hammerBtn.style.opacity = "1"; }
+}
+
+function useHammer() {
+  if (hammerCd > 0) { uiToast("Time Hammer recharging — " + Math.ceil(hammerCd) + "s", { icon: "🔨" }); return; }
+  const me = feet();
+  const roster = net && typeof net.roster === "function" ? (net.roster() || []) : [];
+  let target = null, best = Infinity;
+  for (const p of roster) {
+    if (!p || !p.pos) continue;
+    const d = (p.pos[0] - me[0]) ** 2 + (p.pos[2] - me[2]) ** 2;
+    if (d < best) { best = d; target = p; }
+  }
+  if (!target) { uiToast("No one nearby to hammer!", { icon: "🔨" }); return; }
+  try {
+    if (net && typeof net.publish === "function") net.publish({ hammer: { t: simTime, target: target.id, x: me[0], z: me[2] } });
+  } catch { /* offline */ }
+  hammerCd = HAMMER_CD_S;
+  try { audio && audio.playSfx && audio.playSfx("oof"); } catch { /* optional */ }
+  uiToast("WHAM! You hammered " + (target.name || "someone") + " into the void!", { icon: "🔨" });
+  hammerLabelSec = -1; updateHammerLabel();
+}
+
+// Called every sim step (stepOnce): tick the cooldown, and fling us if a peer hammered us.
+function tickHammer(dt) {
+  if (hammerCd > 0) {
+    hammerCd = Math.max(0, hammerCd - dt);
+    const sec = Math.ceil(hammerCd);
+    if (sec !== hammerLabelSec) { hammerLabelSec = sec; updateHammerLabel(); }
+  }
+  if (state !== "playing" && state !== "hub" && state !== "studio") return;
+  if (!net || typeof net.roster !== "function" || typeof net.self !== "function") return;
+  const self = net.self();
+  const myId = self ? self.id : null;
+  if (!myId) return;
+  let roster = [];
+  try { roster = net.roster() || []; } catch { roster = []; }
+  for (const p of roster) {
+    const h = p && p.state && p.state.hammer;
+    if (!h || h.target !== myId) continue;
+    const key = p.id + ":" + h.t;
+    if (hammerSeen.has(key)) continue;
+    hammerSeen.add(key);
+    const me = feet();
+    let dx = me[0] - (h.x || 0), dz = me[2] - (h.z || 0);
+    let len = Math.hypot(dx, dz); if (len < 0.001) { dx = 1; dz = 0; len = 1; }
+    dx /= len; dz /= len;
+    try { physics.launch([dx * 220, 300, dz * 220]); } catch { /* no physics */ }
+    try { audio && audio.playSfx && audio.playSfx("oof"); } catch { /* optional */ }
+    uiToast("You got HAMMERED — say hi to the void! 👋", { icon: "🔨" });
+  }
 }
 
 let crateSvc = null;
@@ -1552,6 +1649,7 @@ async function loadPlaceInto(entry, slug) {
   // Label the action button with whatever is in hand, so the control says what it does
   // rather than being a mystery key.
   refreshGearButton();
+  refreshHammerButton(); // re-assert the hammer button for the Place we just entered
   setState(slug === "hub" ? "hub" : "playing");
 
   writeHash(slug);
@@ -1765,6 +1863,7 @@ function stepOnce(dt) {
   if (remotes) remotes.update(dt);
   if (buildSvc) buildSvc.update(dt);
   if (gearSvc) gearSvc.update(dt);
+  tickHammer(dt); // Time Hammer: cooldown + "did a peer fling me into the void?"
   if (ctx && gameMod && !updateHalted) {
     ctx.time += dt;
     try {
@@ -1888,6 +1987,7 @@ function buildUi(warnings) {
   // half of that step is badge:awarded -> the `badge` sfx, and ONLY the sfx: badges.js
   // owns the toast, so playing one here as well would double it.
   hud = createHud({ economy, avatar: hudAvatarAdapter(), audio, ui }, platformBus);
+  buildHammerButton(); // the cross-Place Time Hammer button (shown only when owned + equipped)
   platformBus.on("platform:navigate", (payload) => {
     if (payload && payload.slug) navigate(payload.slug);
   });

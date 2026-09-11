@@ -55,14 +55,14 @@ export const ZONES = Object.freeze([
   // the last gate; the Flash is bigger still — the ultimate. Both need top treadmills,
   // shoes and buffs (their Keepers run faster than base pace, so a pace buff is required).
   Object.freeze({ key: "void", name: "The Void", icon: "🕳️", keeper: 68, firstReachOofbux: 700, color: "#2a1a4a", sky: "#05030f" }),
-  Object.freeze({ key: "flash", name: "The Flash Zone", icon: "🌟", keeper: 80, firstReachOofbux: 1000, color: "#ffe23a", sky: "#fffbe0" }),
+  Object.freeze({ key: "flash", name: "The Flash Zone", icon: "🌟", keeper: 94, firstReachOofbux: 1000, color: "#ffe23a", sky: "#fffbe0" }),
   // Past the sun: THE finale (added 2026-09-10). The Big Bang — a blinding singularity
   // erupting into newborn rainbow galaxies, and a Keeper at the very edge of what is
   // beatable. Its crate pays ~30x the Flash's Coins. (A literal "15x the sun Keeper"
   // would be ~1200 studs/sec — utterly unbeatable, since the engine caps run-pace near
   // 100 [WALK_MAX_BUFFED 92]; so its Keeper is instead the fastest a run can still out-pace
   // at max shoes + the best pace buff. Same honesty as §12's capped 100x/25x lengths.)
-  Object.freeze({ key: "bang", name: "The Big Bang", icon: "💥", keeper: 90, firstReachOofbux: 1500, color: "#ff5ccb", sky: "#12001a" }),
+  Object.freeze({ key: "bang", name: "The Big Bang", icon: "💥", keeper: 96, firstReachOofbux: 1500, color: "#ff5ccb", sky: "#12001a" }),
 ]);
 
 // A crate you have reached goes on cooldown so a zone is a repeatable grind, not a
@@ -205,7 +205,7 @@ export function combinedEffect(equippedIds) {
 // Run-pace with a buff pace multiplier. Buffed pace may exceed the base WALK_MAX (so a
 // pace buff really does out-run a fast Keeper) but is still capped under the engine's
 // hard 100 ceiling.
-export const WALK_MAX_BUFFED = 92;
+export const WALK_MAX_BUFFED = 98; // raised toward the engine's 100 ceiling so the Flash/Big Bang Keepers can climb
 export function walkForBuffed(speed, shoes, paceMult) {
   return Math.min(WALK_MAX_BUFFED, walkFor(speed, shoes) * (paceMult || 1));
 }

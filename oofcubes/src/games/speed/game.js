@@ -368,6 +368,8 @@ function deliverCrate(ctx, i) {
   } else {
     const had = ctx.services.avatar.owns(row.id);
     ctx.services.avatar.grantItem(row.id, "speed");
+    // Timewarp comes bundled with the Time Hammer — the only way to get either.
+    if (row.id === "aura_timewarp") { try { ctx.services.avatar.grantItem("gear_timehammer", "speed"); } catch { /* fine */ } }
     if (had) { const bonus = Math.floor(500 * e.coin); save.coins += bonus; gotText = `${row.note} (owned) → ${fmt(bonus)} Coins`; }
     else gotText = row.note;
   }

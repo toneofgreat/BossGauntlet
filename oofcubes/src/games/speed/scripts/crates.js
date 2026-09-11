@@ -73,12 +73,16 @@ export const TABLES = Object.freeze({
     item(6, "epic", "aura_inferno", "🔥", "Inferno"),
     item(4, "legendary", "aura_galaxy", "🌌", "Galaxy Swirl"),
   ]),
+  // Weights sum to 1000 so the two headline drops read as exact odds: Fireheart 10%,
+  // Timewarp (with the Time Hammer) 0.1%. "Beating The Flash" cracks this crate.
   flash: Object.freeze([
-    coins(38, "common", 160000, "💎"),
-    coins(33, "uncommon", 380000, "💎"),
-    coins(16, "rare", 900000, "💎"),
-    item(9, "epic", "aura_prism", "🌈", "Prism Burst"),
-    item(4, "legendary", "aura_supernova", "🌟", "SUPERNOVA — the best aura in the game"),
+    coins(500, "common", 160000, "💎"),
+    coins(250, "uncommon", 380000, "💎"),
+    coins(140, "rare", 900000, "💎"),
+    item(100, "epic", "aura_fireheart", "🔥", "Fireheart — a fiery aura (10%)"),
+    item(8, "epic", "aura_prism", "🌈", "Prism Burst"),
+    item(1, "legendary", "aura_timewarp", "🕰️", "TIMEWARP + the Time Hammer — a whole cosmos (0.1%)"),
+    item(1, "legendary", "aura_supernova", "🌟", "SUPERNOVA"),
   ]),
   // The Big Bang (2026-09-10) — the finale past the sun. Coins are ~30x the Flash crate's,
   // and it is the hardest place in the game to reach the best aura.

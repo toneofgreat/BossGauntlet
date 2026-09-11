@@ -245,13 +245,206 @@ function createPulse(group, spec, held) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// §5.8's showpiece: "Timewarp" — a whole cosmos orbiting the avatar, the rarest aura in
+// the game (Speed's 0.1% Flash drop). A shiny black hole wearing YOUR character's face, a
+// black disc that breathes in and out forever, a thousand white motes streaking fast, and
+// a slow carousel of tiny worlds, moons, suns, black holes, homes, cars and mini-auras
+// that now and then ease into a reversal. Far more going on than Supernova.
+// ---------------------------------------------------------------------------
+
+// The avatar's head colour, read off the rig so the core wears "your" character.
+function timewarpHeadColor(parent) {
+  let color = null;
+  if (parent && parent.traverse) parent.traverse((o) => {
+    if (color || !o.isMesh || !o.parent) return;
+    const pn = typeof o.parent.name === "string" ? o.parent.name : "";
+    if (pn.indexOf("head") >= 0) {
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (m && m.color) color = "#" + m.color.getHexString();
+    }
+  });
+  return color || "#ffcc88";
+}
+
+// A solid dark disc (NormalBlending), shared: the black circle that pulses forever.
+let darkDiscTex = null;
+function darkDiscTexture() {
+  if (darkDiscTex) return darkDiscTex;
+  const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, "rgba(3,1,8,1)");
+  grad.addColorStop(0.72, "rgba(3,1,8,0.96)");
+  grad.addColorStop(1, "rgba(3,1,8,0)");
+  g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+  darkDiscTex = new THREE.CanvasTexture(c);
+  return darkDiscTex; // shared, never disposed (like particleTexture)
+}
+
+function roundRectPath(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+// A little canvas portrait of the blocky avatar head, tinted its own colour.
+function timewarpFaceTexture(headColor) {
+  const c = document.createElement("canvas"); c.width = 128; c.height = 128;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, 128, 128);
+  g.fillStyle = headColor; roundRectPath(g, 26, 22, 76, 84, 16); g.fill();
+  g.fillStyle = "rgba(255,255,255,0.28)"; roundRectPath(g, 32, 28, 30, 26, 10); g.fill(); // shine
+  g.fillStyle = "#12141c";
+  g.beginPath(); g.arc(52, 62, 7, 0, 7); g.fill();
+  g.beginPath(); g.arc(80, 62, 7, 0, 7); g.fill();
+  g.strokeStyle = "#12141c"; g.lineWidth = 5; g.lineCap = "round";
+  g.beginPath(); g.arc(66, 76, 15, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke(); // smile
+  const tex = new THREE.CanvasTexture(c);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function twSphere(color, size, held) {
+  const geo = new THREE.SphereGeometry(size, 12, 12);
+  const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color) });
+  held.geometries.push(geo); held.materials.push(mat);
+  return new THREE.Mesh(geo, mat);
+}
+function twGlowSprite(color, scale, held) {
+  const s = makeSprite();
+  s.material.color.set(color); s.material.opacity = 0.9; s.scale.set(scale, scale, 1); s.visible = true;
+  held.sprites.push(s);
+  return s;
+}
+
+function createTimewarp(parent, group, spec, held) {
+  const CY = 2.6;            // the cosmos centres on the chest
+  const coreY = CY + 1.4;    // the shiny black-hole medallion floats above the head, always in view
+  const cols = spec.colors && spec.colors.length ? spec.colors : ["#ffffff"];
+  const hasCone = typeof THREE.ConeGeometry === "function";
+
+  // ---- shiny accretion rings around the core medallion ----
+  const rings = [];
+  for (let r = 0; r < 3; r++) {
+    const geo = new THREE.TorusGeometry(1.15 + r * 0.42, 0.05, 8, 44);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(cols[r % cols.length]), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const ring = new THREE.Mesh(geo, mat);
+    ring.position.y = coreY; ring.rotation.x = Math.PI / 2 + r * 0.35; ring.rotation.y = r * 0.4;
+    group.add(ring); held.geometries.push(geo); held.materials.push(mat);
+    rings.push({ ring, spin: 0.5 + r * 0.35 });
+  }
+
+  // ---- warm glow → the "shiny" backing, the breathing black disc, then your face. All
+  //      billboarded sprites, so the black hole always shows your character to the camera. ----
+  const glow = twGlowSprite("#ffe6a0", 2.7, held); glow.position.set(0, coreY, -0.12); group.add(glow);
+  const blackMat = new THREE.SpriteMaterial({ map: darkDiscTexture(), transparent: true, depthWrite: false });
+  const black = new THREE.Sprite(blackMat); black.position.set(0, coreY, 0.02); black.scale.set(1.7, 1.7, 1);
+  group.add(black); held.materials.push(blackMat);
+  const faceTex = timewarpFaceTexture(timewarpHeadColor(parent));
+  const faceMat = new THREE.SpriteMaterial({ map: faceTex, transparent: true, depthWrite: false });
+  const face = new THREE.Sprite(faceMat); face.position.set(0, coreY, 0.18); face.scale.set(1.4, 1.4, 1);
+  group.add(face); held.materials.push(faceMat); held.textures.push(faceTex);
+
+  // ---- 1000 white motes streaking fast on a shell ----
+  const N = 1000;
+  const pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const u = Math.random(), v = Math.random();
+    const th = 2 * Math.PI * u, ph = Math.acos(2 * v - 1), rr = 2.5 + Math.random() * 1.1;
+    pos[i * 3] = rr * Math.sin(ph) * Math.cos(th);
+    pos[i * 3 + 1] = CY + rr * Math.cos(ph) * 0.75;
+    pos[i * 3 + 2] = rr * Math.sin(ph) * Math.sin(th);
+  }
+  const dotsGeo = new THREE.BufferGeometry();
+  dotsGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const dotsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.07, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+  const dots = new THREE.Points(dotsGeo, dotsMat);
+  group.add(dots); held.geometries.push(dotsGeo); held.materials.push(dotsMat);
+
+  // ---- the slow carousel: worlds, moons, suns, black holes, homes, cars, mini-auras ----
+  const orbiters = [];
+  function orbit(obj, radius, height, speedDeg) {
+    group.add(obj);
+    orbiters.push({ obj, radius, height, phase: Math.random() * Math.PI * 2, speed: speedDeg * Math.PI / 180, dir: 1, dirTarget: 1, dirT: 4 + Math.random() * 6, spin: 0.3 + Math.random() });
+  }
+  orbit(twSphere("#3a7bd5", 0.5, held), 2.6, CY + 1.2, 34);   // world
+  orbit(twSphere("#3ddc84", 0.42, held), 3.5, CY - 0.6, 24);  // world
+  orbit(twSphere("#b0b6c4", 0.26, held), 3.0, CY + 1.9, 46);  // moon
+  orbit(twSphere("#9aa2b2", 0.22, held), 2.9, CY - 1.3, 40);  // moon
+  for (const [rad, h] of [[3.8, CY + 0.4], [2.8, CY + 2.1]]) { // suns
+    const grp = new THREE.Group(); grp.add(twSphere("#ffd23a", 0.42, held));
+    const gs = twGlowSprite("#ffcf4d", 1.5, held); grp.add(gs);
+    orbit(grp, rad, h, 20);
+  }
+  for (const [rad, h] of [[4.1, CY - 1.6], [3.2, CY + 2.3]]) { // black holes
+    const grp = new THREE.Group(); grp.add(twSphere("#0a0612", 0.36, held));
+    const rgeo = new THREE.TorusGeometry(0.5, 0.04, 6, 24);
+    const rmat = new THREE.MeshBasicMaterial({ color: new THREE.Color("#a05cff"), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const rim = new THREE.Mesh(rgeo, rmat); rim.rotation.x = 1.1; grp.add(rim); held.geometries.push(rgeo); held.materials.push(rmat);
+    orbit(grp, rad, h, 30);
+  }
+  for (const [rad, h, wall, roof] of [[3.0, CY - 1.9, "#e8d6b0", "#c0392b"], [3.6, CY + 2.4, "#cfe0f0", "#2f6fd0"]]) { // homes
+    const grp = new THREE.Group();
+    const wg = new THREE.BoxGeometry(0.5, 0.4, 0.5), wm = new THREE.MeshBasicMaterial({ color: new THREE.Color(wall) });
+    grp.add(new THREE.Mesh(wg, wm)); held.geometries.push(wg); held.materials.push(wm);
+    const rg = hasCone ? new THREE.ConeGeometry(0.4, 0.32, 4) : new THREE.BoxGeometry(0.5, 0.3, 0.5);
+    const rm = new THREE.MeshBasicMaterial({ color: new THREE.Color(roof) });
+    const roofMesh = new THREE.Mesh(rg, rm); roofMesh.position.y = 0.36; roofMesh.rotation.y = Math.PI / 4; grp.add(roofMesh); held.geometries.push(rg); held.materials.push(rm);
+    orbit(grp, rad, h, 26);
+  }
+  for (const [rad, h, col] of [[2.7, CY + 0.1, "#e0245e"], [3.9, CY + 1.4, "#f7c948"]]) { // cars
+    const grp = new THREE.Group();
+    const bg = new THREE.BoxGeometry(0.7, 0.28, 0.35), bm = new THREE.MeshBasicMaterial({ color: new THREE.Color(col) });
+    grp.add(new THREE.Mesh(bg, bm)); held.geometries.push(bg); held.materials.push(bm);
+    for (const wx of [-0.22, 0.22]) {
+      const wgeo = new THREE.SphereGeometry(0.1, 8, 8), wmat = new THREE.MeshBasicMaterial({ color: 0x101216 });
+      held.geometries.push(wgeo); held.materials.push(wmat);
+      const w = new THREE.Mesh(wgeo, wmat); w.position.set(wx, -0.14, 0.16); grp.add(w);
+    }
+    orbit(grp, rad, h, 22);
+  }
+  const auraPalettes = [["#6b3fa0", "#35a3e0", "#ff36c8"], ["#ff2a00", "#ff8c1a", "#ffe45c"], ["#7af0ff", "#ffffff", "#9ad2ff"]];
+  const auraHeights = [CY + 1.6, CY - 1.0, CY + 0.5];
+  for (let a = 0; a < auraPalettes.length; a++) { // mini-auras
+    const grp = new THREE.Group();
+    for (let i = 0; i < 3; i++) { const s = twGlowSprite(auraPalettes[a][i], 0.3, held); s.material.opacity = 1; s.position.set(Math.cos(i * 2.1) * 0.35, Math.sin(i * 2.1) * 0.35, 0); grp.add(s); }
+    orbit(grp, 2.4 + a * 0.55, auraHeights[a], 28 + a * 6);
+  }
+
+  let t = 0;
+  return {
+    update(dt) {
+      t += dt;
+      for (const rg of rings) rg.ring.rotation.z += rg.spin * dt;
+      const beat = 0.5 - 0.5 * Math.cos(t * 1.5);        // the black circle breathes forever
+      black.scale.set(1.4 + 1.0 * beat, 1.4 + 1.0 * beat, 1);
+      glow.material.opacity = 0.55 + 0.35 * beat;
+      face.material.rotation = Math.sin(t * 0.6) * 0.08;
+      dots.rotation.y += 3.1 * dt; dots.rotation.x += 1.4 * dt; dots.rotation.z += 0.6 * dt; // fast motes
+      for (const o of orbiters) {
+        o.dirT -= dt;
+        if (o.dirT <= 0) { o.dirTarget = -o.dirTarget; o.dirT = 5 + Math.random() * 7; }
+        o.dir += (o.dirTarget - o.dir) * Math.min(1, dt * 1.4); // ease into a reversal, never snap
+        o.phase += o.speed * o.dir * dt;
+        o.obj.position.set(Math.cos(o.phase) * o.radius, o.height + Math.sin(t * 0.5 + o.phase) * 0.25, Math.sin(o.phase) * o.radius);
+        o.obj.rotation.y += o.spin * dt;
+      }
+    },
+  };
+}
+
 // createAura(parent, spec) -> { update(dt), dispose() } | null
 export function createAura(parent, spec) {
   if (!spec || !spec.motion || !Array.isArray(spec.colors) || !spec.colors.length) return null;
   const group = new THREE.Group();
   group.name = "OofAura";
   parent.add(group);
-  const held = { geometries: [], materials: [], sprites: [] };
+  const held = { geometries: [], materials: [], sprites: [], textures: [] };
   const movers = [];
 
   const n = poolSize(spec);
@@ -281,6 +474,8 @@ export function createAura(parent, spec) {
       }
       movers.push(createOrbit(group, { ...sub, colors: sub.colors || spec.colors }, subSprites));
     }
+  } else if (spec.motion === "timewarp") {
+    movers.push(createTimewarp(parent, group, spec, held));
   }
 
   return {
@@ -292,9 +487,11 @@ export function createAura(parent, spec) {
       for (const s of held.sprites) s.material.dispose();
       for (const g of held.geometries) g.dispose();
       for (const m of held.materials) m.dispose();
+      for (const tx of held.textures) tx.dispose();
       held.sprites.length = 0;
       held.geometries.length = 0;
       held.materials.length = 0;
+      held.textures.length = 0;
     },
   };
 }

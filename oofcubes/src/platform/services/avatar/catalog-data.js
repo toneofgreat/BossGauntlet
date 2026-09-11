@@ -685,6 +685,49 @@ export const STARTER_CATALOG = [
       ],
     },
   },
+  {
+    // Fireheart — a body wreathed in flame. Beating The Flash Zone Keeper drops it ~10%.
+    id: "aura_fireheart", name: "Fireheart", type: "aura",
+    price: 0, rarity: "epic", grantOnly: true, sourcePlace: "beating The Flash",
+    appearance: {
+      motion: "rise", count: 0, rate: 44, colors: ["#ff1e00", "#ffe24a"], size: [0.78, 0.04],
+      lifetime: 1.1, radius: 1.6, speed: 7, height: 0.7, bob: 0, wobble: 0.65, sub: null,
+    },
+  },
+  {
+    // TIMEWARP — the rarest aura in the game (Flash Keeper, ~0.1%). A whole cosmos orbits
+    // you: a shiny black hole wearing your character's face, a black disc breathing
+    // forever, a thousand fast white motes, and a slow carousel of worlds, moons, suns,
+    // black holes, homes, cars and mini-auras that ease into reversals. Rendered by the
+    // bespoke `timewarp` motion in effects.js. Comes bundled with the Time Hammer.
+    id: "aura_timewarp", name: "Timewarp", type: "aura",
+    price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "beating The Flash",
+    appearance: {
+      motion: "timewarp",
+      colors: ["#ffffff", "#ffd93d", "#7af0ff", "#ff36c8", "#3ddc84", "#a05cff"],
+    },
+  },
+  {
+    // The Time Hammer — bundled with Timewarp (granted together by the 0.1% Flash drop).
+    // A held gear item, plus a platform-wide "use" button (shell.js): swing it at the
+    // nearest player in ANY Place to fling them into the void. 45-second cooldown.
+    id: "gear_timehammer", name: "Time Hammer", type: "gear",
+    price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "beating The Flash",
+    appearance: {
+      prims: [
+        { shape: "sphere", size: [0.3, 0.3, 0.3], offset: [0, -0.16, 0], rotation: [0, 0, 0], color: "#3a3f4a", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.17, 1.9, 0.17], offset: [0, 0.9, 0], rotation: [0, 0, 0], color: "#5a3a1a", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.22, 0.3, 0.22], offset: [0, 0.45, 0], rotation: [0, 0, 0], color: "#4a2f18", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.2, 0.42, 0.2], offset: [0, 1.9, 0], rotation: [0, 0, 0], color: "#6b7386", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.9, 0.72, 1.8], offset: [0, 2.2, 0], rotation: [0, 0, 0], color: "#8a93a6", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.38, 0.16, 0.38], offset: [0, 2.2, 0.9], rotation: [90, 0, 0], color: "#c7cdd9", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.38, 0.16, 0.38], offset: [0, 2.2, -0.9], rotation: [90, 0, 0], color: "#c7cdd9", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.5, 0.5, 0.14], offset: [0, 2.2, 0.95], rotation: [0, 0, 0], color: "#7af0ff", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.5, 0.5, 0.14], offset: [0, 2.2, -0.95], rotation: [0, 0, 0], color: "#7af0ff", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+      ],
+      particles: null,
+    },
+  },
 
   // ---- trails (§3.7) — what you leave behind as you move -----------------------------
   {
