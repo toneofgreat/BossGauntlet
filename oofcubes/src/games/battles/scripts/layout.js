@@ -139,8 +139,14 @@ function buildArena(parts, out) {
   parts.push(P({ shape: "cylinder", size: [20, 0.16, 20], position: [CX, FLOOR_TOP + 0.14, CZ], color: "#8a6a3a", material: "metal", canCollide: false }));
   parts.push(P({ shape: "cylinder", size: [8, 0.2, 8], position: [CX, FLOOR_TOP + 0.16, CZ], color: "#c0392b", material: "neon", canCollide: false }));
   parts.push(P({ shape: "wedge", size: [2.4, 2.4, 2.4], position: [CX, FLOOR_TOP + 1.4, CZ], rotation: [0, 30, 0], color: "#8a6a3a", material: "metal", canCollide: false }));
-  // tiered coliseum stands: seating rings climbing OUTWARD (radius rr)
-  for (let t = 1; t <= 5; t++) { const rr = R + t * 4; parts.push(P({ shape: "cylinder", size: [rr * 2, 2.4, rr * 2], position: [CX, FLOOR_TOP - 2.4 + t * 2.2, CZ], color: t % 2 ? "#7d6e58" : "#8c7a60", canCollide: false })); }
+  // tiered coliseum stands: seating rings climbing OUTWARD (radius rr). Each tier is a
+  // ring of tangent box segments — a solid cylinder would roof the whole arena and sit
+  // between the camera and the player.
+  for (let t = 1; t <= 5; t++) {
+    const rr = R + t * 4, ty = FLOOR_TOP - 2.4 + t * 2.2, col = t % 2 ? "#7d6e58" : "#8c7a60", N = 36;
+    const seg = 2 * rr * Math.sin(Math.PI / N) + 0.8;
+    for (let s = 0; s < N; s++) { const a = (s / N) * Math.PI * 2, [px, pz] = ring(CX, CZ, rr, a); parts.push(P({ size: [seg, 2.4, 4.4], position: [px, ty, pz], rotation: [0, 90 - a * 57.29578, 0], color: col, canCollide: false })); }
+  }
   // broken pillars around the ring, banners + torches on some
   const PILL = 14;
   for (let i = 0; i < PILL; i++) {
