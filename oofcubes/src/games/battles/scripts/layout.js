@@ -78,16 +78,18 @@ function ring(cx, cz, r, a) { return [cx + r * Math.cos(a), cz + r * Math.sin(a)
 function buildArena(parts, out) {
   const [CX, CZ] = ARENA_CENTER;
   const R = ARENA_RADIUS;
-  // the sand floor (a raised disc — step off the edge and you fall into the void)
-  parts.push(P({ shape: "cylinder", size: [R, 2, R], position: [CX, FLOOR_TOP - 1, CZ], color: "#c2a878", material: "plastic" }));
-  parts.push(P({ shape: "cylinder", size: [R - 1, 0.2, R - 1], position: [CX, FLOOR_TOP + 0.11, CZ], color: "#b09a68", material: "plastic", canCollide: false }));
+  // the sand floor (a raised disc — step off the edge and you fall into the void). A
+  // cylinder's COLLISION radius is min(size[0],size[2])/2, so the diameter must be 2*R for
+  // the whole ring (spawns sit at radius 40) to be solid ground, not a trapdoor.
+  parts.push(P({ shape: "cylinder", size: [R * 2, 2, R * 2], position: [CX, FLOOR_TOP - 1, CZ], color: "#c2a878", material: "plastic" }));
+  parts.push(P({ shape: "cylinder", size: [R * 2 - 2, 0.2, R * 2 - 2], position: [CX, FLOOR_TOP + 0.11, CZ], color: "#b09a68", material: "plastic", canCollide: false }));
   // a cracked centre emblem
   parts.push(P({ shape: "cylinder", size: [10, 0.16, 10], position: [CX, FLOOR_TOP + 0.14, CZ], color: "#8a6a3a", material: "metal", canCollide: false }));
   parts.push(P({ shape: "cylinder", size: [4, 0.2, 4], position: [CX, FLOOR_TOP + 0.16, CZ], color: "#c0392b", material: "neon", canCollide: false }));
   // tiered coliseum stands: concentric step-rings climbing outward
   for (let t = 1; t <= 4; t++) {
-    const rr = R + t * 4;
-    parts.push(P({ shape: "cylinder", size: [rr, 2.2, rr], position: [CX, FLOOR_TOP - 2 + t * 2, CZ], color: t % 2 ? "#7d6e58" : "#8c7a60", canCollide: false }));
+    const rr = R + t * 4;                       // seating rings sit OUTSIDE the floor (radius rr)
+    parts.push(P({ shape: "cylinder", size: [rr * 2, 2.2, rr * 2], position: [CX, FLOOR_TOP - 2 + t * 2, CZ], color: t % 2 ? "#7d6e58" : "#8c7a60", canCollide: false }));
   }
   // broken pillars around the ring, banners on a few
   const PILL = 12;

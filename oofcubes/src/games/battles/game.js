@@ -289,13 +289,14 @@ function takeDamage(ctx, dmg, poison, attackerId) {
   else { publishSoon(); refreshHp(); }
 }
 function die(ctx) {
+  // Death sends you back to the LOBBY (spec 26: pick a new sword and go again). Broadcast
+  // the death first so the killer's client scores, then hand off to toLobby — which flips
+  // inArena off (stopping the void check), clears the combat UI, and resets the checkpoint.
   S.deathSeq++;
   S.myState.death = { id: S.deathSeq, killer: S.lastAttacker || null };
-  S.hp = HP_MAX; S.poison = null;
-  const sp = S.world.arenaSpawns[Math.floor(S.runT * 7) % S.world.arenaSpawns.length];
-  try { ctx.player.teleport([sp[0], sp[1], sp[2]], 0); } catch { /* fine */ }
-  publishSoon(); refreshHp();
-  toast(ctx, "You were defeated! Back to the sand.", "💀", 2200); sfx(ctx, "oof");
+  S.hp = HP_MAX; S.poison = null; S.lastAttacker = null;
+  toast(ctx, "You were defeated! Back to the lobby — pick your next blade.", "💀", 2800); sfx(ctx, "oof");
+  toLobby(ctx);
 }
 function scoreKill(ctx, whom) {
   S.save.kills += 1;
@@ -360,7 +361,8 @@ function enterArena(ctx, swordId) {
   S.inArena = true; S.hp = HP_MAX; S.poison = null; S.swingCd = 0; S.abilityCd = 0;
   const sp = S.world.arenaSpawns[Math.floor(S.runT * 3) % S.world.arenaSpawns.length];
   try { ctx.player.teleport([sp[0], sp[1], sp[2]], 0); } catch { /* fine */ }
-  try { ctx.player.setCheckpoint([sp[0], sp[1], sp[2]]); } catch { /* fine */ }
+  // NOTE: the checkpoint deliberately stays at the LOBBY (set in toLobby / at spawn), so a
+  // fall or death in the arena returns you to the lobby, never to a spot in the arena.
   applyPassives(ctx);
   S.myState.inArena = true; S.myState.sword = swordId; S.myState.hp = HP_MAX; publishSoon();
   showCombatUi(true); refreshHp(); refreshHud(ctx);
@@ -416,6 +418,7 @@ export function init(ctx) {
   subs.push(ctx.events.on("touch:bt_leave", () => toLobby(ctx)));
   S.subs = subs;
 
+  try { ctx.player.setCheckpoint([LOBBY_SPAWN[0], LOBBY_SPAWN[1], LOBBY_SPAWN[2]]); } catch { /* fine */ }
   refreshHud(ctx);
   if (!S.save.seenIntro) {
     pagedPanel(ctx, "⚔️ Battles", INTRO_PAGES.map((p) => ({ heading: p.title, body: p.body })), { doneLabel: "Skip", onDone: () => { S.save.seenIntro = true; saveNow(ctx); } });
