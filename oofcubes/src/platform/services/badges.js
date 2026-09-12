@@ -120,14 +120,15 @@ export const BADGES = Object.freeze([
 
   // battles (spec 26) — Battles.
   B("battles.firstblood", "First Blood", "⚔️", "Score your first kill in the arena."),
-  B("battles.sword_golden", "Gilded", "⚜️", "Unlock the Golden Saber (5 kills)."),
-  B("battles.sword_spiked", "Spiker", "🔨", "Unlock the Spiked Maul (25 kills)."),
-  B("battles.sword_gravity", "Untethered", "🌑", "Unlock the Gravity Edge (75 kills)."),
-  B("battles.sword_speedy", "Blur", "💨", "Unlock Swiftsteel (100 kills)."),
-  B("battles.sword_fusion", "Fusion", "⚡", "Unlock the Fusion Blade (175 kills)."),
-  B("battles.sword_venom", "Envenomed", "🐍", "Unlock Venomfang (300 kills)."),
-  B("battles.sword_dummy", "Instructor", "🎯", "Unlock the Trainer's Cleaver (750 kills)."),
-  B("battles.sword_meteor", "Skyfall", "☄️", "Unlock the Meteorbrand (1,500 kills)."),
+  B("battles.sword_golden", "Gilded", "⚜️", "Unlock the Golden Saber (40 kills)."),
+  B("battles.sword_spiked", "Spiker", "🔨", "Unlock the Spiked Maul (200 kills)."),
+  B("battles.sword_gravity", "Untethered", "🌑", "Unlock the Gravity Edge (500 kills)."),
+  B("battles.sword_speedy", "Blur", "💨", "Unlock Swiftsteel (1,000 kills)."),
+  B("battles.sword_fusion", "Fusion", "⚡", "Unlock the Fusion Blade (1,900 kills)."),
+  B("battles.sword_venom", "Envenomed", "🐍", "Unlock Venomfang (3,200 kills)."),
+  B("battles.sword_thorn", "Gardener", "🌹", "Unlock Thornheart (5,000 kills)."),
+  B("battles.sword_dummy", "Instructor", "🎯", "Unlock the Trainer's Cleaver (8,000 kills)."),
+  B("battles.sword_meteor", "Skyfall", "☄️", "Unlock the Meteorbrand (12,500 kills)."),
 ]);
 
 const defsById = new Map();

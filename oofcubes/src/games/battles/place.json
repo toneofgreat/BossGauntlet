@@ -10,9 +10,9 @@
   "killY": -40,
   "music": "chill",
   "lighting": {
-    "skyTop": "#3a1f52", "skyBottom": "#6a4d80",
-    "ambient": "#f0e2f8", "ambientIntensity": 1.15,
-    "sunColor": "#ffe6c0", "sunIntensity": 1.25,
+    "skyTop": "#5a3a7a", "skyBottom": "#8a6aa8",
+    "ambient": "#f6ecff", "ambientIntensity": 1.5,
+    "sunColor": "#fff0d8", "sunIntensity": 1.6,
     "sunDirection": [-0.3, -1, -0.3],
     "fog": { "color": "#2a1d33", "near": 120, "far": 620 }
   },

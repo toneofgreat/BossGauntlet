@@ -22,8 +22,12 @@ const SAVE_V = 1;
 const SWING_CD = 0.5;
 const MELEE_R = 7;
 const DUMMY_HP = 5;
-const DUMMY_RESPAWN = 3;
+const DUMMY_RESPAWN = 5;
 const PUBLISH_EVERY = 0.4;
+const SPIN_SPEED = 0.5;   // rad/s — the display swords turn on their pedestals
+const BUSH_LIFE = 20;     // §: a thorn bush wilts after 20s
+const BUSH_DMG = 10;      // §: 10 damage to anyone near it (once a second)
+const BUSH_R = 5.5;
 
 let S = null;
 let dom = null;
@@ -32,11 +36,12 @@ function fresh() {
   return {
     save: null, world: null,
     inArena: false, hp: HP_MAX, equipped: "basic",
-    swingCd: 0, abilityCd: 0, runT: 0, pubT: 0, hudT: 0,
+    swingCd: 0, abilityCd: 0, runT: 0, pubT: 0, hudT: 0, spinT: 0,
     poison: null,                 // {left, t} — venom on ME
     dummies: [],                  // {parts:[ids], x, z, hp, dead, respawnT}
+    bushes: [],                   // {parts:[ids], x, z, t, dmgT} — thorn hazards
     vfx: [],                      // {ids:[...], t} transient parts
-    meteors: [],                  // {id, x, z, y, dx, dz, t, owner:true}
+    meteors: [],                  // {id, x, z, y, dx, dz, t, trailT}
     labels: [], rootId: null,
     hitSeq: 0, deathSeq: 0, aoeSeq: 0, idSeq: 0,
     myState: { inArena: false, hp: HP_MAX, kills: 0, sword: "basic", hit: null, death: null, aoe: null },
@@ -169,14 +174,26 @@ function refreshLabels(ctx) {
 }
 
 // ---- dummies -------------------------------------------------------------------------
-function spawnDummy(ctx, x, z, temp) {
+// A stitched straw training dummy — a cross-post frame, a lashed straw body with a target
+// ring, arms and a stuffed head with a painted face. Shared by spawn and respawn.
+function buildDummyParts(ctx, x, z) {
   const parts = [];
-  const push = (def) => { try { const id = uid("bt_dummy_"); ctx.engine.parts.create({ id, ...def }); parts.push(id); } catch { /* fine */ } };
-  push({ shape: "cylinder", size: [0.6, 2.8, 0.6], position: [x, FLOOR_TOP + 1.4, z], color: "#6b4423", material: "wood", canCollide: false });
-  push({ shape: "sphere", size: [1.5, 1.9, 1.5], position: [x, FLOOR_TOP + 3.1, z], color: "#d9c48f", material: "plastic", canCollide: false });
-  push({ shape: "box", size: [1.6, 0.4, 1.6], position: [x, FLOOR_TOP + 3.1, z], color: "#c0392b", material: "neon", canCollide: false });
-  push({ shape: "sphere", size: [0.9, 0.9, 0.9], position: [x, FLOOR_TOP + 4.4, z], color: "#c9b48f", material: "plastic", canCollide: false });
-  S.dummies.push({ parts, x, z, hp: DUMMY_HP, dead: false, respawnT: 0, temp: !!temp });
+  const push = (def) => { try { const id = uid("bt_dummy_"); ctx.engine.parts.create({ id, canCollide: false, ...def }); parts.push(id); } catch { /* fine */ } };
+  push({ shape: "cylinder", size: [1.8, 0.5, 1.8], position: [x, FLOOR_TOP + 0.25, z], color: "#5a3a1a", material: "wood" });     // base
+  push({ shape: "cylinder", size: [0.6, 3.4, 0.6], position: [x, FLOOR_TOP + 1.7, z], color: "#6b4423", material: "wood" });     // post
+  push({ shape: "box", size: [3.2, 0.4, 0.4], position: [x, FLOOR_TOP + 3.2, z], color: "#6b4423", material: "wood" });          // cross-arm
+  push({ shape: "sphere", size: [1.7, 2.1, 1.5], position: [x, FLOOR_TOP + 3.0, z], color: "#d9c48f", material: "plastic" });    // straw body
+  for (let i = 0; i < 4; i++) { const a = i * 1.57; push({ shape: "sphere", size: [0.5, 0.9, 0.5], position: [x + Math.cos(a) * 0.7, FLOOR_TOP + 2.0 + (i % 2) * 0.4, z + Math.sin(a) * 0.7], color: "#c9b48f", material: "plastic" }); } // straw tufts
+  push({ shape: "box", size: [1.7, 0.42, 1.6], position: [x, FLOOR_TOP + 3.1, z], color: "#c0392b", material: "neon" });         // target ring
+  push({ shape: "box", size: [1.2, 0.3, 1.1], position: [x, FLOOR_TOP + 3.1, z], color: "#f5f5f5", material: "plastic" });       // target centre
+  for (const sx of [-1, 1]) push({ shape: "sphere", size: [0.6, 0.6, 0.6], position: [x + sx * 1.5, FLOOR_TOP + 3.2, z], color: "#c9b48f", material: "plastic" }); // hands
+  push({ shape: "sphere", size: [1.0, 1.0, 1.0], position: [x, FLOOR_TOP + 4.6, z], color: "#e0cfa0", material: "plastic" });    // head
+  for (const sx of [-1, 1]) push({ shape: "sphere", size: [0.16, 0.16, 0.16], position: [x + sx * 0.28, FLOOR_TOP + 4.7, z - 0.42], color: "#12141c", material: "plastic" }); // eyes
+  push({ shape: "box", size: [0.4, 0.1, 0.1], position: [x, FLOOR_TOP + 4.35, z - 0.44], color: "#12141c", material: "plastic" }); // mouth
+  return parts;
+}
+function spawnDummy(ctx, x, z, temp) {
+  S.dummies.push({ parts: buildDummyParts(ctx, x, z), x, z, hp: DUMMY_HP, dead: false, respawnT: 0, temp: !!temp });
 }
 function hitDummy(ctx, d, dmg) {
   d.hp -= dmg;
@@ -240,38 +257,92 @@ function useAbility(ctx) {
   const me = ctx.player.position();
   if (sw.ability === "spikes") {
     const R = 12; const ids = [];
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2, r = 3 + (i % 3) * 3;
-      try { const id = uid("bt_spike_"); ctx.engine.parts.create({ id, shape: "cylinder", size: [0.7, 3.4, 0.7], position: [me[0] + Math.cos(a) * r, me[1] + 1.4, me[2] + Math.sin(a) * r], rotation: [0, 0, 0], color: "#8a93a6", material: "metal", canCollide: false }); ids.push(id); } catch { /* fine */ }
+    // a rolling dust ring, then jagged iron spikes tearing up out of the sand
+    try { const id = uid("bt_dust_"); ctx.engine.parts.create({ id, shape: "cylinder", size: [R * 2, 0.4, R * 2], position: [me[0], me[1] - 1.2, me[2]], color: "#b09a68", material: "plastic", canCollide: false }); ids.push(id); } catch { /* fine */ }
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2, r = 3 + (i % 3) * 3.4, h = 3.2 + (i % 3) * 0.8;
+      try { const id = uid("bt_spike_"); ctx.engine.parts.create({ id, shape: "wedge", size: [0.9, h, 0.9], position: [me[0] + Math.cos(a) * r, me[1] + h / 2 - 1.4, me[2] + Math.sin(a) * r], rotation: [0, a * 57, 0], color: i % 2 ? "#3e444f" : "#565d70", material: "metal", canCollide: false }); ids.push(id); } catch { /* fine */ }
+      try { const id = uid("bt_spike_"); ctx.engine.parts.create({ id, shape: "wedge", size: [0.4, 1.0, 0.4], position: [me[0] + Math.cos(a) * r, me[1] + h - 1.4, me[2] + Math.sin(a) * r], rotation: [0, a * 57, 0], color: "#c7cdd9", material: "metal", canCollide: false }); ids.push(id); } catch { /* fine */ }
     }
-    S.vfx.push({ ids, t: 0.9 });
-    // AoE to players + dummies
+    S.vfx.push({ ids, t: 1.0 });
     S.aoeSeq++; S.myState.aoe = { id: S.aoeSeq, x: me[0], z: me[2], r: R, dmg: 10 }; publishSoon();
     for (const d of S.dummies) { if (!d.dead && (d.x - me[0]) ** 2 + (d.z - me[2]) ** 2 <= R * R) hitDummy(ctx, d, 10); }
     sfx(ctx, "boing"); toast(ctx, "Spikes erupt! 10 damage each.", "🔨", 1800);
   } else if (sw.ability === "meteor") {
     const [fx, fz] = facing(ctx);
-    try { const id = uid("bt_meteor_"); ctx.engine.parts.create({ id, shape: "sphere", size: [1.4, 1.4, 1.4], position: [me[0] + fx * 3, me[1] + 8, me[2] + fz * 3], color: "#ff5a1f", material: "lava", canCollide: false }); S.meteors.push({ id, x: me[0] + fx * 3, y: me[1] + 8, z: me[2] + fz * 3, dx: fx, dz: fz, t: 0 }); } catch { /* fine */ }
+    const sx = me[0] + fx * 3, sz = me[2] + fz * 3, sy = me[1] + 12;
+    try { const id = uid("bt_meteor_"); ctx.engine.parts.create({ id, shape: "sphere", size: [2.0, 2.0, 2.0], position: [sx, sy, sz], color: "#3a2418", material: "lava", canCollide: false }); S.meteors.push({ id, x: sx, y: sy, z: sz, dx: fx, dz: fz, t: 0, trailT: 0 }); } catch { /* fine */ }
+    try { const id = uid("bt_meteor_"); ctx.engine.parts.create({ id, shape: "sphere", size: [2.6, 2.6, 2.6], position: [sx, sy, sz], color: "#ff8c1a", material: "neon", canCollide: false }); S.meteors[S.meteors.length - 1].glow = id; } catch { /* fine */ }
     sfx(ctx, "warp"); toast(ctx, "Meteor away — make it count!", "☄️", 1800);
   } else if (sw.ability === "dummies") {
     for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; spawnDummy(ctx, me[0] + Math.cos(a) * 5, me[2] + Math.sin(a) * 5, true); }
     sfx(ctx, "sparkle"); toast(ctx, "Training dummies conjured — cut them down!", "🎯", 1800);
+  } else if (sw.ability === "bush") {
+    spawnBush(ctx, me[0], me[2]);
+    sfx(ctx, "sparkle"); toast(ctx, "A thorn bush bursts up — 10 damage to anyone near it!", "🌹", 2000);
   }
   S.abilityCd = ABILITY_CD_S;
   refreshAbilityBtn();
 }
+
+// ---- thorn bushes (Thornheart's ⚡): a living hazard that bites once a second --------
+function spawnBush(ctx, x, z) {
+  const parts = [];
+  const push = (def) => { try { const id = uid("bt_bush_"); ctx.engine.parts.create({ id, canCollide: false, ...def }); parts.push(id); } catch { /* fine */ } };
+  push({ shape: "cylinder", size: [2.4, 0.6, 2.4], position: [x, FLOOR_TOP + 0.3, z], color: "#3a2414", material: "wood" }); // mound
+  const foliage = [[0, 1.5, 0, 2.4], [1.0, 1.2, 0.5, 1.7], [-0.9, 1.3, -0.6, 1.8], [0.4, 2.2, -0.8, 1.5], [-0.5, 2.1, 0.7, 1.4], [0, 2.8, 0, 1.2]];
+  for (let k = 0; k < foliage.length; k++) { const [ox, oy, oz, s] = foliage[k]; push({ shape: "sphere", size: [s, s * 0.85, s], position: [x + ox, FLOOR_TOP + oy, z + oz], color: k % 2 ? "#3ddc84" : "#2f8f4a", material: "plastic" }); }
+  for (let i = 0; i < 8; i++) { const a = i * 0.8; push({ shape: "wedge", size: [0.24, 0.7, 0.24], position: [x + Math.cos(a) * 1.4, FLOOR_TOP + 1.1 + (i % 3) * 0.6, z + Math.sin(a) * 1.4], rotation: [0, a * 57, 90], color: "#1f6b34", material: "plastic" }); } // thorns
+  for (let i = 0; i < 5; i++) { const a = i * 1.3 + 0.4; push({ shape: "sphere", size: [0.3, 0.3, 0.3], position: [x + Math.cos(a) * 1.1, FLOOR_TOP + 1.6 + (i % 2) * 0.5, z + Math.sin(a) * 1.1], color: "#e0245e", material: "neon" }); } // barbs
+  S.bushes.push({ parts, x, z, t: 0, dmgT: 0.6 });
+}
+function stepBushes(ctx, dt) {
+  for (let i = S.bushes.length - 1; i >= 0; i--) {
+    const b = S.bushes[i]; b.t += dt;
+    if (b.t >= BUSH_LIFE) { for (const id of b.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } } S.bushes.splice(i, 1); continue; }
+    b.dmgT -= dt;
+    if (b.dmgT <= 0) {
+      b.dmgT = 1;
+      for (const d of S.dummies) { if (!d.dead && (d.x - b.x) ** 2 + (d.z - b.z) ** 2 <= BUSH_R * BUSH_R) hitDummy(ctx, d, BUSH_DMG); }
+      for (const p of rosterSafe(ctx)) { if (!p.pos) continue; if ((p.pos[0] - b.x) ** 2 + (p.pos[2] - b.z) ** 2 <= BUSH_R * BUSH_R) { S.aoeSeq++; S.myState.aoe = { id: S.aoeSeq, x: b.x, z: b.z, r: BUSH_R, dmg: BUSH_DMG }; publishSoon(); break; } }
+    }
+  }
+}
+
+// Slowly turn every display sword on its pedestal (lobby only — the arena is far away).
+function rotateSwords(ctx) {
+  const ang = S.runT * SPIN_SPEED, ca = Math.cos(ang), sa = Math.sin(ang), deg = (ang * 180 / Math.PI) % 360;
+  for (const pad of S.world.swordPads) {
+    const cx = pad.center[0], cy = pad.center[1], cz = pad.center[2];
+    for (const p of pad.spin) {
+      try { ctx.engine.parts.setPosition(p.id, [cx + p.dx * ca - p.dz * sa, cy + p.dy, cz + p.dx * sa + p.dz * ca]); } catch { /* gone */ }
+      try { ctx.engine.parts.setRotation(p.id, [p.rot[0], p.rot[1] + deg, p.rot[2]]); } catch { /* gone */ }
+    }
+  }
+}
 function stepMeteors(ctx, dt) {
   for (let i = S.meteors.length - 1; i >= 0; i--) {
     const m = S.meteors[i]; m.t += dt;
-    m.x += m.dx * 70 * dt; m.z += m.dz * 70 * dt; m.y = Math.max(FLOOR_TOP + 1, m.y - 16 * dt);
+    m.x += m.dx * 70 * dt; m.z += m.dz * 70 * dt; m.y = Math.max(FLOOR_TOP + 1, m.y - 22 * dt);
     try { ctx.engine.parts.setPosition(m.id, [m.x, m.y, m.z]); } catch { /* gone */ }
-    // impact: a player within the small hit radius is one-shot; dummies too
+    if (m.glow) { try { ctx.engine.parts.setPosition(m.glow, [m.x, m.y, m.z]); } catch { /* gone */ } }
+    // a fiery tail: drop a fading ember every few frames
+    m.trailT -= dt;
+    if (m.trailT <= 0) {
+      m.trailT = 0.04;
+      try { const id = uid("bt_ember_"); ctx.engine.parts.create({ id, shape: "sphere", size: [0.9, 0.9, 0.9], position: [m.x, m.y + 0.4, m.z], color: ["#ff8c1a", "#ffd23a", "#ff5a1f"][S.idSeq % 3], material: "neon", canCollide: false }); S.vfx.push({ ids: [id], t: 0.35 }); } catch { /* fine */ }
+    }
     let hit = false;
     for (const p of rosterSafe(ctx)) { if (!p.pos) continue; if ((p.pos[0] - m.x) ** 2 + (p.pos[2] - m.z) ** 2 <= 9) { S.hitSeq++; S.myState.hit = { id: S.hitSeq, target: p.id, dmg: 9999, poison: 0 }; publishSoon(); hit = true; break; } }
     for (const d of S.dummies) { if (!d.dead && (d.x - m.x) ** 2 + (d.z - m.z) ** 2 <= 9) { hitDummy(ctx, d, 9999); hit = true; } }
-    if (hit || m.t > 2.2 || m.y <= FLOOR_TOP + 1.1) {
-      if (hit) { toast(ctx, "METEOR HIT — obliterated!", "☄️", 2200); sfx(ctx, "win"); }
+    if (hit || m.t > 2.4 || m.y <= FLOOR_TOP + 1.1) {
+      // a burst of debris + fire on impact
+      const ex = [];
+      for (let k = 0; k < 12; k++) { const a = k * 0.52; try { const id = uid("bt_boom_"); ctx.engine.parts.create({ id, shape: k % 2 ? "sphere" : "wedge", size: [1.1, 1.1, 1.1], position: [m.x + Math.cos(a) * (1 + k % 3), m.y + (k % 3) * 0.6, m.z + Math.sin(a) * (1 + k % 3)], rotation: [0, a * 57, 0], color: ["#ff5a1f", "#ffd23a", "#3a2418", "#ff8c1a"][k % 4], material: k % 3 ? "neon" : "lava", canCollide: false }); ex.push(id); } catch { /* fine */ } }
+      S.vfx.push({ ids: ex, t: 0.6 });
+      if (hit) { toast(ctx, "METEOR HIT — obliterated!", "☄️", 2200); sfx(ctx, "win"); } else { sfx(ctx, "boing"); }
       try { ctx.engine.parts.remove(m.id); } catch { /* gone */ }
+      if (m.glow) { try { ctx.engine.parts.remove(m.glow); } catch { /* gone */ } }
       S.meteors.splice(i, 1);
     }
   }
@@ -438,6 +509,7 @@ export function update(dt, ctx) {
 
   if (S.inArena) {
     stepMeteors(ctx, dt);
+    stepBushes(ctx, dt);
     // poison on me
     if (S.poison) { S.poison.t -= dt; if (S.poison.t <= 0) { S.poison.t = 1.0; S.poison.left -= 1; takeDamage(ctx, 3, 0, S.lastAttacker); if (S.poison && S.poison.left <= 0) S.poison = null; } }
     // fell into the void → respawn (before the engine's killY)
@@ -445,6 +517,11 @@ export function update(dt, ctx) {
     if (me[1] < VOID_Y) die(ctx);
     // dummy respawns
     for (const d of S.dummies) { if (d.dead && !d.temp) { d.respawnT -= dt; if (d.respawnT <= 0) { d.dead = false; d.hp = DUMMY_HP; spawnDummyReuse(ctx, d); } } }
+  } else {
+    // the display swords turn while you browse the lobby — throttled (the angle tracks
+    // runT, so a skipped frame just jumps to the right place; ~12 updates/sec is smooth)
+    S.spinT -= dt;
+    if (S.spinT <= 0) { S.spinT = 0.08; rotateSwords(ctx); }
   }
 
   // incoming combat over the presence channel
@@ -469,21 +546,15 @@ export function update(dt, ctx) {
   S.hudT -= dt; if (S.hudT <= 0) { S.hudT = 0.2; if (S.inArena) refreshHp(); }
 }
 
-function spawnDummyReuse(ctx, d) {
-  const x = d.x, z = d.z; d.parts = [];
-  const push = (def) => { try { const id = uid("bt_dummy_"); ctx.engine.parts.create({ id, ...def }); d.parts.push(id); } catch { /* fine */ } };
-  push({ shape: "cylinder", size: [0.6, 2.8, 0.6], position: [x, FLOOR_TOP + 1.4, z], color: "#6b4423", material: "wood", canCollide: false });
-  push({ shape: "sphere", size: [1.5, 1.9, 1.5], position: [x, FLOOR_TOP + 3.1, z], color: "#d9c48f", material: "plastic", canCollide: false });
-  push({ shape: "box", size: [1.6, 0.4, 1.6], position: [x, FLOOR_TOP + 3.1, z], color: "#c0392b", material: "neon", canCollide: false });
-  push({ shape: "sphere", size: [0.9, 0.9, 0.9], position: [x, FLOOR_TOP + 4.4, z], color: "#c9b48f", material: "plastic", canCollide: false });
-}
+function spawnDummyReuse(ctx, d) { d.parts = buildDummyParts(ctx, d.x, d.z); }
 
 export function dispose(ctx) {
   if (S) {
     clearPassives(ctx);
     for (const v of S.vfx) for (const id of v.ids) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
-    for (const m of S.meteors) { try { ctx.engine.parts.remove(m.id); } catch { /* gone */ } }
+    for (const m of S.meteors) { try { ctx.engine.parts.remove(m.id); } catch { /* gone */ } if (m.glow) { try { ctx.engine.parts.remove(m.glow); } catch { /* gone */ } } }
     for (const d of S.dummies) for (const id of d.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
+    for (const b of S.bushes) for (const id of b.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
     if (S.labels) for (const L of S.labels) { try { L.mat.dispose(); L.tex.dispose(); } catch { /* fine */ } }
     if (S.rootId != null) { try { ctx.engine.parts.remove(S.rootId); } catch { /* gone */ } }
     if (S.subs) for (const u of S.subs) { try { u(); } catch { /* fine */ } }
