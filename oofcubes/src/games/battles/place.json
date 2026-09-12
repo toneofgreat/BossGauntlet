@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "slug": "battles",
+    "name": "Battles",
+    "icon": "⚔️",
+    "description": "Start in the lobby, grab a sword, drop into the arena. Every kill unlocks a deadlier blade — nine of them, up to the one-shot Meteorbrand."
+  },
+  "spawn": [12, 4.3, 0],
+  "spawnYaw": 90,
+  "killY": -40,
+  "music": "chill",
+  "lighting": {
+    "skyTop": "#3a1f52", "skyBottom": "#6a4d80",
+    "ambient": "#f0e2f8", "ambientIntensity": 1.15,
+    "sunColor": "#ffe6c0", "sunIntensity": 1.25,
+    "sunDirection": [-0.3, -1, -0.3],
+    "fog": { "color": "#2a1d33", "near": 120, "far": 620 }
+  },
+  "parts": [
+    { "id": "backdrop", "size": [1200, 4, 400], "position": [420, -60, 0],
+      "color": "#1a1226", "material": "plastic", "canCollide": false }
+  ]
+}

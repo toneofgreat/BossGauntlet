@@ -117,6 +117,17 @@ export const BADGES = Object.freeze([
   B("speed.zone8", "Flashpoint", "🌟", "Steal from The Flash Zone."),
   B("speed.zone9", "Big Bang", "💥", "Steal from The Big Bang — the finale past the sun."),
   B("speed.all", "Untouchable", "🏃", "Out-run every Keeper in Speed Simulator."),
+
+  // battles (spec 26) — Battles.
+  B("battles.firstblood", "First Blood", "⚔️", "Score your first kill in the arena."),
+  B("battles.sword_golden", "Gilded", "⚜️", "Unlock the Golden Saber (5 kills)."),
+  B("battles.sword_spiked", "Spiker", "🔨", "Unlock the Spiked Maul (25 kills)."),
+  B("battles.sword_gravity", "Untethered", "🌑", "Unlock the Gravity Edge (75 kills)."),
+  B("battles.sword_speedy", "Blur", "💨", "Unlock Swiftsteel (100 kills)."),
+  B("battles.sword_fusion", "Fusion", "⚡", "Unlock the Fusion Blade (175 kills)."),
+  B("battles.sword_venom", "Envenomed", "🐍", "Unlock Venomfang (300 kills)."),
+  B("battles.sword_dummy", "Instructor", "🎯", "Unlock the Trainer's Cleaver (750 kills)."),
+  B("battles.sword_meteor", "Skyfall", "☄️", "Unlock the Meteorbrand (1,500 kills)."),
 ]);
 
 const defsById = new Map();
