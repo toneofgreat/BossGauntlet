@@ -11,21 +11,23 @@
 
 import {
   buildWorld, FLOOR_TOP, LOBBY_SPAWN, LOBBY_YAW, ARENA_CENTER, ARENA_RADIUS, VOID_Y,
-  OBBY_START,
+  OBBY_START, LETTUCE_KEYS,
 } from "./scripts/layout.js";
 import {
   SWORDS, HP_MAX, ABILITY_CD_S, CHEESE_CD_S, CHEESE_SLOW_S, BASE_WALK, BASE_JUMP,
+  TW_STOP_CD_S, TW_STOP_R, TW_STOP_S, TW_FLING, TW_PORTAL_LIFE_S, TW_PORTAL_CD_S,
   swordById, isOwned, ownedSwords, INTRO_PAGES,
 } from "./scripts/swords.js";
 import { createQuest } from "./scripts/quest.js";
+import { createTimewarp } from "./scripts/timewarp.js";
 import { createBoards, rankRows } from "./scripts/board.js";
 
 export const meta = {
   slug: "battles",
   name: "Battles",
   icon: "⚔️",
-  description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and two swords no kill can buy.",
-  version: "1.1.0",
+  description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and three swords no kill can buy.",
+  version: "1.2.0",
 };
 
 const SAVE_V = 2;
@@ -65,17 +67,21 @@ function fresh() {
     grenades: [],                 // {x,y,z,dx,dz,vy,t,id}
     ksCd: { tp: 0, gr: 0 },
     flying: false,
+    frozenT: 0,                   // §13: seconds of TIME STOP left on ME
+    fling: null,                  // §13: {x0,y0,z0,dx,dz,t,dur} — I am mid-air, evicted
+    portal: { a: null, b: null, aIds: [], bIds: [], life: 0, cd: 0, grace: 0 },
+    stopSeq: 0,
     dummies: [],                  // {parts:[ids], x, z, hp, dead, respawnT}
     bushes: [],                   // {parts:[ids], x, z, t, dmgT} — thorn hazards
     vfx: [],                      // {ids:[...], t} transient parts
     meteors: [],                  // {id, x, z, y, dx, dz, t, trailT}
     labels: [], rootId: null,
     hitSeq: 0, deathSeq: 0, aoeSeq: 0, cheeseSeq: 0, idSeq: 0,
-    myState: { inArena: false, hp: HP_MAX, kills: 0, sword: "basic", hit: null, death: null, aoe: null, cheese: null, cheesed: false, tk: 0, sw: 1, streak: 0 },
-    seenHit: new Set(), seenDeath: new Set(), seenAoe: new Set(), seenCheese: new Set(),
+    myState: { inArena: false, hp: HP_MAX, kills: 0, sword: "basic", hit: null, death: null, aoe: null, cheese: null, cheesed: false, tk: 0, sw: 1, streak: 0, stop: null },
+    seenHit: new Set(), seenDeath: new Set(), seenAoe: new Set(), seenCheese: new Set(), seenStop: new Set(),
     lastAttacker: null,
     panelOpen: false,
-    quest: null, boards: null, boardT: 0,
+    quest: null, tw: null, boards: null, boardT: 0,
     gRows: null,                  // {kills:[rows], swords:[rows]} from the server, or null
     gFetchT: -1e9, gSubmitT: -1e9, gSentTk: -1, gSentSw: -1,
     attachT: 0,
@@ -87,6 +93,7 @@ function fresh() {
 
 // ---- save ----------------------------------------------------------------------------
 function freshQuest() { return { c1: false, c2: false, b1: false, b2: false, dec: false, stars: false, rocket: false }; }
+function freshLettuces() { const o = {}; for (const k of LETTUCE_KEYS) o[k] = false; return o; }
 function loadSave(ctx) {
   let s = null;
   try { s = ctx.services.saves.load(); } catch { s = null; }
@@ -94,6 +101,7 @@ function loadSave(ctx) {
     schemaVersion: SAVE_V, kills: 0, totalKills: 0, equipped: "basic", seenIntro: false,
     cheese: false, ks: false, streak: 0, bestStreak: 0, ksClaimed: false, rebirths: 0,
     quest: freshQuest(),
+    tw: false, twTower: false, twl: freshLettuces(),
   };
   if (s && typeof s === "object") {
     if (Number.isFinite(s.kills)) d.kills = Math.max(0, Math.floor(s.kills));
@@ -106,6 +114,8 @@ function loadSave(ctx) {
     if (Number.isFinite(s.bestStreak)) d.bestStreak = Math.max(d.streak, Math.floor(s.bestStreak));
     if (Number.isFinite(s.rebirths)) d.rebirths = Math.max(0, Math.floor(s.rebirths));
     if (s.quest && typeof s.quest === "object") for (const k of Object.keys(d.quest)) d.quest[k] = !!s.quest[k];
+    d.tw = !!s.tw; d.twTower = !!s.twTower;
+    if (s.twl && typeof s.twl === "object") for (const k of LETTUCE_KEYS) d.twl[k] = !!s.twl[k];
   }
   if (!isOwned(d.equipped, d)) d.equipped = "basic";
   return d;
@@ -117,6 +127,7 @@ function saveNow(ctx) {
       schemaVersion: SAVE_V, kills: s.kills, totalKills: s.totalKills, equipped: s.equipped,
       seenIntro: s.seenIntro, cheese: s.cheese, ks: s.ks, streak: s.streak,
       bestStreak: s.bestStreak, ksClaimed: s.ksClaimed, rebirths: s.rebirths, quest: { ...s.quest },
+      tw: s.tw, twTower: s.twTower, twl: { ...s.twl },
     });
   } catch { /* fine */ }
 }
@@ -156,6 +167,16 @@ function buildDom(ctx) {
   flyBtn.addEventListener("click", () => ksFly(ctx));
   const claimBtn = btn("👑 CLAIM", "position:fixed;right:16px;bottom:424px;z-index:55;background:linear-gradient(180deg,#e0b23a,#8c6a1f);font-size:15px;display:none;");
   claimBtn.addEventListener("click", () => ksClaim(ctx));
+  // §13: the Time Warp's portal gun (shares the grenade slot — the two never coexist)
+  const pgBtn = btn("🌌", "position:fixed;right:16px;bottom:272px;z-index:55;background:linear-gradient(180deg,#2f6fd0,#12275e);font-size:20px;min-width:74px;display:none;");
+  pgBtn.addEventListener("click", () => portalPress(ctx));
+  // §13: the TIME STOP tint — shown while *I* am the one standing in stopped time
+  const frzO = document.createElement("div");
+  frzO.style.cssText = "position:fixed;inset:0;z-index:58;background:radial-gradient(circle,rgba(126,200,255,0.10),rgba(30,60,110,0.42));display:none;pointer-events:none;";
+  const frzT = document.createElement("div");
+  frzT.style.cssText = "position:absolute;left:50%;top:26%;transform:translateX(-50%);font:800 26px system-ui;color:#dff4ff;text-shadow:0 2px 8px #123;";
+  frzT.textContent = "⌛ TIME HAS STOPPED";
+  frzO.append(frzT);
   // the cheese-targeting layer: invisible until ⚡ arms it, then one tap picks a victim
   const aimLayer = document.createElement("div");
   aimLayer.style.cssText = "position:fixed;inset:0;z-index:60;display:none;touch-action:manipulation;";
@@ -167,8 +188,8 @@ function buildDom(ctx) {
   aimLayer.append(aimHint, aimCancel);
   aimLayer.addEventListener("pointerdown", (e) => cheeseTap(ctx, e));
 
-  document.body.append(hpWrap, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, aimLayer);
-  return { hpWrap, hpFill, hpText, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, aimLayer };
+  document.body.append(hpWrap, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, pgBtn, frzO, aimLayer);
+  return { hpWrap, hpFill, hpText, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, pgBtn, frzO, aimLayer };
 }
 
 // ---- a reusable paged panel (intro tips, every sword's story, the hermit's book) -----
@@ -235,7 +256,8 @@ function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcT
 
 function labelText(sw) {
   if (sw.id === "killstreak" && !own("killstreak")) return "❓ ???\nthe plaque is\nscratched out";
-  const cost = sw.cost === null ? (sw.id === "cheese" ? "WIN THE OBBY" : "???") : sw.cost === 0 ? "FREE" : sw.cost + " kills";
+  if (sw.id === "timewarp" && !own("timewarp")) return "⌛ ???\nthe pedestal ticks\nthe tower decides";
+  const cost = sw.cost === null ? (sw.id === "cheese" ? "WIN THE OBBY" : sw.id === "timewarp" ? "TEN LETTUCES" : "???") : sw.cost === 0 ? "FREE" : sw.cost + " kills";
   const ab = sw.ability ? " • ⚡ ability" : (sw.passive ? " • buff" : "");
   const dmg = sw.id === "killstreak" ? "1+streak dmg" : `${sw.damage} dmg`;
   return `${sw.emoji} ${sw.name}\n${cost} • ${dmg}${ab}`;
@@ -243,7 +265,7 @@ function labelText(sw) {
 function refreshLabels(ctx) {
   for (let i = 0; i < S.labels.length; i++) {
     const sw = SWORDS[i], owned = own(sw.id);
-    const col = owned ? "#3ddc84" : sw.id === "killstreak" ? "#ff5a3a" : "#e0b23a";
+    const col = owned ? "#3ddc84" : sw.id === "killstreak" ? "#ff5a3a" : sw.id === "timewarp" ? "#7ec8ff" : "#e0b23a";
     let txt = labelText(sw);
     if (owned) txt += "\n✅ owned";
     else if (sw.cost !== null) txt += `\n🔒 you have ${S.save.kills}`;
@@ -302,7 +324,7 @@ function inReach(me, fx, fz, tx, tz) {
   return dd;
 }
 function swing(ctx) {
-  if (!S.inArena || S.swingCd > 0) return;
+  if (!S.inArena || S.swingCd > 0 || S.frozenT > 0) return;
   S.swingCd = SWING_CD;
   const sw = swordById(S.equipped);
   slashVfx(ctx);
@@ -316,12 +338,30 @@ function swing(ctx) {
   for (const p of roster) { if (!p.pos) continue; const dd = inReach(me, fx, fz, p.pos[0], p.pos[2]); if (dd >= 0 && dd < bp) { bp = dd; bestP = p; } }
   if (bestP && (!bestD || bp <= bd)) {
     S.hitSeq++;
-    S.myState.hit = { id: S.hitSeq, target: bestP.id, dmg: swingDamage(), poison: sw.passive && sw.passive.poison ? 1 : 0 };
+    const hit = { id: S.hitSeq, target: bestP.id, dmg: swingDamage(), poison: sw.passive && sw.passive.poison ? 1 : 0 };
+    // §13: a Time Warp hit also EVICTS its victim — fifty studs, from me outward
+    if (sw.id === "timewarp") {
+      const dx = bestP.pos[0] - me[0], dz = bestP.pos[2] - me[2];
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+      hit.fl = { dx: dx / len, dz: dz / len };
+    }
+    S.myState.hit = hit;
     publishSoon();
     sfx(ctx, "oof");
   } else if (bestD) {
+    if (sw.id === "timewarp") flingTrailVfx(ctx, bestD.x, bestD.z, fx, fz);
     hitDummy(ctx, bestD, swingDamage());
   }
+}
+// The straw goes FLYING: a fading dotted arc along the fling direction (dummies cannot
+// move, but the eye should still be told what this sword does).
+function flingTrailVfx(ctx, x, z, fx, fz) {
+  const ids = [];
+  for (let k = 1; k <= 7; k++) {
+    const d = k * 6.5, h = 3 + Math.sin((k / 7) * Math.PI) * 7;
+    try { const id = uid("bt_flingdot_"); ctx.engine.parts.create({ id, shape: "sphere", size: [0.7, 0.7, 0.7], position: [x + fx * d, FLOOR_TOP + h, z + fz * d], color: k % 2 ? "#d9c48f" : "#7ec8ff", material: "neon", canCollide: false }); ids.push(id); } catch { /* fine */ }
+  }
+  S.vfx.push({ ids, t: 0.7 });
 }
 function slashVfx(ctx) {
   const me = ctx.player.position(); const [fx, fz] = facing(ctx);
@@ -338,9 +378,9 @@ function slashVfx(ctx) {
   S.vfx.push({ ids, t: 0.16 });
 }
 
-function abilityCooldownFor(sw) { return sw.ability === "cheese" ? CHEESE_CD_S : ABILITY_CD_S; }
+function abilityCooldownFor(sw) { return sw.ability === "cheese" ? CHEESE_CD_S : sw.ability === "timestop" ? TW_STOP_CD_S : ABILITY_CD_S; }
 function useAbility(ctx) {
-  if (!S.inArena) return;
+  if (!S.inArena || S.frozenT > 0) return;
   const sw = swordById(S.equipped);
   if (!sw.ability || sw.ability === "streak") { toast(ctx, "This sword has no ability.", "⚡", 1600); return; }
   if (S.abilityCd > 0) { toast(ctx, `Ability recharging — ${Math.ceil(S.abilityCd)}s`, "⚡", 1600); return; }
@@ -376,6 +416,25 @@ function useAbility(ctx) {
   } else if (sw.ability === "bush") {
     spawnBush(ctx, me[0], me[2]);
     sfx(ctx, "sparkle"); toast(ctx, "A thorn bush bursts up — 10 damage to anyone near it!", "🌹", 2000);
+  } else if (sw.ability === "timestop") {
+    // §13: TIME STOP — everyone but ME, within TW_STOP_R, stands still for TW_STOP_S.
+    // The stop travels the presence channel like an aoe; each victim freezes ITSELF.
+    S.stopSeq++;
+    S.myState.stop = { id: S.stopSeq, x: me[0], z: me[2] };
+    publishSoon();
+    const ids = [];
+    for (let ring2 = 0; ring2 < 3; ring2++) {
+      const r = 5 + ring2 * 6;
+      try { const id = uid("bt_stopring_"); ctx.engine.parts.create({ id, shape: "cylinder", size: [r * 2, 0.25, r * 2], position: [me[0], me[1] + 0.2 + ring2 * 0.15, me[2]], color: ring2 % 2 ? "#7ec8ff" : "#dff4ff", material: "neon", canCollide: false }); ids.push(id); } catch { /* fine */ }
+    }
+    for (let k = 0; k < 12; k++) {
+      const a = k * 0.5236;
+      try { const id = uid("bt_stoptick_"); ctx.engine.parts.create({ id, shape: "box", size: [0.5, 5.5, 0.5], position: [me[0] + Math.cos(a) * 14, me[1] + 2.8, me[2] + Math.sin(a) * 14], rotation: [0, -a * 57.29578, 0], color: k % 3 === 0 ? "#e0b23a" : "#7ec8ff", material: "neon", canCollide: false }); ids.push(id); } catch { /* fine */ }
+    }
+    S.vfx.push({ ids, t: TW_STOP_S });
+    try { ctx.engine.camera.shake(0.3, 0.35); } catch { /* fine */ }
+    sfx(ctx, "warp");
+    toast(ctx, "⌛ TIME STOP. For three seconds, the arena belongs to you.", "⌛", 2600);
   }
   S.abilityCd = abilityCooldownFor(sw);
   refreshAbilityBtn();
@@ -448,7 +507,7 @@ function applyCheesed(ctx) {
 // ---- killstreak powers (§11) --------------------------------------------------------
 function ksTier() { return swordById(S.equipped).id === "killstreak" ? S.save.streak : -1; }
 function ksTeleport(ctx) {
-  if (!S.inArena || ksTier() < KS_TIERS[0]) return;
+  if (!S.inArena || S.frozenT > 0 || ksTier() < KS_TIERS[0]) return;
   if (S.ksCd.tp > 0) { toast(ctx, `Teleport in ${Math.ceil(S.ksCd.tp)}s`, "🌀", 1400); return; }
   const me = ctx.player.position();
   const [fx, fz] = facing(ctx);
@@ -466,7 +525,7 @@ function ksTeleport(ctx) {
   sfx(ctx, "warp");
 }
 function ksGrenade(ctx) {
-  if (!S.inArena || ksTier() < KS_TIERS[1]) return;
+  if (!S.inArena || S.frozenT > 0 || ksTier() < KS_TIERS[1]) return;
   if (S.ksCd.gr > 0) { toast(ctx, `Grenade in ${Math.ceil(S.ksCd.gr)}s`, "💣", 1400); return; }
   const me = ctx.player.position();
   const [fx, fz] = facing(ctx);
@@ -538,6 +597,96 @@ function refreshKsButtons() {
   if (tier >= KS_TIERS[0]) { dom.tpBtn.textContent = S.ksCd.tp > 0 ? "🌀 " + Math.ceil(S.ksCd.tp) : "🌀"; dom.tpBtn.style.opacity = S.ksCd.tp > 0 ? "0.55" : "1"; }
   if (tier >= KS_TIERS[1]) { dom.grBtn.textContent = S.ksCd.gr > 0 ? "💣 " + Math.ceil(S.ksCd.gr) : "💣"; dom.grBtn.style.opacity = S.ksCd.gr > 0 ? "0.55" : "1"; }
   if (tier >= KS_TIERS[2]) dom.flyBtn.style.opacity = S.flying ? "1" : "0.8";
+}
+
+// ---- §13: stopped time, the fifty-stud fling, and the portal gun ---------------------
+function applyFrozen(ctx) {
+  S.frozenT = TW_STOP_S;
+  try { ctx.player.setWalkSpeed(0); } catch { /* fine */ }
+  try { ctx.player.setJumpPower(0); } catch { /* fine */ }
+  if (dom) dom.frzO.style.display = "block";
+  sfx(ctx, "denied");
+  toast(ctx, "⌛ Someone stopped time. You are a statue for three seconds.", "🧊", 2600);
+}
+function clearFrozen(ctx) {
+  if (S.frozenT <= 0 && dom && dom.frzO.style.display === "none") return;
+  S.frozenT = 0;
+  if (dom) dom.frzO.style.display = "none";
+  applyPassives(ctx);
+}
+function startFling(ctx, fl) {
+  const me = ctx.player.position();
+  S.fling = { x0: me[0], y0: me[1], z0: me[2], dx: fl.dx || 0, dz: fl.dz || 0, t: 0, dur: 0.7 };
+  try { ctx.engine.camera.shake(0.5, 0.5); } catch { /* fine */ }
+  sfx(ctx, "boing");
+  toast(ctx, "⌛ EVICTED — the Time Warp throws you fifty studs!", "💨", 2200);
+}
+function stepFling(ctx, dt) {
+  if (!S.fling) return;
+  const f = S.fling;
+  f.t += dt;
+  const k = Math.min(1, f.t / f.dur);
+  const x = f.x0 + f.dx * TW_FLING * k;
+  const z = f.z0 + f.dz * TW_FLING * k;
+  const y = f.y0 + Math.sin(k * Math.PI) * 9;
+  try { ctx.player.teleport([x, y, z]); } catch { /* fine */ }
+  if (k >= 1) S.fling = null; // wherever you are now, gravity owns the rest
+}
+function portalPress(ctx) {
+  if (!S.inArena || S.frozenT > 0) return;
+  const P2 = S.portal;
+  if (P2.a && P2.b) { toast(ctx, "A pair is already open. Use them!", "🌌", 1600); return; }
+  if (!P2.a && P2.cd > 0) { toast(ctx, `The gun recharges — ${Math.ceil(P2.cd)}s`, "🌌", 1600); return; }
+  const me = ctx.player.position();
+  const [fx, fz] = facing(ctx);
+  const pos = [me[0] + fx * 3, me[1], me[2] + fz * 3];
+  // keep every portal inside the arena so it never dangles over the void
+  const dx = pos[0] - ARENA_CENTER[0], dz = pos[2] - ARENA_CENTER[1];
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist > ARENA_RADIUS - 3) { const k2 = (ARENA_RADIUS - 3) / dist; pos[0] = ARENA_CENTER[0] + dx * k2; pos[2] = ARENA_CENTER[1] + dz * k2; }
+  if (!P2.a) {
+    P2.a = pos; P2.aIds = buildPortal(ctx, pos, "#35a3e0");
+    sfx(ctx, "warp");
+    toast(ctx, "Portal ONE cut. Walk somewhere else and cut the second.", "🌌", 2600);
+  } else {
+    P2.b = pos; P2.bIds = buildPortal(ctx, pos, "#ff8c1a");
+    P2.life = TW_PORTAL_LIFE_S; P2.cd = TW_PORTAL_CD_S; P2.grace = 1.2;
+    sfx(ctx, "warp");
+    toast(ctx, "Portal TWO cut. Step in either — 30 seconds, then they close.", "🌌", 2600);
+  }
+  refreshAbilityBtn();
+}
+function buildPortal(ctx, pos, col) {
+  const ids = [];
+  const push = (def) => { try { const id = uid("bt_portal_"); ctx.engine.parts.create({ id, canCollide: false, ...def }); ids.push(id); } catch { /* fine */ } };
+  push({ shape: "cylinder", size: [4.4, 0.25, 4.4], position: [pos[0], pos[1] + 0.15, pos[2]], color: col, material: "neon" });
+  push({ shape: "cylinder", size: [3.2, 0.3, 3.2], position: [pos[0], pos[1] + 0.22, pos[2]], color: "#0a0716", material: "plastic" });
+  for (let k = 0; k < 6; k++) { const a = k * 1.047; push({ size: [0.28, 4.5, 0.28], position: [pos[0] + Math.cos(a) * 1.7, pos[1] + 2.3, pos[2] + Math.sin(a) * 1.7], rotation: [0, -a * 57.29578, 0], color: col, material: "neon" }); }
+  push({ shape: "cylinder", size: [3.4, 0.22, 3.4], position: [pos[0], pos[1] + 4.7, pos[2]], color: col, material: "neon" });
+  return ids;
+}
+function clearPortals(ctx, quiet) {
+  const P2 = S.portal;
+  for (const id of P2.aIds.concat(P2.bIds)) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
+  const had = P2.a && P2.b;
+  P2.a = null; P2.b = null; P2.aIds = []; P2.bIds = []; P2.life = 0; P2.grace = 0;
+  if (had && !quiet) toast(ctx, "The portals sigh shut.", "🌌", 1800);
+}
+function stepPortals(ctx, dt) {
+  const P2 = S.portal;
+  if (P2.cd > 0) { P2.cd = Math.max(0, P2.cd - dt); refreshAbilityBtn(); }
+  if (!P2.a || !P2.b) return;
+  P2.life -= dt;
+  if (P2.life <= 0) { clearPortals(ctx, false); return; }
+  if (P2.grace > 0) { P2.grace -= dt; return; }
+  const me = ctx.player.position();
+  const near = (p) => (me[0] - p[0]) ** 2 + (me[2] - p[2]) ** 2 <= 2.3 * 2.3 && Math.abs(me[1] - p[1]) < 4.5;
+  const to = near(P2.a) ? P2.b : near(P2.b) ? P2.a : null;
+  if (to) {
+    try { ctx.player.teleport([to[0], to[1] + 0.4, to[2]]); } catch { /* fine */ }
+    P2.grace = 1.2;
+    sfx(ctx, "warp");
+  }
 }
 
 // ---- thorn bushes (Thornheart's ⚡) --------------------------------------------------
@@ -664,9 +813,17 @@ function refreshAbilityBtn() {
   const show = S.inArena && !!sw.ability && sw.ability !== "streak";
   dom.abBtn.style.display = show ? "block" : "none";
   refreshKsButtons();
+  // §13: the portal gun rides along with the Time Warp
+  const pg = S.inArena && sw.id === "timewarp";
+  dom.pgBtn.style.display = pg ? "block" : "none";
+  if (pg) {
+    const P2 = S.portal;
+    dom.pgBtn.textContent = P2.a && P2.b ? "🌌 " + Math.ceil(P2.life) : P2.a ? "🌌 2nd?" : P2.cd > 0 ? "🌌 " + Math.ceil(P2.cd) : "🌌";
+    dom.pgBtn.style.opacity = !P2.a && P2.cd > 0 ? "0.55" : "1";
+  }
   if (!show) return;
-  if (S.abilityCd > 0) { dom.abBtn.textContent = (sw.ability === "cheese" ? "🧀 " : "⚡ ") + Math.ceil(S.abilityCd); dom.abBtn.style.opacity = "0.55"; }
-  else { dom.abBtn.textContent = sw.ability === "cheese" ? "🧀" : "⚡"; dom.abBtn.style.opacity = "1"; }
+  if (S.abilityCd > 0) { dom.abBtn.textContent = (sw.ability === "cheese" ? "🧀 " : sw.ability === "timestop" ? "⌛ " : "⚡ ") + Math.ceil(S.abilityCd); dom.abBtn.style.opacity = "0.55"; }
+  else { dom.abBtn.textContent = sw.ability === "cheese" ? "🧀" : sw.ability === "timestop" ? "⌛" : "⚡"; dom.abBtn.style.opacity = "1"; }
 }
 function refreshHud(ctx) {
   const sw = swordById(S.equipped);
@@ -674,6 +831,9 @@ function refreshHud(ctx) {
   ctx.services.ui.setHudStat("bt-sword", { icon: sw.emoji, label: S.inArena ? "Wielding" : "Last sword", value: sw.name });
   if (sw.id === "killstreak") ctx.services.ui.setHudStat("bt-streak", { icon: "🩸", label: "Streak", value: `${S.save.streak} (${1 + S.save.streak} dmg)` });
   else { try { ctx.services.ui.removeHudStat("bt-streak"); } catch { /* fine */ } }
+  // §13: the lettuce count rides the HUD from the first tower win to the tenth find
+  if (S.save.twTower && !S.save.tw && S.tw) ctx.services.ui.setHudStat("bt-lett", { icon: "🥬", label: "Lettuces", value: `${S.tw.count()} / 10` });
+  else { try { ctx.services.ui.removeHudStat("bt-lett"); } catch { /* fine */ } }
   try { ctx.events.emit("bt:state", debugState()); } catch { /* no place */ }
 }
 function showCombatUi(on) {
@@ -686,6 +846,7 @@ function showCombatUi(on) {
 
 // ---- lobby / arena travel ------------------------------------------------------------
 function applyPassives(ctx) {
+  if (S.frozenT > 0) return; // §13: stopped time outranks every buff — stay a statue
   const sw = swordById(S.equipped);
   const p = sw.passive || {};
   const slow = S.cheesedT > 0 ? 0.45 : 1; // §10: splatted fighters wade through fondue
@@ -701,6 +862,8 @@ function enterArena(ctx, swordId) {
   S.equipped = swordId; S.save.equipped = swordId; saveNow(ctx);
   S.inArena = true; S.hp = HP_MAX; S.poison = null; S.swingCd = 0; S.abilityCd = 0;
   S.ksCd.tp = 0; S.ksCd.gr = 0;
+  clearFrozen(ctx); S.fling = null; clearPortals(ctx, true); S.portal.cd = 0;
+  if (S.tw) S.tw.leaveRealmState();
   const sp = S.world.arenaSpawns[Math.floor(S.runT * 3) % S.world.arenaSpawns.length];
   try { ctx.player.teleport([sp[0], sp[1], sp[2]], 0); } catch { /* fine */ }
   // NOTE: the checkpoint deliberately stays at the LOBBY (set in toLobby / at spawn), so a
@@ -714,6 +877,10 @@ function enterArena(ctx, swordId) {
 function toLobby(ctx) {
   S.inArena = false;
   endFly(ctx);
+  S.frozenT = 0; if (dom) dom.frzO.style.display = "none";
+  S.fling = null;
+  clearPortals(ctx, true);
+  if (S.tw) S.tw.leaveRealmState();
   clearPassives(ctx);
   try { ctx.player.teleport([LOBBY_SPAWN[0], LOBBY_SPAWN[1], LOBBY_SPAWN[2]], LOBBY_YAW); } catch { /* fine */ }
   try { ctx.player.setCheckpoint([LOBBY_SPAWN[0], LOBBY_SPAWN[1], LOBBY_SPAWN[2]]); } catch { /* fine */ }
@@ -734,6 +901,9 @@ function openSwordPanel(ctx, i) {
     sfx(ctx, "denied");
   } else if (sw.id === "killstreak") {
     pagedPanel(ctx, "❓ The scratched pedestal", [{ heading: "❓ ???", body: "The plaque is scratched out. The pedestal is warm. Whatever stood here was BURIED somewhere, and nothing in this lobby says where — though the Meteorbrand's last page is said to whisper about it." }], { doneLabel: "Close" });
+    sfx(ctx, "denied");
+  } else if (sw.id === "timewarp") {
+    pagedPanel(ctx, "⌛ The ticking pedestal", [{ heading: "⌛ ???", body: "The pedestal ticks like something impatient. A clock is inlaid around its base and the sword above it blurs when you look straight at it — it is here and NOT here.\n\nThe CLOCK ARCH beside it leads to a tower of lava and tiny footholds, and past the tower, they say, a realm where ten lettuces hide. Bring all ten home and time will hold still for you." }], { doneLabel: "Close" });
     sfx(ctx, "denied");
   } else {
     pagedPanel(ctx, `${sw.emoji} ${sw.name}`, [{ heading: `${sw.emoji} ${sw.name}`, body: `${sw.blurb}\n\n🔒 Unlocks at ${sw.cost} kills. You have ${S.save.kills}. Its story stays sealed until you earn it.` }], { doneLabel: "Close" });
@@ -757,6 +927,12 @@ function buildMiniSword(THREE, sw) {
   add(new THREE.SphereGeometry(0.16, 8, 6), mat(sw.colors.gem, true), 0, -0.44, 0);
   if (sw.id === "killstreak") add(new THREE.BoxGeometry(0.08, 2.2, 0.2), mat("#ff2a2a", true), 0, 1.8, 0.02);
   if (sw.id === "cheese") for (let k = 0; k < 3; k++) add(new THREE.SphereGeometry(0.09, 6, 4), mat("#c9971f"), 0.06 - (k % 2) * 0.12, 1.1 + k * 0.6, 0.09);
+  if (sw.id === "timewarp") { // a little dial rides the blade, hands and all
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 6, 18), mat("#7ec8ff", true));
+    ring.position.set(0, 1.8, 0); g.add(ring);
+    add(new THREE.BoxGeometry(0.07, 0.85, 0.07), mat("#e0b23a", true), 0, 2.15, 0.04);
+    add(new THREE.BoxGeometry(0.07, 0.55, 0.07), mat("#ffd23a", true), 0.18, 1.95, 0.04, -0.9);
+  }
   return g;
 }
 function disposeGroup(g) {
@@ -936,6 +1112,10 @@ export function init(ctx) {
   const gate = makeLabel(ctx, "🧀 OBBY OF OOF\none stage\nno mercy", "#ffd23a");
   gate.sprite.position.set(S.world.obbyGate[0], S.world.obbyGate[1], S.world.obbyGate[2]);
   root.add(gate.sprite); S.gateLabel = gate;
+  // §13: the clock arch's label
+  const twGate = makeLabel(ctx, "⌛ THE CLOCK ARCH\nthe tower, the realm\nthe ten lettuces", "#7ec8ff");
+  twGate.sprite.position.set(S.world.twGate[0], S.world.twGate[1], S.world.twGate[2]);
+  root.add(twGate.sprite); S.twGateLabel = twGate;
   refreshLabels(ctx);
 
   // baseline training dummies
@@ -966,6 +1146,24 @@ export function init(ctx) {
   });
   S.quest.refreshWorld();
 
+  // §13: the Time Warp questline
+  S.tw = createTimewarp({
+    ctx,
+    getSave: () => S.save,
+    saveNow: () => { saveNow(ctx); refreshHud(ctx); },
+    toast: (t, icon, dur) => toast(ctx, t, icon, dur),
+    sfx: (n) => sfx(ctx, n),
+    isPanelOpen: () => S.panelOpen,
+    setPanelOpen: (v) => { S.panelOpen = v; },
+    leaveArena: () => { if (S.inArena) toLobby(ctx); },
+    getWorld: () => S.world,
+    onUnlockTimewarp: () => {
+      try { ctx.services.badges.award("sword_timewarp"); } catch { /* fine */ }
+      refreshLabels(ctx); refreshHud(ctx);
+    },
+  });
+  S.tw.refreshWorld();
+
   dom = buildDom(ctx);
   const subs = [];
   for (let i = 0; i < S.world.swordPads.length; i++) subs.push(ctx.events.on("touch:" + S.world.swordPads[i].padId, ((idx) => () => openSwordPanel(ctx, idx))(i)));
@@ -974,6 +1172,11 @@ export function init(ctx) {
   subs.push(ctx.events.on("touch:bt_obby_win", () => winObby(ctx)));
   for (const ev of ["bt_cube", "bt_book1", "bt_book2", "bt_tree", "bt_scope", "bt_rebirth", "bt_rocket", "bt_crater"]) {
     subs.push(ctx.events.on("touch:" + ev, ((e2) => () => { try { S.quest.onTouch(e2); } catch { /* fine */ } })(ev)));
+  }
+  // §13: the Time Warp's world — the arch, the summit, the realm's pads and lettuces
+  const twEvents = ["bt_tw_enter", "bt_tw_top", "bt_tw_leave", "bt_tw_keypad", ...LETTUCE_KEYS.map((k) => "bt_lett_" + k)];
+  for (const ev of twEvents) {
+    subs.push(ctx.events.on("touch:" + ev, ((e2) => () => { try { S.tw.onTouch(e2); } catch { /* fine */ } })(ev)));
   }
   S.subs = subs;
 
@@ -1003,6 +1206,15 @@ export function update(dt, ctx) {
 
   stepCheeses(ctx, dt);
   try { S.quest.update(dt); } catch { /* fine */ }
+  try { S.tw.update(dt); } catch { /* fine */ }
+
+  // §13: stopped time thaws; the fling arcs; the portals hum
+  if (S.frozenT > 0) {
+    S.frozenT = Math.max(0, S.frozenT - dt);
+    if (S.frozenT === 0) { clearFrozen(ctx); toast(ctx, "Time lets go of you.", "⌛", 1600); }
+  }
+  stepFling(ctx, dt);
+  stepPortals(ctx, dt);
 
   if (S.inArena) {
     stepMeteors(ctx, dt);
@@ -1035,7 +1247,8 @@ export function update(dt, ctx) {
   if (myId) {
     for (const p of rosterSafe(ctx)) {
       const st = p.state; if (!st) continue;
-      if (st.hit && st.hit.target === myId) { const key = p.id + ":h" + st.hit.id; if (!S.seenHit.has(key)) { S.seenHit.add(key); takeDamage(ctx, st.hit.dmg, st.hit.poison, p.id); } }
+      if (st.hit && st.hit.target === myId) { const key = p.id + ":h" + st.hit.id; if (!S.seenHit.has(key)) { S.seenHit.add(key); takeDamage(ctx, st.hit.dmg, st.hit.poison, p.id); if (st.hit.fl && S.inArena) startFling(ctx, st.hit.fl); } }
+      if (st.stop) { const key = p.id + ":s" + st.stop.id; if (!S.seenStop.has(key)) { S.seenStop.add(key); const me = ctx.player.position(); if (S.inArena && (me[0] - st.stop.x) ** 2 + (me[2] - st.stop.z) ** 2 <= TW_STOP_R * TW_STOP_R) applyFrozen(ctx); } }
       if (st.aoe) { const key = p.id + ":a" + st.aoe.id; if (!S.seenAoe.has(key)) { S.seenAoe.add(key); const me = ctx.player.position(); if (S.inArena && (me[0] - st.aoe.x) ** 2 + (me[2] - st.aoe.z) ** 2 <= st.aoe.r * st.aoe.r) takeDamage(ctx, st.aoe.dmg, 0, p.id); } }
       if (st.cheese && st.cheese.target === myId) { const key = p.id + ":c" + st.cheese.id; if (!S.seenCheese.has(key)) { S.seenCheese.add(key); if (S.inArena) applyCheesed(ctx); } }
       if (st.death && st.death.killer === myId) { const key = p.id + ":d" + st.death.id; if (!S.seenDeath.has(key)) { S.seenDeath.add(key); scoreKill(ctx, p.name || "a fighter"); } }
@@ -1063,6 +1276,8 @@ export function dispose(ctx) {
     clearPassives(ctx);
     clearAttachments();
     if (S.quest) { try { S.quest.dispose(); } catch { /* fine */ } }
+    if (S.tw) { try { S.tw.dispose(); } catch { /* fine */ } }
+    try { clearPortals(ctx, true); } catch { /* fine */ }
     if (S.boards) { try { S.boards.dispose(); } catch { /* fine */ } }
     for (const v of S.vfx) for (const id of v.ids) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
     for (const m of S.meteors) { try { ctx.engine.parts.remove(m.id); } catch { /* gone */ } if (m.glow) { try { ctx.engine.parts.remove(m.glow); } catch { /* gone */ } } }
@@ -1072,12 +1287,13 @@ export function dispose(ctx) {
     for (const b of S.bushes) for (const id of b.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
     if (S.labels) for (const L of S.labels) { try { L.mat.dispose(); L.tex.dispose(); } catch { /* fine */ } }
     if (S.gateLabel) { try { S.gateLabel.mat.dispose(); S.gateLabel.tex.dispose(); } catch { /* fine */ } }
+    if (S.twGateLabel) { try { S.twGateLabel.mat.dispose(); S.twGateLabel.tex.dispose(); } catch { /* fine */ } }
     if (S.rootId != null) { try { ctx.engine.parts.remove(S.rootId); } catch { /* gone */ } }
     if (S.subs) for (const u of S.subs) { try { u(); } catch { /* fine */ } }
     try { ctx.engine.audio.playMusic("chill"); } catch { /* fine */ }
   }
-  if (dom) { for (const k of ["hpWrap", "atkBtn", "abBtn", "tpBtn", "grBtn", "flyBtn", "claimBtn", "aimLayer"]) { try { dom[k].remove(); } catch { /* fine */ } } dom = null; }
-  try { ctx.services.ui.removeHudStat("bt-kills"); ctx.services.ui.removeHudStat("bt-sword"); ctx.services.ui.removeHudStat("bt-streak"); } catch { /* fine */ }
+  if (dom) { for (const k of ["hpWrap", "atkBtn", "abBtn", "tpBtn", "grBtn", "flyBtn", "claimBtn", "pgBtn", "frzO", "aimLayer"]) { try { dom[k].remove(); } catch { /* fine */ } } dom = null; }
+  try { ctx.services.ui.removeHudStat("bt-kills"); ctx.services.ui.removeHudStat("bt-sword"); ctx.services.ui.removeHudStat("bt-streak"); ctx.services.ui.removeHudStat("bt-lett"); } catch { /* fine */ }
   S = null;
 }
 
@@ -1089,5 +1305,7 @@ export function debugState() {
     hp: Math.ceil(S.hp), dummies: S.dummies.filter((d) => !d.dead).length,
     cheese: S.save.cheese, ks: S.save.ks, streak: S.save.streak, rebirths: S.save.rebirths,
     cheesedT: Math.ceil(S.cheesedT), quest: { ...S.save.quest }, panelOpen: S.panelOpen,
+    tw: S.save.tw, twTower: S.save.twTower, lettuces: S.tw ? S.tw.count() : 0,
+    frozenT: Math.ceil(S.frozenT), portals: !!(S.portal.a && S.portal.b), portalCd: Math.ceil(S.portal.cd),
   };
 }

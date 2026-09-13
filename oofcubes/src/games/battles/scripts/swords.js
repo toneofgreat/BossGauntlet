@@ -12,14 +12,24 @@ export const CHEESE_CD_S = 50;    // §10: the Cheese Blade's ⚡ recharges slow
 export const CHEESE_SLOW_S = 10;  // §10: splatted fighters are slow (and yellow) this long
 export const BASE_WALK = 16;
 export const BASE_JUMP = 50;
+// §13: the Time Warp — won by finding all ten lettuces beyond the clock tower.
+export const TW_STOP_CD_S = 150;  // its ⚡ TIME STOP recharges slower than anything else
+export const TW_STOP_R = 100;     // freeze radius in studs — most of the arena
+export const TW_STOP_S = 3;       // frozen fighters stand still this long; the caster keeps moving
+export const TW_FLING = 50;       // every Time Warp hit also throws the victim this many studs
+export const TW_PORTAL_LIFE_S = 30; // a cut portal pair holds this long
+export const TW_PORTAL_CD_S = 45;   // and the gun needs this long before it can cut a new pair
 
 // ability: "spikes" | "meteor" | "dummies" | "bush" | "cheese" | "streak" | null
 //   ("cheese" = tap-a-target splat; "streak" = the Killstreak's growing button row)
 // passive: { speed?:mult, jump?:+power, poison?:true } | null
-// cost: a KILL threshold, or null for the two secret blades (unlock: "obby" | "quest",
-//   answered by save flags — see isOwned).
+// cost: a KILL threshold, or null for the secret blades (unlock: "obby" | "quest" |
+//   "lettuce", answered by save flags — see isOwned).
 // ornament: a keyword layout.js reads to bolt extra flourishes onto the pedestal model.
-// The two secret blades come FIRST so the rack parks them on the LEFT of the ten.
+// The two secret blades come FIRST so the rack parks them on the LEFT of the ten. The
+// Time Warp comes LAST and carries offRack: true — the rack skips it (so the classic
+// twelve keep their pads and indexes) and layout.js raises it a bespoke pedestal by the
+// clock arch instead.
 export const SWORDS = Object.freeze([
   Object.freeze({
     id: "cheese", name: "Cheese Blade", emoji: "🧀", cost: null, unlock: "obby", damage: 3,
@@ -200,17 +210,47 @@ export const SWORDS = Object.freeze([
       + "gone. The vines are not.",
     ],
   }),
+  Object.freeze({
+    id: "timewarp", name: "Time Warp", emoji: "⌛", cost: null, unlock: "lettuce", damage: 5,
+    ability: "timestop", passive: null, ornament: "timewarp", offRack: true,
+    blurb: "5 damage — and every hit FLINGS the victim fifty studs. ⚡ TIME STOP: freeze "
+      + "everyone within a hundred studs for three seconds while you alone keep moving. "
+      + "Comes with a portal gun. Won by climbing the clock tower and finding all TEN "
+      + "lettuces in the realm beyond it.",
+    colors: { blade: "#7ec8ff", edge: "#dff4ff", hilt: "#2a1a4a", guard: "#e0b23a", gem: "#a05cff" },
+    lore: [
+      "The Time Warp was not forged in a year. It was forged in the SAME year, over and "
+      + "over, by a smith who kept winding his tower's great clock backwards each night to "
+      + "hammer the blade again. The steel remembers every one of those years at once — "
+      + "which is why touching it feels like standing in a doorway with all of history "
+      + "leaning on the other side.",
+      "Every strike unsticks its victim from the present: five points of hurt and then the "
+      + "world THROWS them, fifty studs of it, because a body cannot stand in a second it "
+      + "has been evicted from. Its deepest trick is crueller — turn the key and time simply "
+      + "stops for everyone near you but YOU, three seconds of a world gone still while you "
+      + "walk through it like its owner.",
+      "The smith hid it past a tower of lava and clockwork, in a realm where he grew "
+      + "lettuces — ten of them, his calendar, one for every year the year repeated. Happy "
+      + "ones, sad ones, one gone wrong in the dark. Find all ten and the blade accepts "
+      + "you, and hands you its little brother: a gun that cuts two holes in the air and "
+      + "dares you to step through.",
+    ],
+  }),
 ]);
 
 const BY_ID = new Map(SWORDS.map((s) => [s.id, s]));
 export function swordById(id) { return BY_ID.get(id) || BY_ID.get("basic"); }
 // Ownership answers from the whole SAVE now, not a bare kill count: the ten rack swords
-// stay kill thresholds, the two secret blades are save flags (`cheese`, `ks`) their
+// stay kill thresholds, the secret blades are save flags (`cheese`, `ks`, `tw`) their
 // quests set. A rebirth resets `kills` — so the rack RELOCKS — but never the flags.
 export function isOwned(id, save) {
   const s = BY_ID.get(id);
   if (!s) return false;
-  if (s.cost === null) return s.unlock === "obby" ? !!save.cheese : !!save.ks;
+  if (s.cost === null) {
+    if (s.unlock === "obby") return !!save.cheese;
+    if (s.unlock === "lettuce") return !!save.tw;
+    return !!save.ks;
+  }
   return (save.kills || 0) >= s.cost;
 }
 export function ownedSwords(save) { return SWORDS.filter((s) => isOwned(s.id, save)); }
@@ -249,7 +289,8 @@ export const INTRO_PAGES = Object.freeze([
     body: "Each sword on the rack shows what it costs and what it does, and turns slowly so you "
       + "can admire it. Own one, and touching it opens its past — the forges, the fools and the "
       + "fighters behind it. The Cheese Blade asks for an obby, not kills; the black pedestal "
-      + "asks for something nobody writes down. Two leaderboards by the door keep the score. "
+      + "asks for something nobody writes down. Two leaderboards by the door keep the score, "
+      + "and at the east end a CLOCK ARCH ticks over a pedestal that is here and not here. "
       + "Now go earn them all. Tap Skip any time. Good luck out there.",
   }),
 ]);

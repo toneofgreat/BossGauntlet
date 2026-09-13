@@ -3,7 +3,7 @@
     "slug": "battles",
     "name": "Battles",
     "icon": "⚔️",
-    "description": "Grab a sword, drop into the arena. Twelve blades: ten bought in kills, one won in a brutal obby, one buried at the end of a riddle."
+    "description": "Grab a sword, drop into the arena. Thirteen blades — the last waits past a lava tower and ten hidden lettuces."
   },
   "spawn": [12, 4.3, 0],
   "spawnYaw": 90,
