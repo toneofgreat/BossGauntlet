@@ -581,6 +581,25 @@ export const STARTER_CATALOG = [
     price: 5000, rarity: "legendary", grantOnly: false, sourcePlace: null,
     appearance: { swatch: "#f7c948", material: "metal", preset: null },
   },
+  {
+    // Spec 26 §11: the Killstreak Garb — the shirt and the pants in one set. Shown in
+    // the Catalog like everything else, but no price will ever buy it: only a 250 kill
+    // streak on Battles' Killstreak blade grants it.
+    id: "body_killstreak", name: "Killstreak Shirt & Pants", type: "bodycolor",
+    price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — a 250 killstreak",
+    appearance: {
+      swatch: null,
+      material: "metal",
+      preset: {
+        head: "#f5cd30",
+        torso: "#4a0f14",
+        leftArm: "#1a1220",
+        rightArm: "#1a1220",
+        leftLeg: "#0a0710",
+        rightLeg: "#0a0710",
+      },
+    },
+  },
 
   // ---- auras (§3.6) — emitters that follow the avatar --------------------------------
   {
@@ -705,6 +724,18 @@ export const STARTER_CATALOG = [
     appearance: {
       motion: "timewarp",
       colors: ["#ffffff", "#ffd93d", "#7af0ff", "#ff36c8", "#3ddc84", "#a05cff"],
+    },
+  },
+  {
+    // Spec 26 §11: the Killstreak Aura — tally-red sparks counting around you and dark
+    // smoke rising off your shoulders. In the Catalog for everyone to covet; granted
+    // only by holding a 250 kill streak on Battles' Killstreak blade.
+    id: "aura_killstreak", name: "Killstreak Aura", type: "aura",
+    price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — a 250 killstreak",
+    appearance: {
+      motion: "orbit", count: 10, rate: 0, colors: ["#ff2a2a", "#ff5a3a"], size: [0.26, 0.5],
+      lifetime: 0, radius: 1.9, speed: 210, height: 2.6, bob: 0.5, wobble: 0,
+      sub: { motion: "orbit", count: 7, speed: -80, radius: 1.2, height: 3.6, size: [0.42, 0.34], bob: 0.7, colors: ["#241a2e", "#12101c"] },
     },
   },
   {

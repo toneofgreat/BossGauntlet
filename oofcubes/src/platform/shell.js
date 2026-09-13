@@ -1314,6 +1314,7 @@ function buildCtx(emitter, slug) {
         setOffset: (v) => cameraCtl.setOffset(v),
         shake: (intensity, durationS) => cameraCtl.shake(intensity, durationS),
         reset: () => cameraCtl.reset(),
+        worldToScreen: (pos) => cameraCtl.worldToScreen(pos),
       },
       physics: {
         raycast: (origin, dir, maxDist) => physics.raycast(origin, dir, maxDist),

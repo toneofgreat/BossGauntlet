@@ -3,7 +3,7 @@
     "slug": "battles",
     "name": "Battles",
     "icon": "⚔️",
-    "description": "Start in the lobby, grab a sword, drop into the arena. Every kill unlocks a deadlier blade — nine of them, up to the one-shot Meteorbrand."
+    "description": "Grab a sword, drop into the arena. Twelve blades: ten bought in kills, one won in a brutal obby, one buried at the end of a riddle."
   },
   "spawn": [12, 4.3, 0],
   "spawnYaw": 90,

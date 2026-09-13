@@ -62,6 +62,17 @@ export function createGames(deps = {}) {
       const tok = acc && acc.signedIn() ? `?token=${encodeURIComponent(acc.token())}` : "";
       return call(`/api/lifting/top${tok}`, undefined, "GET");
     },
+    // spec 26 §12 — Battles' two boards: lifetime kills and swords owned.
+    async battlesTop() {
+      const acc = account();
+      const tok = acc && acc.signedIn() ? `?token=${encodeURIComponent(acc.token())}` : "";
+      return call(`/api/battles/top${tok}`, undefined, "GET");
+    },
+    async battlesScore(kills, swords) {
+      const acc = account();
+      if (!acc || !acc.signedIn()) return null; // nothing to attach the row to
+      return call("/api/battles/score", { token: acc.token(), kills, swords });
+    },
     async liftingScore(strength) {
       const acc = account();
       if (!acc || !acc.signedIn()) return null; // nothing to attach the row to

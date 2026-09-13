@@ -347,9 +347,26 @@ export function createCamera({ dom, input, physics } = {}) {
     shiftLocked = false;
   }
 
+  // worldToScreen([x,y,z]) -> [px,py] | null (added 2026-09-12, spec 04 §5.7): the CSS-pixel
+  // screen position of a world point, or null when it is behind the lens — so a game can park
+  // a DOM control (a target ring, a tap marker) over something in the world. Uses the canvas's
+  // CLIENT size because DOM overlays live in CSS pixels, not drawing-buffer pixels.
+  const projV = new THREE.Vector3();
+  function worldToScreen(pos) {
+    if (!pos) return null;
+    three.updateMatrixWorld();
+    projV.set(pos[0], pos[1], pos[2]).applyMatrix4(three.matrixWorldInverse);
+    if (projV.z > -CAMERA.NEAR) return null; // behind the lens
+    projV.set(pos[0], pos[1], pos[2]).project(three);
+    const w = (dom && dom.clientWidth) || 1;
+    const h = (dom && dom.clientHeight) || 1;
+    return [(projV.x * 0.5 + 0.5) * w, (0.5 - projV.y * 0.5) * h];
+  }
+
   return {
     three,
     setAspect,
+    worldToScreen,
     update,
     getYaw,
     getPitch,

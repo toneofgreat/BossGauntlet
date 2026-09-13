@@ -8,13 +8,56 @@
 
 export const HP_MAX = 100;
 export const ABILITY_CD_S = 30;
+export const CHEESE_CD_S = 50;    // §10: the Cheese Blade's ⚡ recharges slower than the rest
+export const CHEESE_SLOW_S = 10;  // §10: splatted fighters are slow (and yellow) this long
 export const BASE_WALK = 16;
 export const BASE_JUMP = 50;
 
-// ability: "spikes" | "meteor" | "dummies" | "bush" | null   (the mobile ⚡ button)
+// ability: "spikes" | "meteor" | "dummies" | "bush" | "cheese" | "streak" | null
+//   ("cheese" = tap-a-target splat; "streak" = the Killstreak's growing button row)
 // passive: { speed?:mult, jump?:+power, poison?:true } | null
+// cost: a KILL threshold, or null for the two secret blades (unlock: "obby" | "quest",
+//   answered by save flags — see isOwned).
 // ornament: a keyword layout.js reads to bolt extra flourishes onto the pedestal model.
+// The two secret blades come FIRST so the rack parks them on the LEFT of the ten.
 export const SWORDS = Object.freeze([
+  Object.freeze({
+    id: "cheese", name: "Cheese Blade", emoji: "🧀", cost: null, unlock: "obby", damage: 3,
+    ability: "cheese", passive: null, ornament: "cheese",
+    blurb: "3 damage. ⚡ CHEESE: tap a fighter — splat! They run slow and glow yellow for 10s. "
+      + "Won only by finishing the one-jump-wrong-and-you're-out Obby of Oof behind this pedestal.",
+    colors: { blade: "#ffd23a", edge: "#fff3b0", hilt: "#b98a4e", guard: "#e8a33a", gem: "#fff59e" },
+    lore: [
+      "No forge made the Cheese Blade. It was left on the rack overnight, wrapped in wax "
+      + "paper, with a note that said only: BEAT MY OBBY. Nobody has ever met the donor. "
+      + "The obby is one stage long, and it is meaner than every tower ever built stacked "
+      + "end to end.",
+      "The blade itself is aged sharp — three damage a bite. Its real trick is the splat: "
+      + "point it at a fighter and a wheel of molten cheddar takes them full in the face. "
+      + "For ten long seconds they wade through fondue, yellow from head to boot, while "
+      + "everyone else gets on with the fight.",
+      "Fifty seconds between splats, because the donor's note had a second line: CHEESE IS "
+      + "A RESPONSIBILITY.",
+    ],
+  }),
+  Object.freeze({
+    id: "killstreak", name: "Killstreak", emoji: "🩸", cost: null, unlock: "quest", damage: 1,
+    ability: "streak", passive: null, ornament: "killstreak",
+    blurb: "1 damage — plus 1 more for EVERY kill you take without dying. The streak wakes "
+      + "powers no other blade has. Dug out of a place only one riddle in this arena points to.",
+    colors: { blade: "#1a1220", edge: "#ff2a2a", hilt: "#0a0710", guard: "#4a0f14", gem: "#ff5a3a" },
+    lore: [
+      "The Killstreak is not on the rack because anyone put it there. The rack GREW a "
+      + "pedestal for it, overnight, the way a scar grows skin. The plaque was already "
+      + "scratched out when the quartermaster found it.",
+      "It starts weaker than the Recruit's Blade — one damage, a joke. Then you take a "
+      + "kill, and it remembers. And another, and it sharpens. Ten without dying and it "
+      + "learns to step through space. Fifty and it hands you fire. A hundred and the "
+      + "ground lets go of you. Die once, and it forgets everything — back to one.",
+      "Where it came from, the Meteorbrand's last page whispers. That is the only map "
+      + "there is.",
+    ],
+  }),
   Object.freeze({
     id: "basic", name: "Recruit's Blade", emoji: "🗡️", cost: 0, damage: 1,
     ability: null, passive: null, ornament: "plain",
@@ -148,22 +191,38 @@ export const SWORDS = Object.freeze([
       "It calls down a meteor no bigger than a fist. Small, fast, and merciless: it does "
       + "nothing at all if you miss, and ends anyone it touches in a single strike. The arena "
       + "goes quiet when a Meteorbrand raises. Everyone knows what the next second might hold.",
+      // §11: the questline's ONLY written map. Three true hints — the vines on the arena's
+      // outer flank, the thing waiting behind them, and the ring the sky keeps.
+      "One page more, in older ink. Three whispers follow every Meteorbrand: that the "
+      + "arena's outer SIDE wears a green beard no gardener ever planted; that behind the "
+      + "green, something with six faces sits and WAITS to be answered; and that the sky "
+      + "over the sand keeps a RING no bird has ever flown through. The whisperers are "
+      + "gone. The vines are not.",
     ],
   }),
 ]);
 
 const BY_ID = new Map(SWORDS.map((s) => [s.id, s]));
-export function swordById(id) { return BY_ID.get(id) || SWORDS[0]; }
-export function ownedSwords(kills) { return SWORDS.filter((s) => kills >= s.cost); }
-export function isOwned(id, kills) { const s = BY_ID.get(id); return !!s && kills >= s.cost; }
+export function swordById(id) { return BY_ID.get(id) || BY_ID.get("basic"); }
+// Ownership answers from the whole SAVE now, not a bare kill count: the ten rack swords
+// stay kill thresholds, the two secret blades are save flags (`cheese`, `ks`) their
+// quests set. A rebirth resets `kills` — so the rack RELOCKS — but never the flags.
+export function isOwned(id, save) {
+  const s = BY_ID.get(id);
+  if (!s) return false;
+  if (s.cost === null) return s.unlock === "obby" ? !!save.cheese : !!save.ks;
+  return (save.kills || 0) >= s.cost;
+}
+export function ownedSwords(save) { return SWORDS.filter((s) => isOwned(s.id, save)); }
 
 // The first-join tips — up to five pages, skippable, page arrows with a click.
 export const INTRO_PAGES = Object.freeze([
   Object.freeze({
     title: "Welcome to Battles",
-    body: "This is the lobby. Down the hall stands a rack of ten swords. Walk into the free "
-      + "Recruit's Blade to drop into the arena and start fighting. Every foe you defeat is a "
-      + "KILL — the only currency here.",
+    body: "This is the lobby. Down the hall stands a rack of twelve swords — ten earned by "
+      + "kills, and two on the far LEFT that kills can never buy. Walk into the free Recruit's "
+      + "Blade to drop into the arena and start fighting. Every foe you defeat is a KILL — the "
+      + "main currency here.",
   }),
   Object.freeze({
     title: "Kills unlock swords",
@@ -189,6 +248,8 @@ export const INTRO_PAGES = Object.freeze([
     title: "Read the blades",
     body: "Each sword on the rack shows what it costs and what it does, and turns slowly so you "
       + "can admire it. Own one, and touching it opens its past — the forges, the fools and the "
-      + "fighters behind it. Now go earn them. Tap Skip any time. Good luck out there.",
+      + "fighters behind it. The Cheese Blade asks for an obby, not kills; the black pedestal "
+      + "asks for something nobody writes down. Two leaderboards by the door keep the score. "
+      + "Now go earn them all. Tap Skip any time. Good luck out there.",
   }),
 ]);
