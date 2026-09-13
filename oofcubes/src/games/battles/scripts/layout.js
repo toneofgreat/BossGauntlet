@@ -536,15 +536,16 @@ function buildTimewarpTower(parts) {
     parts.push(P({ size: [6.5, 0.5, 0.8], position: [bx, top - 0.25, bz], rotation: [0, 90 - a * 57.29578, 0], color: "#b98a4e", material: "wood" }));
     parts.push(P({ size: [0.85, 0.7, 0.85], position: [bx, top + 0.35, bz], color: "#ff5a1f", material: "lava", canCollide: true, behaviors: [{ type: "kill" }] }));
   }
-  // S9 — the final spiral: eight 1-stud pads out at r 8.6 (clear of the summit's shadow),
-  // two of them slowly spinning underfoot
+  // S9 — the final spiral: eight 1-stud pads out at r 9.2 — far enough out that a head
+  // (avatar ≈ 5 tall) never grazes the summit disc (r 8, underside 144.8) on the top
+  // hops. Two of the pads slowly spin underfoot.
   const A9 = AE + 0.95 * 2 + 0.62;
   for (let i = 0; i < 8; i++) {
     const spinny = i === 3 || i === 6;
-    pad(A9 + 0.62 * i, 8.6, 121.9 + 2.7 * i, 1.0, spinny ? "#b98a4e" : i % 2 ? "#e0b23a" : "#241a2e", spinny ? [{ type: "spinner", axis: "y", speed: 140 }] : null);
+    pad(A9 + 0.58 * i, 9.2, 121.9 + 2.7 * i, 1.0, spinny ? "#b98a4e" : i % 2 ? "#e0b23a" : "#241a2e", spinny ? [{ type: "spinner", axis: "y", speed: 140 }] : null);
   }
   // S10 — one last 1-stud pad, then the leap onto the summit's rim
-  pad(A9 + 0.62 * 8, 9.4, 143.4, 1.0, "#ff5a3a");
+  pad(A9 + 0.58 * 8, 9.4, 143.4, 1.0, "#ff5a3a");
   parts.push(P({ shape: "cylinder", size: [8, 2, 8], position: [TX, 144, TZ], color: "#1a1433", material: "metal" }));
   parts.push(P({ shape: "cylinder", size: [16, 1.2, 16], position: [TX, 145.4, TZ], color: "#2a2336", material: "metal" }));
   parts.push(P({ shape: "cylinder", size: [14.5, 0.16, 14.5], position: [TX, 146.09, TZ], color: "#3a2f5e", canCollide: false }));
@@ -669,12 +670,21 @@ function buildLettuceRealm(parts, out) {
     parts.push(P({ size: [40, 0.18, 2.4], position: [-85, 4.1, rz], color: "#5a3a1f", canCollide: false }));
     for (let cx = -103; cx <= -67; cx += 4.5) { if (Math.abs(cx - FX) < 5.5 && Math.abs(rz - FZ) < 5.5) continue; parts.push(P({ shape: "sphere", size: [1.1, 0.75, 1.1], position: [cx, 4.5, rz], color: (cx + r) % 2 ? "#3ddc84" : "#2f8f4a", canCollide: false })); }
   }
-  // the barn (its west face keeps the FIRST whisper)
-  parts.push(P({ size: [12, 7, 10], position: [-120, 7.5, 690], color: "#c0392b" }));
+  // the barn: HOLLOW, with a REAL door in its east face — players always try the barn,
+  // so let them in. The FIRST whisper stays scratched on the OUTSIDE of the west wall.
+  parts.push(P({ size: [12, 7, 1], position: [-120, 7.5, 685.5], color: "#c0392b" }));
+  parts.push(P({ size: [12, 7, 1], position: [-120, 7.5, 694.5], color: "#c0392b" }));
+  parts.push(P({ size: [1, 7, 10], position: [-125.5, 7.5, 690], color: "#c0392b" }));
+  parts.push(P({ size: [1, 7, 2.5], position: [-114.5, 7.5, 687.25], color: "#c0392b" })); // east wall, north of the doorway
+  parts.push(P({ size: [1, 7, 2.5], position: [-114.5, 7.5, 692.75], color: "#c0392b" })); // and south of it
+  parts.push(P({ size: [1, 1, 4], position: [-114.5, 10.5, 690], color: "#c0392b" }));     // lintel: the doorway runs z 688.5..691.5, six studs high
+  parts.push(P({ size: [0.3, 5.6, 3.2], position: [-114, 6.8, 686.4], rotation: [0, 24, 0], color: "#4a2f18", material: "wood", canCollide: false })); // the door, swung open
   // a wedge's tall face sits at its -z side, so the ridge halves flip AWAY from centre
   parts.push(P({ shape: "wedge", size: [12.6, 3.2, 5.4], position: [-120, 12.6, 687.3], rotation: [0, 180, 0], color: "#7d1f16" }));
   parts.push(P({ shape: "wedge", size: [12.6, 3.2, 5.4], position: [-120, 12.6, 692.7], color: "#7d1f16" }));
-  parts.push(P({ size: [3.6, 4.6, 0.4], position: [-114.2, 6.3, 690], color: "#4a2f18", material: "wood", canCollide: false }));
+  parts.push(P({ size: [4, 2.2, 4], position: [-122.4, 5.1, 687.6], color: "#d9c48f", material: "grass" }));    // hay inside
+  parts.push(P({ size: [2.6, 1.5, 2.6], position: [-118.4, 4.75, 692.4], color: "#d9c48f", material: "grass" }));
+  sign(parts, -120, 9.4, 690, "just hay in here — the whisper is OUTSIDE, on the back wall", 1.3);
   binaryGlyphs(parts, "1001", -126.4, 7.5, 690, "z", 1);
   sign(parts, -110, 10.4, 682, "THE FARM — something smiles under glass", 1.8);
   // the glass roof, the smiler beneath it, the crier on top of it, and the hay ramp up
@@ -684,6 +694,7 @@ function buildLettuceRealm(parts, out) {
   lettuceModel(parts, out, "sad", FX, 9.6, FZ, 0.85, { face: "sad" });
   parts.push(P({ size: [4, 3, 4], position: [-76, 5.5, 684], color: "#d9c48f", material: "grass" }));
   parts.push(P({ size: [0.3, 3.1, 4.1], position: [-76, 5.5, 684], color: "#b98a4e", material: "wood", canCollide: false })); // the bale's twine
+  parts.push(P({ size: [2.6, 1.5, 2.6], position: [-72.6, 4.75, 682.4], color: "#b98a4e", material: "wood" }));               // a step up to the bale
   // a scarecrow keeping no crows away
   parts.push(P({ size: [0.4, 5, 0.4], position: [-98, 6.5, 674], color: "#6b4423", material: "wood", canCollide: false }));
   parts.push(P({ size: [3, 0.4, 0.4], position: [-98, 8, 674], color: "#6b4423", material: "wood", canCollide: false }));
@@ -718,29 +729,32 @@ function buildLettuceRealm(parts, out) {
     for (const gx of [W, E]) { parts.push(P({ size: [1.5, 4, 26], position: [gx, 32, 680], color: "#7d6e58" })); parts.push(P({ size: [1.5, 4, 16], position: [gx, 36, 680], color: "#7d6e58" })); parts.push(P({ size: [1.5, 4, 7], position: [gx, 40, 680], color: "#7d6e58" })); }
     // furniture: stool → table → sofa → lamp → shelves → grandfather clock → the hole
     parts.push(P({ size: [4, 2.5, 4], position: [99, 5.25, 688], color: "#b98a4e", material: "wood" }));
-    parts.push(P({ size: [10, 1, 6], position: [93, 8, 681], color: "#6b4423", material: "wood" }));
-    for (const [lx, lz] of [[89, 679], [97, 679], [89, 683], [97, 683]]) parts.push(P({ size: [0.8, 3.5, 0.8], position: [lx, 6.25, lz], color: "#4a2f18", material: "wood", canCollide: false }));
+    parts.push(P({ size: [10, 1, 6], position: [92, 8, 680], color: "#6b4423", material: "wood" }));
+    for (const [lx, lz] of [[88, 678], [96, 678], [88, 682], [96, 682]]) parts.push(P({ size: [0.8, 3.5, 0.8], position: [lx, 6.25, lz], color: "#4a2f18", material: "wood", canCollide: false }));
     parts.push(P({ size: [12, 5, 7], position: [82, 6.5, 669], color: "#7c3aed" }));
     for (const cx of [79, 85]) parts.push(P({ size: [5.5, 1.4, 6.5], position: [cx, 9.7, 669], color: "#8a5cf0" }));
     parts.push(P({ size: [12, 4.4, 2], position: [82, 11, 664.9], color: "#6a3ad0" })); // backrest, top 13.2
     parts.push(P({ size: [0.5, 9, 0.5], position: [75, 8.5, 667], color: "#3e444f", material: "metal", canCollide: false }));
     parts.push(P({ shape: "cylinder", size: [3, 1.4, 3], position: [75, 13.9, 667], color: "#ffe6a0" })); // shade, top 14.6
-    for (let sh = 0; sh < 3; sh++) {
-      parts.push(P({ size: [2.5, 0.8, 12], position: [72.6, 17.1 + sh * 3, 676], color: "#5a3a1f", material: "wood" })); // shelf tops 17.5/20.5/23.5
-      for (let b = 0; b < 4; b++) parts.push(P({ size: [1.6, 2.1, 1.1], position: [72.6, 18.6 + sh * 3, 670.5 + b * 2.6 + sh * 1.1], color: ["#c0392b", "#2f6fd0", "#3ddc84", "#e0b23a"][b], canCollide: false })); // books
-    }
-    for (const px of [71.6, 73.6]) parts.push(P({ size: [0.5, 20.3, 12.5], position: [px, 14.15, 676], color: "#4a2f18", material: "wood", canCollide: false })); // case sides (walk-through)
+    // three bookcases STEPPED along the west wall — an oof is ~5 tall, so every top
+    // keeps open air above it (the old stacked shelves left 2.2 studs: unstandable)
+    parts.push(P({ size: [2.5, 13.5, 4], position: [72.6, 10.75, 672], color: "#5a3a1f", material: "wood" }));   // top 17.5
+    parts.push(P({ size: [2.5, 16.5, 4], position: [72.6, 12.25, 677.2], color: "#4a2f18", material: "wood" })); // top 20.5
+    parts.push(P({ size: [2, 19, 2.6], position: [72.6, 13.5, 680.9], color: "#5a3a1f", material: "wood" }));    // top 23 — head pokes up through the attic hole
+    for (let sh = 0; sh < 3; sh++) for (let b = 0; b < 3; b++) parts.push(P({ size: [0.24, 2.1, 1.1], position: [73.95 - (sh === 2 ? 0.25 : 0), 6.5 + sh * 4.4, 670.9 + sh * 5.2 + b * 1.3], color: ["#c0392b", "#2f6fd0", "#3ddc84", "#e0b23a"][(sh + b) % 4], material: "plastic", canCollide: false })); // spines on the case fronts
     // the grandfather clock, parked right under the attic hole
     parts.push(P({ size: [3.5, 21.5, 3], position: [74.5, 14.75, 682.5], color: "#4a2f18", material: "wood" })); // top 25.5
     parts.push(P({ shape: "cylinder", size: [2.2, 0.3, 2.2], position: [74.5, 22.5, 680.8], rotation: [90, 0, 0], color: "#ffe6a0", material: "neon", canCollide: false }));
     parts.push(P({ size: [0.16, 0.9, 0.1], position: [74.5, 22.9, 680.7], color: "#12141c", canCollide: false }));
     parts.push(P({ shape: "sphere", size: [0.9, 0.9, 0.3], position: [74.5, 17.5, 680.9], color: "#e0b23a", material: "metal", canCollide: false })); // the pendulum
     // the attic: crates, the collar beam, the gable shelf and its masonry prize
-    parts.push(P({ size: [5, 2.6, 5], position: [88, 29.8, 680], color: "#6b4423", material: "wood" }));
-    parts.push(P({ size: [4, 2.6, 4], position: [94, 32.4, 681], color: "#5a3a1f", material: "wood" }));
-    parts.push(P({ size: [24, 0.8, 1.2], position: [100, 34.9, 680], color: "#4a2f18", material: "wood" }));
-    parts.push(P({ size: [4.5, 0.8, 4.5], position: [110.5, 34.9, 680], color: "#5a3a1f", material: "wood" }));
-    lettuceModel(parts, out, "brick", 110.5, 35.3, 680, 1.1, { brick: true });
+    // both crates sit SOUTH of the collar beam's line (z 679.4..680.6) — a crate under
+    // the beam wedges the avatar's feet against it and nothing can stand there
+    parts.push(P({ size: [5, 2.6, 5], position: [87, 29.8, 683.5], color: "#6b4423", material: "wood" }));
+    parts.push(P({ size: [4, 2.6, 4], position: [96, 32.4, 683], color: "#5a3a1f", material: "wood" }));
+    parts.push(P({ size: [24, 0.8, 1.2], position: [100, 33.9, 680], color: "#4a2f18", material: "wood" }));   // top 34.3 — a stud lower keeps heads clear of the roof planes
+    parts.push(P({ size: [4.5, 0.8, 4.5], position: [110.5, 33.9, 680], color: "#5a3a1f", material: "wood" }));
+    lettuceModel(parts, out, "brick", 110.5, 34.3, 680, 1.1, { brick: true });
     binaryGlyphs(parts, "0111", 112.4, 37.5, 680, "z", 3);
     // a proud chimney (decor) off the east end
     parts.push(P({ size: [5, 22, 5], position: [106, 26, 668], color: "#a24936" }));
@@ -749,17 +763,27 @@ function buildLettuceRealm(parts, out) {
 
   // ---- the SEWER: a shack, a shaft, a toxic tunnel, and what festers at the end ----
   {
+    // an open-ended canopy — walk in from EITHER side (spawn approaches from the
+    // north) and the floor simply is not there. The glowing rim says: on purpose.
     parts.push(P({ size: [1.2, 5.5, 9], position: [26.2, 6.75, 725], color: "#565d70", material: "metal" }));
     parts.push(P({ size: [1.2, 5.5, 9], position: [33.8, 6.75, 725], color: "#565d70", material: "metal" }));
-    parts.push(P({ size: [8.8, 5.5, 1.2], position: [30, 6.75, 720.9], color: "#565d70", material: "metal" }));
     parts.push(P({ size: [10, 0.8, 11], position: [30, 9.9, 725], color: "#3e444f", material: "metal" }));
     sign(parts, 30, 11.6, 725, "THE SEWER — hold your nose", 2);
+    sign(parts, 30, 7, 719.2, "walk in — the HOLE is the way down", 1.3);
+    parts.push(P({ size: [7.2, 0.2, 0.5], position: [30, 4.12, 721.6], color: "#8be04a", material: "neon", canCollide: false }));
+    parts.push(P({ size: [7.2, 0.2, 0.5], position: [30, 4.12, 728.4], color: "#8be04a", material: "neon", canCollide: false }));
+    parts.push(P({ size: [0.5, 0.2, 6.6], position: [26.6, 4.12, 725], color: "#8be04a", material: "neon", canCollide: false }));
+    parts.push(P({ size: [0.5, 0.2, 6.6], position: [33.4, 4.12, 725], color: "#8be04a", material: "neon", canCollide: false }));
     for (let k = 0; k < 3; k++) parts.push(P({ size: [0.24, 1.4, 0.24], position: [27.5 + k * 2.5, 3.2, 728.6], color: "#8be04a", material: "neon", canCollide: false })); // drips at the mouth
     // the shaft duct (open at the bottom into the chamber)
     for (const [wx, wz, sx2, sz2] of [[26.5, 725, 1, 7], [33.5, 725, 1, 7], [30, 721.4, 8, 1], [30, 728.6, 8, 1]]) parts.push(P({ size: [sx2, 8, sz2], position: [wx, -2, wz], color: "#3e444f", material: "metal" }));
-    // chamber A under the shack
+    // chamber A under the shack — its ceiling leaves the 6x6 shaft OPEN (a single slab
+    // here once sealed the sewer shut three studs down: the realm's cruellest bug)
     parts.push(P({ size: [12, 1, 12], position: [30, -12, 725], color: "#565d70", material: "metal" }));
-    parts.push(P({ size: [12, 1, 12], position: [30, 0.5, 725], color: "#3e444f", material: "metal" }));
+    parts.push(P({ size: [12, 1, 3], position: [30, 0.5, 720.5], color: "#3e444f", material: "metal" }));
+    parts.push(P({ size: [12, 1, 3], position: [30, 0.5, 729.5], color: "#3e444f", material: "metal" }));
+    parts.push(P({ size: [3, 1, 6], position: [25.5, 0.5, 725], color: "#3e444f", material: "metal" }));
+    parts.push(P({ size: [3, 1, 6], position: [34.5, 0.5, 725], color: "#3e444f", material: "metal" }));
     parts.push(P({ size: [12, 12, 1], position: [30, -5.5, 718.5], color: "#4a4f5e", material: "metal" }));
     parts.push(P({ size: [12, 12, 1], position: [30, -5.5, 731.5], color: "#4a4f5e", material: "metal" }));
     parts.push(P({ size: [1, 12, 12], position: [36.5, -5.5, 725], color: "#4a4f5e", material: "metal" }));
@@ -831,7 +855,7 @@ function buildLettuceRealm(parts, out) {
       } else if (i === 8) {
         parts.push(P({ size: [0.6, 0.5, 6.4], position: [16, top - 0.25, z + 1.6], color: "#4a0f14", material: "metal" }));
         parts.push(P({ size: [0.7, 0.7, 0.7], position: [16, top + 0.3, z + 1.6], color: "#ff5a1f", material: "lava", canCollide: true, behaviors: [{ type: "kill" }] }));
-      } else if (i !== 9) opad(x, top, z, 0.95, i % 2 ? "#4a0f14" : "#241a2e"); // i 9 lives inside the beam's span
+      } else opad(x, top, z, 0.95, i % 2 ? "#4a0f14" : "#241a2e"); // pad 9 floats over the beam's far end — without it the next rise is 5.6, unjumpable
     }
     parts.push(P({ size: [12, 1, 12], position: [16, 126, 820], color: "#141020", material: "metal" }));
     for (const [tx2, tz2] of [[11, 815], [21, 815], [11, 825], [21, 825]]) torch(parts, tx2, 127.6, tz2, "#ff2a2a");
