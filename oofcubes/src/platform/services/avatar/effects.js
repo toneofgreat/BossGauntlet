@@ -438,6 +438,290 @@ function createTimewarp(parent, group, spec, held) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Spec 26 §11's crown jewel: "Killstreak" — the aura that outdoes every other aura in
+// the game COMBINED, earned only by a 250 kill streak on Battles' Killstreak blade.
+// A war altar follows you: a floating tally plaque that CARVES A NEW KILL forever, a
+// crown of six obsidian blades that take turns lunging, twin counter-rotating ember
+// rings, black smoke off your shoulders, a rotating battle sigil underfoot with rolling
+// red shockwaves, 1,200 blood-and-white motes on a fast shell (two hundred more than
+// Timewarp's cosmos), and every few seconds a SURGE: red lightning cracks, the crown
+// flares, and the plaque cuts one more mark.
+// ---------------------------------------------------------------------------
+
+// The tally plaque: a dark board of glowing five-bar gates. Redrawn only when a mark is
+// carved (a few times a minute), never per frame.
+function ksTallyTexture() {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 128;
+  const tex = new THREE.CanvasTexture(c);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  const g = c.getContext("2d");
+  const draw = (count, flash) => {
+    g.clearRect(0, 0, 256, 128);
+    g.fillStyle = flash ? "rgba(60,8,10,0.92)" : "rgba(10,7,16,0.88)";
+    roundRectPath(g, 4, 4, 248, 120, 14); g.fill();
+    g.strokeStyle = flash ? "#ffe6a0" : "#ff2a2a"; g.lineWidth = 4;
+    roundRectPath(g, 4, 4, 248, 120, 14); g.stroke();
+    g.lineCap = "round"; g.shadowColor = "#ff2a2a"; g.shadowBlur = 8;
+    // two rows of five gates; a gate is four strokes and the fifth slashes across
+    for (let i = 0; i < Math.min(count, 50); i++) {
+      const gate = Math.floor(i / 5), inGate = i % 5;
+      const row = Math.floor(gate / 5), col = gate % 5;
+      const x0 = 20 + col * 46, y0 = 22 + row * 52;
+      g.strokeStyle = flash && i === count - 1 ? "#ffffff" : "#ff3a2a";
+      g.lineWidth = i === count - 1 ? 5 : 4;
+      g.beginPath();
+      if (inGate < 4) { g.moveTo(x0 + inGate * 9, y0); g.lineTo(x0 + inGate * 9 - 3, y0 + 34); }
+      else { g.moveTo(x0 - 6, y0 + 26); g.lineTo(x0 + 32, y0 + 6); }
+      g.stroke();
+    }
+    g.shadowBlur = 0;
+    tex.needsUpdate = true;
+  };
+  return { tex, draw };
+}
+
+// Three pre-drawn red lightning bolts; the surge shows one at a random spin.
+function ksBoltTexture(seed) {
+  const c = document.createElement("canvas"); c.width = 96; c.height = 224;
+  const g = c.getContext("2d");
+  let s = 7 + seed * 131;
+  const rnd = () => { s = (s * 48271) % 2147483647; return s / 2147483647; };
+  g.clearRect(0, 0, 96, 224);
+  g.lineCap = "round"; g.lineJoin = "round";
+  for (const [w, col, blur] of [[10, "rgba(255,42,42,0.55)", 14], [5, "#ff5a3a", 6], [2.2, "#fff1e8", 0]]) {
+    g.strokeStyle = col; g.lineWidth = w; g.shadowColor = "#ff2a2a"; g.shadowBlur = blur;
+    let x = 34 + rnd() * 28, y = 6;
+    g.beginPath(); g.moveTo(x, y);
+    while (y < 210) { x += (rnd() - 0.5) * 44; x = Math.max(8, Math.min(88, x)); y += 18 + rnd() * 22; g.lineTo(x, y); }
+    g.stroke();
+    s = 7 + seed * 131; // same path for every pass so the strokes stack into one bolt
+  }
+  const tex = new THREE.CanvasTexture(c);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// The battle sigil underfoot: rings, fifty tick marks, two crossed blades.
+function ksSigilTexture() {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 256;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, 256, 256);
+  g.strokeStyle = "#ff2a2a"; g.shadowColor = "#ff2a2a"; g.shadowBlur = 6;
+  g.lineWidth = 5; g.beginPath(); g.arc(128, 128, 116, 0, 7); g.stroke();
+  g.lineWidth = 2.5; g.beginPath(); g.arc(128, 128, 96, 0, 7); g.stroke();
+  g.beginPath(); g.arc(128, 128, 58, 0, 7); g.stroke();
+  for (let i = 0; i < 50; i++) { // the fifty ticks a full plaque holds
+    const a = (i / 50) * Math.PI * 2, big = i % 5 === 4;
+    g.lineWidth = big ? 4 : 2;
+    g.beginPath();
+    g.moveTo(128 + Math.cos(a) * (big ? 98 : 102), 128 + Math.sin(a) * (big ? 98 : 102));
+    g.lineTo(128 + Math.cos(a) * 114, 128 + Math.sin(a) * 114);
+    g.stroke();
+  }
+  g.lineCap = "round";
+  for (const rot of [-0.6, 0.6]) { // crossed blades
+    g.save(); g.translate(128, 128); g.rotate(rot);
+    g.lineWidth = 7; g.beginPath(); g.moveTo(0, -52); g.lineTo(0, 40); g.stroke();
+    g.lineWidth = 5; g.beginPath(); g.moveTo(-14, 26); g.lineTo(14, 26); g.stroke();
+    g.restore();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// One obsidian blade of the crown: dark steel, a burning core, a bar guard, an ember pommel.
+function ksBlade(held) {
+  const grp = new THREE.Group();
+  const add = (geo, color, additive, x, y, z) => {
+    const mat = new THREE.MeshBasicMaterial(additive
+      ? { color: new THREE.Color(color), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }
+      : { color: new THREE.Color(color) });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    grp.add(mesh); held.geometries.push(geo); held.materials.push(mat);
+    return mesh;
+  };
+  add(new THREE.BoxGeometry(0.24, 1.5, 0.07), "#14101e", false, 0, 0.6, 0);
+  add(new THREE.BoxGeometry(0.1, 1.34, 0.08), "#ff2a2a", true, 0, 0.63, 0);
+  add(new THREE.BoxGeometry(0.035, 1.34, 0.085), "#fff1e8", true, 0.07, 0.63, 0); // white edge
+  add(new THREE.BoxGeometry(0.62, 0.12, 0.12), "#4a0f14", false, 0, -0.2, 0);
+  add(new THREE.SphereGeometry(0.1, 8, 6), "#ff5a3a", true, 0, -0.46, 0);
+  const tip = makeSprite(); tip.material.color.set("#ff5a3a"); tip.material.opacity = 0.9;
+  tip.scale.set(0.55, 0.55, 1); tip.position.set(0, 1.38, 0); tip.visible = true;
+  grp.add(tip); held.sprites.push(tip);
+  return grp;
+}
+
+function createKillstreak(parent, group, spec, held) {
+  const CY = 2.6;
+  const movers = [];
+  const pool = (n) => { const list = []; for (let i = 0; i < n; i++) { const s = makeSprite(); group.add(s); list.push(s); held.sprites.push(s); } return list; };
+
+  // ---- the tally plaque, its glow, and the count that never stops ----
+  const tally = ksTallyTexture();
+  held.textures.push(tally.tex);
+  const plaqueMat = new THREE.SpriteMaterial({ map: tally.tex, transparent: true, depthWrite: false });
+  const plaque = new THREE.Sprite(plaqueMat);
+  plaque.position.set(0, 6.55, 0); plaque.scale.set(2.9, 1.45, 1);
+  group.add(plaque); held.materials.push(plaqueMat);
+  const plaqueGlow = twGlowSprite("#ff2a2a", 3.1, held); plaqueGlow.position.set(0, 6.55, -0.05); plaqueGlow.material.opacity = 0.35; group.add(plaqueGlow);
+  let kills = 3; // the plaque arrives already blooded
+  tally.draw(kills, false);
+
+  // ---- the crown of six blades ----
+  const blades = [];
+  for (let i = 0; i < 6; i++) {
+    const b = ksBlade(held);
+    b.rotation.z = 0.24; // a slight outward lean, like a crown's points
+    group.add(b);
+    blades.push({ grp: b, phase: (i / 6) * Math.PI * 2, dart: 0 });
+  }
+
+  // ---- twin counter-rotating ember rings (the Supernova trick, doubled and redder) ----
+  movers.push(createOrbit(group, { spectrum: true, count: 18, colors: ["#ff2a2a", "#ff8c1a", "#ffd23a", "#fff1e8"], size: [0.26], radius: 1.85, height: 2.7, speed: 210, bob: 0.45 }, pool(18)));
+  movers.push(createOrbit(group, { count: 14, colors: ["#ff3a2a"], size: [0.2], radius: 2.35, height: 3.7, speed: -150, bob: 0.3 }, pool(14)));
+
+  // ---- ember sparks arriving and leaving all over the body ----
+  movers.push(createTwinkle(group, { count: 16, rate: 14, colors: ["#ffd23a", "#ff8c1a", "#fff1e8"], size: [0.15], radius: 1.5, lifetime: 0.5 }, pool(16)));
+
+  // ---- black smoke off the shoulders (NormalBlending, so it reads BLACK) ----
+  const smoke = [];
+  for (let i = 0; i < 10; i++) {
+    const m = new THREE.SpriteMaterial({ map: darkDiscTexture(), transparent: true, depthWrite: false });
+    const s = new THREE.Sprite(m); s.visible = false;
+    group.add(s); held.materials.push(m);
+    smoke.push({ s, age: 0, live: false, x: 0, z: 0, drift: 0 });
+  }
+  let smokeDebt = 0;
+  const SMOKE_LIFE = 1.9;
+
+  // ---- the sigil underfoot + three rolling shockwaves ----
+  const sigilTex = ksSigilTexture(); held.textures.push(sigilTex);
+  const sigilGeo = new THREE.PlaneGeometry(4.3, 4.3);
+  const sigilMat = new THREE.MeshBasicMaterial({ map: sigilTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0.85 });
+  const sigil = new THREE.Mesh(sigilGeo, sigilMat);
+  // 0.22 up, not flush: Places lay their own non-colliding decor sheets over their
+  // floors (Battles' sand overlay sits 0.14 proud) and a flush sigil z-fights them
+  sigil.rotation.x = -Math.PI / 2; sigil.position.y = 0.22;
+  group.add(sigil); held.geometries.push(sigilGeo); held.materials.push(sigilMat);
+  const waves = [];
+  for (let r = 0; r < 3; r++) {
+    const geo = new THREE.TorusGeometry(0.9, 0.07, 8, 36);
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(["#ff2a2a", "#ff8c1a", "#fff1e8"][r]), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2; mesh.position.y = 0.28;
+    group.add(mesh); held.geometries.push(geo); held.materials.push(mat);
+    waves.push({ mesh, mat, phase: (r / 3) * 1.7 });
+  }
+
+  // ---- 1,200 motes on a fast shell: 900 blood, 300 white ----
+  const shells = [];
+  for (const [n, col, size, rMin] of [[900, 0xff2a2a, 0.06, 2.3], [300, 0xffffff, 0.05, 2.7]]) {
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = Math.random(), v = Math.random();
+      const th = 2 * Math.PI * u, ph = Math.acos(2 * v - 1), rr = rMin + Math.random() * 1.1;
+      pos[i * 3] = rr * Math.sin(ph) * Math.cos(th);
+      pos[i * 3 + 1] = CY + rr * Math.cos(ph) * 0.8;
+      pos[i * 3 + 2] = rr * Math.sin(ph) * Math.sin(th);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color: col, size, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+    const pts = new THREE.Points(geo, mat);
+    group.add(pts); held.geometries.push(geo); held.materials.push(mat);
+    shells.push(pts);
+  }
+
+  // ---- the surge: lightning, a lunging blade, one more mark ----
+  const bolts = [];
+  for (let i = 0; i < 3; i++) {
+    const tex = ksBoltTexture(i); held.textures.push(tex);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const bolt = new THREE.Sprite(mat); bolt.visible = false; bolt.scale.set(1.7, 4.0, 1);
+    group.add(bolt); held.materials.push(mat);
+    bolts.push(bolt);
+  }
+  let t = 0, surgeT = 2.5, surge = 0, boltIdx = 0, flashT = 0;
+
+  return {
+    update(dt) {
+      t += dt;
+      for (const m of movers) m.update(dt);
+
+      // crown orbit + the occasional lunge
+      for (let i = 0; i < blades.length; i++) {
+        const b = blades[i];
+        const a = b.phase + t * 0.7;
+        let r = 2.15;
+        if (b.dart > 0) { b.dart = Math.max(0, b.dart - dt); const k = Math.sin((1 - b.dart / 0.5) * Math.PI); r += k * 1.6; }
+        b.grp.position.set(Math.cos(a) * r, 4.95 + Math.sin(t * 1.3 + i) * 0.22, Math.sin(a) * r);
+        b.grp.rotation.y = -a; // the edge always faces the world, not the owner
+      }
+
+      // smoke
+      smokeDebt += 4.5 * dt;
+      for (const p of smoke) {
+        if (p.live) {
+          p.age += dt;
+          if (p.age >= SMOKE_LIFE) { p.live = false; p.s.visible = false; continue; }
+          const k = p.age / SMOKE_LIFE;
+          p.s.position.set(p.x + Math.sin(t * 1.7 + p.drift) * 0.3, 3.9 + k * 3.0, p.z);
+          const sc = 0.7 + k * 1.5;
+          p.s.scale.set(sc, sc, 1);
+          p.s.material.opacity = 0.9 * (1 - k);
+          continue;
+        }
+        if (smokeDebt < 1) continue;
+        smokeDebt -= 1;
+        const a = Math.random() * Math.PI * 2;
+        p.live = true; p.age = 0; p.x = Math.cos(a) * 0.8; p.z = Math.sin(a) * 0.8; p.drift = Math.random() * 6;
+        p.s.visible = true;
+      }
+      if (smokeDebt > 3) smokeDebt = 3;
+
+      // sigil + shockwaves
+      sigil.rotation.z += 0.21 * dt;
+      sigilMat.opacity = 0.7 + 0.25 * Math.sin(t * 2.1);
+      for (const w of waves) {
+        const tt = (t + w.phase) % 1.7, k = tt / 1.7;
+        const grow = 1 + k * 2.4;
+        w.mesh.scale.set(grow, grow, 1);
+        w.mat.opacity = 0.9 * (1 - k);
+      }
+
+      // the mote shells spin against each other
+      shells[0].rotation.y += 2.4 * dt; shells[0].rotation.z += 0.7 * dt;
+      shells[1].rotation.y -= 3.1 * dt; shells[1].rotation.x += 1.1 * dt;
+
+      // plaque bob + surge flare
+      plaque.position.y = 6.55 + Math.sin(t * 1.1) * 0.12;
+      plaqueGlow.position.y = plaque.position.y;
+      if (flashT > 0) {
+        flashT = Math.max(0, flashT - dt);
+        plaqueGlow.material.opacity = 0.35 + 0.6 * (flashT / 0.4);
+        if (flashT === 0) { tally.draw(kills, false); for (const bolt of bolts) bolt.visible = false; }
+      }
+
+      surgeT -= dt;
+      if (surgeT <= 0) {
+        surgeT = 4.5 + Math.random() * 2.5;
+        kills = kills >= 50 ? 1 : kills + 1; // a full plaque wipes clean and starts again
+        tally.draw(kills, true);
+        flashT = 0.4;
+        blades[Math.floor(Math.random() * blades.length)].dart = 0.5;
+        const bolt = bolts[boltIdx = (boltIdx + 1) % bolts.length];
+        const a = Math.random() * Math.PI * 2;
+        bolt.position.set(Math.cos(a) * 1.4, 4.6, Math.sin(a) * 1.4);
+        bolt.material.rotation = (Math.random() - 0.5) * 0.7;
+        bolt.visible = true;
+      }
+    },
+  };
+}
+
 // createAura(parent, spec) -> { update(dt), dispose() } | null
 export function createAura(parent, spec) {
   if (!spec || !spec.motion || !Array.isArray(spec.colors) || !spec.colors.length) return null;
@@ -476,6 +760,8 @@ export function createAura(parent, spec) {
     }
   } else if (spec.motion === "timewarp") {
     movers.push(createTimewarp(parent, group, spec, held));
+  } else if (spec.motion === "killstreak") {
+    movers.push(createKillstreak(parent, group, spec, held));
   }
 
   return {

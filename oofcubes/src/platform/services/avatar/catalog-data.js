@@ -727,15 +727,18 @@ export const STARTER_CATALOG = [
     },
   },
   {
-    // Spec 26 §11: the Killstreak Aura — tally-red sparks counting around you and dark
-    // smoke rising off your shoulders. In the Catalog for everyone to covet; granted
-    // only by holding a 250 kill streak on Battles' Killstreak blade.
+    // Spec 26 §11: the Killstreak Aura — the aura that outdoes every other aura in the
+    // game COMBINED, rendered by the bespoke `killstreak` motion in effects.js: a tally
+    // plaque that carves a new kill forever, a crown of six lunging obsidian blades,
+    // twin counter-rotating ember rings, black shoulder smoke, a battle sigil underfoot
+    // with rolling shockwaves, 1,200 motes, and red lightning on every surge. In the
+    // Catalog for everyone to covet; granted only by holding a 250 kill streak on
+    // Battles' Killstreak blade.
     id: "aura_killstreak", name: "Killstreak Aura", type: "aura",
     price: 0, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — a 250 killstreak",
     appearance: {
-      motion: "orbit", count: 10, rate: 0, colors: ["#ff2a2a", "#ff5a3a"], size: [0.26, 0.5],
-      lifetime: 0, radius: 1.9, speed: 210, height: 2.6, bob: 0.5, wobble: 0,
-      sub: { motion: "orbit", count: 7, speed: -80, radius: 1.2, height: 3.6, size: [0.42, 0.34], bob: 0.7, colors: ["#241a2e", "#12101c"] },
+      motion: "killstreak",
+      colors: ["#ff2a2a", "#ff8c1a", "#ffd23a", "#fff1e8"],
     },
   },
   {
