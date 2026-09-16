@@ -21,13 +21,14 @@ import {
 import { createQuest } from "./scripts/quest.js";
 import { createTimewarp } from "./scripts/timewarp.js";
 import { createBoards, rankRows } from "./scripts/board.js";
+import { createVfx } from "./scripts/vfx.js";
 
 export const meta = {
   slug: "battles",
   name: "Battles",
   icon: "⚔️",
   description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and three swords no kill can buy.",
-  version: "1.2.0",
+  version: "1.3.0",
 };
 
 const SAVE_V = 2;
@@ -88,6 +89,11 @@ function fresh() {
     heldSwords: new Map(),        // rig root uuid -> {swordId, group, anchor}
     shells: new Map(),            // rig root uuid -> group (the yellow cheese coat)
     timers: [],                   // {t, fn} — sim-clock delays (no setTimeout in games)
+    fx: null,                     // the juice engine (scripts/vfx.js)
+    ambT: 0,                      // ambient-emitter tick (torch embers, pedestal motes)
+    dustT: 0, lastPos: null,      // footstep dust
+    auraT: 0,                     // equipped-sword aura trail tick
+    lastHp: HP_MAX,               // for the HP-bar damage flash
   };
 }
 
@@ -144,6 +150,18 @@ function btn(label, style) {
 function uid(pfx) { return pfx + (S.idSeq++); } // monotonic — never collides
 function sfx(ctx, name) { try { ctx.engine.audio.playSfx(name); } catch { /* optional */ } }
 function toast(ctx, t, icon, dur) { try { ctx.services.ui.toast(t, { icon, duration: dur || 2600 }); } catch { /* headless */ } }
+function shake(ctx, i, d) { try { ctx.engine.camera.shake(i, d); } catch { /* fine */ } }
+// A full-screen colour pop that fades right back out — hit reds, kill golds, splat yellows.
+function screenFlash(color, alpha, durMs) {
+  if (!dom) return;
+  const o = dom.flashO;
+  o.style.transition = "none";
+  o.style.background = color;
+  o.style.opacity = String(alpha);
+  void o.offsetWidth; // commit the opaque frame so the fade below actually transitions
+  o.style.transition = `opacity ${durMs || 300}ms ease-out`;
+  o.style.opacity = "0";
+}
 
 function buildDom(ctx) {
   const hpWrap = document.createElement("div");
@@ -188,8 +206,14 @@ function buildDom(ctx) {
   aimLayer.append(aimHint, aimCancel);
   aimLayer.addEventListener("pointerdown", (e) => cheeseTap(ctx, e));
 
-  document.body.append(hpWrap, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, pgBtn, frzO, aimLayer);
-  return { hpWrap, hpFill, hpText, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, pgBtn, frzO, aimLayer };
+  // the one-shot colour pop (hits, kills, splats) and the low-HP heartbeat vignette
+  const flashO = document.createElement("div");
+  flashO.style.cssText = "position:fixed;inset:0;z-index:57;opacity:0;pointer-events:none;";
+  const vignO = document.createElement("div");
+  vignO.style.cssText = "position:fixed;inset:0;z-index:56;opacity:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 46%,rgba(200,20,20,0.55) 100%);transition:opacity .25s;";
+
+  document.body.append(hpWrap, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, pgBtn, frzO, aimLayer, flashO, vignO);
+  return { hpWrap, hpFill, hpText, atkBtn, abBtn, tpBtn, grBtn, flyBtn, claimBtn, pgBtn, frzO, aimLayer, flashO, vignO };
 }
 
 // ---- a reusable paged panel (intro tips, every sword's story, the hermit's book) -----
@@ -293,13 +317,31 @@ function buildDummyParts(ctx, x, z) {
 }
 function spawnDummy(ctx, x, z, temp) {
   S.dummies.push({ parts: buildDummyParts(ctx, x, z), x, z, hp: DUMMY_HP, dead: false, respawnT: 0, temp: !!temp });
+  // conjured dummies (the Trainer's Cleaver's ⚡) arrive in a puff of magic
+  if (temp && S.fx) {
+    S.fx.ring([x, FLOOR_TOP + 0.3, z], { color: "#ffd23a", r1: 4, life: 0.4 });
+    S.fx.burst([x, FLOOR_TOP + 3, z], { count: 8, colors: ["#ffd23a", "#e8d6b0", "#ffffff"], speed: 4, up: 4, size: 0.26, life: 0.6, grav: 8 });
+  }
 }
 function hitDummy(ctx, d, dmg) {
   d.hp -= dmg;
   for (const id of d.parts) { try { ctx.engine.parts.setColor(id, "#ff5a3a"); } catch { /* gone */ } }
+  const at = [d.x, FLOOR_TOP + 3.4, d.z];
+  if (S.fx) {
+    // straw flies off with every whack, and the number tells you what the blade did
+    S.fx.burst(at, { count: 7, colors: ["#d9c48f", "#c9b48f", "#e0cfa0"], speed: 7, up: 6, size: 0.34, life: 0.55, grav: 26 });
+    S.fx.text([d.x, FLOOR_TOP + 5.6, d.z], "-" + dmg, { color: "#ffd23a", scale: 0.9, life: 0.8 });
+  }
   if (d.hp <= 0) {
     for (const id of d.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
     d.dead = true; d.respawnT = d.temp ? 999 : DUMMY_RESPAWN; d.parts = [];
+    if (S.fx) {
+      // the whole dummy lets go: a haystack of straw, splintered planks, the target ring
+      S.fx.burst(at, { count: 16, colors: ["#d9c48f", "#c9b48f", "#e0cfa0", "#6b4423"], shapes: ["sphere", "shard", "box"], speed: 11, up: 9, size: 0.42, life: 0.85, grav: 30 });
+      S.fx.burst([d.x, FLOOR_TOP + 3.1, d.z], { count: 5, colors: ["#c0392b", "#f5f5f5"], shapes: ["box"], speed: 9, up: 8, size: 0.5, life: 0.8, grav: 32 });
+      S.fx.ring([d.x, FLOOR_TOP + 0.35, d.z], { color: "#d9c48f", r1: 6, life: 0.45 });
+    }
+    shake(ctx, 0.18, 0.22);
     scoreKill(ctx, "a dummy");
   }
 }
@@ -338,7 +380,8 @@ function swing(ctx) {
   for (const p of roster) { if (!p.pos) continue; const dd = inReach(me, fx, fz, p.pos[0], p.pos[2]); if (dd >= 0 && dd < bp) { bp = dd; bestP = p; } }
   if (bestP && (!bestD || bp <= bd)) {
     S.hitSeq++;
-    const hit = { id: S.hitSeq, target: bestP.id, dmg: swingDamage(), poison: sw.passive && sw.passive.poison ? 1 : 0 };
+    const dmg = swingDamage();
+    const hit = { id: S.hitSeq, target: bestP.id, dmg, poison: sw.passive && sw.passive.poison ? 1 : 0 };
     // §13: a Time Warp hit also EVICTS its victim — fifty studs, from me outward
     if (sw.id === "timewarp") {
       const dx = bestP.pos[0] - me[0], dz = bestP.pos[2] - me[2];
@@ -347,6 +390,15 @@ function swing(ctx) {
     }
     S.myState.hit = hit;
     publishSoon();
+    // the CONNECT: sparks off the victim, the damage in the air, a kick in the camera
+    if (S.fx) {
+      const at = [bestP.pos[0], bestP.pos[1] + 3, bestP.pos[2]];
+      S.fx.burst(at, { count: 10, colors: [sw.colors.edge, "#ffffff", "#ff5a3a"], shapes: ["shard", "sphere"], speed: 10, up: 5, size: 0.3, life: 0.4, grav: 20 });
+      S.fx.text([at[0], at[1] + 2.2, at[2]], "-" + dmg, { color: "#ff5a3a", scale: 1.05, life: 0.9 });
+      if (hit.poison) S.fx.burst(at, { count: 6, colors: ["#8be04a", "#3a7d2c"], speed: 5, up: 7, size: 0.28, life: 0.7, grav: 8 });
+      if (sw.id === "timewarp") S.fx.burst(at, { count: 8, colors: ["#7ec8ff", "#dff4ff"], speed: 14, up: 4, size: 0.35, life: 0.45, stretch: 5, grav: 0 });
+    }
+    shake(ctx, 0.14, 0.18);
     sfx(ctx, "oof");
   } else if (bestD) {
     if (sw.id === "timewarp") flingTrailVfx(ctx, bestD.x, bestD.z, fx, fz);
@@ -366,16 +418,23 @@ function flingTrailVfx(ctx, x, z, fx, fz) {
 function slashVfx(ctx) {
   const me = ctx.player.position(); const [fx, fz] = facing(ctx);
   const sw = swordById(S.equipped);
+  const yawDeg = Math.atan2(fx, fz) * 180 / Math.PI;
   const ids = [];
-  for (let k = 0; k < 3; k++) {
-    const t = (k - 1) * 0.5;
+  // a five-blade crescent, edge colour fading to blade colour toward the rim
+  for (let k = 0; k < 5; k++) {
+    const t = (k - 2) * 0.55;
+    const rim = Math.abs(k - 2) === 2;
     try {
       const id = uid("bt_slash_");
-      ctx.engine.parts.create({ id, shape: "box", size: [2.6, 0.14, 0.5], position: [me[0] + fx * 3 + fz * t, me[1] + 3, me[2] + fz * 3 - fx * t], rotation: [0, Math.atan2(fx, fz) * 180 / Math.PI, 30 * (k - 1)], color: sw.colors.edge, material: "neon", canCollide: false });
+      ctx.engine.parts.create({ id, shape: "box", size: [rim ? 1.8 : 2.8, 0.14, 0.5], position: [me[0] + fx * (3 - Math.abs(t) * 0.5) + fz * t, me[1] + 3 - Math.abs(t) * 0.3, me[2] + fz * (3 - Math.abs(t) * 0.5) - fx * t], rotation: [0, yawDeg, 26 * (k - 2)], color: rim ? sw.colors.blade : sw.colors.edge, material: "neon", canCollide: false });
       ids.push(id);
     } catch { /* fine */ }
   }
   S.vfx.push({ ids, t: 0.16 });
+  // sparks ride the arc, in the blade's own colours
+  if (S.fx) {
+    S.fx.burst([me[0] + fx * 3.4, me[1] + 3, me[2] + fz * 3.4], { count: 6, colors: [sw.colors.edge, sw.colors.gem], speed: 6, up: 3, size: 0.2, life: 0.35, grav: 10 });
+  }
 }
 
 function abilityCooldownFor(sw) { return sw.ability === "cheese" ? CHEESE_CD_S : sw.ability === "timestop" ? TW_STOP_CD_S : ABILITY_CD_S; }
@@ -401,6 +460,13 @@ function useAbility(ctx) {
       try { const id = uid("bt_spike_"); ctx.engine.parts.create({ id, shape: "wedge", size: [0.4, 1.0, 0.4], position: [me[0] + Math.cos(a) * r, me[1] + h - 1.4, me[2] + Math.sin(a) * r], rotation: [0, a * 57, 0], color: "#c7cdd9", material: "metal", canCollide: false }); ids.push(id); } catch { /* fine */ }
     }
     S.vfx.push({ ids, t: 1.0 });
+    // the ground ITSELF objects: dust shockwaves, flying rock chips, a proper thud
+    if (S.fx) {
+      S.fx.ring([me[0], me[1] - 1, me[2]], { color: "#b09a68", r1: R + 2, life: 0.6 });
+      S.fx.ring([me[0], me[1] - 0.9, me[2]], { color: "#c7cdd9", r1: R - 2, life: 0.45 });
+      S.fx.burst([me[0], me[1], me[2]], { count: 18, colors: ["#565d70", "#3e444f", "#b09a68", "#c7cdd9"], shapes: ["shard", "box"], speed: 12, up: 10, size: 0.4, life: 0.8, grav: 34 });
+    }
+    shake(ctx, 0.45, 0.4);
     S.aoeSeq++; S.myState.aoe = { id: S.aoeSeq, x: me[0], z: me[2], r: R, dmg: 10 }; publishSoon();
     for (const d of S.dummies) { if (!d.dead && (d.x - me[0]) ** 2 + (d.z - me[2]) ** 2 <= R * R) hitDummy(ctx, d, 10); }
     sfx(ctx, "boing"); toast(ctx, "Spikes erupt! 10 damage each.", "🔨", 1800);
@@ -409,6 +475,12 @@ function useAbility(ctx) {
     const sx = me[0] + fx * 3, sz = me[2] + fz * 3, sy = me[1] + 12;
     try { const id = uid("bt_meteor_"); ctx.engine.parts.create({ id, shape: "sphere", size: [2.0, 2.0, 2.0], position: [sx, sy, sz], color: "#3a2418", material: "lava", canCollide: false }); S.meteors.push({ id, x: sx, y: sy, z: sz, dx: fx, dz: fz, t: 0, trailT: 0 }); } catch { /* fine */ }
     try { const id = uid("bt_meteor_"); ctx.engine.parts.create({ id, shape: "sphere", size: [2.6, 2.6, 2.6], position: [sx, sy, sz], color: "#ff8c1a", material: "neon", canCollide: false }); S.meteors[S.meteors.length - 1].glow = id; } catch { /* fine */ }
+    // the summoning has a kick of its own: a launch flash and a plume of embers
+    if (S.fx) {
+      S.fx.burst([sx, sy, sz], { count: 12, colors: ["#ff8c1a", "#ffd23a", "#ff5a1f"], speed: 8, up: 2, size: 0.35, life: 0.5, grav: 4 });
+      S.fx.ring([me[0], me[1] + 0.2, me[2]], { color: "#ff8c1a", r1: 6, life: 0.4 });
+    }
+    shake(ctx, 0.25, 0.3);
     sfx(ctx, "warp"); toast(ctx, "Meteor away — make it count!", "☄️", 1800);
   } else if (sw.ability === "dummies") {
     for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; spawnDummy(ctx, me[0] + Math.cos(a) * 5, me[2] + Math.sin(a) * 5, true); }
@@ -432,6 +504,15 @@ function useAbility(ctx) {
       try { const id = uid("bt_stoptick_"); ctx.engine.parts.create({ id, shape: "box", size: [0.5, 5.5, 0.5], position: [me[0] + Math.cos(a) * 14, me[1] + 2.8, me[2] + Math.sin(a) * 14], rotation: [0, -a * 57.29578, 0], color: k % 3 === 0 ? "#e0b23a" : "#7ec8ff", material: "neon", canCollide: false }); ids.push(id); } catch { /* fine */ }
     }
     S.vfx.push({ ids, t: TW_STOP_S });
+    // time SHATTERS outward: three staggered shockwaves and a field of hanging frost
+    if (S.fx) {
+      for (let w = 0; w < 3; w++) later(w * 0.15, () => { if (S && S.fx) S.fx.ring([me[0], me[1] + 0.25 + w * 0.2, me[2]], { color: w % 2 ? "#dff4ff" : "#7ec8ff", r1: TW_STOP_R + w * 3, life: 0.7 }); });
+      for (let s = 0; s < 24; s++) {
+        const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * (TW_STOP_R - 4);
+        S.fx.spawn([me[0] + Math.cos(a) * r, me[1] + 1 + Math.random() * 6, me[2] + Math.sin(a) * r], { shape: "shard", color: s % 3 ? "#7ec8ff" : "#dff4ff", size: 0.22, vel: [0, 0.3, 0], grav: 0, spin: 1.2, life: TW_STOP_S, opacity: 0.8 });
+      }
+    }
+    screenFlash("#7ec8ff", 0.2, 500);
     try { ctx.engine.camera.shake(0.3, 0.35); } catch { /* fine */ }
     sfx(ctx, "warp");
     toast(ctx, "⌛ TIME STOP. For three seconds, the arena belongs to you.", "⌛", 2600);
@@ -479,8 +560,12 @@ function stepCheeses(ctx, dt) {
     const z = c.from[2] + (c.to[2] - c.from[2]) * k;
     if (!c.ids.length) {
       try { const id = uid("bt_cheese_"); ctx.engine.parts.create({ id, shape: "sphere", size: [1.1, 1.1, 1.1], position: [x, y, z], color: "#ffd23a", material: "neon", canCollide: false }); c.ids.push(id); } catch { /* fine */ }
+      try { const id = uid("bt_cheese_"); ctx.engine.parts.create({ id, shape: "wedge", size: [0.8, 0.8, 1.2], position: [x, y, z], color: "#e8b62a", material: "plastic", canCollide: false }); c.ids.push(id); } catch { /* fine */ }
     } else {
       try { ctx.engine.parts.setPosition(c.ids[0], [x, y, z]); } catch { /* gone */ }
+      // the wedge tumbles around the glow ball, dripping as it goes
+      if (c.ids[1]) { try { ctx.engine.parts.setPosition(c.ids[1], [x, y + 0.1, z]); ctx.engine.parts.setRotation(c.ids[1], [c.t * 900, c.t * 620, 0]); } catch { /* gone */ } }
+      if (S.fx && Math.floor(c.t * 20) !== Math.floor((c.t - dt) * 20)) S.fx.spawn([x, y - 0.4, z], { shape: "sphere", color: "#ffd23a", size: 0.28, vel: [0, -1, 0], grav: 20, life: 0.5 });
     }
     if (k >= 1) {
       for (const id of c.ids) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
@@ -488,6 +573,13 @@ function stepCheeses(ctx, dt) {
       const ex = [];
       for (let s = 0; s < 8; s++) { const a = s * 0.785; try { const id = uid("bt_splat_"); ctx.engine.parts.create({ id, shape: "sphere", size: [0.6, 0.6, 0.6], position: [c.to[0] + Math.cos(a) * 1.2, c.to[1] + (s % 3) * 0.5 - 0.5, c.to[2] + Math.sin(a) * 1.2], color: s % 2 ? "#ffd23a" : "#e8b62a", material: "neon", canCollide: false }); ex.push(id); } catch { /* fine */ } }
       S.vfx.push({ ids: ex, t: 0.7 });
+      // fondue everywhere: a shockwave, flying gobs, and a puddle that outstays its welcome
+      if (S.fx) {
+        S.fx.ring([c.to[0], c.to[1] - 2.2, c.to[2]], { color: "#ffd23a", r1: 5, life: 0.5 });
+        S.fx.ring([c.to[0], c.to[1] - 2.3, c.to[2]], { color: "#e8b62a", r1: 3.2, life: 2.2, fill: true, opacity: 0.65 });
+        S.fx.burst([c.to[0], c.to[1], c.to[2]], { count: 12, colors: ["#ffd23a", "#e8b62a", "#fff3b0"], speed: 7, up: 8, size: 0.34, life: 0.8, grav: 26 });
+        S.fx.text([c.to[0], c.to[1] + 2.4, c.to[2]], "SPLAT!", { color: "#ffd23a", scale: 1.1, life: 1.0 });
+      }
       sfx(ctx, "pop");
       if (c.target) { S.cheeseSeq++; S.myState.cheese = { id: S.cheeseSeq, target: c.target }; publishSoon(); }
       if (c.dummy && !c.dummy.dead) { for (const id of c.dummy.parts) { try { ctx.engine.parts.setColor(id, "#ffd23a"); } catch { /* gone */ } } }
@@ -500,6 +592,12 @@ function applyCheesed(ctx) {
   S.myState.cheesed = true;
   applyPassives(ctx);
   publishSoon();
+  screenFlash("#ffd23a", 0.3, 500);
+  shake(ctx, 0.3, 0.3);
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.burst([me[0], me[1] + 3, me[2]], { count: 10, colors: ["#ffd23a", "#e8b62a"], speed: 5, up: 6, size: 0.35, life: 0.8, grav: 18 });
+  }
   toast(ctx, "SPLAT! You are cheese now. Slow and yellow for 10 seconds.", "🧀", 3000);
   sfx(ctx, "pop");
 }
@@ -520,7 +618,16 @@ function ksTeleport(ctx) {
     for (let s = 0; s < 5; s++) { const a = s * 1.257; try { const id = uid("bt_blink_"); ctx.engine.parts.create({ id, shape: "box", size: [0.3, 4.5, 0.3], position: [px + Math.cos(a) * 1.3, py, pz + Math.sin(a) * 1.3], color: "#ff2a2a", material: "neon", canCollide: false }); ids.push(id); } catch { /* fine */ } }
   }
   S.vfx.push({ ids, t: 0.45 });
+  // red lightning between the two spots: bursts at both ends, streaks along the path
+  if (S.fx) {
+    S.fx.burst([me[0], me[1] + 2.5, me[2]], { count: 8, colors: ["#ff2a2a", "#ff5a3a"], shapes: ["shard"], speed: 6, up: 4, size: 0.3, life: 0.4, grav: 8 });
+    S.fx.burst([nx, me[1] + 2.5, nz], { count: 10, colors: ["#ff2a2a", "#ffffff"], shapes: ["shard", "sphere"], speed: 7, up: 5, size: 0.3, life: 0.5, grav: 8 });
+    S.fx.ring([nx, me[1] + 0.3, nz], { color: "#ff2a2a", r1: 6, life: 0.45 });
+    const ddx = nx - me[0], ddz = nz - me[2];
+    for (let s = 1; s < 6; s++) S.fx.spawn([me[0] + ddx * (s / 6), me[1] + 2.5, me[2] + ddz * (s / 6)], { shape: "box", color: "#ff5a3a", size: 0.6, vel: [ddx * 0.35, 0, ddz * 0.35], grav: 0, life: 0.3, stretch: 6 });
+  }
   try { ctx.player.teleport([nx, me[1] + 0.5, nz]); } catch { /* fine */ }
+  shake(ctx, 0.2, 0.2);
   S.ksCd.tp = KS_TP_CD;
   sfx(ctx, "warp");
 }
@@ -543,12 +650,29 @@ function stepGrenades(ctx, dt) {
     g.x += g.dx * 30 * dt; g.z += g.dz * 30 * dt;
     g.vy -= 85 * dt; g.y += g.vy * dt;
     try { ctx.engine.parts.setPosition(g.id, [g.x, g.y, g.z]); } catch { /* gone */ }
+    try { ctx.engine.parts.setRotation(g.id, [g.t * 720, 0, g.t * 400]); } catch { /* gone */ }
+    // the fuse blinks faster the longer it flies, and it leaves a thread of smoke
+    g.blinkT = (g.blinkT || 0) - dt;
+    if (g.blinkT <= 0) {
+      g.blinkT = Math.max(0.06, 0.25 - g.t * 0.08);
+      g.lit = !g.lit;
+      try { ctx.engine.parts.setColor(g.id, g.lit ? "#ff2a2a" : "#12141c"); } catch { /* gone */ }
+      if (S.fx) S.fx.spawn([g.x, g.y + 0.5, g.z], { shape: "sphere", color: "#565d70", size: 0.4, vel: [0, 2, 0], grav: -1, life: 0.6, opacity: 0.5 });
+    }
     if (g.y <= FLOOR_TOP + 0.6 || g.t > 2.4) {
       try { ctx.engine.parts.remove(g.id); } catch { /* gone */ }
       const ex = [];
       for (let k = 0; k < 14; k++) { const a = k * 0.45; try { const id = uid("bt_boom_"); ctx.engine.parts.create({ id, shape: k % 2 ? "sphere" : "wedge", size: [1.2, 1.2, 1.2], position: [g.x + Math.cos(a) * (1 + k % 4), g.y + 0.4 + (k % 3) * 0.7, g.z + Math.sin(a) * (1 + k % 4)], rotation: [0, a * 57, 0], color: ["#ff5a1f", "#ffd23a", "#ff2a2a", "#3e444f"][k % 4], material: "neon", canCollide: false }); ex.push(id); } catch { /* fine */ } }
       S.vfx.push({ ids: ex, t: 0.6 });
-      try { ctx.engine.camera.shake(0.4, 0.4); } catch { /* fine */ }
+      // the BOOM proper: double shockwave, shrapnel, and a column of climbing smoke
+      if (S.fx) {
+        S.fx.ring([g.x, g.y + 0.2, g.z], { color: "#ff5a1f", r1: 11, life: 0.5 });
+        S.fx.ring([g.x, g.y + 0.35, g.z], { color: "#ffd23a", r1: 7, life: 0.4 });
+        S.fx.burst([g.x, g.y + 0.8, g.z], { count: 16, colors: ["#ff5a1f", "#ffd23a", "#3e444f", "#12141c"], shapes: ["shard", "box"], speed: 12, up: 10, size: 0.36, life: 0.8, grav: 30 });
+        for (let s = 0; s < 6; s++) S.fx.spawn([g.x, g.y + 1, g.z], { shape: "sphere", color: s % 2 ? "#3e444f" : "#565d70", size: 1.2 + s * 0.15, vel: [(Math.random() - 0.5) * 3, 5 + s * 1.5, (Math.random() - 0.5) * 3], grav: -3, life: 1.3, opacity: 0.55 });
+      }
+      shake(ctx, 0.55, 0.45);
+      screenFlash("#ff8c1a", 0.16, 400);
       S.aoeSeq++; S.myState.aoe = { id: S.aoeSeq, x: g.x, z: g.z, r: 9, dmg: 25 }; publishSoon();
       for (const d of S.dummies) { if (!d.dead && (d.x - g.x) ** 2 + (d.z - g.z) ** 2 <= 81) hitDummy(ctx, d, 25); }
       sfx(ctx, "boing");
@@ -562,6 +686,12 @@ function ksFly(ctx) {
   if (S.flying) {
     try { ctx.engine.physics.setGravity(16); } catch { /* fine */ }
     try { ctx.player.setJumpPower(44); } catch { /* fine */ }
+    // takeoff: a downdraft ring and a puff of feathers
+    if (S.fx) {
+      const me = ctx.player.position();
+      S.fx.ring([me[0], me[1] + 0.2, me[2]], { color: "#dff4ff", r1: 7, life: 0.5 });
+      S.fx.burst([me[0], me[1] + 2, me[2]], { count: 10, colors: ["#ffffff", "#dff4ff", "#35a3e0"], speed: 5, up: 3, size: 0.3, life: 0.9, grav: 3, drag: 2.5 });
+    }
     toast(ctx, "FLIGHT. Tap jump to climb; toggle 🕊️ to land.", "🕊️", 2600);
     sfx(ctx, "warp");
   } else {
@@ -605,6 +735,12 @@ function applyFrozen(ctx) {
   try { ctx.player.setWalkSpeed(0); } catch { /* fine */ }
   try { ctx.player.setJumpPower(0); } catch { /* fine */ }
   if (dom) dom.frzO.style.display = "block";
+  // ice crawls up the statue that used to be you
+  if (S.fx) {
+    const me = ctx.player.position();
+    for (let s = 0; s < 10; s++) S.fx.spawn([me[0] + (Math.random() - 0.5) * 2.5, me[1] + Math.random() * 5, me[2] + (Math.random() - 0.5) * 2.5], { shape: "shard", color: s % 2 ? "#7ec8ff" : "#dff4ff", size: 0.3, vel: [0, 0.2, 0], grav: 0, spin: 0.6, life: TW_STOP_S, opacity: 0.85 });
+  }
+  screenFlash("#7ec8ff", 0.25, 500);
   sfx(ctx, "denied");
   toast(ctx, "⌛ Someone stopped time. You are a statue for three seconds.", "🧊", 2600);
 }
@@ -612,6 +748,12 @@ function clearFrozen(ctx) {
   if (S.frozenT <= 0 && dom && dom.frzO.style.display === "none") return;
   S.frozenT = 0;
   if (dom) dom.frzO.style.display = "none";
+  // the ice lets go all at once — a shatter of pale blue
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.burst([me[0], me[1] + 2.5, me[2]], { count: 12, colors: ["#7ec8ff", "#dff4ff", "#ffffff"], shapes: ["shard"], speed: 8, up: 6, size: 0.3, life: 0.6, grav: 24 });
+    S.fx.ring([me[0], me[1] + 0.3, me[2]], { color: "#dff4ff", r1: 5, life: 0.4 });
+  }
   applyPassives(ctx);
 }
 function startFling(ctx, fl) {
@@ -630,7 +772,14 @@ function stepFling(ctx, dt) {
   const z = f.z0 + f.dz * TW_FLING * k;
   const y = f.y0 + Math.sin(k * Math.PI) * 9;
   try { ctx.player.teleport([x, y, z]); } catch { /* fine */ }
-  if (k >= 1) S.fling = null; // wherever you are now, gravity owns the rest
+  // wind screams past — pale streaks peel off the flight path
+  if (S.fx && Math.floor(f.t * 30) !== Math.floor((f.t - dt) * 30)) {
+    S.fx.spawn([x + (Math.random() - 0.5) * 2, y + 1 + Math.random() * 2, z + (Math.random() - 0.5) * 2], { shape: "box", color: "#dff4ff", size: 0.5, vel: [-f.dx * 18, 0, -f.dz * 18], grav: 0, life: 0.35, stretch: 7, opacity: 0.7 });
+  }
+  if (k >= 1) {
+    S.fling = null; // wherever you are now, gravity owns the rest
+    if (S.fx) S.fx.ring([x, y - 1.5, z], { color: "#7ec8ff", r1: 5, life: 0.4 });
+  }
 }
 function portalPress(ctx) {
   if (!S.inArena || S.frozenT > 0) return;
@@ -678,11 +827,27 @@ function stepPortals(ctx, dt) {
   if (!P2.a || !P2.b) return;
   P2.life -= dt;
   if (P2.life <= 0) { clearPortals(ctx, false); return; }
+  // both mouths churn: motes spiral up out of each, blue from one, orange from the other
+  P2.swirlT = (P2.swirlT || 0) - dt;
+  if (P2.swirlT <= 0 && S.fx) {
+    P2.swirlT = 0.12;
+    for (const [p, col] of [[P2.a, "#35a3e0"], [P2.b, "#ff8c1a"]]) {
+      const a = (S.runT * 4) % (Math.PI * 2);
+      S.fx.spawn([p[0] + Math.cos(a) * 1.6, p[1] + 0.4, p[2] + Math.sin(a) * 1.6], { shape: "sphere", color: col, size: 0.24, vel: [-Math.sin(a) * 3, 3.2, Math.cos(a) * 3], grav: -1, life: 0.9 });
+    }
+  }
   if (P2.grace > 0) { P2.grace -= dt; return; }
   const me = ctx.player.position();
   const near = (p) => (me[0] - p[0]) ** 2 + (me[2] - p[2]) ** 2 <= 2.3 * 2.3 && Math.abs(me[1] - p[1]) < 4.5;
   const to = near(P2.a) ? P2.b : near(P2.b) ? P2.a : null;
   if (to) {
+    const from = near(P2.a) ? P2.a : P2.b;
+    if (S.fx) {
+      S.fx.burst([from[0], from[1] + 2.5, from[2]], { count: 8, colors: ["#35a3e0", "#dff4ff"], speed: 6, up: 4, size: 0.3, life: 0.5, grav: 6 });
+      S.fx.burst([to[0], to[1] + 2.5, to[2]], { count: 10, colors: ["#ff8c1a", "#ffd23a", "#dff4ff"], speed: 7, up: 5, size: 0.3, life: 0.6, grav: 6 });
+      S.fx.ring([to[0], to[1] + 0.3, to[2]], { color: "#ff8c1a", r1: 5, life: 0.45 });
+    }
+    screenFlash("#35a3e0", 0.16, 350);
     try { ctx.player.teleport([to[0], to[1] + 0.4, to[2]]); } catch { /* fine */ }
     P2.grace = 1.2;
     sfx(ctx, "warp");
@@ -698,15 +863,34 @@ function spawnBush(ctx, x, z) {
   for (let k = 0; k < foliage.length; k++) { const [ox, oy, oz, s] = foliage[k]; push({ shape: "sphere", size: [s, s * 0.85, s], position: [x + ox, FLOOR_TOP + oy, z + oz], color: k % 2 ? "#3ddc84" : "#2f8f4a", material: "plastic" }); }
   for (let i = 0; i < 8; i++) { const a = i * 0.8; push({ shape: "wedge", size: [0.24, 0.7, 0.24], position: [x + Math.cos(a) * 1.4, FLOOR_TOP + 1.1 + (i % 3) * 0.6, z + Math.sin(a) * 1.4], rotation: [0, a * 57, 90], color: "#1f6b34", material: "plastic" }); } // thorns
   for (let i = 0; i < 5; i++) { const a = i * 1.3 + 0.4; push({ shape: "sphere", size: [0.3, 0.3, 0.3], position: [x + Math.cos(a) * 1.1, FLOOR_TOP + 1.6 + (i % 2) * 0.5, z + Math.sin(a) * 1.1], color: "#e0245e", material: "neon" }); } // barbs
-  S.bushes.push({ parts, x, z, t: 0, dmgT: 0.6 });
+  // it BURSTS out of the ground: soil, leaves and a scatter of rose petals
+  if (S.fx) {
+    S.fx.ring([x, FLOOR_TOP + 0.25, z], { color: "#3a2414", r1: 5, life: 0.5 });
+    S.fx.burst([x, FLOOR_TOP + 1.5, z], { count: 14, colors: ["#3ddc84", "#2f8f4a", "#3a2414", "#e0245e"], shapes: ["shard", "sphere"], speed: 7, up: 9, size: 0.3, life: 0.8, grav: 20 });
+  }
+  S.bushes.push({ parts, x, z, t: 0, dmgT: 0.6, petalT: 0 });
 }
 function stepBushes(ctx, dt) {
   for (let i = S.bushes.length - 1; i >= 0; i--) {
     const b = S.bushes[i]; b.t += dt;
-    if (b.t >= BUSH_LIFE) { for (const id of b.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } } S.bushes.splice(i, 1); continue; }
+    if (b.t >= BUSH_LIFE) {
+      for (const id of b.parts) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } }
+      // it wilts in a sigh of dead leaves
+      if (S.fx) S.fx.burst([b.x, FLOOR_TOP + 1.5, b.z], { count: 10, colors: ["#6b4423", "#3a2414", "#2f8f4a"], speed: 3, up: 2, size: 0.28, life: 1.0, grav: 6, drag: 2 });
+      S.bushes.splice(i, 1); continue;
+    }
+    // rose petals drift off it the whole time it lives
+    b.petalT = (b.petalT || 0) - dt;
+    if (b.petalT <= 0 && S.fx) {
+      b.petalT = 0.45;
+      const a = Math.random() * Math.PI * 2;
+      S.fx.spawn([b.x + Math.cos(a) * 1.4, FLOOR_TOP + 2.6, b.z + Math.sin(a) * 1.4], { shape: "box", color: Math.random() < 0.5 ? "#e0245e" : "#3ddc84", size: 0.22, vel: [Math.cos(a) * 1.5, 0.8, Math.sin(a) * 1.5], grav: 2.5, spin: 5, life: 1.4, drag: 1 });
+    }
     b.dmgT -= dt;
     if (b.dmgT <= 0) {
       b.dmgT = 1;
+      // the thorns flex — a ring of red sparks marks the bite radius
+      if (S.fx) S.fx.ring([b.x, FLOOR_TOP + 0.3, b.z], { color: "#e0245e", r1: BUSH_R, life: 0.4, opacity: 0.5 });
       for (const d of S.dummies) { if (!d.dead && (d.x - b.x) ** 2 + (d.z - b.z) ** 2 <= BUSH_R * BUSH_R) hitDummy(ctx, d, BUSH_DMG); }
       for (const p of rosterSafe(ctx)) { if (!p.pos) continue; if ((p.pos[0] - b.x) ** 2 + (p.pos[2] - b.z) ** 2 <= BUSH_R * BUSH_R) { S.aoeSeq++; S.myState.aoe = { id: S.aoeSeq, x: b.x, z: b.z, r: BUSH_R, dmg: BUSH_DMG }; publishSoon(); break; } }
     }
@@ -729,11 +913,17 @@ function stepMeteors(ctx, dt) {
     const m = S.meteors[i]; m.t += dt;
     m.x += m.dx * 70 * dt; m.z += m.dz * 70 * dt; m.y = Math.max(FLOOR_TOP + 1, m.y - 22 * dt);
     try { ctx.engine.parts.setPosition(m.id, [m.x, m.y, m.z]); } catch { /* gone */ }
+    try { ctx.engine.parts.setRotation(m.id, [m.t * 540, m.t * 360, 0]); } catch { /* gone */ }
     if (m.glow) { try { ctx.engine.parts.setPosition(m.glow, [m.x, m.y, m.z]); } catch { /* gone */ } }
     m.trailT -= dt;
     if (m.trailT <= 0) {
       m.trailT = 0.04;
       try { const id = uid("bt_ember_"); ctx.engine.parts.create({ id, shape: "sphere", size: [0.9, 0.9, 0.9], position: [m.x, m.y + 0.4, m.z], color: ["#ff8c1a", "#ffd23a", "#ff5a1f"][S.idSeq % 3], material: "neon", canCollide: false }); S.vfx.push({ ids: [id], t: 0.35 }); } catch { /* fine */ }
+      // smoke boils off behind the fireball and ember flecks spit sideways
+      if (S.fx) {
+        S.fx.spawn([m.x - m.dx * 2, m.y + 1.2, m.z - m.dz * 2], { shape: "sphere", color: S.idSeq % 2 ? "#3e444f" : "#2a2f3a", size: 1.1, vel: [(Math.random() - 0.5) * 2, 3.5, (Math.random() - 0.5) * 2], grav: -2, life: 0.8, opacity: 0.55 });
+        S.fx.spawn([m.x, m.y, m.z], { shape: "shard", color: "#ffd23a", size: 0.25, vel: [(Math.random() - 0.5) * 10, 2, (Math.random() - 0.5) * 10], grav: 22, life: 0.45 });
+      }
     }
     let hit = false;
     for (const p of rosterSafe(ctx)) { if (!p.pos) continue; if ((p.pos[0] - m.x) ** 2 + (p.pos[2] - m.z) ** 2 <= 9) { S.hitSeq++; S.myState.hit = { id: S.hitSeq, target: p.id, dmg: 9999, poison: 0 }; publishSoon(); hit = true; break; } }
@@ -742,10 +932,80 @@ function stepMeteors(ctx, dt) {
       const ex = [];
       for (let k = 0; k < 12; k++) { const a = k * 0.52; try { const id = uid("bt_boom_"); ctx.engine.parts.create({ id, shape: k % 2 ? "sphere" : "wedge", size: [1.1, 1.1, 1.1], position: [m.x + Math.cos(a) * (1 + k % 3), m.y + (k % 3) * 0.6, m.z + Math.sin(a) * (1 + k % 3)], rotation: [0, a * 57, 0], color: ["#ff5a1f", "#ffd23a", "#3a2418", "#ff8c1a"][k % 4], material: k % 3 ? "neon" : "lava", canCollide: false }); ex.push(id); } catch { /* fine */ } }
       S.vfx.push({ ids: ex, t: 0.6 });
-      if (hit) { toast(ctx, "METEOR HIT — obliterated!", "☄️", 2200); sfx(ctx, "win"); } else { sfx(ctx, "boing"); }
+      // impact: three stacked shockwaves, a scorch that lingers, and a fountain of fire
+      if (S.fx) {
+        S.fx.ring([m.x, m.y + 0.15, m.z], { color: "#ff5a1f", r1: 14, life: 0.6 });
+        S.fx.ring([m.x, m.y + 0.3, m.z], { color: "#ffd23a", r1: 10, life: 0.45 });
+        S.fx.ring([m.x, m.y + 0.1, m.z], { color: "#2a1408", r1: 5.5, life: 3.2, fill: true, opacity: 0.7 });
+        S.fx.burst([m.x, m.y + 1, m.z], { count: 20, colors: ["#ff5a1f", "#ffd23a", "#ff8c1a", "#3a2418"], shapes: ["sphere", "shard"], speed: 11, up: 14, size: 0.45, life: 0.9, grav: 26 });
+        for (let s = 0; s < 5; s++) S.fx.spawn([m.x, m.y + 1.5, m.z], { shape: "sphere", color: "#3e444f", size: 1.4, vel: [(Math.random() - 0.5) * 4, 6 + s, (Math.random() - 0.5) * 4], grav: -3, life: 1.2, opacity: 0.5 });
+      }
+      shake(ctx, hit ? 0.8 : 0.55, 0.5);
+      if (hit) { screenFlash("#ff8c1a", 0.28, 600); toast(ctx, "METEOR HIT — obliterated!", "☄️", 2200); sfx(ctx, "win"); } else { sfx(ctx, "boing"); }
       try { ctx.engine.parts.remove(m.id); } catch { /* gone */ }
       if (m.glow) { try { ctx.engine.parts.remove(m.glow); } catch { /* gone */ } }
       S.meteors.splice(i, 1);
+    }
+  }
+}
+
+// ---- the ambient layer: the world never sits still -----------------------------------
+// Torches spit embers, pedestals breathe motes in their blade's colour, the arena air
+// carries battle-dust, running kicks up dirt, and the showpiece swords trail their own
+// weather. All of it render-side, all of it distance-culled around the player.
+function stepAmbient(ctx, dt) {
+  if (!S.fx) return;
+  const me = ctx.player.position();
+  S.ambT -= dt;
+  if (S.ambT <= 0) {
+    S.ambT = 0.14;
+    const torches = (S.world && S.world.torches) || [];
+    let lit = 0;
+    for (const t of torches) {
+      if ((t.x - me[0]) ** 2 + (t.z - me[2]) ** 2 > 45 * 45) continue;
+      if (Math.random() < 0.4) continue;
+      S.fx.spawn([t.x + (Math.random() - 0.5) * 0.5, t.y, t.z + (Math.random() - 0.5) * 0.5], { shape: "sphere", color: Math.random() < 0.3 ? "#ffe45c" : t.color, size: 0.15 + Math.random() * 0.12, vel: [(Math.random() - 0.5) * 0.8, 2.2 + Math.random() * 1.5, (Math.random() - 0.5) * 0.8], grav: -0.5, life: 0.9, drag: 0.5 });
+      if (++lit >= 6) break;
+    }
+    if (!S.inArena) {
+      for (const pad of S.world.swordPads) {
+        if ((pad.center[0] - me[0]) ** 2 + (pad.center[2] - me[2]) ** 2 > 40 * 40 || Math.random() < 0.55) continue;
+        const sw = swordById(pad.id);
+        const a = Math.random() * Math.PI * 2, r = 1.4 + Math.random() * 1.6;
+        S.fx.spawn([pad.center[0] + Math.cos(a) * r, pad.center[1] - 1.2, pad.center[2] + Math.sin(a) * r], { shape: "sphere", color: sw.colors.gem, size: 0.14, vel: [0, 1.6 + Math.random(), 0], grav: -0.6, life: 1.4, opacity: 0.9 });
+      }
+    } else if (Math.random() < 0.5) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * ARENA_RADIUS * 0.8;
+      S.fx.spawn([ARENA_CENTER[0] + Math.cos(a) * r, FLOOR_TOP + 0.6 + Math.random() * 5, ARENA_CENTER[1] + Math.sin(a) * r], { shape: "sphere", color: Math.random() < 0.5 ? "#ff8c1a" : "#e0b23a", size: 0.13, vel: [(Math.random() - 0.5) * 1.2, 0.7, (Math.random() - 0.5) * 1.2], grav: -0.3, life: 2.0, opacity: 0.7 });
+    }
+  }
+  // footstep dust — only when actually moving flat-out along the ground
+  S.dustT -= dt;
+  if (S.dustT <= 0) {
+    S.dustT = 0.16;
+    if (S.lastPos) {
+      const dx = me[0] - S.lastPos[0], dz = me[2] - S.lastPos[2], dy = Math.abs(me[1] - S.lastPos[1]);
+      if (Math.hypot(dx, dz) / 0.16 > 8 && dy < 0.5) {
+        S.fx.spawn([me[0] - dx * 2, me[1] + 0.25, me[2] - dz * 2], { shape: "sphere", color: "#b09a68", size: 0.32, vel: [-dx * 1.5, 1.2, -dz * 1.5], grav: 2, life: 0.5, opacity: 0.5 });
+      }
+    }
+    S.lastPos = [me[0], me[1], me[2]];
+  }
+  // the showpiece blades carry their own weather
+  S.auraT -= dt;
+  if (S.auraT <= 0) {
+    S.auraT = 0.22;
+    const sw = swordById(S.equipped);
+    if (S.inArena && sw.id === "killstreak" && S.save.streak >= 10) {
+      S.fx.spawn([me[0] + (Math.random() - 0.5) * 1.6, me[1] + 1 + Math.random() * 3, me[2] + (Math.random() - 0.5) * 1.6], { shape: "shard", color: Math.random() < 0.5 ? "#ff2a2a" : "#ff5a3a", size: 0.2, vel: [0, 1.8, 0], grav: -1, life: 0.8 });
+    } else if (S.inArena && sw.id === "timewarp") {
+      S.fx.spawn([me[0] + (Math.random() - 0.5) * 1.6, me[1] + 1.5 + Math.random() * 2.5, me[2] + (Math.random() - 0.5) * 1.6], { shape: "box", color: Math.random() < 0.5 ? "#7ec8ff" : "#e0b23a", size: 0.16, vel: [0, 1, 0], grav: -0.8, spin: 3, life: 1.0, opacity: 0.85 });
+    }
+    if (S.cheesedT > 0) {
+      S.fx.spawn([me[0] + (Math.random() - 0.5) * 1.5, me[1] + 2.5, me[2] + (Math.random() - 0.5) * 1.5], { shape: "sphere", color: "#ffd23a", size: 0.25, vel: [0, -1, 0], grav: 14, life: 0.6 });
+    }
+    if (S.flying) {
+      S.fx.spawn([me[0], me[1] + 0.5, me[2]], { shape: "box", color: "#dff4ff", size: 0.35, vel: [(Math.random() - 0.5) * 2, -2, (Math.random() - 0.5) * 2], grav: 0, life: 0.4, stretch: 5, opacity: 0.6 });
     }
   }
 }
@@ -758,12 +1018,29 @@ function takeDamage(ctx, dmg, poison, attackerId) {
   S.lastAttacker = attackerId || S.lastAttacker;
   S.hp -= dmg;
   if (poison) S.poison = { left: 3, t: 1.0 };
+  // being hit HURTS: red pop, camera kick, a spray of red off my own avatar
+  screenFlash("#c0392b", Math.min(0.1 + dmg * 0.012, 0.4), 320);
+  shake(ctx, Math.min(0.15 + dmg * 0.015, 0.55), 0.28);
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.burst([me[0], me[1] + 3, me[2]], { count: 8, colors: ["#ff5a3a", "#c0392b", "#ffffff"], shapes: ["shard", "sphere"], speed: 8, up: 5, size: 0.28, life: 0.45, grav: 22 });
+    if (poison) S.fx.burst([me[0], me[1] + 3.5, me[2]], { count: 6, colors: ["#8be04a", "#3a7d2c"], speed: 4, up: 6, size: 0.26, life: 0.8, grav: 6 });
+  }
   if (S.hp <= 0) die(ctx);
   else { publishSoon(); refreshHp(); }
 }
 function die(ctx) {
   S.deathSeq++;
   S.myState.death = { id: S.deathSeq, killer: S.lastAttacker || null };
+  // go out with a bang: my whole cube bursts into pieces where I stood
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.burst([me[0], me[1] + 2.5, me[2]], { count: 22, colors: ["#ff5a3a", "#c0392b", "#3e444f", "#ffffff"], shapes: ["box", "shard", "sphere"], speed: 13, up: 11, size: 0.5, life: 0.9, grav: 30 });
+    S.fx.ring([me[0], me[1] + 0.3, me[2]], { color: "#ff5a3a", r1: 10, life: 0.5 });
+    S.fx.text([me[0], me[1] + 5, me[2]], "OOF", { color: "#ff5a3a", scale: 1.5, life: 1.2 });
+  }
+  screenFlash("#7d1f16", 0.5, 700);
+  shake(ctx, 0.7, 0.5);
   S.hp = HP_MAX; S.poison = null; S.lastAttacker = null;
   if (S.save.streak > 0 && swordById(S.equipped).id === "killstreak") {
     toast(ctx, `The Killstreak forgets. ${S.save.streak}-streak, gone — back to 1 damage.`, "🩸", 3600);
@@ -775,6 +1052,13 @@ function die(ctx) {
 function scoreKill(ctx, whom) {
   S.save.kills += 1;
   S.save.totalKills += 1;
+  // every kill is a little party: gold confetti off me and the count in the air
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.burst([me[0], me[1] + 4, me[2]], { count: 12, colors: ["#ffd23a", "#fff3b0", "#e0b23a", "#ffffff"], shapes: ["box", "sphere"], speed: 7, up: 9, size: 0.3, life: 1.0, grav: 14, spin: 8 });
+    S.fx.text([me[0], me[1] + 6.4, me[2]], "+1 KILL", { color: "#ffd23a", scale: 1.1, life: 1.1 });
+  }
+  screenFlash("#e0b23a", 0.14, 380);
   if (S.inArena && swordById(S.equipped).id === "killstreak") {
     S.save.streak += 1;
     if (S.save.streak > S.save.bestStreak) S.save.bestStreak = S.save.streak;
@@ -782,6 +1066,14 @@ function scoreKill(ctx, whom) {
       const names = { 10: "TELEPORT 🌀", 50: "GRENADE 💣", 100: "FLIGHT 🕊️", 250: "THE CROWN 👑 — claim your aura and garb" };
       toast(ctx, `${S.save.streak} STREAK. The blade learns: ${names[S.save.streak]}.`, "🩸", 4600);
       sfx(ctx, "badge");
+      // a tier waking up gets the full treatment — red shockwaves and a firework fan
+      if (S.fx) {
+        const me = ctx.player.position();
+        S.fx.ring([me[0], me[1] + 0.3, me[2]], { color: "#ff2a2a", r1: 16, life: 0.8 });
+        for (let w = 0; w < 3; w++) later(w * 0.25, () => { if (!S || !S.fx) return; const p = ctx.player.position(); S.fx.burst([p[0], p[1] + 5 + w * 2, p[2]], { count: 12, colors: ["#ff2a2a", "#ff5a3a", "#ffd23a"], speed: 9, up: 6, size: 0.32, life: 0.9, grav: 12 }); });
+      }
+      screenFlash("#ff2a2a", 0.22, 600);
+      shake(ctx, 0.4, 0.4);
       refreshKsButtons();
     }
   }
@@ -794,6 +1086,18 @@ function checkUnlocks(ctx, whom) {
       toast(ctx, `UNLOCKED: ${sw.emoji} ${sw.name}! Grab it in the lobby.`, "🗝️", 4000);
       sfx(ctx, "badge");
       try { ctx.services.badges.award("sword_" + sw.id); } catch { /* fine */ }
+      // fireworks over the newly-lit pedestal, in the new blade's own colours
+      const pad = S.world && S.world.swordPads.find((p) => p.id === sw.id);
+      if (pad && S.fx) {
+        for (let w = 0; w < 4; w++) {
+          later(w * 0.3, () => {
+            if (!S || !S.fx) return;
+            S.fx.burst([pad.center[0], pad.center[1] + 3 + w, pad.center[2]], { count: 14, colors: [sw.colors.edge, sw.colors.gem, sw.colors.blade, "#ffffff"], shapes: ["sphere", "shard"], speed: 8, up: 8, size: 0.3, life: 1.0, grav: 10 });
+            S.fx.ring([pad.center[0], pad.center[1] - 1.5, pad.center[2]], { color: sw.colors.gem, r1: 8 + w * 2, life: 0.7 });
+          });
+        }
+      }
+      screenFlash("#ffd23a", 0.2, 700);
     }
   }
   try { ctx.services.badges.award("firstblood"); } catch { /* fine */ }
@@ -806,6 +1110,15 @@ function refreshHp() {
   dom.hpFill.style.width = (pct * 100) + "%";
   dom.hpFill.style.background = pct > 0.5 ? "linear-gradient(90deg,#3ddc84,#8be04a)" : pct > 0.25 ? "linear-gradient(90deg,#e0b23a,#ffd23a)" : "linear-gradient(90deg,#c0392b,#ff5a3a)";
   dom.hpText.textContent = `${Math.max(0, Math.ceil(S.hp))} / ${HP_MAX}`;
+  // the bar itself flinches when the number drops
+  if (S.hp < S.lastHp) {
+    dom.hpWrap.style.boxShadow = "0 0 14px 3px rgba(255,60,40,0.85)";
+    dom.hpWrap.style.transform = "translateX(-50%) scale(1.06)";
+    later(0.15, () => { if (dom) { dom.hpWrap.style.boxShadow = "none"; dom.hpWrap.style.transform = "translateX(-50%)"; } });
+  }
+  S.lastHp = S.hp;
+  // below a quarter, the edges of the world close in (pulse driven from update())
+  dom.vignO.style.opacity = S.inArena && pct <= 0.25 ? String(0.5 + 0.3 * Math.sin(S.runT * 6)) : "0";
 }
 function refreshAbilityBtn() {
   if (!dom) return;
@@ -871,6 +1184,13 @@ function enterArena(ctx, swordId) {
   applyPassives(ctx);
   S.myState.inArena = true; S.myState.sword = swordId; S.myState.hp = HP_MAX; publishSoon();
   showCombatUi(true); refreshHp(); refreshHud(ctx);
+  // arrive like you mean it: a ring in your blade's colour and a leap of sparks
+  const swIn = swordById(swordId);
+  if (S.fx) {
+    S.fx.ring([sp[0], sp[1] + 0.2, sp[2]], { color: swIn.colors.edge, r1: 8, life: 0.6 });
+    S.fx.burst([sp[0], sp[1] + 2, sp[2]], { count: 12, colors: [swIn.colors.edge, swIn.colors.gem, "#ffffff"], speed: 6, up: 8, size: 0.3, life: 0.7, grav: 14 });
+  }
+  shake(ctx, 0.2, 0.25);
   try { ctx.engine.audio.playMusic("clash"); } catch { /* fine */ }
   toast(ctx, `Fighting with the ${swordById(swordId).name}. Tap ⚔️ to swing!`, swordById(swordId).emoji, 3200);
 }
@@ -1072,12 +1392,24 @@ function enterObby(ctx) {
   if (S.inArena) toLobby(ctx); // no fighting mid-obby; also re-pins the lobby checkpoint
   // checkpoint stays at the LOBBY on purpose: any fall = start over from the hall
   try { ctx.player.teleport([OBBY_START[0], OBBY_START[1], OBBY_START[2]], 180); } catch { /* fine */ }
+  if (S.fx) {
+    S.fx.ring([OBBY_START[0], OBBY_START[1] + 0.2, OBBY_START[2]], { color: "#ffd23a", r1: 6, life: 0.5 });
+    S.fx.burst([OBBY_START[0], OBBY_START[1] + 2, OBBY_START[2]], { count: 10, colors: ["#ffd23a", "#e8b62a", "#ffffff"], speed: 5, up: 6, size: 0.28, life: 0.7, grav: 10 });
+  }
+  screenFlash("#ffd23a", 0.15, 400);
   sfx(ctx, "warp");
   toast(ctx, S.save.cheese
     ? "The Obby of Oof — again, for glory. One stage. Fall and you're home."
     : "The OBBY OF OOF. One stage. Fall ONCE and you're back in the lobby. Win, and the Cheese Blade is yours.", "🧀", 5000);
 }
 function winObby(ctx) {
+  // cheese fireworks either way — winning the Obby of Oof should LOOK won
+  if (S.fx) {
+    const me = ctx.player.position();
+    for (let w = 0; w < 4; w++) later(w * 0.25, () => { if (!S || !S.fx) return; const p = ctx.player.position(); S.fx.burst([p[0], p[1] + 4 + w * 1.5, p[2]], { count: 12, colors: ["#ffd23a", "#fff3b0", "#e8b62a", "#ffffff"], speed: 8, up: 7, size: 0.32, life: 1.0, grav: 12 }); });
+    S.fx.ring([me[0], me[1] + 0.2, me[2]], { color: "#ffd23a", r1: 9, life: 0.7 });
+  }
+  screenFlash("#ffd23a", 0.25, 700);
   if (!S.save.cheese) {
     S.save.cheese = true; saveNow(ctx);
     sfx(ctx, "win");
@@ -1098,6 +1430,7 @@ export function init(ctx) {
   S.equipped = S.save.equipped;
   S.world = buildWorld();
   for (const def of S.world.parts) { try { ctx.engine.parts.create(def); } catch { /* one bad part is not a dead Place */ } }
+  try { S.fx = createVfx(ctx); } catch { S.fx = null; /* headless: the game plays fine without sparkle */ }
 
   // pedestal labels
   const THREE = ctx.engine.THREE;
@@ -1203,6 +1536,8 @@ export function update(dt, ctx) {
 
   // transient VFX cleanup
   for (let i = S.vfx.length - 1; i >= 0; i--) { const v = S.vfx[i]; v.t -= dt; if (v.t <= 0) { for (const id of v.ids) { try { ctx.engine.parts.remove(id); } catch { /* gone */ } } S.vfx.splice(i, 1); } }
+  if (S.fx) { try { S.fx.step(dt); } catch { /* fine */ } }
+  try { stepAmbient(ctx, dt); } catch { /* fine */ }
 
   stepCheeses(ctx, dt);
   try { S.quest.update(dt); } catch { /* fine */ }
@@ -1220,8 +1555,8 @@ export function update(dt, ctx) {
     stepMeteors(ctx, dt);
     stepBushes(ctx, dt);
     stepGrenades(ctx, dt);
-    // poison on me
-    if (S.poison) { S.poison.t -= dt; if (S.poison.t <= 0) { S.poison.t = 1.0; S.poison.left -= 1; takeDamage(ctx, 3, 0, S.lastAttacker); if (S.poison && S.poison.left <= 0) S.poison = null; } }
+    // poison on me — each tick drips green off the wound
+    if (S.poison) { S.poison.t -= dt; if (S.poison.t <= 0) { S.poison.t = 1.0; S.poison.left -= 1; if (S.fx) { const pp = ctx.player.position(); S.fx.burst([pp[0], pp[1] + 3.2, pp[2]], { count: 5, colors: ["#8be04a", "#3a7d2c", "#c8ff6b"], speed: 3, up: 4, size: 0.24, life: 0.7, grav: 12 }); } takeDamage(ctx, 3, 0, S.lastAttacker); if (S.poison && S.poison.left <= 0) S.poison = null; } }
     // fell into the void → respawn (before the engine's killY)
     const me = ctx.player.position();
     if (me[1] < VOID_Y) die(ctx);
@@ -1268,7 +1603,14 @@ export function update(dt, ctx) {
   S.hudT -= dt; if (S.hudT <= 0) { S.hudT = 0.2; if (S.inArena) refreshHp(); }
 }
 
-function spawnDummyReuse(ctx, d) { d.parts = buildDummyParts(ctx, d.x, d.z); }
+function spawnDummyReuse(ctx, d) {
+  d.parts = buildDummyParts(ctx, d.x, d.z);
+  // it pops back with a puff of straw and a ring, so respawns read as arrivals
+  if (S.fx) {
+    S.fx.ring([d.x, FLOOR_TOP + 0.3, d.z], { color: "#d9c48f", r1: 4.5, life: 0.45 });
+    S.fx.burst([d.x, FLOOR_TOP + 2.5, d.z], { count: 8, colors: ["#d9c48f", "#e0cfa0", "#ffffff"], speed: 4, up: 4, size: 0.26, life: 0.6, grav: 10 });
+  }
+}
 
 export function dispose(ctx) {
   if (S) {
@@ -1288,11 +1630,12 @@ export function dispose(ctx) {
     if (S.labels) for (const L of S.labels) { try { L.mat.dispose(); L.tex.dispose(); } catch { /* fine */ } }
     if (S.gateLabel) { try { S.gateLabel.mat.dispose(); S.gateLabel.tex.dispose(); } catch { /* fine */ } }
     if (S.twGateLabel) { try { S.twGateLabel.mat.dispose(); S.twGateLabel.tex.dispose(); } catch { /* fine */ } }
+    if (S.fx) { try { S.fx.dispose(); } catch { /* fine */ } }
     if (S.rootId != null) { try { ctx.engine.parts.remove(S.rootId); } catch { /* gone */ } }
     if (S.subs) for (const u of S.subs) { try { u(); } catch { /* fine */ } }
     try { ctx.engine.audio.playMusic("chill"); } catch { /* fine */ }
   }
-  if (dom) { for (const k of ["hpWrap", "atkBtn", "abBtn", "tpBtn", "grBtn", "flyBtn", "claimBtn", "pgBtn", "frzO", "aimLayer"]) { try { dom[k].remove(); } catch { /* fine */ } } dom = null; }
+  if (dom) { for (const k of ["hpWrap", "atkBtn", "abBtn", "tpBtn", "grBtn", "flyBtn", "claimBtn", "pgBtn", "frzO", "aimLayer", "flashO", "vignO"]) { try { dom[k].remove(); } catch { /* fine */ } } dom = null; }
   try { ctx.services.ui.removeHudStat("bt-kills"); ctx.services.ui.removeHudStat("bt-sword"); ctx.services.ui.removeHudStat("bt-streak"); ctx.services.ui.removeHudStat("bt-lett"); } catch { /* fine */ }
   S = null;
 }

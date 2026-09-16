@@ -144,11 +144,14 @@ function swordModel(parts, key, cx, cy, cz, c, ornament, spin) {
 
 function ring(cx, cz, r, a) { return [cx + r * Math.cos(a), cz + r * Math.sin(a)]; }
 
-// A wall torch: a bracket + a flame. Purely decorative (never collides).
+// A wall torch: a bracket + a flame. Purely decorative (never collides). Every flame's
+// position is recorded so game.js can rain embers out of the ones near the player.
+let torchSpots = [];
 function torch(parts, x, y, z, flame) {
   parts.push(P({ shape: "cylinder", size: [0.2, 1.2, 0.2], position: [x, y, z], color: "#3a2a1a", material: "wood", canCollide: false }));
   parts.push(P({ shape: "sphere", size: [0.7, 1.0, 0.7], position: [x, y + 0.9, z], color: flame || "#ff8c1a", material: "lava", canCollide: false }));
   parts.push(P({ shape: "sphere", size: [0.35, 0.5, 0.35], position: [x, y + 1.2, z], color: "#ffe45c", material: "neon", canCollide: false }));
+  torchSpots.push({ x, y: y + 1.4, z, color: flame || "#ff8c1a" });
 }
 
 function buildLobby(parts, out) {
@@ -901,8 +904,9 @@ function buildLettuceRealm(parts, out) {
 
 export function buildWorld() {
   seq = 0;
+  torchSpots = [];
   const parts = [];
-  const out = { parts };
+  const out = { parts, torches: torchSpots };
   buildLobby(parts, out);
   buildArena(parts, out);
   buildObby(parts);
