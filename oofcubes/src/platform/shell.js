@@ -851,17 +851,20 @@ async function playPublishedGame(game) {
   try {
     const full = await gamesService().get(game.id);
     const studio = await import("./studio/store.js");
-    const imported = studio.importCode(full.code);
-    if (!imported || !imported.ok) {
+    // codeToPlaceData, not importCode: playing someone's game must not clone it onto
+    // this player's My Places shelf (or hit its 20-creation cap). The save namespace
+    // is the SERVER's game id, so progress in a published game survives replays and
+    // republished updates alike.
+    const parsed = studio.codeToPlaceData(full.code, game.id);
+    if (parsed.error) {
+      console.warn("[oof] published game did not open:", parsed);
       uiToast("That game could not be opened.");
       return;
     }
     // Record the visit AFTER we know the world is good, and never block on it: a
     // visit that cannot be counted must not stop the game opening (spec 14 §5.7).
     gamesService().visit(game.id).catch(() => {});
-    const doc = studio.getCreation(imported.id);
-    const placeData = studio.toPlaceData(doc);
-    await loadPublishedPlace(game, placeData);
+    await loadPublishedPlace(game, parsed.placeData);
   } catch (err) {
     uiToast((err && err.message) || "Could not reach the server.");
   }

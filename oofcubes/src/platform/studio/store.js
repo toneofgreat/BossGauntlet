@@ -418,10 +418,11 @@ export function exportCode(id) {
   return { code, granted };
 }
 
-// importCode(str) -> { id, name } | { error, ... } — spec 11 §5.7's five steps.
-// Every failure is a returned tag, never a throw: the paste box has to be able to say
-// what went wrong without the shelf wrapping every call in try/catch.
-export function importCode(str) {
+// parseCode(str) -> { placeData } | { error, ... } — the decode half shared by
+// importCode and codeToPlaceData: trim, both length caps, decode, domain check,
+// unpack, part cap. Everything after this point differs between "add it to my
+// shelf" and "just play it", so this is where the two paths fork.
+function parseCode(str) {
   const text = String(str == null ? "" : str).trim();
   if (!text) return { error: "badcode", message: "Paste a share code first." };
   // SPEC AMENDMENT (§5.7 importCode step 1, amended in this change): the numbered steps
@@ -447,6 +448,36 @@ export function importCode(str) {
     return { error: "badpack", message: err && err.message ? err.message : String(err) };
   }
   if (placeData.parts.length > MAX_STUDIO_PARTS) return { error: "toobig" };
+  return { placeData };
+}
+
+// codeToPlaceData(str, slugId) -> { placeData, name } | { error, ... } — decode a share
+// code straight into playable place data, saving NOTHING. The Games panel's Play path
+// (spec 14 §5.6) is the caller: playing someone's published game must not clone it onto
+// the player's shelf, count against the 20-creation cap, or mint a fresh local id per
+// play. `slugId` names the save namespace (`studio-<slugId>`) — the SERVER's game id
+// goes here, so a published game's progress keys the same on every device and replay.
+export function codeToPlaceData(str, slugId) {
+  const parsed = parseCode(str);
+  if (parsed.error) return parsed;
+  const placeData = parsed.placeData;
+  // unpackPlace validated nothing and carries a placeholder slug (pack.js); the real
+  // namespace lands here and the whole object is validated under it, same gate as play.
+  placeData.meta.slug = "studio-" + String(slugId == null ? "" : slugId);
+  const result = validatePlaceData(placeData);
+  if (!result.ok) {
+    return { error: "invalid", messages: result.errors.map((e) => friendly(e, placeData)) };
+  }
+  return { placeData, name: placeData.meta.name };
+}
+
+// importCode(str) -> { id, name } | { error, ... } — spec 11 §5.7's five steps.
+// Every failure is a returned tag, never a throw: the paste box has to be able to say
+// what went wrong without the shelf wrapping every call in try/catch.
+export function importCode(str) {
+  const parsed = parseCode(str);
+  if (parsed.error) return parsed;
+  const placeData = parsed.placeData;
 
   const index = getIndex();
   if (index.creations.length >= MAX_CREATIONS) return { error: "limit" };
