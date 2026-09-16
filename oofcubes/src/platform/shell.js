@@ -47,6 +47,7 @@ const BOOT_FADE_MS = 300;
 const TRANSITION_FADE_MS = 300;
 const TIP_INTERVAL_MS = 2500;
 const SETTINGS_DEBOUNCE_MS = 250;
+const PLAY_PING_MS = 30000; // spec 14 §5.9.1 — the play-clock ping cadence
 const SHELL_VERSION = "0.1.0";
 
 // Constants owned by sibling specs, cited by name and never re-derived.
@@ -847,6 +848,22 @@ async function loadPublishedPlace(game, placeData) {
   await goTo(slug);
 }
 
+// spec 14 §5.9.1 — the play clock. While a published game is open, ping the server on a
+// half-minute cadence so it can bank this player's time; five banked minutes is what
+// unlocks the like/dislike buttons. A hidden tab does not ping — a game left open in
+// the background is not being played. teardown() stops the clock, so ANY way out of the
+// Place (the Hub, another game, Studio) stops the crediting with it.
+let playClockTimer = null;
+function startPlayClock(gameId) {
+  stopPlayClock();
+  const ping = () => { if (!document.hidden) gamesService().played(gameId); };
+  ping(); // the first ping banks nothing; it starts the server's clock
+  playClockTimer = setInterval(ping, PLAY_PING_MS);
+}
+function stopPlayClock() {
+  if (playClockTimer) { clearInterval(playClockTimer); playClockTimer = null; }
+}
+
 async function playPublishedGame(game) {
   try {
     const full = await gamesService().get(game.id);
@@ -865,6 +882,9 @@ async function playPublishedGame(game) {
     // visit that cannot be counted must not stop the game opening (spec 14 §5.7).
     gamesService().visit(game.id).catch(() => {});
     await loadPublishedPlace(game, parsed.placeData);
+    // Start AFTER the load: goTo's teardown of the previous Place calls stopPlayClock,
+    // and a clock started before it would be stopped before it ever ticked.
+    startPlayClock(game.id);
   } catch (err) {
     uiToast((err && err.message) || "Could not reach the server.");
   }
@@ -1471,6 +1491,7 @@ function instrumentEmitter(emitter) {
 }
 
 function teardown() {
+  stopPlayClock(); // spec 14 §5.9.1 — leaving the Place stops the play clock
   if (!placeHandle) return;
   setState("disposing");
   events.emit("place:disposing", { slug: currentSlug });

@@ -96,7 +96,23 @@ export function createGames(deps = {}) {
       }
     },
 
+    // spec 14 §5.9.1 — the play clock. The shell pings this every half minute while a
+    // published game is open; the server banks the elapsed time, and five banked
+    // minutes is what unlocks rating. A guest is skipped (nobody to credit), and a
+    // failed ping is dropped silently — the clock must never interrupt play.
+    async played(id) {
+      const acc = account();
+      if (!acc || !acc.signedIn()) return null;
+      try {
+        return await call(`/api/games/${encodeURIComponent(id)}/played`, { token: acc.token() });
+      } catch {
+        return null;
+      }
+    },
+
     // spec 14 §5.9 — one like OR dislike per account per game; "none" takes it back.
+    // §5.9.1: the server refuses a vote until the account has five minutes of play
+    // on the clock, and the refusal's message is meant to be shown as-is.
     // Unlike visit() this DOES throw on failure: a tap on 👍 that silently did nothing
     // would leave the button lying about the count.
     async rate(id, rating) {

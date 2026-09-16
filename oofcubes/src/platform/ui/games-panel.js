@@ -123,8 +123,14 @@ export function mountGamesPanel(body, deps = {}) {
       dislike.textContent = `👎 ${game.dislikes || 0}`;
       like.setAttribute("style", voteStyle(game.myRating === "like"));
       dislike.setAttribute("style", voteStyle(game.myRating === "dislike"));
-      like.title = game.myRating === "like" ? "Take your like back" : "Like this game";
-      dislike.title = game.myRating === "dislike" ? "Take your dislike back" : "Dislike this game";
+      // §5.9.1 — the tooltip warns about the five-minute gate, but the SERVER decides:
+      // `canRate` here is only as fresh as the list, and somebody who just finished
+      // their five minutes deserves the vote to land, not a stale local no.
+      const locked = game.canRate === false && account && account.signedIn();
+      like.title = game.myRating === "like" ? "Take your like back"
+        : locked ? "Play it for 5 minutes first" : "Like this game";
+      dislike.title = game.myRating === "dislike" ? "Take your dislike back"
+        : locked ? "Play it for 5 minutes first" : "Dislike this game";
     }
     async function vote(which) {
       if (!account || !account.signedIn()) {
