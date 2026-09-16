@@ -349,32 +349,71 @@ function messageList(messages) {
   return body;
 }
 
-function copyToClipboard(text, area) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => toast("Copied!"), () => fallbackCopy(area));
-    return;
-  }
-  fallbackCopy(area);
+// creationId -> published game id, so sharing again UPDATES the same listing instead of
+// making a second one and splitting its visit count. Kept in the studio's own
+// localStorage key rather than a new one: it is a fact ABOUT a creation. (Lived in
+// shelf.js while publishing was the shelf's own button; moved here when Share became
+// the one publish path.)
+const publishedIds = new Map();
+const PUBLISHED_KEY = "oofcubes.v1.studio";
+let publishedLoaded = false;
+
+function loadPublished() {
+  if (publishedLoaded) return;
+  publishedLoaded = true;
+  try {
+    const raw = JSON.parse(localStorage.getItem(PUBLISHED_KEY) || "{}");
+    const map = raw && raw.published;
+    if (map && typeof map === "object") {
+      for (const [k, v] of Object.entries(map)) publishedIds.set(k, v);
+    }
+  } catch { /* unreadable: sharing simply publishes fresh */ }
 }
 
-function fallbackCopy(area) {
+function rememberPublished() {
   try {
-    area.select();
-    document.execCommand("copy");
-    toast("Copied!");
-  } catch (err) {
-    console.warn("[oof] clipboard unavailable", err);
-    toast("Select the code and copy it");
-  }
+    const raw = JSON.parse(localStorage.getItem(PUBLISHED_KEY) || "{}");
+    raw.published = Object.fromEntries(publishedIds);
+    localStorage.setItem(PUBLISHED_KEY, JSON.stringify(raw));
+  } catch { /* private mode: sharing again will create a new listing, which is survivable */ }
 }
 
 // openShareDialog() — the Share button and the shelf both land here (§5.7).
-export function openShareDialog(creationId, services) {
+//
+// Sharing IS publishing (spec 14 §5.8): one dialog, three buttons — Private, Friends,
+// Public — and the Place lands on the Hub's Games list with that visibility. There is
+// no code to copy any more; the shelf's paste-a-code import stays for codes that
+// already exist out there, but nothing here mints new ones.
+export async function openShareDialog(creationId, services) {
   if (services) fallbackServices = services;
   const u = ui();
   const id = creationId || (doc && doc.id);
   if (!id) return;
   if (editor && editor.isDirty()) saveNow();
+
+  const svc = (deps && deps.services) || fallbackServices || {};
+  const games = svc.games;
+  const account = svc.account;
+  if (!games || !games.available()) {
+    if (u && u.dialog) {
+      u.dialog({
+        title: "Can't share yet",
+        body: "No server is set up, so there is nowhere to publish to. Add one in Settings → MULTIPLAYER.",
+      });
+    }
+    sfx("error");
+    return;
+  }
+  if (!account || !account.signedIn()) {
+    if (u && u.dialog) {
+      u.dialog({
+        title: "Sign in first",
+        body: "A published game needs an author. Sign in from the Hub, then share again.",
+      });
+    }
+    sfx("error");
+    return;
+  }
 
   const result = store.exportCode(id);
   if (result.error) {
@@ -383,22 +422,45 @@ export function openShareDialog(creationId, services) {
     sfx("error");
     return;
   }
+  if (!u || !u.dialog) return;
 
-  const body = el("div", "display:flex;flex-direction:column;gap:8px;");
-  const area = el("textarea", "width:100%;height:96px;font-family:monospace;font-size:11px;"
-    + "background:" + PANEL2 + ";color:" + TEXT + ";border:1px solid " + LINE + ";border-radius:8px;"
-    + "padding:6px;box-sizing:border-box;");
-  area.value = result.code;
-  area.readOnly = true;
-  const copy = el("button", CHIP, "Copy");
-  copy.addEventListener("click", () => copyToClipboard(result.code, area));
-  body.append(
-    el("div", "font-size:12px;color:" + MUTED + ";",
-      "Send this code to a friend. They paste it into My Places and play your Place."),
-    area,
-    copy,
-  );
-  if (u && u.dialog) u.dialog({ title: "Share code", bodyEl: body });
+  const creation = store.getCreation(id);
+  const name = (creation && creation.name) || (doc && doc.name) || "Untitled Place";
+
+  // spec 14 §5.8.1: who can play it. Asked every time — sharing again is how you
+  // CHANGE it, so the current answer must never be assumed.
+  const choice = await u.dialog({
+    title: `Who can play “${name}”?`,
+    body: "Your Place goes on the Games list in the Hub. Private: only you see it. "
+      + "Friends: you and your friends. Public: everyone. "
+      + "Share again any time to change who sees it, or to push your latest build.",
+    buttons: [
+      { id: "cancel", label: "Cancel", variant: "secondary" },
+      { id: "private", label: "🔒 Private" },
+      { id: "friends", label: "🤝 Friends" },
+      { id: "everyone", label: "🌍 Public", variant: "primary" },
+    ],
+  });
+  if (!choice || choice === "cancel") return;
+
+  loadPublished();
+  let published;
+  try {
+    published = await games.publish({
+      name,
+      code: result.code,
+      gameId: publishedIds.get(id) || null,
+      visibility: choice,
+    });
+  } catch (err) {
+    toast((err && err.message) || "Could not publish");
+    sfx("error");
+    return;
+  }
+  publishedIds.set(id, published.id);
+  rememberPublished();
+  const who = choice === "everyone" ? "everyone" : choice === "friends" ? "your friends" : "only you";
+  toast((published.updated ? `Updated “${name}”` : `Published “${name}”`) + ` — visible to ${who}`);
   if (result.granted) {
     toast("＋200 Oofbux — published!");
     sfx("purchase");

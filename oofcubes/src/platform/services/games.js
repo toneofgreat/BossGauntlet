@@ -19,13 +19,15 @@ export function createGames(deps = {}) {
   return {
     available,
 
-    // The top `GAMES_TOP` by visits when `q` is empty; name matches otherwise. Either
-    // way the server decides the order — see spec 14 §4.
-    async list(q) {
+    // The top `GAMES_TOP` when `q` is empty; name matches otherwise. Either way the
+    // server decides the order — see spec 14 §4. `sort` is "visits" (default),
+    // "liked" or "disliked" (spec 14 §5.6/§5.9).
+    async list(q, sort) {
       // The token rides along so the server can include friends-only games this
       // account may see (spec 14 §5.8.1); a guest sees only "everyone".
       const params = new URLSearchParams();
       if (q && q.trim()) params.set("q", q.trim());
+      if (sort && sort !== "visits") params.set("sort", sort);
       const acc = account();
       if (acc && acc.signedIn()) params.set("token", acc.token());
       const qs = params.toString();
@@ -92,6 +94,15 @@ export function createGames(deps = {}) {
         // A visit that could not be recorded must never stop the game from opening.
         return { visits: null, counted: false };
       }
+    },
+
+    // spec 14 §5.9 — one like OR dislike per account per game; "none" takes it back.
+    // Unlike visit() this DOES throw on failure: a tap on 👍 that silently did nothing
+    // would leave the button lying about the count.
+    async rate(id, rating) {
+      const acc = account();
+      if (!acc || !acc.signedIn()) throw new Error("Sign in to rate games");
+      return call(`/api/games/${encodeURIComponent(id)}/rate`, { token: acc.token(), rating });
     },
 
     async remove(id) {

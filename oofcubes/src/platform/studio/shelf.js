@@ -93,31 +93,7 @@ export function closeMyPlacesShelf() {
 }
 
 // openMyPlacesShelf(deps) -> void — §5.10. deps: { services }
-// creationId -> published game id, so republishing updates rather than duplicating.
-// Kept in the studio's own key rather than a new one: it is a fact ABOUT a creation.
-const publishedIds = new Map();
-const PUBLISHED_KEY = "oofcubes.v1.studio";
-
-function loadPublished() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(PUBLISHED_KEY) || "{}");
-    const map = raw && raw.published;
-    if (map && typeof map === "object") {
-      for (const [k, v] of Object.entries(map)) publishedIds.set(k, v);
-    }
-  } catch { /* a shelf that cannot read this simply publishes fresh */ }
-}
-
-function rememberPublished() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(PUBLISHED_KEY) || "{}");
-    raw.published = Object.fromEntries(publishedIds);
-    localStorage.setItem(PUBLISHED_KEY, JSON.stringify(raw));
-  } catch { /* private mode: republishing will create a new listing, which is survivable */ }
-}
-
 export function openMyPlacesShelf(deps = {}) {
-  loadPublished();
   if (openShelf) openShelf.close();
   const services = deps.services || {};
   const ui = services.ui || null;
@@ -210,7 +186,11 @@ export function openMyPlacesShelf(deps = {}) {
       const edit = el("button", ICON_BTN, "✎");
       edit.title = "Edit";
       edit.addEventListener("click", () => route("#/studio/" + entry.id));
-      const share = el("button", ICON_BTN, "⧉");
+      // Spec 14 §5.8. Sharing IS publishing: the dialog in studio.js asks Private /
+      // Friends / Public and puts the Place on the Hub's Games list. An unshared
+      // creation never leaves this browser, and nothing here uploads anything until
+      // somebody presses this.
+      const share = el("button", ICON_BTN, "🌍");
       share.title = "Share";
       share.addEventListener("click", () => {
         // Lazy: the share dialog lives in studio.js, and the Hub must not pay for the
@@ -218,80 +198,14 @@ export function openMyPlacesShelf(deps = {}) {
         import("./studio.js").then((mod) => mod.openShareDialog(entry.id, services))
           .catch((err) => {
             console.error("[oof] could not open the share dialog", err);
-            if (ui && ui.toast) ui.toast("Could not build a share code");
+            if (ui && ui.toast) ui.toast("Could not open the share dialog");
           });
       });
-      // Spec 14 §5.8. Publishing is an explicit act on one creation: an unpublished
-      // creation never leaves this browser, and nothing here uploads anything until
-      // somebody presses this.
-      const publish = el("button", ICON_BTN, "🌍");
-      publish.title = "Publish to Games";
-      publish.addEventListener("click", () => publishCreation(entry, publish));
       const remove = el("button", ICON_BTN, "🗑");
       remove.title = "Delete";
       remove.addEventListener("click", () => confirmDelete(entry));
-      row.append(edit, share, publish, remove);
+      row.append(edit, share, remove);
       list.appendChild(row);
-    }
-  }
-
-  // Publishing reuses spec 11 §5.7's share code verbatim — the server stores it as an
-  // opaque string (spec 14 §3.3), so there is exactly one world format and the catalogue
-  // cannot drift from what Share produces.
-  //
-  // Republishing the same creation UPDATES it rather than making a second listing, so a
-  // creator fixing their level does not split its visit count. That is why the game id
-  // is remembered against the creation.
-  async function publishCreation(entry, btn) {
-    const account = services && services.account;
-    const games = services && services.games;
-    if (!games || !games.available()) {
-      if (ui && ui.toast) ui.toast("No server is set up, so there is nowhere to publish to.");
-      return;
-    }
-    if (!account || !account.signedIn()) {
-      if (ui && ui.toast) ui.toast("Sign in first — a published game needs an author.");
-      return;
-    }
-    // spec 14 §5.8.1: who can play it. Asked every time — republishing is how you
-    // CHANGE it, so the current answer must never be assumed.
-    const visibility = ui && ui.dialog
-      ? await ui.dialog({
-        title: `Who can play “${entry.name}”?`,
-        body: "Friends only uses your friends list. Private means only you. Publish again any time to change it.",
-        buttons: [
-          { id: "everyone", label: "🌍 Everyone", variant: "primary" },
-          { id: "friends", label: "🤝 Friends only" },
-          { id: "private", label: "🔒 Private" },
-          { id: "cancel", label: "Cancel", variant: "secondary" },
-        ],
-      })
-      : "everyone";
-    if (!visibility || visibility === "cancel") return;
-    const wasTitle = btn.title;
-    btn.disabled = true;
-    btn.title = "Publishing…";
-    try {
-      const store = await import("./store.js");
-      const exported = store.exportCode(entry.id);
-      if (!exported || !exported.ok) throw new Error("That creation could not be packed");
-      const published = await games.publish({
-        name: entry.name,
-        code: exported.code,
-        gameId: publishedIds.get(entry.id) || null,
-        visibility,
-      });
-      publishedIds.set(entry.id, published.id);
-      rememberPublished();
-      if (ui && ui.toast) {
-        const who = visibility === "everyone" ? "everyone" : visibility === "friends" ? "your friends" : "only you";
-        ui.toast((published.updated ? `Updated “${entry.name}”` : `Published “${entry.name}”`) + ` — visible to ${who}`);
-      }
-    } catch (err) {
-      if (ui && ui.toast) ui.toast((err && err.message) || "Could not publish");
-    } finally {
-      btn.disabled = false;
-      btn.title = wasTitle;
     }
   }
 
