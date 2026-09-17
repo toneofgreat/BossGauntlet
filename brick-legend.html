@@ -9,7 +9,7 @@
   html,body{margin:0;padding:0;overflow:hidden;background:#0b0e14;height:100%;
     font-family:'Segoe UI',Arial,sans-serif;-webkit-user-select:none;user-select:none;
     touch-action:none}
-  canvas{display:block}
+  canvas{display:block;touch-action:none}
   #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
   .bar{position:absolute;height:14px;border-radius:7px;background:#00000088;
     border:2px solid #ffffff44;overflow:hidden}
@@ -107,7 +107,7 @@
 <div class="ov" id="start">
   <h1>BRICK LEGEND</h1>
   <p>You are a cool brick-built construction worker. Click the glowing <b style="color:#7df3ff">translucent cyan part</b> to snap each piece of your house into place — walls, windows, a door with its own little window and doorknob, a roof, grass and a pathway. Then things get... legendary.</p>
-  <p style="color:#8fa4c4;font-size:13px">Move: WASD / Arrow keys &nbsp;·&nbsp; Jump: Space &nbsp;·&nbsp; Mobile: joystick + buttons<br>Headphones recommended. The T-rex is LOUD.</p>
+  <p style="color:#8fa4c4;font-size:13px">Move: WASD / Arrow keys &nbsp;·&nbsp; Jump: Space &nbsp;·&nbsp; Camera: drag the screen &nbsp;·&nbsp; Mobile: joystick + buttons<br>Headphones recommended. The T-rex is LOUD.</p>
   <div id="startBtns"><button id="btnPlay">BUILD THE HOUSE</button></div>
   <div id="tapNote"></div>
 </div>
@@ -950,8 +950,25 @@ addEventListener('keydown',function(e){
 });
 addEventListener('keyup',function(e){ keys[e.code]=false; });
 var pointer=new THREE.Vector2(),ray=new THREE.Raycaster();
+/* Drag on the world (not on any button) = rotate the camera yourself.
+   A short tap (< ~9px of travel) = the action: place piece / shoot / punch / throw. */
+var drag={id:null,lx:0,ly:0,moved:0};
 renderer.domElement.addEventListener('pointerdown',function(e){
   audioInit(); actx();
+  drag.id=e.pointerId; drag.lx=e.clientX; drag.ly=e.clientY; drag.moved=0;
+});
+addEventListener('pointermove',function(e){
+  if(drag.id!==e.pointerId) return;
+  var dx=e.clientX-drag.lx;
+  drag.moved+=Math.abs(dx)+Math.abs(e.clientY-drag.ly);
+  drag.lx=e.clientX; drag.ly=e.clientY;
+  if(drag.moved>9&&PH!=='menu'&&PH!=='build'&&PH!=='cut')
+    camYaw-=dx*0.008; // drag right = look right
+});
+addEventListener('pointerup',function(e){
+  if(drag.id!==e.pointerId) return;
+  drag.id=null;
+  if(drag.moved>9) return; // it was a camera drag, not a tap
   if(PH==='build'||PH==='buildwalk'){ tryPlace(e); return; }
   if(PH==='cut'){ if(cutSkipOk) cutT=99; return; }
   if(PH==='boss'){ if(carried) throwTnt(); else tryPunch(); return; }
@@ -959,6 +976,7 @@ renderer.domElement.addEventListener('pointerdown',function(e){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
+addEventListener('pointercancel',function(e){ if(drag.id===e.pointerId) drag.id=null; });
 addEventListener('contextmenu',function(e){ e.preventDefault(); });
 /* mobile joystick */
 var stickVec={x:0,y:0};
@@ -1034,7 +1052,7 @@ function placeStep(silent){
   buildIdx++;
   if(buildIdx===SPAWN_AFTER+1&&!player&&!silent){
     spawnPlayer(false); PH='buildwalk'; updateMobileUI();
-    msg('There YOU are! 👷<br><span style="font-size:60%">WASD / arrows to move · Space to jump · joystick on mobile</span>',3800);
+    msg('There YOU are! 👷<br><span style="font-size:60%">WASD / arrows to move · Space to jump · joystick on mobile<br>Drag the screen (not a button) to move the camera</span>',4600);
   }
   if(buildIdx>=BUILD_STEPS.length){
     PH='path';
@@ -1832,9 +1850,9 @@ function updatePlayer(dt){
   if(l>1){ ix/=l; iz/=l; }
   var spd=P.speed*(P.slowT>0?0.45:1)*(tornActive?1.15:1);
   if(P.slowT>0) P.slowT-=dt;
-  /* camera-relative movement */
+  /* camera-relative movement: forward=(sinY,cosY), screen-right=(-cosY,sinY) */
   var sinY=Math.sin(camYaw),cosY=Math.cos(camYaw);
-  var vx=(ix*cosY+iz*sinY)*spd, vz=(iz*cosY-ix*sinY)*spd;
+  var vx=(iz*sinY-ix*cosY)*spd, vz=(iz*cosY+ix*sinY)*spd;
   var moving=l>0.15;
   if(moving){
     P.pos.x+=vx*dt; P.pos.z+=vz*dt;
@@ -1914,12 +1932,7 @@ function updateCamera(dt){
   }
   else if(PH==='cut'){ /* handled in updateCutscene */ }
   else if(player){
-    var targetYaw=P.yaw;
-    /* only swing camera when moving forwardish, to avoid spin */
-    var dy=targetYaw-camYaw;
-    while(dy>Math.PI) dy-=Math.PI*2;
-    while(dy<-Math.PI) dy+=Math.PI*2;
-    if(!tornActive) camYaw+=dy*(1-Math.pow(0.25,dt));
+    /* camera yaw is player-controlled only (drag to look) — it never moves on its own */
     var dist=PH==='boss'?11:8,h=PH==='boss'?6:4.6;
     var cx=P.pos.x-Math.sin(camYaw)*dist,
         cz=P.pos.z-Math.cos(camYaw)*dist;
