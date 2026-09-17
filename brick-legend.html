@@ -95,6 +95,17 @@
   #xpWrap b{display:block;font-size:11px;color:#d9f2c0;font-weight:800;
     text-shadow:0 1px 2px #000;margin-top:2px;letter-spacing:0.5px}
   #bWave{right:176px;bottom:104px;display:none;background:#8bc34a33;border-color:#c9f29988}
+  #bForm{left:34px;bottom:250px;display:none;background:#66d9ef33;border-color:#9ae8f588}
+  #forms{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:45;
+    background:#0a0d16f2;border:2px solid #66d9ef;border-radius:16px;padding:18px 22px;
+    display:none;text-align:center;max-width:90vw}
+  #forms h3{color:#9ae8f5;margin:0 0 10px;font-size:18px;letter-spacing:1px}
+  #forms button{font-family:inherit;font-weight:800;font-size:14px;margin:4px;
+    padding:10px 16px;border-radius:10px;border:0;cursor:pointer;
+    background:linear-gradient(180deg,#3b4b66,#232c40);color:#cfe0ff;
+    box-shadow:0 3px 0 #10151f}
+  #forms button:active{transform:translateY(2px)}
+  #forms button.on{background:linear-gradient(180deg,#ffd83d,#ff9500);color:#4a2500}
   #warn{display:none;background:#1a0505f2}
   #warn h1{background:linear-gradient(180deg,#ffe14d,#ff3b3b);-webkit-background-clip:text;background-clip:text}
 </style>
@@ -127,6 +138,13 @@
   <div class="mbtn" id="bTorn">TORNADO</div>
   <div class="mbtn" id="bThrow">THROW</div>
   <div class="mbtn" id="bWave">WAVE</div>
+  <div class="mbtn" id="bForm">FORM</div>
+</div>
+<div id="forms">
+  <h3>🔁 BECOME ANYONE YOU'VE BEEN</h3>
+  <div id="formBtns"></div>
+  <div><button id="btnGuards">🕴️ BODYGUARDS: OFF</button>
+  <button id="btnFormsClose">CLOSE</button></div>
 </div>
 <div class="ov" id="start">
   <h1>BRICK LEGEND</h1>
@@ -561,6 +579,18 @@ function makeMinifig(o){ // o:{torso,legs,arms,face,hat,tie,backpack,gunHand}
   if(o.headband){
     var hb=box(0.46,0.1,0.46,o.headband); hb.position.y=0.12; headG.add(hb);
     var tail1=box(0.08,0.3,0.04,o.headband); tail1.position.set(0.12,-0.02,-0.28); tail1.rotation.x=0.4; headG.add(tail1);
+  }
+  if(o.fishy){ /* a fish. with legs. */
+    var fh=box(0.62,0.5,0.72,0xff8a3d); fh.position.set(0,0.08,0.06); headG.add(fh);
+    var lip=box(0.5,0.2,0.16,0xffa96b); lip.position.set(0,-0.06,0.46); headG.add(lip);
+    var eL2=box(0.2,0.2,0.1,0xffffff); eL2.position.set(-0.22,0.22,0.4); headG.add(eL2);
+    var eR2=box(0.2,0.2,0.1,0xffffff); eR2.position.set(0.22,0.22,0.4); headG.add(eR2);
+    var pL2=box(0.09,0.09,0.06,0x111111); pL2.position.set(-0.22,0.22,0.47); headG.add(pL2);
+    var pR2=box(0.09,0.09,0.06,0x111111); pR2.position.set(0.22,0.22,0.47); headG.add(pR2);
+    var dorsal=box(0.1,0.4,0.5,0xff6f2a); dorsal.position.set(0,0.5,-0.1); dorsal.rotation.x=-0.3; headG.add(dorsal);
+    var tailf=box(0.1,0.5,0.4,0xff6f2a); tailf.position.set(0,1.05,-0.45); tailf.rotation.x=0.7; g.add(tailf);
+    var finL=box(0.06,0.3,0.4,0xff6f2a); finL.position.set(-0.4,1.1,0); finL.rotation.z=0.5; g.add(finL);
+    var finR=box(0.06,0.3,0.4,0xff6f2a); finR.position.set(0.4,1.1,0); finR.rotation.z=-0.5; g.add(finR);
   }
   if(o.fancy){
     var shirt=box(0.3,0.5,0.06,0xf4f4f4); shirt.position.set(0,1.06,0.19); g.add(shirt);
@@ -1111,7 +1141,8 @@ var SPAWN_AFTER=(function(){ // step index after which the character appears
 function save(){
   try{ localStorage.setItem('brickLegendSave',JSON.stringify(
     {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
-     jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone})); }catch(e){}
+     jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone,
+     oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm})); }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -1149,9 +1180,10 @@ function spawnPlayer(kind){
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
-    ||PH==='cut'||PH==='cut2'||PH==='cut3')?'none':'block';
+    ||PH==='ocbuild'||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4')?'none':'block';
   var inBoss=PH==='boss';
   $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
+  $('bForm').style.display=spatula?'flex':'none';
   $('bEquip').style.display=(hasGun&&!inBoss)?'flex':'none';
   $('bShoot').style.display=(gunEquipped&&!inBoss)?'flex':'none';
   $('bReload').style.display=(gunEquipped&&!inBoss)?'flex':'none';
@@ -1170,6 +1202,7 @@ addEventListener('keydown',function(e){
   if(e.code==='KeyF') tryPunch();
   if(e.code==='KeyE'&&PH==='boss'&&carried) throwTnt();
   if(e.code==='KeyG') doWave();
+  if(e.code==='KeyP') toggleForms($('forms').style.display!=='block');
 });
 addEventListener('keyup',function(e){ keys[e.code]=false; });
 var pointer=new THREE.Vector2(),ray=new THREE.Raycaster();
@@ -1205,6 +1238,13 @@ addEventListener('pointerup',function(e){
   if(drag.moved>9) return; // it was a camera drag, not a tap
   if(PH==='citybuild'){ tryPlaceCity(e); return; }
   if(PH==='jgbuild'){ tryPlaceJg(e); return; }
+  if(PH==='ocbuild'){ tryPlaceOc(e); return; }
+  if(PH==='cut4'){ if(cutSkipOk) cut4T=99; return; }
+  if(PH==='castle'){
+    if(contest){ contestClick(); return; }
+    if(gunEquipped) shoot(); else tryPunch();
+    return;
+  }
   if(PH==='build'||PH==='buildwalk'){ tryPlace(e); return; }
   if(PH==='cut'){ if(cutSkipOk) cutT=99; return; }
   if(PH==='cut2'){ if(cutSkipOk) cut2T=99; return; }
@@ -1254,6 +1294,7 @@ bindBtn('bReload',function(){ startReload(); });
 bindBtn('bTorn',function(){ tryTornado(); });
 bindBtn('bThrow',function(){ if(carried) throwTnt(); });
 bindBtn('bWave',function(){ doWave(); });
+bindBtn('bForm',function(){ toggleForms($('forms').style.display!=='block'); });
 
 /* ---------------- BUILD PHASE ---------------- */
 var placedGroup=new THREE.Group(); world.add(placedGroup);
@@ -1358,6 +1399,11 @@ function combatTargets(){
     if(hwGod&&!hwGod.dead)
       list.push({pos:hwGod.ref.group.position,y:2.4,big:true,hurt:function(d){ hurtHwGod(d,false); }});
   }
+  if(PH==='castle'){
+    fzombies.forEach(function(z){ if(!z.dead)
+      list.push({pos:z.ref.group.position,y:z.boss?2.4:1.2,big:z.boss,
+        hurt:function(d,t){ hurtFzombie(z,d,t); }}); });
+  }
   return list;
 }
 function shoot(){
@@ -1399,12 +1445,21 @@ function tryPunch(){
   punchCd=0.45; punchAnimT=0.22;
   player.armR.rotation.x=-1.7;
   var hit=false;
+  var kick=isFishForm&&isFishForm()&&curForm==='fish';
+  if(kick&&player){ /* the mighty fish KICK */
+    player.legR.rotation.x=-1.6;
+    (function(){ tween(0.25,function(k){ if(player) player.legR.rotation.x=-1.6+1.6*k; }); })();
+    sndWhoosh(true);
+  }
   combatTargets().forEach(function(t){
     var d=t.pos.distanceTo(P.pos);
-    if(d<(t.big?4.2:(isGod?3.4:1.9))){
+    if(d<(t.big?4.2:(isGod?3.4:(kick?2.6:1.9)))){
       var dir=t.pos.clone().sub(P.pos).setY(0).normalize();
       var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
-      if(dir.dot(fwd)>(isGod?-0.1:0.2)){ t.hurt(isGod?40:12,tornActive); hit=true; }
+      if(dir.dot(fwd)>(isGod?-0.1:0.2)){
+        t.hurt(isGod?40:(kick?20:12),tornActive); hit=true;
+        if(kick&&!t.big) t.pos.addScaledVector(dir,1.6); // kicked things FLY
+      }
     }
   });
   drones.forEach(function(dr){
@@ -2071,6 +2126,16 @@ function hurtPlayer(dmg,why){
   burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
   if(P.hp<=0){
     if(PH==='boss') killPlayer('SMASHED!',why+' Bosses reset when you fall — go again?');
+    else if(PH==='castle'){
+      killPlayer('FILLETED!','The zombie fish got you. The soldier shift restarts.',function(){
+        fzombies.forEach(function(z){ if(!z.dead) world.remove(z.ref.group); });
+        fzombies.length=0; fzBoss=null; fzKills=0;
+        battleMusic(false); setMood('lib');
+        job=null; placeJobBeacon();
+        P.pos.set(FC.x,0,FC.z-FC.hd+3);
+        if(player) player.group.position.copy(P.pos);
+      });
+    }
     else if(PH==='hw'){
       if(hwState==='battle') killPlayer('DETHRONED!','The mob took their old god back. Retry the throne battle?',restartGodBattle);
       else killPlayer(hwState==='wipe'?'ANNIHILATED!':'MOBBED!',
@@ -2162,6 +2227,7 @@ function groundYAt(){
   if(houseBuilt&&(PH==='home'||PH==='jungle'||PH==='path')
      &&P.pos.x>WALL.x0-0.8&&P.pos.x<WALL.x1+0.8
      &&P.pos.z>WALL.z0-0.8&&P.pos.z<WALL.z1+0.8&&P.pos.y>4.4) return 5.55;
+  if(PH==='castle') return 0.3; // castle floor
   return 0;
 }
 function collideHouseWalls(){
@@ -2176,8 +2242,8 @@ function collideHouseWalls(){
     P.pos.z=P.pos.z<WALL.z1?WALL.z1-t:WALL.z1+t;
 }
 function playerControlAllowed(){
-  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'
-    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild';
+  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'&&PH!=='cut4'
+    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
@@ -2249,12 +2315,15 @@ function updatePlayer(dt){
   } else if(PH==='hw'){
     P.pos.x=clamp(P.pos.x,HW.x-HW.r+1,HW.x+HW.r-1);
     P.pos.z=clamp(P.pos.z,HW.z-HW.r+1,HW.z+HW.r-1);
+  } else if(PH==='castle'){
+    P.pos.x=clamp(P.pos.x,FC.x-FC.hw+1.2,FC.x+FC.hw-1.2);
+    P.pos.z=clamp(P.pos.z,FC.z-FC.hd+1.2,FC.z+FC.hd-1.2);
   } else if(PH==='city'||PH==='metro'){
     if(PH==='city'){
       P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
       P.pos.z=clamp(P.pos.z,CITY.z-40,CITY.z+48);
-    } else { // metro: city + the jungle strip to the west
-      P.pos.x=clamp(P.pos.x,-400,-252);
+    } else { // metro: city + jungle strip (west) + ocean strip (east)
+      P.pos.x=clamp(P.pos.x,-400,-178);
       P.pos.z=clamp(P.pos.z,-135,135);
     }
     for(var ci=0;ci<cityColliders.length;ci++){
@@ -2325,7 +2394,7 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20*buildZoom,11*buildZoom*buildTilt,Math.cos(camOrbit.a)*20*buildZoom);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='citybuild'||PH==='jgbuild'){
+  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'){
     camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
     camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
     var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
@@ -2371,7 +2440,7 @@ function updateAmbient(dt){
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost||PH==='citybuild'||PH==='jgbuild'){
+  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2390,6 +2459,7 @@ function animate(){
   if(PH==='cut') updateCutscene(dt);
   else if(PH==='cut2') updateCut2(dt);
   else if(PH==='cut3') updateCut3(dt);
+  else if(PH==='cut4') updateCut4(dt);
   else {
     updatePlayer(dt);
     if(PH==='jungle'||PH==='home') updateHikers(dt);
@@ -2397,7 +2467,9 @@ function animate(){
     if(PH==='boss'){ updateBoss(dt); updateTnts(dt); updateFallBlocks(dt); updateDrones(dt); }
     if(PH==='city'||PH==='metro') updateCity(dt);
     if(PH==='hw') updateHW(dt);
+    if(PH==='castle') updateCastle(dt);
     updateAct3(dt);
+    updateAct4(dt);
     if(PH==='ninja') updateNinjas(dt);
     if(PH==='bridge') updateBridge(dt);
     if(PH==='golem') updateGolem(dt);
@@ -2433,7 +2505,25 @@ function startSkip(sv){
   if(sv&&sv.rich){ /* returning TYCOON (or later): everything already built */
     applyRichSkip(sv);
     applyAct3Skip(sv);
-    if(sv.hw){
+    applyAct4Skip(sv);
+    if(sv.oc){
+      ensureCityExtraPads();
+      var sk=curForm==='worker'?false:curForm==='biz'?true:curForm;
+      spawnPlayer(spatula?sk:'fish');
+      PH='metro';
+      P.pos.set(OC.x1+4,0,20); if(player) player.group.position.copy(P.pos);
+      camYaw=0; P.yaw=0;
+      fishHud(); sbuxHud(); setMood('day');
+      if(spatula){
+        obj('🥄 GOLDEN SPATULA champion. Press P / FORM to become anyone. Your empire: city, jungle, ocean.');
+        hint('P / FORM = form menu · every world is yours');
+      } else if(fishLvl>=FISH_JOBS.length){
+        obj('🍽️ GORDON CASOH waits in the castle. Finish the eating contest!');
+      } else {
+        obj('🐟 Your fish career awaits in the castle: next job — '+FISH_JOBS[fishLvl]+'.');
+        hint('The castle gate is at the north end of the ocean');
+      }
+    } else if(sv.hw){
       ensureCityExtraPads();
       PH='hw';
       P.pos.set(HW.x,0,HW.z+HW.r-8); if(player) player.group.position.copy(P.pos);
@@ -2577,7 +2667,7 @@ function updateCut2(dt){
     burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
       Math.random()<0.5?0xffd83d:0xf3d97a,2,{speed:2,life:0.6,grav:-2,size:0.7});
   if(cut2T>2.2&&!rich){
-    rich=true;
+    rich=true; curForm='rich';
     spawnPlayer('rich'); player.group.rotation.y=cutSpin;
     burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0xffe97a,26,{speed:6,life:0.9});
     sndBoom(); camShake=0.5;
@@ -4016,6 +4106,7 @@ function updateCity(dt){
     if(!P.dead&&padCd<=0&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.7){
       padCd=1.5;
       if(p.mode==='jungle') handleJunglePad();
+      else if(p.mode==='ocean') handleOceanPad();
       else if(p.mode==='gohome'){
         PH='home';
         P.pos.set(0,0,6); P.vy=0;
@@ -4520,6 +4611,13 @@ function ensureCityExtraPads(){
     sign.position.set(CITY.x-44,3.2,CITY.z-1.9); world.add(sign);
     cityPads.push({x:CITY.x-44,z:CITY.z,mode:'jungle',pad:pad});
   }
+  if(!cityPads.some(function(p){ return p.mode==='ocean'; })){
+    var padO=studdedBox(3,0.3,3,0x66d9ef,0x4fb8d0);
+    padO.position.set(CITY.x+44,0.15,CITY.z-10); world.add(padO);
+    var signO=textBoard('OCEAN PLOT\n200 STUD BUX',3.8,1.9,'#0a1a3a','#9ae8f5',24);
+    signO.position.set(CITY.x+44,3.2,CITY.z-11.9); world.add(signO);
+    cityPads.push({x:CITY.x+44,z:CITY.z-10,mode:'ocean',pad:padO});
+  }
   if(!cityPads.some(function(p){ return p.mode==='gohome'; })){
     var pad2=studdedBox(3,0.3,3,0xc62b21,0xa02318);
     pad2.position.set(CITY.x+44,0.15,CITY.z+24); world.add(pad2);
@@ -4564,7 +4662,7 @@ function updateCut3(dt){
     burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
       Math.random()<0.5?0x8bc34a:0x3fae3b,2,{speed:2,life:0.6,grav:-2,size:0.7});
   if(cut3T>2.2&&!isHiker){
-    isHiker=true;
+    isHiker=true; curForm='hiker';
     spawnPlayer('hiker'); player.group.rotation.y=cutSpin;
     burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0x8bc34a,26,{speed:6,life:0.9});
     sndBoom(); camShake=0.5;
@@ -4773,7 +4871,7 @@ function startCoronation(){
   a2Timer=setTimeout(function(){ a2Timer=null; becomeGod(); },4000);
 }
 function becomeGod(){
-  isGod=true;
+  isGod=true; curForm='god';
   spawnPlayer('god');
   P.maxHp=500; P.hp=500;
   $('hpBar').firstElementChild.style.width='100%';
@@ -5038,6 +5136,838 @@ function applyAct3Skip(sv){
   woodHud();
 }
 
+/* ================================================================
+   ACT 4 — THE FISH SAGA
+   200 STUD BUX buys the ocean plot east of the city: a 500+ piece
+   ocean build, then you become a FISH WITH LEGS (kick + gun). The
+   Castle of Fish career: feed -> clean -> get fed -> produce movies
+   -> watch cringe movies -> soldier (20 zombies + mega boss). Then
+   the eating contest vs GORDON CASOH, the belly-punch finale, the
+   GOLDEN SPATULA, +300 stud bux, and the become-anyone form menu.
+   ================================================================ */
+var OC={x0:-246,x1:-186,z0:-70,z1:70};
+var ocGroup=null,ocChunks=[],ocIdx=0,ocDone=false,ocPartCount=0;
+var isFish=false,cut4T=-1,curForm='worker';
+var FC={x:-216,z:260,hw:24,hd:21}; // castle interior room
+var fcGroup=null,fcBuilt=false,fishLvl=0,fishCash=0,spatula=false;
+var FISH_JOBS=['FEEDER','CLEANER','THE FED ONE','MOVIE PRODUCER','CRINGE WATCHER','SOLDIER'];
+var fcNpcs=[],job=null,jobBeacon=null,fzombies=[],fzBoss=null,fzKills=0;
+var contest=null,gordon=null,castleDoorCd=0;
+function fishHud(){
+  var e=$('wood');
+  if(PH==='castle'||isFish&&!spatula){
+    e.style.display='block';
+    e.textContent='🐟 Fish coins: '+fishCash+(spatula?' · 🥄 GOLDEN SPATULA':'');
+  } else if(!isHiker||hwUnlocked) e.style.display='none';
+}
+
+/* ---- the 500-piece OCEAN build ---- */
+function buildOcean(instant){
+  if(ocGroup) return;
+  ocGroup=new THREE.Group(); world.add(ocGroup);
+  var sand=new THREE.Mesh(new THREE.PlaneGeometry(OC.x1-OC.x0+16,OC.z1-OC.z0+18),mat(0xd8c28a));
+  sand.rotation.x=-Math.PI/2; sand.position.set((OC.x0+OC.x1)/2,0.018,(OC.z0+OC.z1)/2);
+  ocGroup.add(sand);
+  var defs=[];
+  function def(z,label,make){ defs.push({z:z,label:label,make:make}); }
+  function spot(){ return {x:rand(OC.x0+2,OC.x1-2),z:rand(OC.z0+2,OC.z1-16)}; }
+  var CORALC=[0xff6f61,0xff8ac2,0xffa14d,0x9b5cff];
+  for(var c2=0;c2<120;c2++)(function(c2){
+    var s=spot();
+    def(s.z,'Coral cluster',function(){
+      var g=new THREE.Group(),col=CORALC[c2%4];
+      for(var b2=0;b2<3;b2++){
+        var br=box(0.3,rand(0.8,1.8),0.3,col);
+        br.position.set(rand(-0.5,0.5),br.geometry.parameters.height/2,rand(-0.5,0.5));
+        br.rotation.z=rand(-0.4,0.4); g.add(br);
+        var tip=box(0.44,0.3,0.44,new THREE.Color(col).offsetHSL(0,0,0.12).getHex());
+        tip.position.set(br.position.x,br.geometry.parameters.height,br.position.z); g.add(tip);
+      }
+      g.position.set(s.x,0,s.z); return g; });
+  })(c2);
+  for(var w2=0;w2<112;w2++)(function(){
+    var s=spot();
+    def(s.z,'Seaweed',function(){
+      var g=new THREE.Group();
+      for(var st=0;st<3;st++){
+        var sw=box(0.22,rand(1.2,2.6),0.22,st%2?0x2e8b2e:0x3fae3b);
+        sw.position.set(rand(-0.4,0.4),sw.geometry.parameters.height/2,rand(-0.4,0.4));
+        sw.rotation.z=rand(-0.25,0.25); g.add(sw);
+      }
+      g.position.set(s.x,0,s.z); return g; });
+  })();
+  for(var sh2=0;sh2<50;sh2++)(function(sh2){
+    var s=spot();
+    def(s.z,'Seashell',function(){
+      var g=new THREE.Group();
+      var base=box(0.5,0.25,0.4,sh2%2?0xfff0d8:0xffc9d8); base.position.y=0.13; g.add(base);
+      var rid=box(0.4,0.12,0.3,0xffffff); rid.position.y=0.3; g.add(rid);
+      g.position.set(s.x,0,s.z); g.rotation.y=rand(0,3.14); return g; });
+  })(sh2);
+  for(var st2=0;st2<40;st2++)(function(){
+    var s=spot();
+    def(s.z,'Starfish',function(){
+      var g=new THREE.Group();
+      for(var a2=0;a2<5;a2++){
+        var arm=box(0.5,0.12,0.18,0xff7b54);
+        arm.position.set(Math.cos(a2*1.256)*0.26,0.07,Math.sin(a2*1.256)*0.26);
+        arm.rotation.y=-a2*1.256; g.add(arm);
+      }
+      var core=box(0.24,0.16,0.24,0xffa14d); core.position.y=0.1; g.add(core);
+      g.position.set(s.x,0,s.z); return g; });
+  })();
+  for(var rk2=0;rk2<40;rk2++)(function(){
+    var s=spot();
+    def(s.z,'Sea rock',function(){
+      var r2=studdedBox(rand(0.8,2),rand(0.5,1.4),rand(0.8,2),0x7d8791,0x6d7680);
+      r2.position.set(s.x,0.3,s.z); r2.rotation.y=rand(0,3.14); return r2; });
+  })();
+  for(var an=0;an<30;an++)(function(){
+    var s=spot();
+    def(s.z,'Anemone',function(){
+      var g=new THREE.Group();
+      var b3=box(0.6,0.4,0.6,0xc86bd8); b3.position.y=0.2; g.add(b3);
+      for(var t2=0;t2<6;t2++){
+        var tn=box(0.1,0.7,0.1,0xe89be8);
+        tn.position.set(Math.cos(t2*1.05)*0.22,0.75,Math.sin(t2*1.05)*0.22);
+        tn.rotation.z=Math.cos(t2*1.05)*0.4; tn.rotation.x=-Math.sin(t2*1.05)*0.4; g.add(tn);
+      }
+      g.position.set(s.x,0,s.z); return g; });
+  })();
+  for(var jf=0;jf<25;jf++)(function(){
+    var s=spot();
+    def(s.z,'Glowing jellyfish',function(){
+      var g=new THREE.Group();
+      var bell=new THREE.Mesh(boxGeo(0.7,0.5,0.7),
+        new THREE.MeshBasicMaterial({color:0x9ae8f5,transparent:true,opacity:0.75}));
+      g.add(bell);
+      for(var t3=0;t3<4;t3++){
+        var tt=box(0.06,rand(0.8,1.4),0.06,0x66d9ef);
+        tt.position.set(rand(-0.25,0.25),-0.7,rand(-0.25,0.25)); g.add(tt);
+      }
+      g.position.set(s.x,rand(4,9),s.z); return g; });
+  })();
+  for(var bu=0;bu<30;bu++)(function(){
+    var s=spot();
+    def(s.z,'Bubble column',function(){
+      var g=new THREE.Group();
+      for(var b4=0;b4<3;b4++){
+        var bub=new THREE.Mesh(new THREE.SphereGeometry(rand(0.15,0.35),8,6),
+          new THREE.MeshBasicMaterial({color:0xd8f6ff,transparent:true,opacity:0.5}));
+        bub.position.set(rand(-0.3,0.3),1+b4*rand(1,2),rand(-0.3,0.3)); g.add(bub);
+      }
+      g.position.set(s.x,0,s.z); return g; });
+  })();
+  for(var cl3=0;cl3<15;cl3++)(function(){
+    var s=spot();
+    def(s.z,'Clam with a pearl',function(){
+      var g=new THREE.Group();
+      var lo=box(0.8,0.2,0.7,0xc9b8ff); lo.position.y=0.1; g.add(lo);
+      var hi=box(0.8,0.2,0.7,0xb8a3f0); hi.position.set(0,0.34,-0.2); hi.rotation.x=-0.6; g.add(hi);
+      var pearl=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,8),
+        new THREE.MeshBasicMaterial({color:0xfff6e8})); pearl.position.y=0.28; g.add(pearl);
+      g.position.set(s.x,0,s.z); g.rotation.y=rand(0,6.28); return g; });
+  })();
+  for(var sp3=0;sp3<10;sp3++)(function(sp3){
+    def(rand(OC.z0+4,OC.z0+30),'Shipwreck piece',function(){
+      var g=new THREE.Group();
+      var hull=box(rand(2,4),rand(1,2),0.5,0x6f4820);
+      hull.position.y=hull.geometry.parameters.height/2;
+      hull.rotation.z=rand(-0.4,0.4); g.add(hull);
+      if(sp3===0){ var mast=box(0.25,5,0.25,0x5a3a18); mast.position.y=2.5; g.add(mast);
+        var sail=box(2.4,1.6,0.08,0xe8e0c8); sail.position.set(0.9,3.6,0); sail.rotation.z=0.2; g.add(sail); }
+      g.position.set(rand(OC.x0+4,OC.x1-4),0,rand(OC.z0+4,OC.z0+30)); return g; });
+  })(sp3);
+  for(var ch3=0;ch3<6;ch3++)(function(){
+    var s=spot();
+    def(s.z,'Treasure chest',function(){
+      var g=new THREE.Group();
+      var bx4=box(0.9,0.5,0.6,0x8a5a2a); bx4.position.y=0.25; g.add(bx4);
+      var lid2=box(0.9,0.25,0.6,0x6f4820); lid2.position.set(0,0.56,-0.15); lid2.rotation.x=-0.5; g.add(lid2);
+      var gold2=box(0.6,0.16,0.4,0xffd83d); gold2.position.y=0.5; g.add(gold2);
+      g.position.set(s.x,0,s.z); g.rotation.y=rand(0,6.28); return g; });
+  })();
+  for(var fs3=0;fs3<4;fs3++)(function(fs3){
+    var s=spot();
+    def(s.z,'Fish statue',function(){
+      var g=new THREE.Group();
+      var ped=studdedBox(1.4,1,1.4,0x9aa5ad,0x8b969e); ped.position.y=0.5; g.add(ped);
+      var body2=box(1.2,0.7,0.5,0x7d8791); body2.position.y=1.5; g.add(body2);
+      var tail2=box(0.4,0.5,0.2,0x7d8791); tail2.position.set(-0.75,1.5,0); tail2.rotation.z=0.5; g.add(tail2);
+      g.position.set(s.x,0,s.z); g.rotation.y=fs3*1.57; return g; });
+  })(fs3);
+  for(var wt2=0;wt2<20;wt2++)(function(wt2){
+    def(OC.z0+3+wt2*1.1,'Water surface',function(){
+      var w3=new THREE.Mesh(new THREE.PlaneGeometry(15,15),
+        new THREE.MeshBasicMaterial({color:0x66d9ef,transparent:true,opacity:0.22,
+          side:THREE.DoubleSide,depthWrite:false}));
+      w3.rotation.x=-Math.PI/2;
+      w3.position.set(OC.x0+8+(wt2%4)*15,13,OC.z0+8+((wt2/4)|0)*15);
+      return w3; });
+  })(wt2);
+  /* THE CASTLE OF FISH — final pieces at the north end */
+  var CB2={x:-216,z:52}, CGOLD=0xffc9d8, CGOLD2=0xe8a3b8;
+  var castleDefs=[
+    ['Castle — great wall',function(){ var g=new THREE.Group();
+      var w4=studdedBox(22,7,2,CGOLD,CGOLD2); w4.position.set(CB2.x,3.5,CB2.z-6); g.add(w4); return g; }],
+    ['Castle — side walls',function(){ var g=new THREE.Group();
+      [-10,10].forEach(function(o){ var w5=studdedBox(2,7,14,CGOLD,CGOLD2);
+        w5.position.set(CB2.x+o,3.5,CB2.z+1); g.add(w5); }); return g; }],
+    ['Castle — back wall',function(){ var g=new THREE.Group();
+      var w6=studdedBox(22,7,2,CGOLD,CGOLD2); w6.position.set(CB2.x,3.5,CB2.z+8); g.add(w6); return g; }],
+    ['Castle — gate towers',function(){ var g=new THREE.Group();
+      [-8,8].forEach(function(o){ var t4=studdedBox(4,11,4,CGOLD2,CGOLD);
+        t4.position.set(CB2.x+o,5.5,CB2.z-6); g.add(t4);
+        var cone2=box(3,2.4,3,0x66d9ef); cone2.position.set(CB2.x+o,12.2,CB2.z-6); g.add(cone2); }); return g; }],
+    ['Castle — rear towers',function(){ var g=new THREE.Group();
+      [-8,8].forEach(function(o){ var t5=studdedBox(4,9,4,CGOLD2,CGOLD);
+        t5.position.set(CB2.x+o,4.5,CB2.z+8); g.add(t5); }); return g; }],
+    ['Castle — coral spires',function(){ var g=new THREE.Group();
+      for(var s4=0;s4<3;s4++){ var sp4=box(0.7,rand(3,5),0.7,CORALC[s4%4]);
+        sp4.position.set(CB2.x-4+s4*4,7+sp4.geometry.parameters.height/2,CB2.z+2); g.add(sp4); } return g; }],
+    ['Castle — the GATE',function(){ var g=new THREE.Group();
+      var d3=box(4,5,0.6,0x2a6fd6); d3.position.set(CB2.x,2.5,CB2.z-6); g.add(d3);
+      var arch2=box(5,1,1,0x66d9ef); arch2.position.set(CB2.x,5.4,CB2.z-6); g.add(arch2); return g; }],
+    ['Castle — fish banner',function(){ var g=new THREE.Group();
+      var pole2=box(0.2,4,0.2,0xe8e0c8); pole2.position.set(CB2.x,9,CB2.z-6); g.add(pole2);
+      var bn2=textBoard('🐟 CASTLE\nOF FISH',3.4,2,'#0a2a3a','#9ae8f5',30);
+      bn2.position.set(CB2.x,10.4,CB2.z-6.2); g.add(bn2); return g; }]
+  ];
+  defs.sort(function(a,b){ return a.z-b.z; });
+  castleDefs.forEach(function(cd){ defs.push({z:999,label:cd[0],make:cd[1]}); });
+  ocChunks.length=0;
+  defs.forEach(function(d){
+    var o=d.make();
+    ocGroup.add(o);
+    if(!instant){
+      o.traverse(function(m){ if(m.isMesh&&!m.userData.om) m.userData.om=m.material; });
+      o.visible=false;
+    }
+    ocChunks.push({label:d.label,obj:o});
+  });
+  ocPartCount=0;
+  ocGroup.traverse(function(m){ if(m.isMesh) ocPartCount++; });
+  if(instant) ocIdx=ocChunks.length;
+}
+function showOcGhost(){
+  var ch=ocChunks[ocIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if(m.isMesh) m.material=ghostMat; });
+  var bb=new THREE.Box3().setFromObject(ch.obj);
+  var c=bb.getCenter(new THREE.Vector3()), sz=bb.getSize(new THREE.Vector3());
+  cityCam.x=c.x; cityCam.y=Math.max(1.2,c.y); cityCam.z=c.z;
+  cityCam.r=clamp(Math.max(sz.x,sz.z)*0.9+8,11,46);
+  cityCam.h=clamp(sz.y*1.1+c.y+5,7,30);
+  obj('🌊 '+ch.label+' &nbsp;<span style="color:#7df3ff">('+(ocIdx+1)+'/'+ocChunks.length+')</span>');
+  hint('Click the glowing cyan part! Drag to scroll · wheel to zoom · '+(ocChunks.length-ocIdx)+' to go');
+}
+function placeOcChunk(silent){
+  var ch=ocChunks[ocIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if(m.isMesh&&m.userData.om) m.material=m.userData.om; });
+  if(!silent){
+    sndBrickClick();
+    ch.obj.scale.set(1.25,1.25,1.25);
+    (function(oo){ tween(0.14,function(k){ var s=1.25-0.25*k; oo.scale.set(s,s,s); }); })(ch.obj);
+    var bb=new THREE.Box3().setFromObject(ch.obj);
+    burst(bb.getCenter(new THREE.Vector3()),0x66d9ef,6,{speed:2.5,life:0.5,grav:6,size:0.8});
+  }
+  ocIdx++;
+  if(ocIdx>=ocChunks.length) finishOceanBuild(silent);
+  else showOcGhost();
+}
+function tryPlaceOc(e){
+  var ch=ocChunks[ocIdx];
+  if(!ch) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb=new THREE.Box3().setFromObject(ch.obj); bb.expandByScalar(2.2);
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan part</b>!'); return; }
+  placeOcChunk();
+}
+function finishOceanBuild(silent){
+  ocDone=true;
+  if(silent) return;
+  save();
+  sndFanfare();
+  msg('🌊 THE OCEAN IS COMPLETE!<br><span style="font-size:55%">All '+ocChunks.length+' pieces. Wait… why do you smell like seaweed?</span>',3600);
+  a2Timer=setTimeout(function(){ a2Timer=null; startCut4(); },2800);
+}
+function handleOceanPad(){
+  if(ocDone){ msg('🌊 Your ocean is east of the city!',1600); return; }
+  if(studBux<200){ msg('🔒 The ocean plot costs 🪵 200 STUD BUX.<br><span style="font-size:55%">Become the HIKER GOD and win the throne battle to earn them!</span>',2800); return; }
+  studBux-=200; sbuxHud(); save();
+  sndJingle(); sndPortal();
+  msg('💸 200 STUD BUX SPENT!<br><span style="font-size:55%">You bought the OCEAN. Now build it… all 500+ pieces.</span>',3600);
+  buildOcean(false);
+  ocIdx=0;
+  PH='ocbuild';
+  setMood('day');
+  camOrbit.a=0.4; camOrbit.target=0.4;
+  showOcGhost();
+  updateMobileUI();
+}
+
+/* ---- cut4: -> FISH WITH LEGS ---- */
+function startCut4(){
+  PH='cut4'; cut4T=0; cutSkipOk=false; cutSpin=0;
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  if(player){ P.pos.set(OC.x1+5,0,0); player.group.position.copy(P.pos); }
+  if(!cutBackdrop){
+    cutBackdrop=new THREE.Mesh(new THREE.CylinderGeometry(9,9,14,24,1,true),
+      new THREE.MeshBasicMaterial({color:0x061420,side:THREE.BackSide,fog:false}));
+    world.add(cutBackdrop);
+  }
+  cutBackdrop.visible=true;
+  cutBackdrop.position.set(P.pos.x,5,P.pos.z);
+  sndSparkle(); sndSplash();
+}
+function updateCut4(dt){
+  cut4T+=dt;
+  if(cut4T>1) cutSkipOk=true;
+  cutSpin+=dt*(2+Math.min(cut4T*3,14));
+  if(player) player.group.rotation.y=cutSpin;
+  var ca=cutSpin*0.12;
+  camera.position.set(P.pos.x+Math.sin(ca)*4.2,2.3,P.pos.z+Math.cos(ca)*4.2);
+  camera.lookAt(P.pos.x,1.3,P.pos.z);
+  if(Math.random()<0.5)
+    burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
+      Math.random()<0.5?0x66d9ef:0x9ae8f5,2,{speed:2,life:0.6,grav:-2,size:0.7});
+  if(cut4T>2.2&&!isFish){
+    isFish=true; setFormFlags('fish');
+    spawnPlayer('fish'); player.group.rotation.y=cutSpin;
+    burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0xff8a3d,26,{speed:6,life:0.9});
+    sndBoom(); sndSplash(); camShake=0.5;
+    msg('🐟 OCEAN SURGE! 🐟<br><span style="font-size:70%">You are now… <b>A FISH. WITH LEGS.</b></span>',3400);
+  }
+  if(cut4T>5&&cut4T<5.1){
+    msg('🦵 You have a KICK now (F / PUNCH button = mighty kick, 20 dmg).<br><span style="font-size:55%">You kept the gun. Somehow. You have no pockets.</span>',4200);
+  }
+  if(cut4T>8){
+    if(cutBackdrop) cutBackdrop.visible=false;
+    PH='metro';
+    setMood('day');
+    fishHud(); save();
+    obj('🐟 Walk into the CASTLE OF FISH (the pink gate at the north end of your ocean) to start your fish career!');
+    hint('Kick: F · the castle gate glows blue · your career awaits');
+    updateMobileUI();
+  }
+}
+
+/* ---- CASTLE OF FISH interior + career ---- */
+function buildCastle(){
+  if(fcBuilt) return; fcBuilt=true;
+  fcGroup=new THREE.Group(); world.add(fcGroup);
+  var fl=studdedBox(FC.hw*2,0.3,FC.hd*2,0x8ac2d8,0x79b1c7);
+  fl.position.set(FC.x,0.15,FC.z); fcGroup.add(fl);
+  [[0,FC.hd,'n'],[0,-FC.hd,'s'],[FC.hw,0,'e'],[-FC.hw,0,'w']].forEach(function(o){
+    var w7=box(o[2]==='n'||o[2]==='s'?FC.hw*2:1.5,9,o[2]==='n'||o[2]==='s'?1.5:FC.hd*2,0xffc9d8);
+    w7.position.set(FC.x+o[0],4.5,FC.z+o[1]); fcGroup.add(w7);
+  });
+  for(var p3=0;p3<6;p3++){
+    var pil=box(1,8,1,0xe8a3b8);
+    pil.position.set(FC.x-18+(p3%3)*18,4,FC.z+(p3<3?-14:14)); fcGroup.add(pil);
+  }
+  for(var ch4=0;ch4<3;ch4++){
+    var lamp2=new THREE.Mesh(boxGeo(1.2,0.6,1.2),new THREE.MeshBasicMaterial({color:0x9ae8f5}));
+    lamp2.position.set(FC.x-12+ch4*12,7.6,FC.z); fcGroup.add(lamp2);
+  }
+  /* stations */
+  var barrel=new THREE.Group();
+  var bb5=box(1.4,1.4,1.4,0x8a5a2a); bb5.position.y=0.7; barrel.add(bb5);
+  var food5=box(1,0.3,1,0xd8a35c); food5.position.y=1.5; barrel.add(food5);
+  barrel.position.set(FC.x-18,0,FC.z-14); fcGroup.add(barrel);
+  var throne=box(2.2,3,1,0xffd83d); throne.position.set(FC.x+18,1.5,FC.z-14); fcGroup.add(throne);
+  var screen=textBoard('🎬 FISH\nCINEMA',10,5,'#05070d','#9ae8f5',40);
+  screen.position.set(FC.x,5,FC.z+19.8); fcGroup.add(screen);
+  fcGroup.userData.screen=screen;
+  var bench2=studdedBox(6,0.5,1.2,0x8a5a2a,0x6f4820); bench2.position.set(FC.x,0.4,FC.z+12); fcGroup.add(bench2);
+  var camera2=new THREE.Group();
+  var cbody=box(0.8,0.6,1.1,0x2f3540); cbody.position.y=1.6; camera2.add(cbody);
+  var lens=box(0.4,0.4,0.4,0x111111); lens.position.set(0,1.6,0.75); camera2.add(lens);
+  var tripod=box(0.14,1.4,0.14,0x2f3540); tripod.position.y=0.7; camera2.add(tripod);
+  camera2.position.set(FC.x-14,0,FC.z+8); fcGroup.add(camera2);
+  /* contest table */
+  var table=studdedBox(6,0.2,2.4,0x8a5a2a,0x6f4820); table.position.set(FC.x+14,1.1,FC.z+12); fcGroup.add(table);
+  [[-1,0],[1,0]].forEach(function(o){ var lg5=box(0.3,1,0.3,0x6f4820);
+    lg5.position.set(FC.x+14+o[0]*2.6,0.5,FC.z+12); fcGroup.add(lg5); });
+  /* fish NPCs */
+  for(var f4=0;f4<12;f4++){
+    var fg=new THREE.Group();
+    var fb2=box(0.9,0.55,0.4,CORALC2()[f4%4]); fg.add(fb2);
+    var ftl=box(0.3,0.4,0.15,CORALC2()[(f4+1)%4]); ftl.position.set(-0.6,0,0); ftl.rotation.z=0.4; fg.add(ftl);
+    var fe=box(0.12,0.12,0.08,0xffffff); fe.position.set(0.3,0.1,0.22); fg.add(fe);
+    var fp=box(0.05,0.05,0.05,0x111111); fp.position.set(0.32,0.1,0.27); fg.add(fp);
+    fg.position.set(FC.x+rand(-16,16),rand(1,3.4),FC.z+rand(-12,10));
+    fcGroup.add(fg);
+    fcNpcs.push({mesh:fg,ang:rand(0,6.28),r:rand(2,6),cy:fg.position.y,
+      cx:fg.position.x,cz:fg.position.z,fed:false,hungry:null});
+  }
+  function CORALC2(){ return [0xff6f61,0xffd83d,0x66d9ef,0x9b5cff]; }
+  /* gordon casoh waits at the table */
+  gordon=makeMinifig({torso:0xf4f4f4,legs:0x2f3540,arms:0xf4f4f4,face:'angry'});
+  var chefHat=new THREE.Group();
+  var hb2=box(0.5,0.5,0.5,0xffffff); hb2.position.y=0.42; chefHat.add(hb2);
+  var hb3=box(0.56,0.14,0.56,0xffffff); hb3.position.y=0.2; chefHat.add(hb3);
+  gordon.head.add(chefHat);
+  var gSprite=makeCasohSprite();
+  gSprite.scale.set(2.2,3.2,1); gSprite.position.y=3.6;
+  gordon.group.add(gSprite);
+  gordon.group.position.set(FC.x+14,0,FC.z+13.6);
+  gordon.group.rotation.y=Math.PI;
+  fcGroup.add(gordon.group);
+}
+function enterCastle(){
+  buildCastle();
+  PH='castle';
+  setMood('lib');
+  P.pos.set(FC.x,0,FC.z-FC.hd+3); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  sndPortal(); sndWhoosh(false);
+  fishHud();
+  if(fishLvl>=FISH_JOBS.length&&!spatula){
+    obj('🍽️ Career complete! GORDON CASOH waits at the table. Walk up to face him in the EATING CONTEST.');
+  } else if(spatula){
+    obj('🥄 GOLDEN SPATULA champion. The castle is yours to enjoy.');
+  } else {
+    obj('🐟 THE CASTLE OF FISH — your career starts at the bottom: '+FISH_JOBS[fishLvl]+'. Find the glowing beacon!');
+  }
+  hint('Career: '+FISH_JOBS.map(function(n,i){ return (i<fishLvl?'✅':'▫️')+n; }).join(' '));
+  placeJobBeacon();
+  updateMobileUI();
+}
+function jobStation(n){
+  return [{x:FC.x-18,z:FC.z-14},{x:FC.x,z:FC.z},{x:FC.x+18,z:FC.z-14},
+          {x:FC.x-14,z:FC.z+8},{x:FC.x,z:FC.z+12},{x:FC.x,z:FC.z-8}][n];
+}
+function placeJobBeacon(){
+  if(jobBeacon){ world.remove(jobBeacon); jobBeacon=null; }
+  if(fishLvl>=FISH_JOBS.length||spatula||job) return;
+  var s=jobStation(fishLvl);
+  jobBeacon=new THREE.Mesh(new THREE.CylinderGeometry(0.4,1.4,16,10,1,true),
+    new THREE.MeshBasicMaterial({color:0x9ae8f5,transparent:true,opacity:0.25,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  jobBeacon.position.set(s.x,8,s.z);
+  world.add(jobBeacon);
+}
+function startJob(){
+  var n=fishLvl;
+  job={n:n,have:0,need:0,items:[],t:0,phase:0};
+  if(jobBeacon){ world.remove(jobBeacon); jobBeacon=null; }
+  sndChime(); sndUi();
+  if(n===0){ job.need=10;
+    fcNpcs.slice(0,10).forEach(function(f){ f.fed=false;
+      f.hungry=new THREE.Mesh(boxGeo(0.3,0.3,0.3),new THREE.MeshBasicMaterial({color:0xff5340}));
+      f.hungry.position.y=0.8; f.mesh.add(f.hungry); });
+    job.carry=false;
+    msg('🍤 JOB 1 — FEEDER:<br><span style="font-size:55%">Grab food at the BARREL, bring it to '+job.need+' hungry (red-marked) fish. 6 coins each!</span>',4600);
+  } else if(n===1){ job.need=12;
+    for(var i=0;i<12;i++){
+      var dirt=new THREE.Mesh(new THREE.CircleGeometry(0.9,12),
+        new THREE.MeshBasicMaterial({color:0x4a5230,transparent:true,opacity:0.85}));
+      dirt.rotation.x=-Math.PI/2;
+      dirt.position.set(FC.x+rand(-17,17),0.32,FC.z+rand(-13,13));
+      world.add(dirt); job.items.push({mesh:dirt,prog:0});
+    }
+    msg('🧽 JOB 2 — CLEANER:<br><span style="font-size:55%">Stand on all '+job.need+' algae patches to scrub them off. 4 coins each!</span>',4600);
+  } else if(n===2){ job.need=15;
+    msg('🍔 JOB 3 — THE FED ONE:<br><span style="font-size:55%">Stand on the GOLD THRONE and eat the '+job.need+' snacks they throw at you. Don\'t move!</span>',4600);
+  } else if(n===3){ job.need=6; job.spot=-1; job.t=0;
+    msg('🎬 JOB 4 — MOVIE PRODUCER:<br><span style="font-size:55%">Shoot '+job.need+' takes: run to each glowing film mark before the director loses it (8s each)!</span>',4600);
+    nextTake();
+  } else if(n===4){ job.need=30;
+    msg('🍿 JOB 5 — CRINGE WATCHER:<br><span style="font-size:55%">Sit at the bench and WATCH '+job.need+'s of the worst fish cinema ever made. Endure.</span>',4600);
+  } else { job.need=20; fzKills=0;
+    msg('⚔️ JOB 6 — SOLDIER:<br><span style="font-size:55%">Defend the castle: 20 fish-zombies… then the MEGA BOSS. Kick + gun!</span>',4600);
+    battleMusic(true); setMood('boss');
+    for(var z2=0;z2<5;z2++) spawnFzombie(false);
+  }
+  obj('📋 '+FISH_JOBS[n]+' — 0/'+job.need);
+}
+function nextTake(){
+  job.spot=(job.spot+1)%3;
+  job.t=8;
+  var spots=[{x:FC.x-8,z:FC.z+4},{x:FC.x-14,z:FC.z-2},{x:FC.x-20,z:FC.z+4}];
+  var s=spots[job.spot];
+  if(job.marker) world.remove(job.marker);
+  job.marker=new THREE.Mesh(new THREE.CylinderGeometry(0.3,1.1,12,10,1,true),
+    new THREE.MeshBasicMaterial({color:0xffd83d,transparent:true,opacity:0.3,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  job.marker.position.set(s.x,6,s.z);
+  job.markerPos=s;
+  world.add(job.marker);
+}
+function spawnFzombie(boss){
+  var ref=makeMinifig({torso:boss?0x1b3b1b:0x3d6b3d,legs:0x2a4a2a,arms:0x3d6b3d,face:'angry',fishy:true});
+  if(boss) ref.group.scale.set(2.4,2.4,2.4);
+  var a=rand(0,6.28);
+  ref.group.position.set(FC.x+Math.cos(a)*(FC.hw-3),0,FC.z+Math.sin(a)*(FC.hd-3));
+  world.add(ref.group);
+  var z={ref:ref,hp:boss?600:40,boss:boss,atkCd:0,walkT:0,stunT:0,dead:false};
+  if(boss){ fzBoss=z; sndRoar(true); doFlash('#3d6b3d');
+    msg('☠️ THE MEGA ZOMBIE FISH ☠️',2600); }
+  fzombies.push(z);
+  return z;
+}
+function hurtFzombie(z,dmg,fromTorn){
+  if(z.dead) return;
+  z.hp-=dmg;
+  burst(z.ref.group.position.clone().setY(1.2),0x9ccc65,4,{speed:2.5,life:0.4});
+  doFlash('#3d6b3d');
+  if(fromTorn&&Math.random()<0.2&&z.stunT<=0){ z.stunT=2.2; sndStun(); }
+  if(z.hp<=0){
+    z.dead=true;
+    sndWoodFall();
+    burst(z.ref.group.position.clone().setY(1),0x3d6b3d,14,{speed:5,life:1});
+    world.remove(z.ref.group);
+    if(z.boss){ fzBoss=null; completeJob(); return; }
+    fzKills++;
+    obj('📋 SOLDIER — '+Math.min(fzKills,20)+'/20 zombies'+(fzKills>=20?' — HERE COMES THE BOSS':''));
+    if(fzKills<20){ if(fzombies.filter(function(x){ return !x.dead; }).length<5) spawnFzombie(false); }
+    else if(!fzBoss&&fzombies.every(function(x){ return x.dead; })) spawnFzombie(true);
+  }
+}
+function completeJob(){
+  var n=job.n;
+  var pay=[60,48,45,70,50,120][n];
+  fishCash+=pay; fishHud();
+  job.items.forEach(function(it){ world.remove(it.mesh); });
+  if(job.marker) world.remove(job.marker);
+  fcNpcs.forEach(function(f){ if(f.hungry){ f.mesh.remove(f.hungry); f.hungry=null; } });
+  fzombies.forEach(function(z){ if(!z.dead) world.remove(z.ref.group); });
+  fzombies.length=0; fzBoss=null;
+  battleMusic(false); setMood('lib');
+  job=null;
+  fishLvl++; save();
+  sndFanfare(); doFlash('#9ae8f5');
+  if(fishLvl>=FISH_JOBS.length){
+    msg('🏆 CAREER COMPLETE! (+'+pay+' coins)<br><span style="font-size:55%">One thing left… GORDON CASOH challenges you to an EATING CONTEST. Walk to the table.</span>',5200);
+    obj('🍽️ Face GORDON CASOH at the table — the eating contest awaits.');
+  } else {
+    msg('⬆️ PROMOTED: <b>'+FISH_JOBS[fishLvl]+'</b> (+'+pay+' coins)<br><span style="font-size:55%">Find the next glowing beacon!</span>',4200);
+    obj('🐟 Next job: '+FISH_JOBS[fishLvl]+' — find the beacon.');
+    placeJobBeacon();
+  }
+}
+/* ---- the EATING CONTEST vs GORDON CASOH ---- */
+var FOODS=['bread roll','pizza slice','burger','taco','spaghetti','sushi boat',
+  'triple cake','turkey leg','golden waffle','lava curry','royal lobster','THE MEGA FEAST'];
+var FOODC=[0xd8a35c,0xffd83d,0xc9762a,0xffa14d,0xff6f61,0xf4f4f4,
+  0xff8ac2,0xc9762a,0xffd83d,0xff5340,0xff6f61,0xffe97a];
+function startContest(){
+  contest={state:'eat',mine:0,his:0,clicks:0,foodMesh:null,hisT:3.2,punches:0,punchT:0};
+  battleMusic(true); setMood('boss');
+  sndFanfare();
+  msg('🍽️ EATING CONTEST vs GORDON CASOH!<br><span style="font-size:55%">TAP/CLICK fast to eat! 8 bites per food, 12 foods. He\'s FAST. GO!</span>',4200);
+  obj('🍽️ EAT! You: 0/12 · Gordon: 0/12 — TAP FAST!');
+  contestFood();
+}
+function contestFood(){
+  if(contest.foodMesh) world.remove(contest.foodMesh);
+  var tier=Math.min(contest.mine,FOODS.length-1);
+  var m=box(0.8+tier*0.06,0.4+tier*0.05,0.8+tier*0.06,FOODC[tier]);
+  m.position.set(FC.x+13,1.6,FC.z+11.4);
+  world.add(m);
+  contest.foodMesh=m;
+}
+function contestClick(){
+  if(!contest) return;
+  if(contest.state==='eat'){
+    contest.clicks++;
+    knock(700+Math.random()*500,0.35,0.04,0);
+    if(contest.foodMesh){ contest.foodMesh.scale.multiplyScalar(0.88);
+      burst(contest.foodMesh.position,FOODC[Math.min(contest.mine,11)],2,{speed:2,life:0.4,size:0.7}); }
+    if(contest.clicks>=8){
+      contest.clicks=0; contest.mine++;
+      sndPickup();
+      if(contest.mine>=12){ contestBelly(); return; }
+      msg('😋 Ate the '+FOODS[contest.mine-1]+'! Next: <b>'+FOODS[Math.min(contest.mine,11)]+'</b>',1200);
+      contestFood();
+      obj('🍽️ EAT! You: '+contest.mine+'/12 · Gordon: '+contest.his+'/12 — TAP FAST!');
+    }
+  } else if(contest.state==='belly'){
+    contest.punches++;
+    sndPunch(true); doFlash('#ffd83d');
+    if(gordon){ gordon.group.position.y=0.1;
+      (function(gg2){ tween(0.1,function(k){ gg2.group.position.y=0.1*(1-k); }); })(gordon);
+      burst(gordon.group.position.clone().setY(1.1),0xffe97a,3,{speed:3,life:0.4}); }
+    if(player){ player.armR.rotation.x=-1.9;
+      tween(0.12,function(k){ if(player) player.armR.rotation.x=-1.9+1.9*k; }); }
+    obj('👊 PUNCH THE BELLY! '+contest.punches+'/30 — '+Math.max(0,contest.punchT).toFixed(1)+'s left!');
+    if(contest.punches>=30) contestWin();
+  }
+}
+function contestBelly(){
+  contest.state='belly'; contest.punches=0; contest.punchT=10;
+  if(contest.foodMesh){ world.remove(contest.foodMesh); contest.foodMesh=null; }
+  sndRoar(false); doFlash('#ffffff');
+  msg('🤯 YOU OUT-ATE GORDON CASOH!<br><span style="font-size:55%">Now PUNCH HIS BELLY 30 times in 10 seconds — TAP AS FAST AS YOU CAN!</span>',3600);
+  obj('👊 PUNCH THE BELLY! 0/30 — 10s!');
+}
+function contestFail(why){
+  battleMusic(false); setMood('lib');
+  if(contest&&contest.foodMesh) world.remove(contest.foodMesh);
+  contest=null;
+  msg('😔 '+why+'<br><span style="font-size:55%">Walk up to Gordon to try again.</span>',3600);
+  obj('🍽️ Gordon smirks. Face him again at the table.');
+}
+function contestWin(){
+  battleMusic(false); setMood('lib');
+  contest=null;
+  spatula=true; studBux+=300; curForm='fish';
+  sbuxHud(); fishHud(); save();
+  sndFanfare(); setTimeout(sndFanfare,600); doFlash('#ffe97a');
+  /* the golden spatula, in hand */
+  if(player){
+    var spat=new THREE.Group();
+    var handle=box(0.08,0.5,0.08,0xffd83d); spat.add(handle);
+    var head2=box(0.3,0.34,0.05,0xffe97a); head2.position.y=0.42; spat.add(head2);
+    spat.position.set(0,-0.55,0.15);
+    player.armL.add(spat);
+  }
+  if(gordon){ gordon.group.rotation.z=1.2; gordon.group.position.y=0.3; }
+  for(var i=0;i<8;i++)
+    burst(P.pos.clone().add(new THREE.Vector3(rand(-3,3),rand(1,5),rand(-3,3))),
+      [0xffd83d,0x7dffd8,0xff7bd5][i%3],12,{speed:6,life:1.3});
+  msg('🥄 THE GOLDEN SPATULA IS YOURS! 🥄<br><span style="font-size:55%">+300 STUD BUX (they still do nothing). And a new power: press <b>P</b> / FORM to BECOME ANYONE you\'ve been!</span>',7000);
+  obj('🥄 GOLDEN SPATULA champion! Press P / FORM to switch between every form you\'ve ever been.');
+  buildFormMenu();
+  updateMobileUI();
+}
+/* ---- become anyone you have been ---- */
+function setFormFlags(kind){
+  curForm=kind;
+  isGod=(kind==='god');
+  isHiker=(kind==='hiker'||kind==='god');
+  isFish=(kind==='fish');
+  P.maxHp=kind==='god'?500:(kind==='fish'?150:100);
+  P.hp=Math.min(P.hp,P.maxHp)||P.maxHp;
+}
+function setForm(kind){
+  setFormFlags(kind);
+  P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  spawnPlayer(kind==='worker'?false:kind==='biz'?true:kind);
+  sndSparkle(); doFlash('#9ae8f5');
+  burst(P.pos.clone().setY(1.2),0x9ae8f5,16,{speed:4,life:0.8});
+  save();
+  buildFormMenu();
+  updateMobileUI();
+}
+var FORM_DEFS=[['worker','👷 WORKER'],['biz','🕴️ BUSINESSMAN'],['rich','💰 TYCOON'],
+  ['hiker','🥾 HIKER'],['god','👑 HIKER GOD'],['fish','🐟 FISH WITH LEGS']];
+function buildFormMenu(){
+  var box2=$('formBtns');
+  box2.innerHTML='';
+  FORM_DEFS.forEach(function(fd){
+    var b=document.createElement('button');
+    b.textContent=fd[1];
+    if(curForm===fd[0]) b.className='on';
+    b.addEventListener('click',function(){ setForm(fd[0]); toggleForms(false); });
+    box2.appendChild(b);
+  });
+  $('btnGuards').textContent='🕴️ BODYGUARDS: '+(bodyguards.length?'ON':'OFF');
+}
+function toggleForms(show){
+  if(!spatula) return;
+  $('forms').style.display=show?'block':'none';
+  if(show) buildFormMenu();
+}
+$('btnFormsClose').addEventListener('click',function(){ toggleForms(false); });
+$('btnGuards').addEventListener('click',function(){
+  if(bodyguards.length){
+    bodyguards.forEach(function(b){ world.remove(b.ref.group); });
+    bodyguards.length=0;
+  } else spawnBodyguards();
+  buildFormMenu(); sndUi();
+});
+/* ---- castle per-frame ---- */
+function updateCastle(dt){
+  if(castleDoorCd>0) castleDoorCd-=dt;
+  /* ambient fish swim */
+  fcNpcs.forEach(function(f){
+    f.ang+=dt*0.5;
+    f.mesh.position.set(f.cx+Math.cos(f.ang)*f.r*0.4,f.cy+Math.sin(f.ang*2)*0.3,f.cz+Math.sin(f.ang)*f.r*0.4);
+    f.mesh.rotation.y=-f.ang;
+  });
+  if(gordon&&!spatula) gordon.group.rotation.y=Math.atan2(P.pos.x-gordon.group.position.x,P.pos.z-gordon.group.position.z);
+  if(jobBeacon) jobBeacon.rotation.y+=dt;
+  /* start next job at its beacon */
+  if(!job&&!contest&&fishLvl<FISH_JOBS.length&&!spatula&&!P.dead){
+    var s=jobStation(fishLvl);
+    if(Math.hypot(P.pos.x-s.x,P.pos.z-s.z)<2.4) startJob();
+  }
+  /* start contest at the table */
+  if(!job&&!contest&&fishLvl>=FISH_JOBS.length&&!spatula&&!P.dead&&gordon
+     &&gordon.group.position.distanceTo(P.pos)<4.2){ startContest(); }
+  /* job logic */
+  if(job){
+    var n=job.n;
+    if(n===0){
+      var barrel={x:FC.x-18,z:FC.z-14};
+      if(!job.carry&&Math.hypot(P.pos.x-barrel.x,P.pos.z-barrel.z)<2){ job.carry=true; sndPickup();
+        msg('🍤 Food grabbed — find a red-marked fish!',1200); }
+      if(job.carry){
+        for(var i=0;i<fcNpcs.length;i++){
+          var f=fcNpcs[i];
+          if(f.hungry&&!f.fed&&f.mesh.position.distanceTo(P.pos)<2){
+            f.fed=true; f.mesh.remove(f.hungry); f.hungry=null;
+            job.carry=false; job.have++; fishCash+=6; fishHud();
+            sndChirp(); sndPickup();
+            burst(f.mesh.position.clone(),0xd8a35c,5,{speed:2,life:0.5});
+            obj('📋 FEEDER — '+job.have+'/'+job.need+' (+6 coins each)');
+            if(job.have>=job.need) completeJob();
+            break;
+          }
+        }
+      }
+    } else if(n===1){
+      job.items.forEach(function(it){
+        if(it.prog>=1) return;
+        if(Math.hypot(P.pos.x-it.mesh.position.x,P.pos.z-it.mesh.position.z)<1.3){
+          it.prog+=dt;
+          it.mesh.material.opacity=0.85*(1-it.prog);
+          if(Math.random()<dt*6) knock(2400,0.15,0.03,0);
+          if(it.prog>=1){
+            world.remove(it.mesh); job.have++; fishCash+=4; fishHud();
+            sndPickup();
+            obj('📋 CLEANER — '+job.have+'/'+job.need+' (+4 coins each)');
+            if(job.have>=job.need) completeJob();
+          }
+        }
+      });
+    } else if(n===2){
+      var th={x:FC.x+18,z:FC.z-14};
+      if(Math.hypot(P.pos.x-th.x,P.pos.z-th.z)<2.4){
+        job.t-=dt;
+        if(job.t<=0){
+          job.t=0.7;
+          var pel=box(0.3,0.3,0.3,0xd8a35c);
+          pel.position.set(th.x+rand(-4,4),3,th.z+rand(-4,4));
+          world.add(pel);
+          (function(pp2){ tween(0.5,function(k){
+            pp2.position.lerp(P.pos.clone().setY(1.4),k*0.25);
+          },function(){
+            world.remove(pp2);
+            if(!job||job.n!==2) return;
+            job.have++; sndPickup();
+            burst(P.pos.clone().setY(1.5),0xd8a35c,3,{speed:2,life:0.4});
+            obj('📋 THE FED ONE — '+job.have+'/'+job.need+' snacks');
+            if(job.have>=job.need) completeJob();
+          }); })(pel);
+        }
+      } else if(job.have>0&&Math.random()<dt) msg('🍔 Stay ON the gold throne!',1000);
+    } else if(n===3){
+      if(job.marker){
+        job.marker.rotation.y+=dt*2;
+        job.t-=dt;
+        if(Math.hypot(P.pos.x-job.markerPos.x,P.pos.z-job.markerPos.z)<1.6){
+          job.have++; sndUi(); doFlash('#ffd83d');
+          knock(1200,0.4,0.05,0);
+          obj('📋 MOVIE PRODUCER — take '+job.have+'/'+job.need+' 🎬');
+          if(job.have>=job.need){ completeJob(); }
+          else nextTake();
+        } else if(job.t<=0){
+          msg('🎬 CUT! Too slow — again!',1200);
+          nextTake();
+        }
+      }
+    } else if(n===4){
+      var bench3={x:FC.x,z:FC.z+12};
+      if(Math.hypot(P.pos.x-bench3.x,P.pos.z-bench3.z)<2.2){
+        job.have+=dt;
+        if(!job.cringeT||job.cringeT<=0){
+          job.cringeT=5;
+          var lines=['"o-fish-ally in love" 🤢','"you had me at herring"','"let minnow if you need me"',
+            '"cod you not?"','"this movie is kraken me up"','"salmon call a doctor"'];
+          msg('🍿 '+lines[(Math.random()*lines.length)|0],2600);
+          blip(160,'sawtooth',0.25,0.5,0,90); // pained groan
+        }
+        job.cringeT-=dt;
+        obj('📋 CRINGE WATCHER — '+Math.min(job.need,job.have|0)+'/'+job.need+'s endured 😖');
+        if(job.have>=job.need) completeJob();
+      }
+    } else if(n===5){
+      fzombies.forEach(function(z){
+        if(z.dead) return;
+        var g=z.ref.group, d=g.position.distanceTo(P.pos);
+        if(z.stunT>0){ z.stunT-=dt; g.rotation.z=Math.sin(GTIME*20)*0.1; return; }
+        g.rotation.z=0;
+        var spd=z.boss?2.6:3.8;
+        if(d>(z.boss?3:1.4)){
+          var dx=P.pos.x-g.position.x, dz=P.pos.z-g.position.z, l=Math.hypot(dx,dz)||1;
+          g.position.x+=dx/l*spd*dt; g.position.z+=dz/l*spd*dt;
+          g.rotation.y=Math.atan2(dx,dz);
+          z.walkT+=dt*6;
+          z.ref.legL.rotation.x=Math.sin(z.walkT)*0.7;
+          z.ref.legR.rotation.x=-Math.sin(z.walkT)*0.7;
+        } else {
+          z.atkCd-=dt;
+          if(z.atkCd<=0&&!P.dead){
+            z.atkCd=1.2;
+            hurtPlayer(z.boss?22:8,z.boss?'MEGA BOSS SLAM!':'Zombie fish bite!');
+            sndPunch(true);
+            if(z.boss) camShake=0.6;
+          }
+        }
+      });
+    }
+  }
+  /* contest timers */
+  if(contest){
+    if(contest.state==='eat'){
+      contest.hisT-=dt;
+      if(contest.hisT<=0){
+        contest.hisT=3.2;
+        contest.his++;
+        knock(500,0.5,0.08,0);
+        if(gordon){ gordon.head.rotation.x=0.4;
+          (function(gg3){ tween(0.3,function(k){ gg3.head.rotation.x=0.4*(1-k); }); })(gordon); }
+        obj('🍽️ EAT! You: '+contest.mine+'/12 · Gordon: '+contest.his+'/12 — TAP FAST!');
+        if(contest.his>=12) contestFail('GORDON CASOH out-ate you. "erm what then green blob man?"');
+      }
+    } else if(contest.state==='belly'){
+      contest.punchT-=dt;
+      if(contest.punchT<=0) contestFail('Too slow! His belly stands undefeated.');
+    }
+  }
+  /* leave the castle by the south wall */
+  if(!job&&!contest&&castleDoorCd<=0&&P.pos.z<FC.z-FC.hd+2.2&&Math.abs(P.pos.x-FC.x)<3){
+    castleDoorCd=2;
+    PH='metro';
+    P.pos.set(-216,0,44); P.vy=0;
+    if(player) player.group.position.copy(P.pos);
+    camYaw=Math.PI; P.yaw=Math.PI;
+    setMood('day'); sndWhoosh(false);
+    obj(spatula?'🥄 The ocean bows to the spatula champion.':'🌊 Your ocean. The castle gate is behind you.');
+    updateMobileUI();
+  }
+}
+/* castle gate entry from the ocean */
+function updateAct4(dt){
+  if(ocDone&&isFishForm()&&PH==='metro'&&!P.dead&&castleDoorCd<=0
+     &&Math.abs(P.pos.x-(-216))<2.6&&Math.abs(P.pos.z-46)<2.4){
+    castleDoorCd=2;
+    enterCastle();
+  }
+  if(castleDoorCd>0&&PH==='metro') castleDoorCd-=dt;
+}
+function isFishForm(){ return isFish||spatula; }
+function applyAct4Skip(sv){
+  if(sv.oc){
+    buildOcean(true); ocDone=true;
+    isFish=true; fishLvl=sv.fl||0; fishCash=sv.fc||0;
+    spatula=!!sv.spat;
+    if(spatula){ studBux=sv.sb!=null?sv.sb:studBux; curForm=sv.fm||'fish'; buildFormMenu(); }
+  }
+}
+
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
 window.__dbg={
   phase:function(){ return PH; },
@@ -5162,7 +6092,29 @@ window.__dbg={
   killHwAll:function(){ hwHikers.forEach(function(h){ if(!h.dead) hurtHwHiker(h,9999,false); }); },
   hitGod:function(n){ hurtHwGod(n||9999,false); },
   coronate:startCoronation,
-  resetHW:resetHWPeace
+  resetHW:resetHWPeace,
+  /* ---- Act 4 ---- */
+  giveStudBux:function(n){ studBux=n==null?200:n; sbuxHud(); },
+  spendOcean:handleOceanPad,
+  oc:function(){ return {idx:ocIdx,total:ocChunks.length,done:ocDone,parts:ocPartCount}; },
+  placeOc:function(n){ for(var i=0;i<(n||1);i++) placeOcChunk(ocIdx<ocChunks.length-1);
+    if(ocIdx>=ocChunks.length&&PH==='ocbuild'&&!isFish) finishOceanBuild(false); },
+  skipCut4:function(){ if(PH==='cut4') cut4T=99; },
+  fish:function(){ return {isFish:isFish,lvl:fishLvl,cash:fishCash,spatula:spatula,
+    job:job?{n:job.n,have:Math.floor(job.have),need:job.need}:null,
+    contest:contest?{state:contest.state,mine:contest.mine,his:contest.his,punches:contest.punches}:null,
+    zombies:fzombies.filter(function(z){ return !z.dead; }).length,kills:fzKills}; },
+  gotoCastle:function(){ if(!ocGroup) buildOcean(true); ocDone=true;
+    if(!isFish){ isFish=true; setFormFlags('fish'); spawnPlayer('fish'); }
+    enterCastle(); },
+  winJob:function(){ if(job){ if(job.n===5){ fzKills=20;
+      fzombies.forEach(function(z){ if(!z.dead){ z.dead=true; world.remove(z.ref.group); } });
+      fzombies.length=0; spawnFzombie(true); hurtFzombie(fzBoss,9999,false); }
+    else { job.have=job.need; completeJob(); } } },
+  setFishLvl:function(n){ fishLvl=n; placeJobBeacon(); },
+  contestClickN:function(n){ for(var i=0;i<(n||1);i++) contestClick(); },
+  forms:function(){ return {cur:curForm,unlocked:spatula}; },
+  setFormTo:setForm
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
 </script>
