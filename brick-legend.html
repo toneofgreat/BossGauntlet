@@ -1774,9 +1774,8 @@ function updateBoss(dt){
     trex.jaw.rotation.x=0.1+Math.sin(GTIME*3)*0.06;
     if(bossT>bossCd){
       bossT=0;
-      var moves=['roar','stomp','charge','rain','tazer','suction'];
+      var moves=['roar','stomp','charge','rain','suction']; // tazer drones removed — too OP
       var mv=moves[(Math.random()*moves.length)|0];
-      if(bossN===2&&Math.random()<0.35) spawnDrone(); // extra harassment
       startBossMove(mv);
     }
   }
@@ -1885,7 +1884,6 @@ function startBossMove(mv){
   else if(mv==='stomp'){ bossState='stompPrep'; bossT=0; }
   else if(mv==='charge'){ bossState='chargePrep'; bossT=0; }
   else if(mv==='rain'){ bossState='rain'; bossT=0; sndRoar(false); msg('🧱 BLOCKS INCOMING!',1200); }
-  else if(mv==='tazer'){ bossState='idle'; bossT=0; spawnDrone(); if(bossN===2) spawnDrone(); }
   else if(mv==='suction'){ bossState='suction'; bossT=0;
     sndRoar(false); slideLoop.set(0.3);
     msg('😱 IT\'S SUCKING YOU IN — RUN + JUMP AWAY!',1800); }
