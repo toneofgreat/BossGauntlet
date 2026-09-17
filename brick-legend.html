@@ -2523,19 +2523,22 @@ function startSkip(sv){
         obj('🐟 Your fish career awaits in the castle: next job — '+FISH_JOBS[fishLvl]+'.');
         hint('The castle gate is at the north end of the ocean');
       }
+    } else if(sv.god){
+      /* throne champion with STUD BUX to spend: continue into the CITY, at the ocean pad */
+      ensureCityExtraPads();
+      PH='metro';
+      P.pos.set(CITY.x+30,0,CITY.z-6); if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI/2; P.yaw=Math.PI/2;
+      sbuxHud(); setMood('day');
+      obj('👑 Welcome back, HIKER GOD. The cyan OCEAN PLOT pad (east road) takes your 🪵 '+studBux+' STUD BUX!');
+      hint('The ocean pad is just east of you · the cabin portal in the jungle returns to Hiker World');
     } else if(sv.hw){
       ensureCityExtraPads();
       PH='hw';
-      P.pos.set(HW.x,0,HW.z+HW.r-8); if(player) player.group.position.copy(P.pos);
-      camYaw=Math.PI; P.yaw=Math.PI;
-      windLoop.set(0.2); xpHud(); sbuxHud(); setMood('day');
-      if(sv.god){
-        obj('👑 HIKER GOD — undisputed. 🪵 '+studBux+' STUD BUX banked (useless… for now).');
-        hint('You already won it all. Enjoy your realm.');
-      } else {
-        obj('🏕️ HIKER WORLD — keep hanging out near hikers to level up ('+LVL_NAMES[lvl]+').');
-        hint('Wave: G / WAVE (+5 XP) · reach HIKER PRE-GOD then approach the god on the mound');
-      }
+      enterHW(); /* re-enter properly (exit portal + givers + casoh) */
+      xpHud(); sbuxHud();
+      obj('🏕️ HIKER WORLD — keep hanging out near hikers to level up ('+LVL_NAMES[lvl]+').');
+      hint('Wave: G / WAVE (+5 XP) · tasks at the ❕ hikers · EXIT portal at the south edge');
     } else if(sv.jg){
       ensureCityExtraPads();
       PH='metro';
@@ -4058,6 +4061,7 @@ function startCity(){
   if(!(sv0&&(sv0.gun||sv0.city))){ startCityBuild(); return; } // new players BUILD the city first
   buildCity();
   cityDone=true; cityBuildIdx=cityChunks.length;
+  if(sv0&&sv0.rich){ rich=true; ensureCityExtraPads(); } // jungle/ocean/home pads visible on the stroll
   var sv=sv0;
   hasGun=!!(sv&&sv.gun);
   tornadoOwned=!!(sv&&sv.torn);
@@ -4133,7 +4137,7 @@ var jgGroup=null,jgChunks=[],jgIdx=0,jgDone=false,jgPartCount=0;
 var chopTrees=[],wood=0,WOOD_NEED=30,cabinPortal=null,CABIN={x:-373,z:118};
 var isHiker=false,isGod=false,cut3T=-1;
 var HW={x:-300,z:430,r:74};
-var hwGroup=null,hwHikers=[],hwGod=null,hwState='none',hwUnlocked=false,godWon=false;
+var hwGroup=null,hwHikers=[],hwGod=null,hwState='none',hwUnlocked=false,godWon=false,hwExitPortal=null;
 var xp=0,XP_LVLS=[0,300,900,1800,3600],lvl=0,waveCd=0,studBux=0,battleLeft=0;
 var LVL_NAMES=['BASIC HIKER','TRAIL HIKER','RIDGE HIKER','SUMMIT HIKER','HIKER PRE-GOD'];
 /* tiers are EARNED: cumulative hiker-tasks required to reach each level */
@@ -4787,6 +4791,12 @@ function enterHW(){
   PH='hw';
   setMood('day');
   markTaskGivers();
+  if(!hwExitPortal){ /* the way home: a portal at the spawn edge */
+    hwExitPortal=makePortal(HW.x+8,HW.z+HW.r-6);
+    var xs=textBoard('EXIT to\nthe JUNGLE',2.8,1.6,'#0a2a12','#7dffa0',26);
+    xs.position.set(HW.x+8,4.6,HW.z+HW.r-7.8);
+    world.add(xs);
+  }
   P.pos.set(HW.x,0,HW.z+HW.r-8); P.vy=0;
   if(player) player.group.position.copy(P.pos);
   camYaw=Math.PI; P.yaw=Math.PI;
@@ -4917,8 +4927,8 @@ function hwWin(){
   for(var i=0;i<8;i++)
     burst(P.pos.clone().add(new THREE.Vector3(rand(-4,4),rand(1,6),rand(-4,4))),
       [0xffd83d,0x7dffd8,0xff7bd5][i%3],12,{speed:6,life:1.3});
-  msg('🏆 THE THRONE IS YOURS 🏆<br><span style="font-size:55%">You earned 🪵 200 STUD BUX. They do nothing. For now.</span>',6000);
-  obj('👑 HIKER GOD — undisputed. 🪵 200 STUD BUX banked (useless… for now).');
+  msg('🏆 THE THRONE IS YOURS 🏆<br><span style="font-size:55%">You earned 🪵 200 STUD BUX… and something on the city\'s EAST side is for sale.</span>',6000);
+  obj('👑 HIKER GOD! Take the EXIT portal → city → the cyan OCEAN PLOT pad (east road) takes your 200 STUD BUX.');
 }
 function restartGodBattle(){
   hwHikers.forEach(function(h){ if(h.ref.group.parent) world.remove(h.ref.group); });
@@ -4958,6 +4968,23 @@ var hwFrame=0;
 function updateHW(dt){
   hwFrame++;
   if(waveCd>0) waveCd-=dt;
+  /* exit portal back to the jungle (blocked mid-battle/wipe) */
+  if(hwExitPortal){
+    hwExitPortal.userData.ring.rotation.z+=dt*2;
+    hwExitPortal.userData.disc.rotation.z-=dt*3;
+    if(!P.dead&&hwState!=='battle'&&hwState!=='wipe'
+       &&P.pos.distanceTo(hwExitPortal.position)<2.2){
+      PH='metro';
+      P.pos.set(-370,0,110); P.vy=0;
+      if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI; P.yaw=Math.PI;
+      setMood('day'); sndPortal(); sndWhoosh(false);
+      battleMusic(false); $('timer').style.display='none';
+      obj(godWon&&studBux>=200?'👑 Back in the jungle. Your 🪵 STUD BUX can buy the OCEAN PLOT — east side of the city!':'🌴 Back in your jungle. The cabin portal returns to Hiker World.');
+      updateMobileUI();
+      return;
+    }
+  }
   /* XP while peaceful and socializing + TASKS gate the tiers */
   if(hwState==='peace'&&!isGod){
     updateTask(dt);
