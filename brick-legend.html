@@ -2587,6 +2587,7 @@ function startBuild(){
 function startSkip(sv){
   $('start').style.display='none';
   audioInit(); actx(); sndUi();
+  if(sv&&sv.city){ cityDone=true; buildCity(); cityBuildIdx=cityChunks.length; }
   for(var i=0;i<BUILD_STEPS.length;i++) placeStep(true);
   hasGun=true;
   tornadoOwned=!!(sv&&sv.torn);
@@ -2674,9 +2675,13 @@ function startSkip(sv){
 (function(){
   var sv=loadSave();
   if(sv&&(sv.gun||sv.city)){
-    /* returning player: choose to continue or start over from nothing */
+    /* returning player: CONTINUE restores everything IMMEDIATELY (no gold-pad step
+       needed — landing in a half-loaded city stroll looked like lost progress) */
     $('btnPlay').textContent='▶️ CONTINUE';
-    $('btnPlay').addEventListener('click',startCity);
+    $('btnPlay').addEventListener('click',function(){
+      if(sv.gun) startSkip(sv); // full restore, straight to the deepest act
+      else startCity();         // city-only save: the stroll IS the game so far
+    });
     var rb=document.createElement('button');
     rb.className='alt'; rb.id='btnRestart'; rb.textContent='🔄 RESTART FROM SCRATCH';
     var restartArmed=false;
