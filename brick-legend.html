@@ -6144,7 +6144,7 @@ var CW={x:-300,z:-430,r:72};
 var catUnlocked=false,isCat=false,cut5T=-1,catLvl=0,cafeFloors=0,fragPlaced=false,haveFrag=false;
 var cwGroup=null,cwBuilt=false,cafeCore=null,cafeHp=200,CAFE_MAX=200;
 var cbChunks=[],cbIdx=0,cbStage=0,cbGroup=null;
-var dogs=[],dogCasoh=null,wave=null,scratchDogsDone=0,waveBeacon=null;
+var dogs=[],dogCasoh=null,wave=null,scratchDogsDone=0,waveBeacon=null,waveBreakT=0,breakMsgCd=0;
 var catPortalObj=null,catCats=[];
 var catGren=0,grenT=0,grenUnlocked=false,slamCd=0,slamPending=false,wasGround=true;
 var CAT_TIERS=['ALLEY CAT','TABBY','TUXEDO CAT','MAINE COON','SHADOW CAT',
@@ -6516,7 +6516,7 @@ function waveDogStats(lvl){
   var fat=lvl>=14, base=lvl>=14?lvl-13:lvl;
   return {hp:(22+base*14)*(fat?2:1),dmg:5+base*2+(fat?4:0),
     spd:clamp(3+base*0.15,3,5)*(fat?0.85:1),
-    interval:clamp(4-base*0.22,1.3,4),
+    interval:clamp(5.5-base*0.18,2.6,5.5), /* fewer dogs: slower spawns */
     fur:[0xb0784a,0x8a5a2a,0x4a4f57,0x2f3540,0xc62b21][base%5],fat:fat};
 }
 function endWave(win2){
@@ -6526,6 +6526,7 @@ function endWave(win2){
   $('timer').style.display='none';
   if(win2){
     catLvl++; save();
+    waveBreakT=60; /* a well-earned 1-minute break */
     sndFanfare(); sndMeow();
     if(curForm==='cat') spawnPlayer('cat'); /* new fur tier */
     catHud();
@@ -6719,9 +6720,24 @@ function updateAutoBuild(dt){
 function updateCW(dt){
   if(slamCd>0) slamCd-=dt;
   if(grenUnlocked&&catGren<3){ grenT+=dt; if(grenT>=45){ grenT=0; catGren++; catHud(); } }
+  if(breakMsgCd>0) breakMsgCd-=dt;
+  if(waveBreakT>0&&!wave){
+    waveBreakT-=dt;
+    var tEl2=$('timer');
+    tEl2.style.display='block';
+    tEl2.textContent='☕ Break: '+Math.max(0,waveBreakT|0)+'s';
+    tEl2.style.color='#7dffa0';
+    if(waveBreakT<=0){ $('timer').style.display='none';
+      msg('☕ Break\'s over — the beacon awaits!',2200); }
+  }
   if(waveBeacon){
     waveBeacon.rotation.y+=dt;
-    if(!P.dead&&cafeFloors>=1&&P.pos.distanceTo(waveBeacon.position.clone().setY(0))<2.2) startWave();
+    if(!P.dead&&cafeFloors>=1&&P.pos.distanceTo(waveBeacon.position.clone().setY(0))<2.2){
+      if(waveBreakT>0){
+        if(breakMsgCd<=0){ breakMsgCd=3;
+          msg('☕ You earned this break — '+Math.max(1,waveBreakT|0)+'s of naps left.',2200); }
+      } else startWave();
+    }
   }
   /* café lot: start builds */
   if(!wave&&scratchDogsDone>=5&&!P.dead
@@ -6774,7 +6790,7 @@ function updateCW(dt){
     tEl.style.color=cafeHp<60?'#ff5340':'#ffd83d';
     wave.spawnT-=dt;
     var st3=waveDogStats(wave.lvl);
-    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<10){
+    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<6){
       wave.spawnT=st3.interval;
       spawnDog(1,st3.fur,st3.hp,st3.dmg,st3.spd,st3.fat);
     }
@@ -6796,8 +6812,8 @@ function updateCW(dt){
       }
     }
     wave.spawnT-=dt;
-    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<4){
-      wave.spawnT=6;
+    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<3){
+      wave.spawnT=9;
       var st4=waveDogStats(20);
       spawnDog(1,st4.fur,st4.hp,st4.dmg,st4.spd,true);
     }
@@ -7059,6 +7075,7 @@ window.__dbg={
   cat:function(){ return {unlocked:catUnlocked,isCat:isCat,lvl:catLvl,floors:cafeFloors,
     scratched:scratchDogsDone,frag:fragPlaced,haveFrag:haveFrag,gren:catGren,
     wave:wave?{lvl:wave.lvl,t:Math.round(wave.t),boss:!!wave.boss}:null,
+    breakT:Math.max(0,Math.round(waveBreakT)),
     dogs:dogs.filter(function(d){ return !d.dead; }).length,
     casoh:dogCasoh?{hp:dogCasoh.hp}:null,cafeHp:cafeHp}; },
   buyCat:function(){ studBux=Math.max(studBux,300); catUnlocked=true; startCut5(); },
