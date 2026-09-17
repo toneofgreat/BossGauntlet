@@ -2451,13 +2451,14 @@ function updatePlayer(dt){
     player.armR.rotation.x=-1.7+(0.22-punchAnimT)/0.22*1.7; }
   if(punchCd>0) punchCd-=dt;
   if(shootCd>0) shootCd-=dt;
-  /* gods regenerate */
-  if(isGod&&!P.dead&&P.hp<P.maxHp){
-    P.hp=Math.min(P.maxHp,P.hp+8*dt);
+  /* gods regenerate (8/s, gold) — and cats too, nine lives and all (5/s, pink) */
+  var catRegen=(curForm==='cat'||curForm==='dog'||curForm==='catcasoh');
+  if((isGod||catRegen)&&!P.dead&&P.hp<P.maxHp){
+    P.hp=Math.min(P.maxHp,P.hp+(isGod?8:5)*dt);
     $('hpBar').firstElementChild.style.width=clamp(P.hp/P.maxHp*100,0,100)+'%';
     if(Math.random()<dt*2)
       burst(P.pos.clone().add(new THREE.Vector3(rand(-0.6,0.6),rand(0.5,2.2),rand(-0.6,0.6))),
-        0xffe97a,1,{speed:0.6,life:0.6,grav:-2,size:0.6});
+        isGod?0xffe97a:0xff8ac2,1,{speed:0.6,life:0.6,grav:-2,size:0.6});
   }
   if(reloading){ reloadT-=dt;
     if(reloadT<=0){ reloading=false; ammo=MAG; updateAmmoHud(); } }
