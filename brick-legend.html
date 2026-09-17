@@ -1165,12 +1165,24 @@ var SPAWN_AFTER=(function(){ // step index after which the character appears
     if(BUILD_STEPS[i].label.indexOf('piece 2')>=0) return i;
   return BUILD_STEPS.length-3;
 })();
+/* How far along a save is. Used to make progress loss IMPOSSIBLE: a session
+   that is behind the stored save (e.g. a story replay) may never overwrite it. */
+function progScore(s){
+  if(!s) return -1;
+  return (s.gun?1:0)+(s.torn?1:0)+(s.rich?2:0)+(s.city?1:0)+(s.jg?4:0)+(s.hw?8:0)
+    +(s.god?16:0)+(s.oc?32:0)+(s.spat?64:0)+(s.cw?128:0)+(s.fr?256:0)
+    +(s.cl||0)*0.5+(s.fl||0)*0.5+(s.tk||0)*0.1+Math.min(s.xp||0,4000)*0.001;
+}
 function save(){
-  try{ localStorage.setItem('brickLegendSave',JSON.stringify(
-    {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
+  try{
+    var cur={gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
      jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone,
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
-     cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0})); }catch(e){}
+     cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0};
+    var stored=loadSave();
+    if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
+    localStorage.setItem('brickLegendSave',JSON.stringify(cur));
+  }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -2520,7 +2532,7 @@ function updateAmbient(dt){
 }
 
 /* ---------------- MAIN LOOP ---------------- */
-var lastT=performance.now();
+var lastT=performance.now(),autosaveT=0;
 function animate(){
   requestAnimationFrame(animate);
   var now=performance.now(),dt=Math.min((now-lastT)/1000,0.05);
@@ -2545,6 +2557,9 @@ function animate(){
     updateAct3(dt);
     updateAct4(dt);
     updateAct5(dt);
+    /* autosave every 20s — the regression guard makes this always safe */
+    autosaveT+=dt;
+    if(autosaveT>=20){ autosaveT=0; if(PH!=='menu') save(); }
     if(PH==='ninja') updateNinjas(dt);
     if(PH==='bridge') updateBridge(dt);
     if(PH==='golem') updateGolem(dt);
@@ -2664,7 +2679,18 @@ function startSkip(sv){
     $('btnPlay').addEventListener('click',startCity);
     var rb=document.createElement('button');
     rb.className='alt'; rb.id='btnRestart'; rb.textContent='🔄 RESTART FROM SCRATCH';
+    var restartArmed=false;
     rb.addEventListener('click',function(){
+      if(!restartArmed){ /* two clicks to wipe — no accidents */
+        restartArmed=true;
+        rb.textContent='⚠️ REALLY WIPE EVERYTHING?';
+        rb.style.background='linear-gradient(180deg,#ff6b5d,#c01000)';
+        rb.style.color='#fff';
+        setTimeout(function(){ restartArmed=false;
+          rb.textContent='🔄 RESTART FROM SCRATCH';
+          rb.style.background=''; rb.style.color=''; },4000);
+        return;
+      }
       try{ localStorage.removeItem('brickLegendSave'); }catch(e){}
       cityDone=false;
       startCity(); // no save any more -> builds the city from nothing
@@ -4184,9 +4210,10 @@ function leaveCityTo(mode){
     startSkip(loadSave());
   }
 }
-var padCd=0;
+var padCd=0,storyConfirmT=0;
 function updateCity(dt){
   if(padCd>0) padCd-=dt;
+  if(storyConfirmT>0) storyConfirmT-=dt;
   cityPads.forEach(function(p){
     p.pad.position.y=0.15+Math.sin(GTIME*3+p.x)*0.06;
     if(Math.random()<0.06)
@@ -4194,7 +4221,17 @@ function updateCity(dt){
         p.mode==='story'?0x35e0ff:p.mode==='jungle'?0x7dffa0:0xffd83d,1,{speed:0.8,life:0.6,grav:-2,size:0.6});
     if(!P.dead&&padCd<=0&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.7){
       padCd=1.5;
-      if(p.mode==='jungle') handleJunglePad();
+      if(p.mode==='story'){
+        /* a real save deserves a warning before a story restart */
+        var st5=loadSave();
+        if(st5&&progScore(st5)>3&&storyConfirmT<=0){
+          storyConfirmT=6;
+          msg('⚠️ START STORY replays Act 1 from the beginning.<br><span style="font-size:55%">Your SAVED progress stays safe either way. Step on the pad again to confirm.</span>',4600);
+          return;
+        }
+        leaveCityTo('story');
+      }
+      else if(p.mode==='jungle') handleJunglePad();
       else if(p.mode==='ocean') handleOceanPad();
       else if(p.mode==='gohome'){
         PH='home';
@@ -7028,7 +7065,9 @@ window.__dbg={
   slam:trySlam,
   catNade:throwCatGrenade,
   autoBuildOn:function(on){ setAutoBuild(on!==false); },
-  autoState:function(){ return {on:autoBuild,inBuild:inBuildPhase()}; }
+  autoState:function(){ return {on:autoBuild,inBuild:inBuildPhase()}; },
+  forceSave:function(){ save(); return loadSave(); },
+  score:function(){ return {stored:progScore(loadSave())}; }
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
 </script>
