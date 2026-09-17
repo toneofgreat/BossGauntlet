@@ -85,6 +85,16 @@
     text-shadow:0 2px 4px #000;display:none;font-variant-numeric:tabular-nums}
   #bux{position:absolute;top:44px;right:16px;color:#ffe97a;font-weight:900;font-size:15px;
     text-shadow:0 2px 4px #000;display:none}
+  #wood{position:absolute;top:70px;right:16px;color:#d8a35c;font-weight:900;font-size:15px;
+    text-shadow:0 2px 4px #000;display:none}
+  #sbux{position:absolute;top:96px;right:16px;color:#c9b8ff;font-weight:900;font-size:15px;
+    text-shadow:0 2px 4px #000;display:none}
+  #xpWrap{position:absolute;left:14px;top:58px;width:190px;display:none}
+  #xpWrap .bar{position:relative;left:0;top:0;width:100%}
+  #xpWrap i{background:linear-gradient(90deg,#8bc34a,#ffd83d);width:0%}
+  #xpWrap b{display:block;font-size:11px;color:#d9f2c0;font-weight:800;
+    text-shadow:0 1px 2px #000;margin-top:2px;letter-spacing:0.5px}
+  #bWave{right:176px;bottom:104px;display:none;background:#8bc34a33;border-color:#c9f29988}
   #warn{display:none;background:#1a0505f2}
   #warn h1{background:linear-gradient(180deg,#ffe14d,#ff3b3b);-webkit-background-clip:text;background-clip:text}
 </style>
@@ -102,6 +112,9 @@
   <div id="stepPop"></div>
   <div id="timer"></div>
   <div id="bux"></div>
+  <div id="wood"></div>
+  <div id="sbux"></div>
+  <div id="xpWrap"><div class="bar"><i></i></div><b></b></div>
 </div>
 <div id="flash"></div>
 <div id="mc">
@@ -113,6 +126,7 @@
   <div class="mbtn" id="bReload">RELOAD</div>
   <div class="mbtn" id="bTorn">TORNADO</div>
   <div class="mbtn" id="bThrow">THROW</div>
+  <div class="mbtn" id="bWave">WAVE</div>
 </div>
 <div class="ov" id="start">
   <h1>BRICK LEGEND</h1>
@@ -1096,7 +1110,8 @@ var SPAWN_AFTER=(function(){ // step index after which the character appears
 })();
 function save(){
   try{ localStorage.setItem('brickLegendSave',JSON.stringify(
-    {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0})); }catch(e){}
+    {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
+     jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood})); }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -1114,20 +1129,29 @@ function updateTweens(dt){
 function spawnPlayer(kind){
   if(player) world.remove(player.group);
   isBusiness=!!kind;
-  player=makeMinifig(kind==='rich'?
+  player=makeMinifig(
+    kind==='god'?
+    {torso:0xd4af37,legs:0xb8912b,arms:0xd4af37,face:'cool',hat:'tophat',
+     backpack:0x8a5a2a,gunHand:true}:
+    kind==='hiker'?
+    {torso:0x4e6b2f,legs:0x5d4a33,arms:0x4e6b2f,face:'smile',backpack:0x8a5a2a,gunHand:true}:
+    kind==='rich'?
     {torso:0x23252e,legs:0x17181f,arms:0x23252e,face:'cool',tie:0xd4af37,
      hat:'tophat',fancy:true,gunHand:true}:
     kind?
     {torso:0x1c1f26,legs:0x14161c,arms:0x1c1f26,face:'cool',tie:0xc62b21,gunHand:true}:
     {torso:0x2a6fd6,legs:0x3a3f4a,arms:0x2a6fd6,face:'smile',hat:'hardhat',vest:true});
+  if(kind==='god') player.group.scale.set(1.6,1.6,1.6);
   if(player.gun) player.gun.visible=gunEquipped;
   player.group.position.copy(P.pos);
   world.add(player.group);
 }
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
-  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='cut'||PH==='cut2')?'none':'block';
+  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
+    ||PH==='cut'||PH==='cut2'||PH==='cut3')?'none':'block';
   var inBoss=PH==='boss';
+  $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
   $('bEquip').style.display=(hasGun&&!inBoss)?'flex':'none';
   $('bShoot').style.display=(gunEquipped&&!inBoss)?'flex':'none';
   $('bReload').style.display=(gunEquipped&&!inBoss)?'flex':'none';
@@ -1145,6 +1169,7 @@ addEventListener('keydown',function(e){
   if(e.code==='KeyQ'||e.code==='KeyT') tryTornado();
   if(e.code==='KeyF') tryPunch();
   if(e.code==='KeyE'&&PH==='boss'&&carried) throwTnt();
+  if(e.code==='KeyG') doWave();
 });
 addEventListener('keyup',function(e){ keys[e.code]=false; });
 var pointer=new THREE.Vector2(),ray=new THREE.Raycaster();
@@ -1179,13 +1204,16 @@ addEventListener('pointerup',function(e){
   drag.id=null;
   if(drag.moved>9) return; // it was a camera drag, not a tap
   if(PH==='citybuild'){ tryPlaceCity(e); return; }
+  if(PH==='jgbuild'){ tryPlaceJg(e); return; }
   if(PH==='build'||PH==='buildwalk'){ tryPlace(e); return; }
   if(PH==='cut'){ if(cutSkipOk) cutT=99; return; }
   if(PH==='cut2'){ if(cutSkipOk) cut2T=99; return; }
+  if(PH==='cut3'){ if(cutSkipOk) cut3T=99; return; }
   if(PH==='boss'){ if(carried) throwTnt(); else tryPunch(); return; }
   if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
+  if(PH==='metro'){ if(tryChop(e)) return; if(gunEquipped) shoot(); else tryPunch(); return; }
   if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
-     ||PH==='golem'||PH==='mlib'||PH==='lib2'){
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -1225,6 +1253,7 @@ bindBtn('bShoot',function(){ shoot(); });
 bindBtn('bReload',function(){ startReload(); });
 bindBtn('bTorn',function(){ tryTornado(); });
 bindBtn('bThrow',function(){ if(carried) throwTnt(); });
+bindBtn('bWave',function(){ doWave(); });
 
 /* ---------------- BUILD PHASE ---------------- */
 var placedGroup=new THREE.Group(); world.add(placedGroup);
@@ -1323,6 +1352,12 @@ function combatTargets(){
     list.push({pos:ga.mesh.position,y:0.6,hurt:function(d,t){ hurtGator(ga,d,t); }}); });
   if(golemObj&&golemHp>0&&PH==='golem')
     list.push({pos:golemObj.group.position,y:4,big:true,hurt:function(d){ golemDamage(d); }});
+  if(PH==='hw'){
+    hwHikers.forEach(function(h){ if(!h.dead)
+      list.push({pos:h.ref.group.position,y:1.2,hurt:function(d,t){ hurtHwHiker(h,d,t); }}); });
+    if(hwGod&&!hwGod.dead)
+      list.push({pos:hwGod.ref.group.position,y:2.4,big:true,hurt:function(d){ hurtHwGod(d,false); }});
+  }
   return list;
 }
 function shoot(){
@@ -1366,10 +1401,10 @@ function tryPunch(){
   var hit=false;
   combatTargets().forEach(function(t){
     var d=t.pos.distanceTo(P.pos);
-    if(d<(t.big?4.2:1.9)){
+    if(d<(t.big?4.2:(isGod?3.4:1.9))){
       var dir=t.pos.clone().sub(P.pos).setY(0).normalize();
       var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
-      if(dir.dot(fwd)>0.2){ t.hurt(12,tornActive); hit=true; }
+      if(dir.dot(fwd)>(isGod?-0.1:0.2)){ t.hurt(isGod?40:12,tornActive); hit=true; }
     }
   });
   drones.forEach(function(dr){
@@ -2036,6 +2071,12 @@ function hurtPlayer(dmg,why){
   burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
   if(P.hp<=0){
     if(PH==='boss') killPlayer('SMASHED!',why+' Bosses reset when you fall — go again?');
+    else if(PH==='hw'){
+      if(hwState==='battle') killPlayer('DETHRONED!','The mob took their old god back. Retry the throne battle?',restartGodBattle);
+      else killPlayer(hwState==='wipe'?'ANNIHILATED!':'MOBBED!',
+        hwState==='wipe'?'The OP hikers erased you instantly. Killing their god the rude way is basically impossible to survive.':'The hiker mob got you. Next time, stay friendly.',
+        function(){ resetHWPeace(); });
+    }
     else if(PH==='ninja') killPlayer('SLICED!','The ninjas got you — die once and you face ALL THREE again.',startNinjaFight);
     else if(PH==='bridge') killPlayer('GATOR FOOD!',why+' Try the bridge again.',startBridge);
     else if(PH==='golem') killPlayer('FLATTENED!','The Golden Golem crushed you into a 2x2 plate.',startGolem);
@@ -2127,7 +2168,8 @@ function collideHouseWalls(){
     P.pos.z=P.pos.z<WALL.z1?WALL.z1-t:WALL.z1+t;
 }
 function playerControlAllowed(){
-  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='menu'&&PH!=='build';
+  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'
+    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
@@ -2196,9 +2238,17 @@ function updatePlayer(dt){
   } else if(PH==='lib2'){
     P.pos.x=clamp(P.pos.x,LIB2.x-19,LIB2.x+19);
     P.pos.z=clamp(P.pos.z,LIB2.z-19,LIB2.z+19);
-  } else if(PH==='city'){
-    P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
-    P.pos.z=clamp(P.pos.z,CITY.z-40,CITY.z+48);
+  } else if(PH==='hw'){
+    P.pos.x=clamp(P.pos.x,HW.x-HW.r+1,HW.x+HW.r-1);
+    P.pos.z=clamp(P.pos.z,HW.z-HW.r+1,HW.z+HW.r-1);
+  } else if(PH==='city'||PH==='metro'){
+    if(PH==='city'){
+      P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
+      P.pos.z=clamp(P.pos.z,CITY.z-40,CITY.z+48);
+    } else { // metro: city + the jungle strip to the west
+      P.pos.x=clamp(P.pos.x,-400,-252);
+      P.pos.z=clamp(P.pos.z,-135,135);
+    }
     for(var ci=0;ci<cityColliders.length;ci++){
       var cc=cityColliders[ci];
       var dxc=P.pos.x-cc.x, dzc=P.pos.z-cc.z;
@@ -2259,7 +2309,7 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20*buildZoom,11*buildZoom*buildTilt,Math.cos(camOrbit.a)*20*buildZoom);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='citybuild'){
+  else if(PH==='citybuild'||PH==='jgbuild'){
     camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
     camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
     var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
@@ -2299,12 +2349,13 @@ function updateAmbient(dt){
     var f=Math.sin(GTIME*9+b.r)*0.7;
     b.wl.rotation.z=f; b.wr.rotation.z=-f;
   });
-  if(birds.length&&(PH==='build'||PH==='buildwalk'||PH==='path'||PH==='jungle'||PH==='home'||PH==='city')){
+  if(birds.length&&(PH==='build'||PH==='buildwalk'||PH==='path'||PH==='jungle'
+    ||PH==='home'||PH==='city'||PH==='metro'||(PH==='hw'&&hwState==='peace'))){
     chirpT-=dt;
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost||PH==='citybuild'){
+  if(ghost||PH==='citybuild'||PH==='jgbuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2322,12 +2373,15 @@ function animate(){
   updateCamera(dt);
   if(PH==='cut') updateCutscene(dt);
   else if(PH==='cut2') updateCut2(dt);
+  else if(PH==='cut3') updateCut3(dt);
   else {
     updatePlayer(dt);
     if(PH==='jungle'||PH==='home') updateHikers(dt);
     updatePortals(dt);
     if(PH==='boss'){ updateBoss(dt); updateTnts(dt); updateFallBlocks(dt); updateDrones(dt); }
-    if(PH==='city') updateCity(dt);
+    if(PH==='city'||PH==='metro') updateCity(dt);
+    if(PH==='hw') updateHW(dt);
+    updateAct3(dt);
     if(PH==='ninja') updateNinjas(dt);
     if(PH==='bridge') updateBridge(dt);
     if(PH==='golem') updateGolem(dt);
@@ -2360,18 +2414,43 @@ function startSkip(sv){
   if(tornadoOwned) tornCharge=TORN_MAX;
   buildJungle(); jungleGroup.visible=true;
   spawnBirds(0,-14,3);
-  if(sv&&sv.rich){ /* returning TYCOON: everything from Act 2 is already built */
+  if(sv&&sv.rich){ /* returning TYCOON (or later): everything already built */
     applyRichSkip(sv);
-    P.pos.set(0,0,6); if(player) player.group.position.copy(P.pos);
-    camYaw=Math.PI; P.yaw=Math.PI;
-    windLoop.set(0.12);
-    PH='home';
-    if(bux>=100){
-      obj('🏆 Your brick kingdom, complete. The roof portal reruns the ninja gauntlet.');
+    applyAct3Skip(sv);
+    if(sv.hw){
+      ensureCityExtraPads();
+      PH='hw';
+      P.pos.set(HW.x,0,HW.z+HW.r-8); if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI; P.yaw=Math.PI;
+      windLoop.set(0.2); xpHud(); sbuxHud(); setMood('day');
+      if(sv.god){
+        obj('👑 HIKER GOD — undisputed. 🪵 '+studBux+' STUD BUX banked (useless… for now).');
+        hint('You already won it all. Enjoy your realm.');
+      } else {
+        obj('🏕️ HIKER WORLD — keep hanging out near hikers to level up ('+LVL_NAMES[lvl]+').');
+        hint('Wave: G / WAVE (+5 XP) · reach HIKER PRE-GOD then approach the god on the mound');
+      }
+    } else if(sv.jg){
+      ensureCityExtraPads();
+      PH='metro';
+      P.pos.set(JG.x1+4,0,40); if(player) player.group.position.copy(P.pos);
+      camYaw=0; P.yaw=0;
+      woodHud(); setMood('day');
+      obj('🪓 Wood: '+wood+' / '+WOOD_NEED+' — chop jungle trees, then build the portal at the CABIN (north end).');
+      hint('Tap a tree to chop · 3 chops fells it · the cabin is at the far north of your jungle');
     } else {
-      obj('🏡 Welcome back, TYCOON. The ROOF portal leads to the ninjas… and beyond, the golden book.');
+      P.pos.set(0,0,6); if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI; P.yaw=Math.PI;
+      windLoop.set(0.12);
+      PH='home';
+      if(bux>=100){
+        obj('💰 100 LEGO BUX ready to spend — take the blue TO-THE-CITY pad by your house!');
+        ensureHomeCityPad();
+      } else {
+        obj('🏡 Welcome back, TYCOON. The ROOF portal leads to the ninjas… and beyond, the golden book.');
+      }
+      hint('Climb the ladder on the right of the house to reach the roof portal. Q = tornado.');
     }
-    hint('Climb the ladder on the right of the house to reach the roof portal. Q = tornado.');
   } else {
     spawnPlayer(true);
     P.pos.set(0,0,PATH_END_Z); if(player) player.group.position.copy(P.pos);
@@ -2649,8 +2728,9 @@ function placeBookOnStatue(){
   for(var i=0;i<5;i++)
     burst(statueObj.position.clone().add(new THREE.Vector3(rand(-2,2),rand(2,6),rand(-2,2))),
       [0xffd83d,0x7dffd8,0xff7bd5][i%3],10,{speed:5,life:1.2});
-  msg('💰 100 LEGO BUX! 💰<br><span style="font-size:55%">(they do nothing… yet)</span>',5200);
-  obj('🏆 100% COMPLETE! You built it, fought it, and shelved it. Enjoy your brick kingdom.');
+  msg('💰 100 LEGO BUX! 💰<br><span style="font-size:55%">…and now you can SPEND them. A blue pad appeared by your house!</span>',5200);
+  obj('💰 100 LEGO BUX! Take the blue TO-THE-CITY pad by your house — the JUNGLE PLOT is for sale.');
+  ensureHomeCityPad();
 }
 
 /* ---- NINJA DOJO ---- */
@@ -3876,7 +3956,13 @@ function startCity(){
   hasGun=!!(sv&&sv.gun);
   tornadoOwned=!!(sv&&sv.torn);
   if(tornadoOwned) tornCharge=TORN_MAX;
-  if(sv&&sv.rich){ rich=true; bux=sv.bux||0; updateBuxHud(); spawnPlayer('rich'); spawnBodyguards(); }
+  if(sv&&sv.rich){
+    rich=true; bux=sv.bux||0; updateBuxHud();
+    if(sv.jg||sv.hw){ /* act 3 saves stroll the city in their true form */
+      isHiker=true; isGod=!!sv.god; studBux=sv.sb||0; sbuxHud();
+      spawnPlayer(sv.god?'god':'hiker');
+    } else { spawnPlayer('rich'); spawnBodyguards(); }
+  }
   else spawnPlayer(hasGun?true:false);
   P.pos.set(CITY.x+2,0,CITY.z+22); P.vy=0;
   player.group.position.copy(P.pos);
@@ -3903,14 +3989,776 @@ function leaveCityTo(mode){
     startSkip(loadSave());
   }
 }
+var padCd=0;
 function updateCity(dt){
+  if(padCd>0) padCd-=dt;
   cityPads.forEach(function(p){
     p.pad.position.y=0.15+Math.sin(GTIME*3+p.x)*0.06;
     if(Math.random()<0.06)
       burst(new THREE.Vector3(p.x+rand(-1,1),rand(0.5,2.5),p.z+rand(-1,1)),
-        p.mode==='story'?0x35e0ff:0xffd83d,1,{speed:0.8,life:0.6,grav:-2,size:0.6});
-    if(!P.dead&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.7) leaveCityTo(p.mode);
+        p.mode==='story'?0x35e0ff:p.mode==='jungle'?0x7dffa0:0xffd83d,1,{speed:0.8,life:0.6,grav:-2,size:0.6});
+    if(!P.dead&&padCd<=0&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.7){
+      padCd=1.5;
+      if(p.mode==='jungle') handleJunglePad();
+      else if(p.mode==='gohome'){
+        PH='home';
+        P.pos.set(0,0,6); P.vy=0;
+        if(player) player.group.position.copy(P.pos);
+        camYaw=Math.PI; P.yaw=Math.PI;
+        sndPortal(); sndWhoosh(false); setMood('day'); windLoop.set(0.12);
+        obj('🏡 Home sweet brick home.');
+        updateMobileUI();
+      }
+      else leaveCityTo(p.mode);
+    }
   });
+}
+
+/* ================================================================
+   ACT 3 — THE HIKER SAGA
+   Spend the 100 LEGO BUX on a jungle plot next to the city, build a
+   500-piece jungle, become a HIKER, chop wood, open the cabin portal
+   to HIKER WORLD (100+ hikers + the HIKER GOD), evolve to pre-god,
+   get crowned, survive 101 hikers + the old god, earn 200 STUD BUX.
+   ================================================================ */
+var JG={x0:-392,x1:-354,z0:-130,z1:130};
+var jgGroup=null,jgChunks=[],jgIdx=0,jgDone=false,jgPartCount=0;
+var chopTrees=[],wood=0,WOOD_NEED=30,cabinPortal=null,CABIN={x:-373,z:118};
+var isHiker=false,isGod=false,cut3T=-1;
+var HW={x:-300,z:430,r:74};
+var hwGroup=null,hwHikers=[],hwGod=null,hwState='none',hwUnlocked=false,godWon=false;
+var xp=0,XP_LVLS=[0,300,900,1800,3600],lvl=0,waveCd=0,studBux=0,battleLeft=0;
+var LVL_NAMES=['BASIC HIKER','TRAIL HIKER','RIDGE HIKER','SUMMIT HIKER','HIKER PRE-GOD'];
+function woodHud(){ var e=$('wood');
+  e.style.display=(isHiker&&!hwUnlocked)?'block':'none';
+  e.textContent='🪓 Wood: '+wood+' / '+WOOD_NEED; }
+function sbuxHud(){ var e=$('sbux');
+  e.style.display=studBux>0?'block':'none';
+  e.textContent='🪵 '+studBux+' STUD BUX'; }
+function xpHud(){
+  var w=$('xpWrap');
+  w.style.display=(hwState==='peace'&&!isGod)?'block':'none';
+  var lo=XP_LVLS[lvl]||0, hi=XP_LVLS[lvl+1]||XP_LVLS[XP_LVLS.length-1];
+  var f=lvl>=XP_LVLS.length-1?1:clamp((xp-lo)/(hi-lo),0,1);
+  w.firstElementChild.firstElementChild.style.width=(f*100)+'%';
+  w.lastElementChild.textContent=LVL_NAMES[lvl]+(lvl>=XP_LVLS.length-1?' — approach the GOD!':' · '+Math.floor(xp)+' / '+hi+' XP');
+}
+
+/* ---- the 500-piece jungle build ---- */
+function jgPathX(z){ return (JG.x0+JG.x1)/2+Math.sin(z*0.045)*8; }
+function makeJTree(big){
+  var t=makeTree(Math.random()<0.5?0:1);
+  if(big) t.scale.set(1.6,1.7,1.6);
+  t.userData.tree=true; t.userData.hp=3;
+  return t;
+}
+function buildJungleStrip(instant){
+  if(jgGroup) return;
+  jgGroup=new THREE.Group(); world.add(jgGroup);
+  var g0=new THREE.Mesh(new THREE.PlaneGeometry(JG.x1-JG.x0+14,JG.z1-JG.z0+16),mat(0x35701f));
+  g0.rotation.x=-Math.PI/2; g0.position.set((JG.x0+JG.x1)/2,0.015,(JG.z0+JG.z1)/2);
+  jgGroup.add(g0); // the plot itself is always there
+  var defs=[];
+  function def(z,label,make){ defs.push({z:z,label:label,make:make}); }
+  /* winding path — 40 plates */
+  for(var i=0;i<40;i++)(function(i){
+    var z=JG.z0+4+i*6.4;
+    def(z,'Path stones',function(){
+      var p=studdedBox(3,0.22,5.6,0xb9a37e,0xa8916b);
+      p.position.set(jgPathX(z),0.12,z); p.rotation.y=Math.cos(z*0.045)*0.3; return p; });
+  })(i);
+  /* river band + bridge */
+  for(var r2=0;r2<12;r2++)(function(r2){
+    def(-52,'River water',function(){
+      var w2=new THREE.Mesh(new THREE.PlaneGeometry(3.6,16),
+        new THREE.MeshBasicMaterial({color:0x3fb8d8,transparent:true,opacity:0.85}));
+      w2.rotation.x=-Math.PI/2; w2.position.set(JG.x0+3+r2*3.3,0.1,-52); return w2; });
+  })(r2);
+  def(-52,'River bridge',function(){
+    var b2=studdedBox(4,0.4,18,0x8a5a2a,0x6f4820);
+    b2.position.set(jgPathX(-52),0.5,-52); return b2; });
+  def(-52,'Bridge rails',function(){
+    var gr=new THREE.Group();
+    [-1.7,1.7].forEach(function(o){ var rl=box(0.2,0.9,18,0x6f4820);
+      rl.position.set(jgPathX(-52)+o,1.2,-52); gr.add(rl); });
+    return gr; });
+  /* trees 170 (16 giants) */
+  for(var t2=0;t2<170;t2++)(function(t2){
+    var z=rand(JG.z0+3,JG.z1-14), x=rand(JG.x0+2,JG.x1-2);
+    if(Math.abs(x-jgPathX(z))<3.4){ x+=(x>jgPathX(z)?4.5:-4.5); }
+    if(Math.abs(z+52)<9) z+=20;
+    var big=t2%11===0;
+    def(z,big?'GIANT canopy tree':'Jungle tree',function(){
+      var t3=makeJTree(big); t3.position.set(x,0,z); t3.rotation.y=rand(0,6.28); return t3; });
+  })(t2);
+  /* ferns/bushes 90 */
+  for(var f2=0;f2<90;f2++)(function(f2){
+    var z=rand(JG.z0+2,JG.z1-4), x=rand(JG.x0+1,JG.x1-1);
+    if(Math.abs(z+52)<9) z-=16;
+    def(z,'Jungle fern',function(){
+      var gr=new THREE.Group();
+      for(var l3=0;l3<4;l3++){ var leaf=box(0.14,1.1,0.5,l3%2?0x2e8b2e:0x3fae3b);
+        leaf.position.set(Math.cos(l3*1.57)*0.3,0.55,Math.sin(l3*1.57)*0.3);
+        leaf.rotation.z=Math.cos(l3*1.57)*0.5; leaf.rotation.x=-Math.sin(l3*1.57)*0.5; gr.add(leaf); }
+      gr.position.set(x,0,z); return gr; });
+  })(f2);
+  /* rocks 50 */
+  for(var rk=0;rk<50;rk++)(function(rk){
+    var z=rand(JG.z0+2,JG.z1-4), x=rand(JG.x0+1,JG.x1-1);
+    def(z,'Mossy boulder',function(){
+      var b3=studdedBox(rand(0.8,1.8),rand(0.6,1.3),rand(0.8,1.8),0x7d8791,0x5e8b52);
+      b3.position.set(x,0.35,z); b3.rotation.y=rand(0,3.14); return b3; });
+  })(rk);
+  /* mushrooms 40 */
+  for(var m2=0;m2<40;m2++)(function(m2){
+    var z=rand(JG.z0+2,JG.z1-4), x=rand(JG.x0+1,JG.x1-1);
+    def(z,'Mushroom',function(){
+      var gr=new THREE.Group();
+      var st3=box(0.22,0.5,0.22,0xf4e9d8); st3.position.y=0.25; gr.add(st3);
+      var cap=box(0.7,0.3,0.7,m2%3?0xc62b21:0x9b5cff); cap.position.y=0.6; gr.add(cap);
+      var dot=box(0.16,0.08,0.16,0xffffff); dot.position.set(0.12,0.78,0.1); gr.add(dot);
+      gr.position.set(x,0,z); return gr; });
+  })(m2);
+  /* flowers 60 */
+  for(var fl3=0;fl3<60;fl3++)(function(fl3){
+    var z=rand(JG.z0+2,JG.z1-4), x=rand(JG.x0+1,JG.x1-1);
+    def(z,'Jungle flower',function(){
+      var gr=new THREE.Group();
+      var st4=box(0.08,0.6,0.08,0x2e8b2e); st4.position.y=0.3; gr.add(st4);
+      var bl=box(0.34,0.26,0.34,[0xff5b8d,0xffd83d,0xff8a00,0x66d9ef][fl3%4]); bl.position.y=0.7; gr.add(bl);
+      gr.position.set(x,0,z); return gr; });
+  })(fl3);
+  /* vines 20 */
+  for(var v2=0;v2<20;v2++)(function(v2){
+    var z=rand(JG.z0+4,JG.z1-10), x=rand(JG.x0+2,JG.x1-2);
+    def(z,'Hanging vine',function(){
+      var gr=new THREE.Group();
+      var pole=box(0.16,rand(4,6),0.16,0x6f4820); pole.position.y=pole.geometry.parameters.height/2; gr.add(pole);
+      for(var s3=0;s3<3;s3++){ var vn=box(0.1,rand(1.5,3),0.1,0x3fae3b);
+        vn.position.set(rand(-0.5,0.5),pole.geometry.parameters.height-vn.geometry.parameters.height/2,rand(-0.5,0.5)); gr.add(vn); }
+      gr.position.set(x,0,z); return gr; });
+  })(v2);
+  /* fallen logs 12 */
+  for(var lg4=0;lg4<12;lg4++)(function(lg4){
+    var z=rand(JG.z0+3,JG.z1-6), x=rand(JG.x0+2,JG.x1-2);
+    def(z,'Fallen log',function(){
+      var l4=box(0.7,0.7,rand(2.5,4),0x6f4820);
+      l4.position.set(x,0.35,z); l4.rotation.y=rand(0,3.14); return l4; });
+  })(lg4);
+  /* butterflies 8 */
+  for(var bt2=0;bt2<8;bt2++)(function(bt2){
+    var z=rand(JG.z0+4,JG.z1-8), x=rand(JG.x0+2,JG.x1-2);
+    def(z,'Butterfly',function(){
+      var gr=new THREE.Group();
+      var bd2=box(0.12,0.12,0.3,0x1c2026); gr.add(bd2);
+      var w3=box(0.4,0.04,0.3,[0xff5b8d,0x66d9ef,0xffd83d,0x9b5cff][bt2%4]); w3.position.x=-0.26; gr.add(w3);
+      var w4=box(0.4,0.04,0.3,[0xff5b8d,0x66d9ef,0xffd83d,0x9b5cff][bt2%4]); w4.position.x=0.26; gr.add(w4);
+      gr.position.set(x,rand(1.5,3),z); return gr; });
+  })(bt2);
+  /* the cabin — always the LAST 6 pieces */
+  var CB=CABIN;
+  var cabinDefs=[
+    ['Cabin — floor',function(){ var p=studdedBox(8,0.5,7,0x8a5a2a,0x6f4820); p.position.set(CB.x,0.25,CB.z); return p; }],
+    ['Cabin — log walls',function(){ var gr=new THREE.Group();
+      for(var r3=0;r3<4;r3++){
+        var wl1=box(8,0.8,0.8,r3%2?0x6f4820:0x8a5a2a); wl1.position.set(CB.x,0.9+r3*0.8,CB.z-3.1); gr.add(wl1);
+        var wl2=box(0.8,0.8,7,r3%2?0x8a5a2a:0x6f4820); wl2.position.set(CB.x-3.6,0.9+r3*0.8,CB.z); gr.add(wl2);
+        var wl3=box(0.8,0.8,7,r3%2?0x6f4820:0x8a5a2a); wl3.position.set(CB.x+3.6,0.9+r3*0.8,CB.z); gr.add(wl3);
+        if(r3>2){ var wl4=box(8,0.8,0.8,0x8a5a2a); wl4.position.set(CB.x,0.9+r3*0.8,CB.z+3.1); gr.add(wl4); }
+        else{ [[-2.6,0],[2.6,0]].forEach(function(o){ var seg=box(2.6,0.8,0.8,r3%2?0x8a5a2a:0x6f4820);
+          seg.position.set(CB.x+o[0],0.9+r3*0.8,CB.z+3.1); gr.add(seg); }); }
+      } return gr; }],
+    ['Cabin — door frame',function(){ var gr=new THREE.Group();
+      var d2=box(1.8,2.6,0.3,0x3a2c14); d2.position.set(CB.x,1.6,CB.z+3.1); gr.add(d2);
+      var kn=box(0.14,0.14,0.14,0xffd83d); kn.position.set(CB.x+0.6,1.5,CB.z+3.3); gr.add(kn); return gr; }],
+    ['Cabin — window',function(){ var gr=new THREE.Group();
+      var fr2=box(1.4,1.4,0.3,0xf4f4f4); fr2.position.set(CB.x-2,2.2,CB.z+3.1); gr.add(fr2);
+      var gl2=new THREE.Mesh(boxGeo(1.1,1.1,0.34),glassMat); gl2.position.set(CB.x-2,2.2,CB.z+3.1); gr.add(gl2); return gr; }],
+    ['Cabin — roof',function(){ var gr=new THREE.Group();
+      for(var rr3=0;rr3<3;rr3++){ var sl2=studdedBox(9-rr3*2.4,0.5,8-rr3*1.6,0x54606e,0x47525f);
+        sl2.position.set(CB.x,4.3+rr3*0.55,CB.z); gr.add(sl2); } return gr; }],
+    ['Cabin — chimney',function(){ var ch2=studdedBox(1,2.2,1,0xa33a2a,0x8c2f22);
+      ch2.position.set(CB.x+2.4,5.6,CB.z-1.6); return ch2; }]
+  ];
+  /* order: everything by z (a LONG build up the strip), cabin last */
+  defs.sort(function(a,b){ return a.z-b.z; });
+  cabinDefs.forEach(function(cd){ defs.push({z:999,label:cd[0],make:cd[1]}); });
+  jgChunks.length=0;
+  defs.forEach(function(d){
+    var o=d.make();
+    jgGroup.add(o);
+    if(!instant){
+      o.traverse(function(m){ if(m.isMesh&&!m.userData.om) m.userData.om=m.material; });
+      o.visible=false;
+    }
+    jgChunks.push({label:d.label,obj:o});
+  });
+  jgPartCount=0;
+  jgGroup.traverse(function(m){ if(m.isMesh) jgPartCount++; });
+  if(instant){ jgIdx=jgChunks.length; collectChopTrees(); }
+}
+function collectChopTrees(){
+  chopTrees.length=0;
+  jgGroup.traverse(function(o){ if(o.userData&&o.userData.tree&&!o.userData.down) chopTrees.push(o); });
+}
+function showJgGhost(){
+  var ch=jgChunks[jgIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if(m.isMesh) m.material=ghostMat; });
+  var bb=new THREE.Box3().setFromObject(ch.obj);
+  var c=bb.getCenter(new THREE.Vector3()), sz=bb.getSize(new THREE.Vector3());
+  cityCam.x=c.x; cityCam.y=Math.max(1.2,c.y); cityCam.z=c.z;
+  cityCam.r=clamp(Math.max(sz.x,sz.z)*0.9+8,11,46);
+  cityCam.h=clamp(sz.y*1.1+c.y+5,7,30);
+  obj('🌴 '+ch.label+' &nbsp;<span style="color:#7df3ff">('+(jgIdx+1)+'/'+jgChunks.length+')</span>');
+  hint('Click the glowing cyan part! Drag to scroll around · wheel to zoom · '+(jgChunks.length-jgIdx)+' to go');
+}
+function placeJgChunk(silent){
+  var ch=jgChunks[jgIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if(m.isMesh&&m.userData.om) m.material=m.userData.om; });
+  if(!silent){
+    sndBrickClick();
+    ch.obj.scale.set(1.25,1.25,1.25);
+    (function(oo){ tween(0.14,function(k){ var s=1.25-0.25*k; oo.scale.set(s,s,s); }); })(ch.obj);
+    var bb=new THREE.Box3().setFromObject(ch.obj);
+    burst(bb.getCenter(new THREE.Vector3()),0x7df3ff,6,{speed:2.5,life:0.5,grav:6,size:0.8});
+  }
+  jgIdx++;
+  if(jgIdx>=jgChunks.length) finishJungleBuild(silent);
+  else showJgGhost();
+}
+function tryPlaceJg(e){
+  var ch=jgChunks[jgIdx];
+  if(!ch) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb=new THREE.Box3().setFromObject(ch.obj); bb.expandByScalar(2.2);
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan part</b>!'); return; }
+  placeJgChunk();
+}
+function finishJungleBuild(silent){
+  jgDone=true;
+  collectChopTrees();
+  if(silent) return;
+  save();
+  sndFanfare();
+  msg('🌴 THE JUNGLE IS COMPLETE!<br><span style="font-size:55%">All '+jgChunks.length+' pieces. But something is happening to you…</span>',3600);
+  a2Timer=setTimeout(function(){ a2Timer=null; startCut3(); },2800);
+}
+/* spend pad + travel pads */
+function handleJunglePad(){
+  if(jgDone){ msg('🌴 Your jungle is west of the city!',1600); return; }
+  if(bux<100){ msg('🔒 The jungle plot costs 💰 100 LEGO BUX.<br><span style="font-size:55%">Beat the golden golem quest to earn them!</span>',2600); return; }
+  bux=0; updateBuxHud(); save();
+  sndJingle(); sndPortal();
+  msg('💸 100 LEGO BUX SPENT!<br><span style="font-size:55%">You bought the JUNGLE PLOT. Now build it… all 500+ pieces.</span>',3600);
+  buildJungleStrip(false);
+  jgIdx=0;
+  PH='jgbuild';
+  setMood('day');
+  camOrbit.a=0.4; camOrbit.target=0.4;
+  showJgGhost();
+  updateMobileUI();
+}
+function ensureCityExtraPads(){
+  if(!rich) return;
+  buildCity();
+  if(!cityPads.some(function(p){ return p.mode==='jungle'; })){
+    var pad=studdedBox(3,0.3,3,0x2e8b2e,0x256e25);
+    pad.position.set(CITY.x-44,0.15,CITY.z); world.add(pad);
+    var sign=textBoard('JUNGLE PLOT\n100 BUX',3.6,1.9,'#0a2a12','#7dffa0',26);
+    sign.position.set(CITY.x-44,3.2,CITY.z-1.9); world.add(sign);
+    cityPads.push({x:CITY.x-44,z:CITY.z,mode:'jungle',pad:pad});
+  }
+  if(!cityPads.some(function(p){ return p.mode==='gohome'; })){
+    var pad2=studdedBox(3,0.3,3,0xc62b21,0xa02318);
+    pad2.position.set(CITY.x+44,0.15,CITY.z+24); world.add(pad2);
+    var sign2=textBoard('GO\nHOME',2.6,1.6,'#2a0a0a','#ff9a8a',30);
+    sign2.position.set(CITY.x+44,3,CITY.z+22.1); world.add(sign2);
+    cityPads.push({x:CITY.x+44,z:CITY.z+24,mode:'gohome',pad:pad2});
+  }
+}
+var homeCityPad=null;
+function ensureHomeCityPad(){
+  if(homeCityPad||!rich) return;
+  homeCityPad=studdedBox(3,0.3,3,0x2a6fd6,0x2258aa);
+  homeCityPad.position.set(10,0.15,16); world.add(homeCityPad);
+  var sign=textBoard('TO THE\nCITY',2.6,1.6,'#0a1a3a','#7fd8ff',30);
+  sign.position.set(10,3,14.1); world.add(sign);
+}
+
+/* ---- cut3: TYCOON -> HIKER ---- */
+function startCut3(){
+  PH='cut3'; cut3T=0; cutSkipOk=false; cutSpin=0;
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  if(player){ P.pos.set(JG.x1+6,0,0); player.group.position.copy(P.pos); }
+  if(!cutBackdrop){
+    cutBackdrop=new THREE.Mesh(new THREE.CylinderGeometry(9,9,14,24,1,true),
+      new THREE.MeshBasicMaterial({color:0x0a1806,side:THREE.BackSide,fog:false}));
+    world.add(cutBackdrop);
+  }
+  cutBackdrop.visible=true;
+  cutBackdrop.position.set(P.pos.x,5,P.pos.z);
+  sndSparkle();
+}
+function updateCut3(dt){
+  cut3T+=dt;
+  if(cut3T>1) cutSkipOk=true;
+  cutSpin+=dt*(2+Math.min(cut3T*3,14));
+  if(player) player.group.rotation.y=cutSpin;
+  var ca=cutSpin*0.12;
+  camera.position.set(P.pos.x+Math.sin(ca)*4.2,2.3,P.pos.z+Math.cos(ca)*4.2);
+  camera.lookAt(P.pos.x,1.3,P.pos.z);
+  if(Math.random()<0.5)
+    burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
+      Math.random()<0.5?0x8bc34a:0x3fae3b,2,{speed:2,life:0.6,grav:-2,size:0.7});
+  if(cut3T>2.2&&!isHiker){
+    isHiker=true;
+    spawnPlayer('hiker'); player.group.rotation.y=cutSpin;
+    burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0x8bc34a,26,{speed:6,life:0.9});
+    sndBoom(); camShake=0.5;
+    msg('🥾 NATURE SURGE! 🥾<br><span style="font-size:70%">You are now… <b>A HIKER.</b></span>',3200);
+  }
+  if(cut3T>4.2&&isHiker&&bodyguards.length){
+    bodyguards.forEach(function(b){
+      burst(b.ref.group.position.clone().setY(1.2),0xffffff,8,{speed:3,life:0.6});
+      world.remove(b.ref.group); });
+    bodyguards.length=0;
+    msg('🕴️🕴️ Your bodyguards quit.<br><span style="font-size:55%">"We don\'t do jungles."</span>',3000);
+  }
+  if(cut3T>6.4&&cut3T<6.5){
+    msg('🪓 You have an AXE now!<br><span style="font-size:55%">Tap trees to CHOP them. Collect '+WOOD_NEED+' wood, then build the portal in the CABIN.</span>',4600);
+  }
+  if(cut3T>9){
+    cutBackdrop.visible=false;
+    PH='metro';
+    setMood('day');
+    woodHud(); save();
+    obj('🪓 Chop jungle trees for wood: '+wood+' / '+WOOD_NEED+' — then head to the CABIN at the far end.');
+    hint('Tap a tree to chop (3 chops fells it) · the cabin is at the north end of the jungle');
+    updateMobileUI();
+  }
+}
+/* chopping */
+function tryChop(e){
+  if(!isHiker||hwUnlocked&&PH!=='metro') return false;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var best=null,bd=1e9;
+  for(var i=0;i<chopTrees.length;i++){
+    var t=chopTrees[i];
+    if(t.userData.down) continue;
+    var d=t.position.distanceTo(P.pos);
+    if(d>4.2) continue;
+    var bb=new THREE.Box3().setFromObject(t); bb.expandByScalar(0.8);
+    if(ray.ray.intersectsBox(bb)&&d<bd){ best=t; bd=d; }
+  }
+  if(!best) return false;
+  best.userData.hp--;
+  if(player){ player.armR.rotation.x=-1.9;
+    tween(0.25,function(k){ if(player) player.armR.rotation.x=-1.9+1.9*k; }); }
+  knock(900,0.6,0.05,0); knock(400,0.5,0.08,0.04);
+  best.rotation.z=0.08;
+  (function(tt){ tween(0.2,function(k){ tt.rotation.z=0.08*(1-k); }); })(best);
+  burst(best.position.clone().setY(1.5),0x8a5a2a,5,{speed:2.5,life:0.5});
+  if(best.userData.hp<=0){
+    best.userData.down=true;
+    sndWoodFall(); sndWoodFall();
+    (function(tt){ tween(0.8,function(k){ tt.rotation.z=k*1.5; },function(){
+      tween(0.6,function(k2){ tt.position.y=-k2*4; },function(){ jgGroup.remove(tt); }); }); })(best);
+    wood+=2; woodHud(); save();
+    burst(best.position.clone().setY(1),0x6f4820,12,{speed:4,life:0.9});
+    if(wood>=WOOD_NEED&&!cabinPortal)
+      msg('🪵 ENOUGH WOOD!<br><span style="font-size:55%">Go to the CABIN at the north end and build the portal!</span>',3600);
+    else obj('🪓 Chop jungle trees for wood: '+wood+' / '+WOOD_NEED+' — then head to the CABIN.');
+  }
+  return true;
+}
+
+/* ---- HIKER WORLD ---- */
+function buildHW(){
+  if(hwGroup) return;
+  hwGroup=new THREE.Group(); world.add(hwGroup);
+  var fl=new THREE.Mesh(new THREE.PlaneGeometry(HW.r*2+30,HW.r*2+30),mat(0x4f9c3f));
+  fl.rotation.x=-Math.PI/2; fl.position.set(HW.x,0.02,HW.z); hwGroup.add(fl);
+  for(var i=0;i<46;i++){
+    var t=makeTree((Math.random()*3)|0);
+    var a=rand(0,6.28), rr=rand(28,HW.r-3);
+    t.position.set(HW.x+Math.cos(a)*rr,0,HW.z+Math.sin(a)*rr);
+    hwGroup.add(t);
+  }
+  for(var tn=0;tn<8;tn++){
+    var tent=new THREE.Group();
+    var s1=box(3,0.3,3.6,0xc62b21); s1.rotation.z=0.7; s1.position.set(-1,1.1,0); tent.add(s1);
+    var s2=box(3,0.3,3.6,0xa02318); s2.rotation.z=-0.7; s2.position.set(1,1.1,0); tent.add(s2);
+    var a2=tn/8*Math.PI*2;
+    tent.position.set(HW.x+Math.cos(a2)*16,0,HW.z+Math.sin(a2)*16);
+    tent.rotation.y=-a2;
+    hwGroup.add(tent);
+  }
+  for(var cf=0;cf<3;cf++){
+    var fire=new THREE.Group();
+    for(var l5=0;l5<4;l5++){ var log5=box(1.4,0.25,0.25,0x6f4820);
+      log5.rotation.y=l5*0.785; log5.position.y=0.15; fire.add(log5); }
+    var fl5=new THREE.Mesh(boxGeo(0.5,0.8,0.5),new THREE.MeshBasicMaterial({color:0xff8a00}));
+    fl5.position.y=0.6; fire.add(fl5);
+    fire.position.set(HW.x+(cf-1)*9,0,HW.z+4);
+    hwGroup.add(fire);
+  }
+  /* god mound + throne */
+  var mound=studdedBox(8,2,8,0x7d8791,0x6d7680); mound.position.set(HW.x,1,HW.z-20); hwGroup.add(mound);
+  var throne=box(2.6,3.4,1,0xd4af37); throne.position.set(HW.x,3.7,HW.z-21.5); hwGroup.add(throne);
+}
+function spawnHwHikers(n){
+  for(var i=0;i<n;i++){
+    var ref=makeMinifig({torso:HIKER_COLORS[i%5],legs:0x4e5a3a,
+      arms:HIKER_COLORS[(i+2)%5],face:'smile',backpack:0x9e3b2f});
+    var a=rand(0,6.28), rr=rand(4,HW.r-8);
+    ref.group.position.set(HW.x+Math.cos(a)*rr,0,HW.z+Math.sin(a)*rr);
+    world.add(ref.group);
+    hwHikers.push({ref:ref,hp:30,dead:false,tx:0,tz:0,retargetT:rand(0,4),
+      walkT:rand(0,6),atkCd:0,waveT:0,stunT:0});
+  }
+}
+function spawnHwGod(){
+  if(hwGod) return;
+  var ref=makeMinifig({torso:0xd4af37,legs:0xb8912b,arms:0xd4af37,face:'cool',
+    hat:'tophat',backpack:0x8a5a2a});
+  ref.group.scale.set(2.3,2.3,2.3);
+  ref.group.position.set(HW.x,2,HW.z-20);
+  world.add(ref.group);
+  hwGod={ref:ref,hp:4000,maxHp:4000,dead:false,op:false,atkCd:0,walkT:0};
+}
+function enterHW(){
+  buildHW();
+  hwUnlocked=true; hwState='peace';
+  if(!hwHikers.length){ spawnHwHikers(110); spawnHwGod(); }
+  PH='hw';
+  setMood('day');
+  P.pos.set(HW.x,0,HW.z+HW.r-8); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  windLoop.set(0.2);
+  sndPortal(); sndWhoosh(false);
+  woodHud(); xpHud(); save();
+  obj('🏕️ HIKER WORLD — they think you\'re one of them. Hang out near hikers to gain XP. DON\'T attack…');
+  hint('Wave: G / WAVE button (+5 XP) · XP flows when you\'re near 3+ hikers · reach HIKER PRE-GOD ('+XP_LVLS[4]+' XP) and the god may crown you');
+  msg('🏕️ HIKER WORLD<br><span style="font-size:55%">Hundreds of hikers… and the HIKER GOD on the mound. Blend in.</span>',4600);
+  updateMobileUI();
+}
+function hurtHwHiker(h,dmg,fromTorn){
+  if(h.dead) return;
+  h.hp-=dmg;
+  burst(h.ref.group.position.clone().setY(1.2),0xffd83d,4,{speed:2.5,life:0.4});
+  if(fromTorn&&Math.random()<0.2&&h.stunT<=0){ h.stunT=2.2; sndStun(); }
+  if(hwState==='peace'){ turnHostile('You attacked one of THEM.'); }
+  if(h.hp<=0){
+    h.dead=true;
+    sndWoodFall();
+    burst(h.ref.group.position.clone().setY(1),HIKER_COLORS[(Math.random()*5)|0],14,{speed:5,life:1});
+    world.remove(h.ref.group);
+    if(hwState==='battle'){
+      battleLeft--;
+      $('kills').textContent='⚔️ Enemies left: '+battleLeft;
+      if(battleLeft<=0&&hwGod&&hwGod.dead) hwWin();
+    }
+  }
+}
+function hurtHwGod(dmg,fromTorn){
+  if(!hwGod||hwGod.dead) return;
+  hwGod.hp-=dmg;
+  burst(hwGod.ref.group.position.clone().setY(3),0xffe97a,6,{speed:4,life:0.6});
+  if(hwState==='peace'){ turnHostile('You struck the HIKER GOD?!'); }
+  if(hwGod.hp<=0){
+    hwGod.dead=true;
+    world.remove(hwGod.ref.group);
+    sndRoar(true); doFlash('#ffe97a'); camShake=1.2;
+    if(hwState==='battle'){
+      if(battleLeft<=0) hwWin();
+      return;
+    }
+    /* you killed the god the WRONG way: they all become too OP */
+    hwState='wipe';
+    battleMusic(true); setMood('boss');
+    msg('☠️ YOU KILLED THE HIKER GOD ☠️<br><span style="font-size:55%">A terrible power flows into ALL of them…</span>',3600);
+  }
+}
+function turnHostile(why){
+  if(hwState!=='peace') return;
+  hwState='hostile';
+  battleMusic(true); setMood('boss');
+  xpHud();
+  msg('😡 '+why+'<br><span style="font-size:55%">Now they ALL want you gone.</span>',3200);
+  obj('😡 The hikers turned on you. Survive… or fall.');
+}
+function resetHWPeace(){
+  hwState='peace';
+  battleMusic(false); setMood('day');
+  hwHikers.forEach(function(h){ if(h.ref.group.parent) world.remove(h.ref.group); });
+  hwHikers.length=0;
+  if(hwGod&&hwGod.ref.group.parent) world.remove(hwGod.ref.group);
+  hwGod=null;
+  spawnHwHikers(110); spawnHwGod();
+  isGod=false;
+  if(player&&player.group.scale.x>1.5){ spawnPlayer('hiker'); P.maxHp=100; }
+  P.pos.set(HW.x,0,HW.z+HW.r-8);
+  if(player) player.group.position.copy(P.pos);
+  $('kills').style.display='none';
+  xpHud();
+  obj('🏕️ Back in HIKER WORLD — blend in, gain XP, don\'t attack.');
+}
+function startCoronation(){
+  if(hwState!=='peace'||lvl<XP_LVLS.length-1||isGod) return;
+  hwState='coron';
+  battleMusic(false);
+  sndFanfare(); doFlash('#ffe97a');
+  msg('👑 THE HIKER GOD RISES…<br><span style="font-size:55%">"You have walked far, young hiker. Take my crown."</span>',4200);
+  a2Timer=setTimeout(function(){ a2Timer=null; becomeGod(); },4000);
+}
+function becomeGod(){
+  isGod=true;
+  spawnPlayer('god');
+  P.maxHp=500; P.hp=500;
+  $('hpBar').firstElementChild.style.width='100%';
+  tornadoOwned=true; tornCharge=TORN_MAX;
+  sndFanfare(); sndRoar(true); doFlash('#ffe97a'); camShake=1;
+  for(var i=0;i<6;i++)
+    burst(P.pos.clone().add(new THREE.Vector3(rand(-2,2),rand(1,4),rand(-2,2))),0xffe97a,10,{speed:5,life:1.1});
+  /* the old god steps down... and is FURIOUS */
+  if(hwGod){
+    hwGod.ref.group.scale.set(1.3,1.3,1.3);
+    hwGod.ref.group.position.y=0;
+    hwGod.hp=800; hwGod.maxHp=800; hwGod.op=true; hwGod.dead=false;
+    hwGod.ref.torso.material=mat(0x8f1f16);
+  }
+  msg('👑 YOU ARE THE HIKER GOD! 👑<br><span style="font-size:55%">…but the OLD god and 101 loyal hikers reject you. FIGHT!</span>',4600);
+  a2Timer=setTimeout(function(){ a2Timer=null; startGodBattle(); },3800);
+}
+function startGodBattle(){
+  hwState='battle';
+  battleMusic(true); setMood('boss');
+  /* exactly 101 normal hikers + the OP old god */
+  var live=hwHikers.filter(function(h){ return !h.dead; }).length;
+  if(live>101){
+    var extra=live-101;
+    for(var i=0;i<hwHikers.length&&extra>0;i++){
+      if(!hwHikers[i].dead){ hwHikers[i].dead=true; world.remove(hwHikers[i].ref.group); extra--; }
+    }
+  } else if(live<101) spawnHwHikers(101-live);
+  battleLeft=101;
+  $('kills').style.display='block';
+  $('kills').textContent='⚔️ Enemies left: '+battleLeft;
+  xpHud();
+  obj('👑 DEFEND YOUR CROWN — 101 hikers + the OLD GOD. As god: punches hit HARD in a big arc.');
+  hint('Punch: F/tap (god punch = 40 dmg, wide) · Tornado: Q · Gun: 1 · survive and destroy them all');
+  updateMobileUI();
+}
+function hwWin(){
+  hwState='won'; godWon=true;
+  battleMusic(false); setMood('day');
+  $('kills').style.display='none';
+  studBux=200; sbuxHud(); save();
+  sndFanfare(); setTimeout(sndFanfare,600); doFlash('#ffe97a');
+  for(var i=0;i<8;i++)
+    burst(P.pos.clone().add(new THREE.Vector3(rand(-4,4),rand(1,6),rand(-4,4))),
+      [0xffd83d,0x7dffd8,0xff7bd5][i%3],12,{speed:6,life:1.3});
+  msg('🏆 THE THRONE IS YOURS 🏆<br><span style="font-size:55%">You earned 🪵 200 STUD BUX. They do nothing. For now.</span>',6000);
+  obj('👑 HIKER GOD — undisputed. 🪵 200 STUD BUX banked (useless… for now).');
+}
+function restartGodBattle(){
+  hwHikers.forEach(function(h){ if(h.ref.group.parent) world.remove(h.ref.group); });
+  hwHikers.length=0;
+  if(hwGod&&hwGod.ref.group.parent) world.remove(hwGod.ref.group);
+  hwGod=null;
+  spawnHwHikers(101);
+  spawnHwGod();
+  hwGod.ref.group.scale.set(1.3,1.3,1.3);
+  hwGod.ref.group.position.set(HW.x,0,HW.z-16);
+  hwGod.hp=800; hwGod.maxHp=800; hwGod.op=true;
+  hwGod.ref.torso.material=mat(0x8f1f16);
+  P.maxHp=500; P.hp=500;
+  $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(HW.x,0,HW.z+HW.r-8); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  startGodBattle();
+}
+function doWave(){
+  if(PH!=='hw'||hwState!=='peace'||waveCd>0||isGod) return;
+  waveCd=8;
+  if(player){ player.armR.rotation.z=-2.6;
+    tween(0.6,function(k){ if(player) player.armR.rotation.z=-2.6+2.6*k; }); }
+  sndChirp();
+  var near=hwHikers.filter(function(h){ return !h.dead&&h.ref.group.position.distanceTo(P.pos)<7; });
+  if(near.length){
+    xp+=5;
+    near.slice(0,3).forEach(function(h){
+      h.waveT=0.8;
+      h.ref.armR.rotation.z=-2.6;
+      (function(hh){ tween(0.7,function(k){ hh.ref.armR.rotation.z=-2.6+2.6*k; }); })(h);
+    });
+    msgFloat(P.pos,'+5 XP');
+  }
+}
+var hwFrame=0;
+function updateHW(dt){
+  hwFrame++;
+  if(waveCd>0) waveCd-=dt;
+  /* XP while peaceful and socializing */
+  if(hwState==='peace'&&!isGod){
+    var near=0;
+    for(var i=0;i<hwHikers.length;i++){
+      if(!hwHikers[i].dead&&hwHikers[i].ref.group.position.distanceTo(P.pos)<9) near++;
+      if(near>=3) break;
+    }
+    if(near>=3) xp+=dt;
+    var newLvl=0;
+    for(var l6=XP_LVLS.length-1;l6>=0;l6--){ if(xp>=XP_LVLS[l6]){ newLvl=l6; break; } }
+    if(newLvl>lvl){
+      lvl=newLvl; save();
+      sndFanfare(); doFlash('#8bc34a');
+      msg('⬆️ LEVEL UP: <b>'+LVL_NAMES[lvl]+'</b>'+(lvl>=XP_LVLS.length-1?'<br><span style="font-size:55%">The god watches you. Approach the mound…</span>':''),3600);
+    }
+    xpHud();
+    /* coronation trigger */
+    if(lvl>=XP_LVLS.length-1&&hwGod&&!hwGod.dead
+       &&hwGod.ref.group.position.distanceTo(P.pos)<7) startCoronation();
+  }
+  /* hikers AI */
+  var hostile=(hwState==='hostile'||hwState==='wipe'||hwState==='battle');
+  hwHikers.forEach(function(h,idx){
+    if(h.dead) return;
+    var g=h.ref.group, d=g.position.distanceTo(P.pos);
+    if(h.stunT>0){ h.stunT-=dt; g.rotation.z=Math.sin(GTIME*20)*0.12; return; }
+    g.rotation.z=0;
+    if(hostile){
+      var spd=hwState==='wipe'?7:4.6;
+      if(d>1.4){
+        var dx=P.pos.x-g.position.x, dz=P.pos.z-g.position.z, l7=Math.hypot(dx,dz)||1;
+        g.position.x+=dx/l7*spd*dt; g.position.z+=dz/l7*spd*dt;
+        g.rotation.y=Math.atan2(dx,dz);
+        h.walkT+=dt*spd*1.6;
+        h.ref.legL.rotation.x=Math.sin(h.walkT)*0.8;
+        h.ref.legR.rotation.x=-Math.sin(h.walkT)*0.8;
+      } else {
+        h.atkCd-=dt;
+        if(h.atkCd<=0&&!P.dead){
+          h.atkCd=1.2;
+          hurtPlayer(hwState==='wipe'?50:6,hwState==='wipe'?'The OP hikers are unstoppable!':'Hiker mob!');
+          sndPunch(true);
+        }
+      }
+    } else {
+      /* peaceful wander; only a slice moves per frame to keep 110 cheap */
+      if((idx+hwFrame)%3!==0) return;
+      h.retargetT-=dt*3;
+      if(h.retargetT<=0){ h.retargetT=rand(3,7);
+        h.tx=clamp(g.position.x+rand(-8,8),HW.x-HW.r+4,HW.x+HW.r-4);
+        h.tz=clamp(g.position.z+rand(-8,8),HW.z-HW.r+4,HW.z+HW.r-4); }
+      var dx2=h.tx-g.position.x, dz2=h.tz-g.position.z, l8=Math.hypot(dx2,dz2);
+      if(l8>1){
+        g.position.x+=dx2/l8*1.6*dt*3; g.position.z+=dz2/l8*1.6*dt*3;
+        g.rotation.y=Math.atan2(dx2,dz2);
+        h.walkT+=dt*8;
+        h.ref.legL.rotation.x=Math.sin(h.walkT)*0.6;
+        h.ref.legR.rotation.x=-Math.sin(h.walkT)*0.6;
+      }
+      if(d<6&&Math.random()<dt*0.3){ /* friendly nod */
+        h.ref.head.rotation.x=0.3;
+        (function(hh){ tween(0.5,function(k){ hh.ref.head.rotation.x=0.3*(1-k); }); })(h);
+      }
+    }
+  });
+  /* the god */
+  if(hwGod&&!hwGod.dead){
+    var gg=hwGod.ref.group, gd=gg.position.distanceTo(P.pos);
+    if(hostile&&hwGod.op){
+      var gspd=5.5;
+      if(gd>2.4){
+        var gdx=P.pos.x-gg.position.x, gdz=P.pos.z-gg.position.z, gl=Math.hypot(gdx,gdz)||1;
+        gg.position.x+=gdx/gl*gspd*dt; gg.position.z+=gdz/gl*gspd*dt;
+        gg.rotation.y=Math.atan2(gdx,gdz);
+      } else {
+        hwGod.atkCd-=dt;
+        if(hwGod.atkCd<=0&&!P.dead){
+          hwGod.atkCd=1.0;
+          hurtPlayer(25,'The OLD GOD strikes!');
+          sndPunch(true); doFlash('#ff5340'); camShake=0.5;
+        }
+      }
+    } else if(hostile&&!hwGod.op){
+      /* pre-battle hostility: the god defends his flock from the mound */
+      if(gd<12){ hwGod.atkCd-=dt;
+        if(hwGod.atkCd<=0&&!P.dead){ hwGod.atkCd=2;
+          hurtPlayer(30,'The HIKER GOD swats you!'); camShake=0.7; sndRoar(false); } }
+    } else {
+      gg.rotation.y=Math.atan2(P.pos.x-gg.position.x,P.pos.z-gg.position.z);
+    }
+  }
+  /* battle end check when god already dead */
+  if(hwState==='battle'&&hwGod&&hwGod.dead&&battleLeft<=0) hwWin();
+}
+
+/* ---- act 3 shared per-frame ---- */
+function updateAct3(dt){
+  /* home <-> city travel */
+  if(homeCityPad&&(PH==='home'||PH==='jungle')&&!P.dead
+     &&Math.hypot(P.pos.x-10,P.pos.z-16)<1.7){
+    PH='metro'; ensureCityExtraPads();
+    P.pos.set(CITY.x,0,CITY.z+18); P.vy=0;
+    if(player) player.group.position.copy(P.pos);
+    camYaw=Math.PI; P.yaw=Math.PI;
+    sndPortal(); sndWhoosh(false); setMood('day');
+    obj('🏙️ BRICK CITY — the JUNGLE PLOT pad is at the west end of the road.');
+    updateMobileUI();
+  }
+  /* cabin portal build + entry */
+  if(jgDone&&isHiker&&PH==='metro'&&!P.dead){
+    var cd2=Math.hypot(P.pos.x-CABIN.x,P.pos.z-(CABIN.z+4));
+    if(!cabinPortal&&wood>=WOOD_NEED&&cd2<4){
+      wood-=WOOD_NEED; woodHud();
+      cabinPortal=makePortal(CABIN.x,CABIN.z+5);
+      sndBrickClick(); sndPortal(); sndFanfare();
+      msg('🌀 THE CABIN PORTAL IS BUILT!<br><span style="font-size:55%">Step in… HIKER WORLD awaits.</span>',3600);
+      save();
+    }
+    if(cabinPortal&&P.pos.distanceTo(cabinPortal.position)<2.2) enterHW();
+  }
+  if(cabinPortal){
+    cabinPortal.userData.ring.rotation.z+=dt*2;
+    cabinPortal.userData.disc.rotation.z-=dt*3;
+  }
+}
+/* ---- act3 continue/skip restoration ---- */
+function applyAct3Skip(sv){
+  ensureHomeCityPad();
+  if(sv.jg){
+    buildJungleStrip(true); jgDone=true;
+    isHiker=true; wood=sv.wd||0;
+  }
+  if(sv.hw){
+    hwUnlocked=true;
+    buildHW();
+    cabinPortal=makePortal(CABIN.x,CABIN.z+5);
+    xp=sv.xp||0;
+    for(var l9=XP_LVLS.length-1;l9>=0;l9--){ if(xp>=XP_LVLS[l9]){ lvl=l9; break; } }
+    spawnHwHikers(110); spawnHwGod();
+    hwState='peace';
+  }
+  if(sv.god){
+    godWon=true; isGod=true; studBux=sv.sb||200;
+    hwState='won'; sbuxHud();
+  }
+  if(isHiker) spawnPlayer(sv.god?'god':'hiker');
+  if(sv.god){ P.maxHp=500; P.hp=500; }
+  woodHud();
 }
 
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
@@ -3998,7 +4846,36 @@ window.__dbg={
   cityBuild:function(){ return {idx:cityBuildIdx,total:cityChunks.length,done:cityDone}; },
   placeCity:function(n){ for(var i=0;i<(n||1);i++) placeCityChunk(cityBuildIdx<cityChunks.length-1);
     if(cityBuildIdx>=cityChunks.length&&PH==='citybuild') finishCityBuild(false); },
-  bossMove:function(mv){ startBossMove(mv); }
+  bossMove:function(mv){ startBossMove(mv); },
+  /* ---- Act 3 ---- */
+  giveBux:function(n){ bux=n==null?100:n; updateBuxHud(); ensureHomeCityPad(); },
+  spendJungle:handleJunglePad,
+  jg:function(){ return {idx:jgIdx,total:jgChunks.length,done:jgDone,parts:jgPartCount}; },
+  placeJg:function(n){ for(var i=0;i<(n||1);i++) placeJgChunk(jgIdx<jgChunks.length-1);
+    if(jgIdx>=jgChunks.length&&PH==='jgbuild'&&!isHiker) finishJungleBuild(false); },
+  skipCut3:function(){ if(PH==='cut3') cut3T=99; },
+  hiker:function(){ return {isHiker:isHiker,isGod:isGod,wood:wood,portal:!!cabinPortal}; },
+  addWood:function(n){ wood+=(n||30); woodHud(); },
+  chopNearest:function(){ var best=null,bd=1e9;
+    chopTrees.forEach(function(t){ if(t.userData.down) return;
+      var d=t.position.distanceTo(P.pos); if(d<bd){ best=t; bd=d; } });
+    if(best){ __dbg.tp(best.position.x+1.5,best.position.z);
+      best.userData.hp=1;
+      var e={clientX:innerWidth/2,clientY:innerHeight/2};
+      camera.lookAt(best.position); tryChop(e); } },
+  gotoHW:function(){ if(!player) spawnPlayer('hiker'); isHiker=true; jgDone=true;
+    if(!jgGroup) buildJungleStrip(true); enterHW(); },
+  hwInfo:function(){ return {state:hwState,hikers:hwHikers.filter(function(h){return !h.dead;}).length,
+    god:hwGod?{hp:hwGod.hp,op:hwGod.op,dead:hwGod.dead}:null,
+    xp:Math.round(xp),lvl:lvl,battleLeft:battleLeft,sb:studBux,isGod:isGod}; },
+  setXp:function(n){ xp=n; },
+  wave:doWave,
+  killHwHiker:function(){ for(var i=0;i<hwHikers.length;i++)
+    if(!hwHikers[i].dead){ hurtHwHiker(hwHikers[i],9999,false); return; } },
+  killHwAll:function(){ hwHikers.forEach(function(h){ if(!h.dead) hurtHwHiker(h,9999,false); }); },
+  hitGod:function(n){ hurtHwGod(n||9999,false); },
+  coronate:startCoronation,
+  resetHW:resetHWPeace
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
 </script>
