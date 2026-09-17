@@ -96,6 +96,12 @@
     text-shadow:0 1px 2px #000;margin-top:2px;letter-spacing:0.5px}
   #bWave{right:176px;bottom:104px;display:none;background:#8bc34a33;border-color:#c9f29988}
   #bForm{left:34px;bottom:250px;display:none;background:#66d9ef33;border-color:#9ae8f588}
+  #bSlam{right:100px;bottom:170px;display:none;background:#9b5cff33;border-color:#c9a8ff88}
+  #bGren{right:176px;bottom:170px;display:none;background:#ff8ac233;border-color:#ffc9e088}
+  #bAuto{position:fixed;right:16px;bottom:16px;z-index:22;font-family:inherit;font-weight:900;
+    font-size:14px;padding:12px 18px;border-radius:12px;border:2px solid #7df3ff;cursor:pointer;
+    background:#0a2a3add;color:#7df3ff;display:none;letter-spacing:1px}
+  #bAuto.on{background:#7df3ff;color:#06222e}
   #forms{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:45;
     background:#0a0d16f2;border:2px solid #66d9ef;border-radius:16px;padding:18px 22px;
     display:none;text-align:center;max-width:90vw}
@@ -139,7 +145,10 @@
   <div class="mbtn" id="bThrow">THROW</div>
   <div class="mbtn" id="bWave">WAVE</div>
   <div class="mbtn" id="bForm">FORM</div>
+  <div class="mbtn" id="bSlam">SLAM</div>
+  <div class="mbtn" id="bGren">CAT NADE</div>
 </div>
+<button id="bAuto">⚡ AUTO-BUILD: OFF</button>
 <div id="forms">
   <h3>🔁 BECOME ANYONE YOU'VE BEEN</h3>
   <div id="formBtns"></div>
@@ -579,6 +588,24 @@ function makeMinifig(o){ // o:{torso,legs,arms,face,hat,tie,backpack,gunHand}
   if(o.headband){
     var hb=box(0.46,0.1,0.46,o.headband); hb.position.y=0.12; headG.add(hb);
     var tail1=box(0.08,0.3,0.04,o.headband); tail1.position.set(0.12,-0.02,-0.28); tail1.rotation.x=0.4; headG.add(tail1);
+  }
+  if(o.catty){ /* a cat (or a dog, with snouty=true) */
+    var fur=o.catFur||0xff9d5c;
+    var ch5=box(0.56,0.44,0.56,fur); ch5.position.set(0,0.04,0.02); headG.add(ch5);
+    var earL2=box(0.16,0.26,0.1,fur); earL2.position.set(-0.18,0.36,0); earL2.rotation.z=0.2; headG.add(earL2);
+    var earR2=box(0.16,0.26,0.1,fur); earR2.position.set(0.18,0.36,0); earR2.rotation.z=-0.2; headG.add(earR2);
+    var eI1=box(0.1,0.14,0.08,0xf0d5ff); eI1.position.set(-0.18,0.4,0.02); headG.add(eI1);
+    var eI2=box(0.1,0.14,0.08,0xf0d5ff); eI2.position.set(0.18,0.4,0.02); headG.add(eI2);
+    if(o.snouty){ var sn2=box(0.3,0.22,0.3,new THREE.Color(fur).offsetHSL(0,0,-0.08).getHex());
+      sn2.position.set(0,-0.08,0.4); headG.add(sn2);
+      var nz=box(0.12,0.1,0.08,0x111111); nz.position.set(0,-0.02,0.56); headG.add(nz); }
+    else { var nz2=box(0.1,0.08,0.06,0xff5b8d); nz2.position.set(0,0,0.33); headG.add(nz2);
+      [-1,1].forEach(function(s){ for(var w5=0;w5<2;w5++){
+        var wh=box(0.34,0.02,0.02,0xf4f4f4);
+        wh.position.set(s*0.32,-0.02-w5*0.07,0.3); headG.add(wh); } }); }
+    var tail3=box(0.12,0.7,0.12,fur); tail3.position.set(0,1,-0.32); tail3.rotation.x=0.6; g.add(tail3);
+    var tailTip=box(0.16,0.16,0.16,new THREE.Color(fur).offsetHSL(0,0,0.12).getHex());
+    tailTip.position.set(0,1.36,-0.62); g.add(tailTip);
   }
   if(o.fishy){ /* a fish. with legs. */
     var fh=box(0.62,0.5,0.72,0xff8a3d); fh.position.set(0,0.08,0.06); headG.add(fh);
@@ -1142,7 +1169,8 @@ function save(){
   try{ localStorage.setItem('brickLegendSave',JSON.stringify(
     {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
      jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone,
-     oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm})); }catch(e){}
+     oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
+     cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0})); }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -1161,6 +1189,15 @@ function spawnPlayer(kind){
   if(player) world.remove(player.group);
   isBusiness=!!kind;
   player=makeMinifig(
+    kind==='cat'?
+    {torso:catFur(),legs:new THREE.Color(catFur()).offsetHSL(0,0,-0.08).getHex(),
+     arms:catFur(),face:'smile',catty:true,catFur:catFur(),gunHand:true}:
+    kind==='dog'?
+    {torso:0xb0784a,legs:0x8a5a2a,arms:0xb0784a,face:'smile',catty:true,snouty:true,
+     catFur:0xb0784a,gunHand:true}:
+    kind==='catcasoh'?
+    {torso:0x7ba03a,legs:0x55702a,arms:0x7ba03a,face:'cool',catty:true,
+     catFur:0x7ba03a,gunHand:true}:
     kind==='god'?
     {torso:0xd4af37,legs:0xb8912b,arms:0xd4af37,face:'cool',hat:'tophat',
      backpack:0x8a5a2a,gunHand:true}:
@@ -1173,6 +1210,7 @@ function spawnPlayer(kind){
     {torso:0x1c1f26,legs:0x14161c,arms:0x1c1f26,face:'cool',tie:0xc62b21,gunHand:true}:
     {torso:0x2a6fd6,legs:0x3a3f4a,arms:0x2a6fd6,face:'smile',hat:'hardhat',vest:true});
   if(kind==='god') player.group.scale.set(1.6,1.6,1.6);
+  if(kind==='catcasoh') player.group.scale.set(1.25,1.25,1.25);
   if(player.gun) player.gun.visible=gunEquipped;
   player.group.position.copy(P.pos);
   world.add(player.group);
@@ -1180,10 +1218,12 @@ function spawnPlayer(kind){
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
-    ||PH==='ocbuild'||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4')?'none':'block';
+    ||PH==='ocbuild'||PH==='catbuild'||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5')?'none':'block';
   var inBoss=PH==='boss';
   $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
   $('bForm').style.display=spatula?'flex':'none';
+  $('bSlam').style.display=(curForm==='catcasoh')?'flex':'none';
+  $('bGren').style.display=(grenUnlocked)?'flex':'none';
   $('bEquip').style.display=(hasGun&&!inBoss)?'flex':'none';
   $('bShoot').style.display=(gunEquipped&&!inBoss)?'flex':'none';
   $('bReload').style.display=(gunEquipped&&!inBoss)?'flex':'none';
@@ -1203,6 +1243,9 @@ addEventListener('keydown',function(e){
   if(e.code==='KeyE'&&PH==='boss'&&carried) throwTnt();
   if(e.code==='KeyG') doWave();
   if(e.code==='KeyP') toggleForms($('forms').style.display!=='block');
+  if(e.code==='Digit4') throwCatGrenade();
+  if(e.code==='KeyV') trySlam();
+  if(e.code==='KeyB'&&inBuildPhase()) setAutoBuild(!autoBuild);
 });
 addEventListener('keyup',function(e){ keys[e.code]=false; });
 var pointer=new THREE.Vector2(),ray=new THREE.Raycaster();
@@ -1239,7 +1282,9 @@ addEventListener('pointerup',function(e){
   if(PH==='citybuild'){ tryPlaceCity(e); return; }
   if(PH==='jgbuild'){ tryPlaceJg(e); return; }
   if(PH==='ocbuild'){ tryPlaceOc(e); return; }
+  if(PH==='catbuild'){ tryPlaceCb(e); return; }
   if(PH==='cut4'){ if(cutSkipOk) cut4T=99; return; }
+  if(PH==='cut5'){ if(cutSkipOk) cut5T=99; return; }
   if(PH==='castle'){
     if(contest){ contestClick(); return; }
     if(gunEquipped) shoot(); else tryPunch();
@@ -1253,7 +1298,7 @@ addEventListener('pointerup',function(e){
   if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
   if(PH==='metro'){ if(tryChop(e)) return; if(gunEquipped) shoot(); else tryPunch(); return; }
   if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
-     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'){
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -1295,6 +1340,8 @@ bindBtn('bTorn',function(){ tryTornado(); });
 bindBtn('bThrow',function(){ if(carried) throwTnt(); });
 bindBtn('bWave',function(){ doWave(); });
 bindBtn('bForm',function(){ toggleForms($('forms').style.display!=='block'); });
+bindBtn('bSlam',function(){ trySlam(); });
+bindBtn('bGren',function(){ throwCatGrenade(); });
 
 /* ---------------- BUILD PHASE ---------------- */
 var placedGroup=new THREE.Group(); world.add(placedGroup);
@@ -1404,6 +1451,13 @@ function combatTargets(){
       list.push({pos:z.ref.group.position,y:z.boss?2.4:1.2,big:z.boss,
         hurt:function(d,t){ hurtFzombie(z,d,t); }}); });
   }
+  if(PH==='cw'){
+    dogs.forEach(function(d){ if(!d.dead)
+      list.push({pos:d.mesh.position,y:0.8,hurt:function(dm,t){ hurtDog(d,dm,t); }}); });
+    if(dogCasoh&&!dogCasoh.dead)
+      list.push({pos:dogCasoh.mesh.position,y:2,big:true,
+        hurt:function(dm,t){ hurtDogCasoh(dm,t); }});
+  }
   return list;
 }
 function shoot(){
@@ -1446,18 +1500,25 @@ function tryPunch(){
   player.armR.rotation.x=-1.7;
   var hit=false;
   var kick=isFishForm&&isFishForm()&&curForm==='fish';
+  var catF=(curForm==='cat'||curForm==='dog'||curForm==='catcasoh');
   if(kick&&player){ /* the mighty fish KICK */
     player.legR.rotation.x=-1.6;
     (function(){ tween(0.25,function(k){ if(player) player.legR.rotation.x=-1.6+1.6*k; }); })();
     sndWhoosh(true);
   }
+  if(catF&&player){ /* the SCRATCH: both paws, claw sounds */
+    player.armL.rotation.x=-1.8; player.armR.rotation.x=-1.4;
+    tween(0.2,function(k){ if(player){ player.armL.rotation.x=-1.8+1.8*k; } });
+    sndScratch();
+  }
+  var meleeDmg=isGod?40:(kick?20:(catF?(curForm==='catcasoh'?30:12+catLvl*3):12));
   combatTargets().forEach(function(t){
     var d=t.pos.distanceTo(P.pos);
     if(d<(t.big?4.2:(isGod?3.4:(kick?2.6:1.9)))){
       var dir=t.pos.clone().sub(P.pos).setY(0).normalize();
       var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
       if(dir.dot(fwd)>(isGod?-0.1:0.2)){
-        t.hurt(isGod?40:(kick?20:12),tornActive); hit=true;
+        t.hurt(meleeDmg,tornActive); hit=true;
         if(kick&&!t.big) t.pos.addScaledVector(dir,1.6); // kicked things FLY
       }
     }
@@ -2126,6 +2187,15 @@ function hurtPlayer(dmg,why){
   burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
   if(P.hp<=0){
     if(PH==='boss') killPlayer('SMASHED!',why+' Bosses reset when you fall — go again?');
+    else if(PH==='cw'){
+      killPlayer('DOGGED!','The dogs got you. The wave resets — beacon to retry.',function(){
+        if(dogCasoh&&!dogCasoh.dead){ world.remove(dogCasoh.mesh); dogCasoh=null;
+          $('bossWrap').style.display='none'; }
+        endWave(false);
+        P.pos.set(CW.x,0,CW.z+CW.r-8);
+        if(player) player.group.position.copy(P.pos);
+      });
+    }
     else if(PH==='castle'){
       killPlayer('FILLETED!','The zombie fish got you. The soldier shift restarts.',function(){
         fzombies.forEach(function(z){ if(!z.dead) world.remove(z.ref.group); });
@@ -2242,8 +2312,8 @@ function collideHouseWalls(){
     P.pos.z=P.pos.z<WALL.z1?WALL.z1-t:WALL.z1+t;
 }
 function playerControlAllowed(){
-  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'&&PH!=='cut4'
-    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild';
+  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'&&PH!=='cut4'&&PH!=='cut5'
+    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild'&&PH!=='catbuild';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
@@ -2318,6 +2388,9 @@ function updatePlayer(dt){
   } else if(PH==='castle'){
     P.pos.x=clamp(P.pos.x,FC.x-FC.hw+1.2,FC.x+FC.hw-1.2);
     P.pos.z=clamp(P.pos.z,FC.z-FC.hd+1.2,FC.z+FC.hd-1.2);
+  } else if(PH==='cw'){
+    P.pos.x=clamp(P.pos.x,CW.x-CW.r+1,CW.x+CW.r-1);
+    P.pos.z=clamp(P.pos.z,CW.z-CW.r+1,CW.z+CW.r-1);
   } else if(PH==='city'||PH==='metro'){
     if(PH==='city'){
       P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
@@ -2394,7 +2467,7 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20*buildZoom,11*buildZoom*buildTilt,Math.cos(camOrbit.a)*20*buildZoom);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'){
+  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'){
     camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
     camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
     var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
@@ -2440,7 +2513,7 @@ function updateAmbient(dt){
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'){
+  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2460,6 +2533,7 @@ function animate(){
   else if(PH==='cut2') updateCut2(dt);
   else if(PH==='cut3') updateCut3(dt);
   else if(PH==='cut4') updateCut4(dt);
+  else if(PH==='cut5') updateCut5(dt);
   else {
     updatePlayer(dt);
     if(PH==='jungle'||PH==='home') updateHikers(dt);
@@ -2470,10 +2544,12 @@ function animate(){
     if(PH==='castle') updateCastle(dt);
     updateAct3(dt);
     updateAct4(dt);
+    updateAct5(dt);
     if(PH==='ninja') updateNinjas(dt);
     if(PH==='bridge') updateBridge(dt);
     if(PH==='golem') updateGolem(dt);
-    if(PH==='ninja'||PH==='bridge'||PH==='golem'){ updateEproj(dt); updateFallBlocks(dt); }
+    updateEproj(dt); // enemy projectiles + cat grenades fly in every phase
+    if(PH==='ninja'||PH==='golem') updateFallBlocks(dt);
     updateAct2(dt);
     updateBodyguards(dt);
     updateTornado(dt);
@@ -2506,7 +2582,15 @@ function startSkip(sv){
     applyRichSkip(sv);
     applyAct3Skip(sv);
     applyAct4Skip(sv);
-    if(sv.oc){
+    applyAct5Skip(sv);
+    if(sv.cw){
+      ensureCityExtraPads();
+      var kk=fragPlaced&&(sv.fm==='dog'||sv.fm==='catcasoh')?sv.fm:'cat';
+      curForm=kk; setFormFlags(kk); spawnPlayer(kk);
+      enterCW();
+      sbuxHud();
+      if(fragPlaced) obj('🏆 CAT SAGA complete. P = forms · 4 = cat grenade · V = slam (as cat-casoh).');
+    } else if(sv.oc){
       ensureCityExtraPads();
       var sk=curForm==='worker'?false:curForm==='biz'?true:curForm;
       spawnPlayer(spatula?sk:'fish');
@@ -3049,7 +3133,7 @@ function updateEproj(dt){
     p.mesh.position.addScaledVector(p.v,dt);
     p.mesh.rotation.x+=dt*6; p.mesh.rotation.y+=dt*5;
     var gone=false;
-    if(!P.dead&&p.mesh.position.distanceTo(P.pos.clone().setY(p.mesh.position.y))<1.1
+    if(p.type!=='catnade'&&!P.dead&&p.mesh.position.distanceTo(P.pos.clone().setY(p.mesh.position.y))<1.1
        &&Math.abs(p.mesh.position.y-P.pos.y-1)<1.6){
       hurtPlayer(p.dmg,p.type==='water'?'Water blast!':p.type==='lava'?'Fireball!':'Rock!');
       doFlash(p.type==='water'?'#4fc3f7':p.type==='lava'?'#ff5722':'#a1887f');
@@ -3057,6 +3141,7 @@ function updateEproj(dt){
       gone=true;
     }
     if(!gone&&p.mesh.position.y<=0.25){
+      if(p.type==='catnade'){ catNadeBoom(p.mesh.position.clone()); world.remove(p.mesh); eproj.splice(i,1); continue; }
       if(p.type==='lava'){
         var pool=new THREE.Mesh(new THREE.CircleGeometry(1.4,16),
           new THREE.MeshBasicMaterial({color:0xff5722,transparent:true,opacity:0.75}));
@@ -4622,6 +4707,7 @@ function ensureCityExtraPads(){
     signO.position.set(CITY.x+44,3.2,CITY.z-11.9); world.add(signO);
     cityPads.push({x:CITY.x+44,z:CITY.z-10,mode:'ocean',pad:padO});
   }
+  ensureCatPortal();
   if(!cityPads.some(function(p){ return p.mode==='gohome'; })){
     var pad2=studdedBox(3,0.3,3,0xc62b21,0xa02318);
     pad2.position.set(CITY.x+44,0.15,CITY.z+24); world.add(pad2);
@@ -5773,7 +5859,7 @@ function setFormFlags(kind){
   isGod=(kind==='god');
   isHiker=(kind==='hiker'||kind==='god');
   isFish=(kind==='fish');
-  P.maxHp=kind==='god'?500:(kind==='fish'?150:100);
+  P.maxHp=kind==='god'?500:(kind==='catcasoh'?250:(kind==='fish'?150:(kind==='cat'?120:100)));
   P.hp=Math.min(P.hp,P.maxHp)||P.maxHp;
 }
 function setForm(kind){
@@ -5789,10 +5875,16 @@ function setForm(kind){
 }
 var FORM_DEFS=[['worker','👷 WORKER'],['biz','🕴️ BUSINESSMAN'],['rich','💰 TYCOON'],
   ['hiker','🥾 HIKER'],['god','👑 HIKER GOD'],['fish','🐟 FISH WITH LEGS']];
+function getFormDefs(){
+  var out=FORM_DEFS.slice();
+  if(catUnlocked) out.push(['cat','🐱 CAT']);
+  if(fragPlaced){ out.push(['dog','🐶 DOG SKIN']); out.push(['catcasoh','🟢 CAT-CASOH']); }
+  return out;
+}
 function buildFormMenu(){
   var box2=$('formBtns');
   box2.innerHTML='';
-  FORM_DEFS.forEach(function(fd){
+  getFormDefs().forEach(function(fd){
     var b=document.createElement('button');
     b.textContent=fd[1];
     if(curForm===fd[0]) b.className='on';
@@ -5995,6 +6087,778 @@ function applyAct4Skip(sv){
   }
 }
 
+/* ================================================================
+   ACT 5 — THE CAT SAGA
+   300 STUD BUX portal -> become a CAT. Scratch dogs, build the CAT
+   CAFÉ (400 pieces), defend it through 27 escalating dog waves
+   (fat dogs round two, DOG CASOH at 27), build the 700-piece second
+   floor, earn the CASOH FRAGMENT (1/5), unlock the dog skin,
+   CAT-CASOH with BODY SLAM, cursed portal walls, the CAT GRENADE,
+   +500 stud bux. Plus: AUTO-BUILD (1 piece / 0.1s) in every build.
+   ================================================================ */
+var CW={x:-300,z:-430,r:72};
+var catUnlocked=false,isCat=false,cut5T=-1,catLvl=0,cafeFloors=0,fragPlaced=false,haveFrag=false;
+var cwGroup=null,cwBuilt=false,cafeCore=null,cafeHp=200,CAFE_MAX=200;
+var cbChunks=[],cbIdx=0,cbStage=0,cbGroup=null;
+var dogs=[],dogCasoh=null,wave=null,scratchDogsDone=0,waveBeacon=null;
+var catPortalObj=null,catCats=[];
+var catGren=0,grenT=0,grenUnlocked=false,slamCd=0,slamPending=false,wasGround=true;
+var CAT_TIERS=['ALLEY CAT','TABBY','TUXEDO CAT','MAINE COON','SHADOW CAT',
+  'NINJA CAT','ROYAL CAT','LASER CAT','COSMIC CAT','ETERNAL CAT'];
+var CAT_FURS=[0xff9d5c,0xb0784a,0x2f3540,0x8a5a2a,0x4a4f57,0x23252e,0xffd83d,0xff5b8d,0x9b5cff,0xf4f4f4];
+function catFur(){ return CAT_FURS[Math.min(catLvl,CAT_FURS.length-1)]; }
+function sndMeow(){ if(!actx()) return;
+  blip(700,'sine',0.35,0.18,0,1100); blip(1000,'sine',0.28,0.22,0.14,500); }
+function sndBark(){ if(!actx()) return;
+  blip(180,'sawtooth',0.5,0.1,0,90); knock(600,0.4,0.06,0.02); }
+function sndScratch(){ if(!actx()) return;
+  for(var i=0;i<3;i++) scrape(1800,700,0.07,i*0.05,0.3); }
+function catHud(){
+  var e=$('wood');
+  if(isCat&&PH!=='castle'){
+    e.style.display='block';
+    e.textContent='🐱 '+(fragPlaced?'CAT-CASOH era':CAT_TIERS[Math.min(catLvl,9)])
+      +' · lvl '+catLvl+'/27'+(grenUnlocked?' · 🧨 '+catGren:'')+(haveFrag&&!fragPlaced?' · 🧩 FRAGMENT':'');
+  }
+}
+/* ---- CAT WORLD terrain ---- */
+function buildCW(){
+  if(cwBuilt) return; cwBuilt=true;
+  cwGroup=new THREE.Group(); world.add(cwGroup);
+  var fl=new THREE.Mesh(new THREE.PlaneGeometry(CW.r*2+30,CW.r*2+30),mat(0x5aa845));
+  fl.rotation.x=-Math.PI/2; fl.position.set(CW.x,0.02,CW.z); cwGroup.add(fl);
+  for(var i=0;i<24;i++){
+    var t=makeTree((Math.random()*3)|0);
+    var a=rand(0,6.28), rr=rand(40,CW.r-4);
+    t.position.set(CW.x+Math.cos(a)*rr,0,CW.z+Math.sin(a)*rr);
+    cwGroup.add(t);
+  }
+  for(var d2=0;d2<6;d2++){ /* dog houses around the rim — where waves come from */
+    var dh=new THREE.Group();
+    var bb6=box(2,1.6,2,0xc62b21); bb6.position.y=0.8; dh.add(bb6);
+    var rf2=box(2.4,0.5,2.4,0x8f1f16); rf2.position.y=1.85; dh.add(rf2);
+    var hole=box(0.9,1,0.2,0x1c0f08); hole.position.set(0,0.6,1); dh.add(hole);
+    var a2=d2/6*Math.PI*2;
+    dh.position.set(CW.x+Math.cos(a2)*(CW.r-8),0,CW.z+Math.sin(a2)*(CW.r-8));
+    dh.rotation.y=-a2+Math.PI;
+    cwGroup.add(dh);
+  }
+  /* café lot marker */
+  var lot=studdedBox(26,0.2,20,0x9aa5ad,0x8b969e);
+  lot.position.set(CW.x,0.1,CW.z); cwGroup.add(lot);
+  /* fragment shrine at the north edge */
+  var ped=studdedBox(3,1.2,3,0x4d555e,0x3d444c); ped.position.set(CW.x,0.6,CW.z-CW.r+10); cwGroup.add(ped);
+  for(var s5=0;s5<5;s5++){
+    var slot2=box(0.5,0.2,0.5,0x2f3540);
+    slot2.position.set(CW.x-1+s5*0.5,1.3,CW.z-CW.r+10);
+    cwGroup.add(slot2);
+  }
+  var shrSign=textBoard('THE FIVE\nFRAGMENTS',3.2,1.8,'#1a0a2a','#c9a8ff',28);
+  shrSign.position.set(CW.x,3.4,CW.z-CW.r+8.4); cwGroup.add(shrSign);
+}
+function enterCW(){
+  buildCW();
+  PH='cw';
+  setMood('day');
+  P.pos.set(CW.x,0,CW.z+CW.r-8); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  windLoop.set(0.15);
+  sndPortal(); sndWhoosh(false); sndMeow();
+  catHud();
+  if(scratchDogsDone<5){
+    spawnIntroDogs();
+    obj('🐱 CAT WORLD — first lesson: SCRATCH '+(5-scratchDogsDone)+' normal dogs (F / PUNCH = scratch)!');
+    hint('Scratch: F / the punch button · dogs live in the red dog houses');
+  } else if(cafeFloors<1){
+    obj('☕ Time to build your CAT CAFÉ — step on the glowing lot in the middle!');
+  } else {
+    obj('☕ Your café stands. The wave beacon starts DEFENSE LEVEL '+(catLvl+1)+'.');
+    placeWaveBeacon();
+  }
+  updateMobileUI();
+}
+function spawnIntroDogs(){
+  while(dogs.filter(function(d){ return !d.dead; }).length<5){
+    spawnDog(1,0xb0784a,25,4,2.6,false);
+  }
+  dogs.forEach(function(d){ d.passive=true; });
+}
+function makeDogFig(scale,fur){
+  var g=new THREE.Group();
+  var body=box(0.7,0.6,1.4,fur); body.position.y=0.65; g.add(body);
+  var head=box(0.55,0.5,0.5,fur); head.position.set(0,1.05,0.85); g.add(head);
+  var snout=box(0.3,0.24,0.35,new THREE.Color(fur).offsetHSL(0,0,-0.08).getHex());
+  snout.position.set(0,0.95,1.2); g.add(snout);
+  var nose=box(0.12,0.1,0.08,0x111111); nose.position.set(0,1.0,1.4); g.add(nose);
+  [-1,1].forEach(function(s){
+    var ear=box(0.14,0.3,0.1,new THREE.Color(fur).offsetHSL(0,0,-0.12).getHex());
+    ear.position.set(s*0.2,1.35,0.8); g.add(ear);
+    var e2=box(0.1,0.1,0.06,0x111111); e2.position.set(s*0.14,1.12,1.11); g.add(e2);
+  });
+  var tail=box(0.12,0.12,0.6,fur); tail.position.set(0,0.9,-0.9); tail.rotation.x=-0.5; g.add(tail);
+  [[-0.25,0.5],[0.25,0.5],[-0.25,-0.45],[0.25,-0.45]].forEach(function(o){
+    var leg=box(0.18,0.55,0.18,fur); leg.position.set(o[0],0.28,o[1]); g.add(leg);
+  });
+  g.scale.set(scale,scale,scale);
+  g.traverse(function(m){ if(m.isMesh) m.castShadow=!IS_TOUCH; });
+  return g;
+}
+function spawnDog(scale,fur,hp,dmg,spd,fat){
+  var a=rand(0,6.28);
+  var mesh=makeDogFig(fat?scale*1.5:scale,fur);
+  mesh.position.set(CW.x+Math.cos(a)*(CW.r-9),0,CW.z+Math.sin(a)*(CW.r-9));
+  world.add(mesh);
+  var d={mesh:mesh,hp:hp,maxHp:hp,dmg:dmg,spd:spd,dead:false,atkCd:0,walkT:rand(0,6),
+    stunT:0,passive:false,fat:fat};
+  dogs.push(d);
+  if(Math.random()<0.5) sndBark();
+  return d;
+}
+function hurtDog(d,dmg,fromTorn){
+  if(d.dead) return;
+  d.hp-=dmg; d.passive=false;
+  burst(d.mesh.position.clone().setY(0.8),0xffd83d,4,{speed:2.5,life:0.4});
+  if(fromTorn&&Math.random()<0.2&&d.stunT<=0){ d.stunT=2.2; sndStun(); }
+  if(d.hp<=0){
+    d.dead=true;
+    sndWoodFall(); sndBark();
+    burst(d.mesh.position.clone().setY(0.6),0xb0784a,12,{speed:5,life:0.9});
+    world.remove(d.mesh);
+    if(scratchDogsDone<5&&!wave){
+      scratchDogsDone++;
+      sndMeow();
+      obj('🐱 SCRATCH! '+scratchDogsDone+'/5 dogs taught a lesson.');
+      if(scratchDogsDone>=5){
+        sndFanfare();
+        msg('🐱 THE DOGS FEAR YOU.<br><span style="font-size:55%">Now build your CAT CAFÉ — the glowing lot in the middle. 400 pieces!</span>',4600);
+        obj('☕ Step on the glowing café lot to start building (400 pieces).');
+      } else spawnIntroDogs();
+    }
+  }
+}
+/* ---- CAT CAFÉ builds (stage 1: 400 pieces; stage 2: 700) ---- */
+function genCafe(stage){
+  var defs=[], y0=stage===2?4.4:0, R=function(a,b){ return rand(a,b); };
+  function d(label,make){ defs.push({label:label,make:make}); }
+  function at2(m,x,y,z){ m.position.set(CW.x+x,y+y0,CW.z+z); return m; }
+  var n=stage===2?700:400;
+  var types=[
+    ['Café floor tile',60,function(i){ return at2(studdedBox(2,0.22,2,i%2?0xf4e9d8:0xe8d5b8,0xd8c5a8),
+      -12+(i%12)*2.1,0.11,-9+((i/12)|0)*2.1); }],
+    ['Wall piece',30,function(i){ var w=box(2.2,3.2,0.5,0xff8ac2);
+      var side=(i/8)|0, k=i%8;
+      if(side===0) return at2(w,-12+k*3.1,1.6,-10);
+      if(side===1) return at2(w,-12+k*3.1,1.6,10);
+      if(side===2){ w.rotation.y=Math.PI/2; return at2(w,-13,1.6,-8+k*2.4); }
+      w.rotation.y=Math.PI/2; return at2(w,13,1.6,-8+k*2.4); }],
+    ['Round window',10,function(i){ var g=new THREE.Group();
+      var fr=box(1.2,1.2,0.3,0xf4f4f4); g.add(fr);
+      var gl=new THREE.Mesh(boxGeo(0.9,0.9,0.36),glassMat); g.add(gl);
+      return at2(g,-10+i*2.3,2.2,(i%2?10:-10)); }],
+    ['Counter block',6,function(i){ return at2(studdedBox(2,1.2,1.4,0x8a5a2a,0x6f4820),-5+i*2,0.6,-6); }],
+    ['Espresso machine',3,function(i){ var g=new THREE.Group();
+      g.add(box(0.8,0.9,0.7,0xc0c8d0));
+      var sp2=box(0.14,0.3,0.14,0x4a4f57); sp2.position.set(0,-0.2,0.4); g.add(sp2);
+      return at2(g,-4+i*2.2,1.7,-6); }],
+    ['Pastry display',3,function(i){ var g=new THREE.Group();
+      g.add(new THREE.Mesh(boxGeo(1.4,0.8,0.9),glassMat));
+      var cake=box(0.5,0.3,0.5,[0xff8ac2,0xffd83d,0x8a5a2a][i%3]); cake.position.y=-0.1; g.add(cake);
+      return at2(g,2+i*2,1.7,-6); }],
+    ['Café table',24,function(i){ var g=new THREE.Group();
+      var top=new THREE.Mesh(new THREE.CylinderGeometry(0.8,0.8,0.14,10),mat(0xf4e9d8)); top.position.y=1; g.add(top);
+      var leg=box(0.16,1,0.16,0x8a5a2a); leg.position.y=0.5; g.add(leg);
+      return at2(g,-10+(i%8)*2.9,0,-2.5+((i/8)|0)*3.4); }],
+    ['Café chair',48,function(i){ var g=new THREE.Group();
+      g.add(box(0.5,0.14,0.5,0xff8ac2));
+      var back2=box(0.5,0.7,0.1,0xff8ac2); back2.position.set(0,0.4,-0.22); g.add(back2);
+      var lg6=box(0.4,0.5,0.4,0x8a5a2a); lg6.position.y=-0.3; g.add(lg6);
+      return at2(g,-11+(i%12)*2.1,0.6,-1.4+((i/12)|0)*2.4); }],
+    ['Cat tower',12,function(i){ var g=new THREE.Group();
+      for(var l7=0;l7<3;l7++){ var pl3=studdedBox(1.2-l7*0.25,0.2,1.2-l7*0.25,0xd8c5a8,0xc8b598);
+        pl3.position.y=0.6+l7*0.9; g.add(pl3);
+        var po=box(0.2,0.8,0.2,0xb0784a); po.position.y=0.2+l7*0.9; g.add(po); }
+      return at2(g,(i%2?11:-11),0,-8+((i/2)|0)*3); }],
+    ['Scratching post',10,function(i){ var g=new THREE.Group();
+      var po2=box(0.3,1.6,0.3,0xd8a35c); po2.position.y=0.8; g.add(po2);
+      var ba=studdedBox(0.9,0.2,0.9,0x8a5a2a,0x6f4820); ba.position.y=0.1; g.add(ba);
+      return at2(g,-9+i*2.1,0,8.4); }],
+    ['Cat cushion',24,function(i){ return at2(box(0.8,0.24,0.8,[0xff8ac2,0x9b5cff,0x66d9ef,0xffd83d][i%4]),
+      -10+(i%8)*2.7,0.15,5.4+((i/8)|0)*1.6); }],
+    ['Food bowl',20,function(i){ var g=new THREE.Group();
+      g.add(box(0.5,0.2,0.5,0xc62b21));
+      var fd=box(0.34,0.1,0.34,0xd8a35c); fd.position.y=0.13; g.add(fd);
+      return at2(g,-9.5+i*1.05,0.12,3.8); }],
+    ['Milk saucer',14,function(i){ var g=new THREE.Group();
+      g.add(box(0.44,0.1,0.44,0xf4f4f4));
+      var mk=box(0.3,0.06,0.3,0xfffdf0); mk.position.y=0.07; g.add(mk);
+      return at2(g,-8+i*1.2,0.1,-3.6); }],
+    ['Potted plant',16,function(i){ var g=new THREE.Group();
+      g.add(box(0.5,0.5,0.5,0xc9762a));
+      for(var l8=0;l8<3;l8++){ var lf=box(0.14,0.7,0.14,0x2e8b2e);
+        lf.position.set(rand(-0.15,0.15),0.7,rand(-0.15,0.15)); lf.rotation.z=rand(-0.3,0.3); g.add(lf); }
+      return at2(g,(i%2?12:-12),0.25,-9+((i/2)|0)*2.4); }],
+    ['Hanging lamp',12,function(i){ var g=new THREE.Group();
+      var cord=box(0.06,1,0.06,0x2f3540); cord.position.y=0.5; g.add(cord);
+      var sh2=new THREE.Mesh(boxGeo(0.6,0.4,0.6),new THREE.MeshBasicMaterial({color:0xfff0b8})); g.add(sh2);
+      return at2(g,-10+(i%6)*4,3.4,(i<6?-4:2)); }],
+    ['Menu board',2,function(i){ return at2(textBoard(i?'🐱 CAT CAFÉ\nmeow menu':'MILK  ··· 3\nYARN ··· 5\nNAPS ··· free',2.6,2,'#1c2333','#ffd83d',24),
+      -2+i*4,2.6,-9.6); }],
+    ['Fluffy rug',8,function(i){ return at2(box(1.8,0.08,1.2,[0xf4f4f4,0xffd0e0][i%2]),
+      -7+(i%4)*4.6,0.06,0.6+((i/4)|0)*4); }],
+    ['Yarn ball',18,function(i){ return at2(new THREE.Mesh(new THREE.SphereGeometry(0.28,8,6),
+      mat([0xff5b8d,0x66d9ef,0xffd83d,0x9b5cff][i%4])),-11+i*1.25,0.28,7); }],
+    ['Cat bed',12,function(i){ var g=new THREE.Group();
+      g.add(box(1,0.3,1,0x8a5a2a));
+      var cu=box(0.8,0.16,0.8,0xffd0e0); cu.position.y=0.2; g.add(cu);
+      return at2(g,-10+i*1.9,0.16,9); }],
+    ['Fish tank',4,function(i){ var g=new THREE.Group();
+      g.add(new THREE.Mesh(boxGeo(1.6,1,0.7),glassMat));
+      var fsh=box(0.4,0.24,0.14,0xff8a3d); fsh.position.y=0.1; g.add(fsh);
+      return at2(g,9+((i%2))*2,1.7,(i<2?-6:-9)); }],
+    ['Café door',1,function(){ var g=new THREE.Group();
+      g.add(box(1.8,2.8,0.3,0x8a5a2a));
+      var kb=box(0.14,0.14,0.14,0xffd83d); kb.position.set(0.6,0,0.2); g.add(kb);
+      return at2(g,0,1.5,10.2); }],
+    ['Café sign',1,function(){ return at2(textBoard('☕ THE CAT CAFÉ',5,1.6,'#2a0a1a','#ffd0e0',34),0,4,10.4); }],
+    ['Mystery box',4,function(i){ return at2(studdedBox(0.8,0.8,0.8,0x9b5cff,0x7a3ddd),
+      11-i*1.2,0.5,9); }]
+  ];
+  if(stage===2){
+    types=types.concat([
+      ['Balcony rail',48,function(i){ var r3=box(1.5,0.9,0.16,0xffd0e0);
+        var side=(i/12)|0,k=i%12;
+        if(side===0) return at2(r3,-12+k*2.2,0.45,-10.2);
+        if(side===1) return at2(r3,-12+k*2.2,0.45,10.2);
+        if(side===2){ r3.rotation.y=Math.PI/2; return at2(r3,-13.2,0.45,-8+k*1.7); }
+        r3.rotation.y=Math.PI/2; return at2(r3,13.2,0.45,-8+k*1.7); }],
+      ['Stair step',12,function(i){ var s6=studdedBox(2.4,0.3,1,0x8a5a2a,0x6f4820);
+        s6.position.set(CW.x+15,0.3+i*0.36,CW.z+8-i*0.9); return s6; }],
+      ['Arcade machine',14,function(i){ var g=new THREE.Group();
+        g.add(box(1,1.8,0.9,[0xc62b21,0x2a6fd6,0x9b5cff][i%3]));
+        var sc2=box(0.7,0.5,0.1,0x66d9ef); sc2.position.set(0,0.4,0.46); g.add(sc2);
+        return at2(g,-11+i*1.7,0.9,-8.8); }],
+      ['Cat statue',18,function(i){ var g=new THREE.Group();
+        var b7=box(0.5,0.8,0.4,0xd4af37); b7.position.y=0.6; g.add(b7);
+        var h7=box(0.4,0.4,0.4,0xd4af37); h7.position.y=1.2; g.add(h7);
+        [-1,1].forEach(function(s){ var e3=box(0.12,0.2,0.08,0xd4af37);
+          e3.position.set(s*0.12,1.45,0); g.add(e3); });
+        return at2(g,-11+(i%9)*2.7,0.1,(i<9?-6:6)); }],
+      ['Disco chandelier',10,function(i){ var g=new THREE.Group();
+        var ball=new THREE.Mesh(new THREE.SphereGeometry(0.4,10,8),
+          new THREE.MeshBasicMaterial({color:0xd8f6ff})); g.add(ball);
+        var cord2=box(0.05,1,0.05,0x2f3540); cord2.position.y=0.7; g.add(cord2);
+        return at2(g,-8+i*1.9,3.6,0); }],
+      ['VIP poster',16,function(i){ return at2(textBoard(['TOP CAT','MEOW','9 LIVES','PURR'][i%4],1.4,1,
+        '#1c2333',['#ffd83d','#ff8ac2','#66d9ef','#9b5cff'][i%4],36),-11+i*1.55,2.6,(i%2?9.9:-9.9)); }]
+    ]);
+  }
+  var out=[];
+  types.forEach(function(t2){
+    for(var i=0;i<t2[1];i++) out.push({label:t2[0]+(t2[1]>1?' '+(i+1):''),make:(function(f,i2){ return function(){ return f(i2); }; })(t2[2],i)});
+  });
+  /* trim or repeat cushions to hit the exact count */
+  while(out.length<n){
+    (function(k){ out.push({label:'Bonus cat cushion '+k,make:function(){
+      var m=box(0.7,0.2,0.7,CAT_FURS[k%10]);
+      m.position.set(CW.x+rand(-12,12),0.12+y0,CW.z+rand(-9,9)); return m; }}); })(out.length);
+  }
+  out.length=n;
+  return out;
+}
+function startCafeBuild(stage){
+  cbStage=stage;
+  if(!cbGroup){ cbGroup=new THREE.Group(); world.add(cbGroup); }
+  if(stage===2){ /* second-storey slab first (free) */
+    var slab=studdedBox(27,0.5,21,0xe8a3b8,0xd893a8);
+    slab.position.set(CW.x,4.15,CW.z); cbGroup.add(slab);
+  }
+  var defs=genCafe(stage);
+  cbChunks.length=0; cbIdx=0;
+  defs.forEach(function(dd){
+    var o=dd.make();
+    cbGroup.add(o);
+    o.traverse(function(m){ if(m.isMesh&&!m.userData.om) m.userData.om=m.material; });
+    o.visible=false;
+    cbChunks.push({label:dd.label,obj:o});
+  });
+  PH='catbuild';
+  setMood('day');
+  camOrbit.a=0.4; camOrbit.target=0.4;
+  showCbGhost();
+  msg(stage===2?'🏗️ THE SECOND FLOOR!<br><span style="font-size:55%">'+cbChunks.length+' pieces. The ⚡AUTO-BUILD button is your friend.</span>'
+    :'☕ BUILD THE CAT CAFÉ!<br><span style="font-size:55%">'+cbChunks.length+' pieces, all different. ⚡AUTO-BUILD available!</span>',4600);
+  updateMobileUI();
+}
+function showCbGhost(){
+  var ch=cbChunks[cbIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if(m.isMesh) m.material=ghostMat; });
+  var bb=new THREE.Box3().setFromObject(ch.obj);
+  var c=bb.getCenter(new THREE.Vector3()), sz=bb.getSize(new THREE.Vector3());
+  cityCam.x=c.x; cityCam.y=Math.max(1,c.y); cityCam.z=c.z;
+  cityCam.r=clamp(Math.max(sz.x,sz.z)*0.9+7,9,40);
+  cityCam.h=clamp(sz.y*1.1+c.y+4,6,26);
+  obj('☕ '+ch.label+' &nbsp;<span style="color:#7df3ff">('+(cbIdx+1)+'/'+cbChunks.length+')</span>');
+  hint('Click the cyan piece · ⚡ AUTO-BUILD places 10/second · drag + wheel to look');
+}
+function placeCbChunk(silent){
+  var ch=cbChunks[cbIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if(m.isMesh&&m.userData.om) m.material=m.userData.om; });
+  if(!silent){
+    sndBrickClick();
+    ch.obj.scale.set(1.22,1.22,1.22);
+    (function(oo){ tween(0.13,function(k){ var s=1.22-0.22*k; oo.scale.set(s,s,s); }); })(ch.obj);
+  }
+  cbIdx++;
+  if(cbIdx>=cbChunks.length) finishCafeBuild();
+  else showCbGhost();
+}
+function tryPlaceCb(e){
+  var ch=cbChunks[cbIdx];
+  if(!ch) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb=new THREE.Box3().setFromObject(ch.obj); bb.expandByScalar(2);
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan piece</b>!'); return; }
+  placeCbChunk();
+}
+function finishCafeBuild(){
+  cafeFloors=cbStage;
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  if(cbStage===1){
+    cafeCore=cbGroup; cafeHp=CAFE_MAX;
+  }
+  save();
+  sndFanfare();
+  PH='cw';
+  P.pos.set(CW.x,0,CW.z+14); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  msg(cbStage===2?'🏗️ SECOND FLOOR DONE — the NEW SHOP is open!<br><span style="font-size:55%">3 grind waves, then the FAT rounds… all the way to level 27.</span>'
+    :'☕ CAFÉ COMPLETE!<br><span style="font-size:55%">Now DEFEND it. The beacon starts wave 1 — 2 minutes each, dogs get stronger.</span>',5200);
+  obj('🛡️ Step on the wave beacon to start DEFENSE LEVEL '+(catLvl+1)+'.');
+  placeWaveBeacon();
+  updateMobileUI();
+}
+/* ---- CAFÉ DEFENSE: 27 levels of dogs ---- */
+function placeWaveBeacon(){
+  if(waveBeacon){ world.remove(waveBeacon); }
+  waveBeacon=new THREE.Mesh(new THREE.CylinderGeometry(0.4,1.4,16,10,1,true),
+    new THREE.MeshBasicMaterial({color:0xff5b8d,transparent:true,opacity:0.25,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  waveBeacon.position.set(CW.x,8,CW.z+16);
+  world.add(waveBeacon);
+}
+function startWave(){
+  if(waveBeacon){ world.remove(waveBeacon); waveBeacon=null; }
+  var lvl=catLvl+1;
+  if(lvl===27){ startDogCasoh(); return; }
+  wave={lvl:lvl,t:120,spawnT:0.5};
+  cafeHp=CAFE_MAX;
+  dogs.forEach(function(d){ if(!d.dead) world.remove(d.mesh); }); dogs.length=0;
+  battleMusic(true); setMood('boss');
+  sndBark(); sndBark();
+  var fat=lvl>=14;
+  msg('🛡️ DEFENSE LEVEL '+lvl+(fat?' — THE FAT DOGS ARE HERE':'')+'!<br><span style="font-size:55%">Survive 2 minutes. Protect the café!</span>',3600);
+  updateMobileUI();
+}
+function waveDogStats(lvl){
+  var fat=lvl>=14, base=lvl>=14?lvl-13:lvl;
+  return {hp:(22+base*14)*(fat?2:1),dmg:5+base*2+(fat?4:0),
+    spd:clamp(3+base*0.15,3,5)*(fat?0.85:1),
+    interval:clamp(4-base*0.22,1.3,4),
+    fur:[0xb0784a,0x8a5a2a,0x4a4f57,0x2f3540,0xc62b21][base%5],fat:fat};
+}
+function endWave(win2){
+  battleMusic(false); setMood('day');
+  dogs.forEach(function(d){ if(!d.dead) world.remove(d.mesh); }); dogs.length=0;
+  wave=null;
+  $('timer').style.display='none';
+  if(win2){
+    catLvl++; save();
+    sndFanfare(); sndMeow();
+    if(curForm==='cat') spawnPlayer('cat'); /* new fur tier */
+    catHud();
+    if(catLvl===10&&cafeFloors<2){
+      msg('🏆 LEVEL 10 — INSANE! 🏆<br><span style="font-size:55%">You unlocked the NEW SHOP: build the SECOND FLOOR (700 pieces!). Step on the lot.</span>',5600);
+      obj('🏗️ Step on the café lot to build the SECOND FLOOR (700 pieces).');
+    } else if(catLvl>=27){ /* handled by dog casoh */ }
+    else {
+      msg('⬆️ WAVE '+catLvl+' CLEARED — you evolved into <b>'+CAT_TIERS[Math.min(catLvl,9)]+'</b>!',3800);
+      obj('🛡️ Wave beacon: DEFENSE LEVEL '+(catLvl+1)+(catLvl+1>=14?' (FAT dogs!)':'')+'.');
+      placeWaveBeacon();
+    }
+  } else {
+    msg('💔 THE CAFÉ FELL.<br><span style="font-size:55%">Level '+(catLvl+1)+' resets. Beacon to retry.</span>',3600);
+    obj('🛡️ Retry DEFENSE LEVEL '+(catLvl+1)+' at the beacon.');
+    placeWaveBeacon();
+  }
+}
+function startDogCasoh(){
+  wave={lvl:27,t:9999,spawnT:3,boss:true};
+  cafeHp=CAFE_MAX;
+  battleMusic(true); setMood('boss');
+  var mesh=makeDogFig(2.6,0x5a8a3a);
+  mesh.position.set(CW.x,0,CW.z-30);
+  world.add(mesh);
+  var spr=makeCasohSprite();
+  spr.scale.set(2.6,3.8,1); spr.position.y=4.4;
+  mesh.add(spr);
+  dogCasoh={mesh:mesh,hp:2500,maxHp:2500,atkCd:0,dead:false,stunT:0,walkT:0};
+  sndRoar(true); sndBark(); doFlash('#5a8a3a');
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='🐶 DOG CASOH 🐶';
+  $('bossBar').firstElementChild.style.width='100%';
+  msg('🐶 LEVEL 27: DOG CASOH 🐶<br><span style="font-size:55%">"erm what then furry blob man?" — DESTROY HIM.</span>',4200);
+}
+function hurtDogCasoh(dmg,fromTorn){
+  if(!dogCasoh||dogCasoh.dead) return;
+  dogCasoh.hp-=dmg;
+  $('bossBar').firstElementChild.style.width=clamp(dogCasoh.hp/dogCasoh.maxHp*100,0,100)+'%';
+  burst(dogCasoh.mesh.position.clone().setY(2),0x5a8a3a,5,{speed:4,life:0.5});
+  if(dogCasoh.hp<=0){
+    dogCasoh.dead=true;
+    world.remove(dogCasoh.mesh);
+    $('bossWrap').style.display='none';
+    endWave(true);
+    haveFrag=true; catHud();
+    sndFanfare(); setTimeout(sndFanfare,500); doFlash('#c9a8ff');
+    msg('🧩 DOG CASOH DROPS A <b>CASOH FRAGMENT</b> (1/5)!<br><span style="font-size:55%">Take it to the FIVE FRAGMENTS shrine at the north edge!</span>',5600);
+    obj('🧩 Place the fragment at the shrine (north edge of Cat World).');
+  }
+}
+function placeFragment(){
+  if(!haveFrag||fragPlaced) return;
+  fragPlaced=true; haveFrag=false;
+  studBux+=500; sbuxHud(); save();
+  grenUnlocked=true; catGren=3;
+  sndFanfare(); setTimeout(sndFanfare,600); doFlash('#c9a8ff');
+  /* golden fragment into slot 1 */
+  var fr2=box(0.4,0.3,0.4,0xffd83d);
+  fr2.position.set(CW.x-1,1.5,CW.z-CW.r+10);
+  world.add(fr2);
+  /* cursed portals behind warning walls */
+  for(var i=0;i<4;i++){
+    var cp=makePortal(CW.x-9+i*6,CW.z-CW.r+16);
+    cp.userData.ring.material=new THREE.MeshBasicMaterial({color:0x4a4f57});
+    cp.userData.disc.material=new THREE.MeshBasicMaterial({color:0x23252e,transparent:true,opacity:0.8});
+    var wall=studdedBox(4.6,2.2,0.8,0x4d555e,0x3d444c);
+    wall.position.set(CW.x-9+i*6,1.1,CW.z-CW.r+19);
+    world.add(wall);
+  }
+  var warn2=textBoard('YOU CAN\'T GO THERE\nUNLESS YOU WANNA\nBE CURSED',6,3,'#1a0a0a','#ff5340',22);
+  warn2.position.set(CW.x,3.6,CW.z-CW.r+20);
+  world.add(warn2);
+  buildFormMenu();
+  catHud(); updateMobileUI();
+  msg('🧩 FRAGMENT PLACED (1/5) — +🪵 500 STUD BUX!<br><span style="font-size:55%">Unlocked: 🐶 DOG skin · 🐱 CAT-CASOH (V = BODY SLAM) · 🧨 CAT GRENADE (4) — turns bosses into cats! 4 cursed portals await the other fragments…</span>',9000);
+  obj('🏆 THE CAT SAGA IS COMPLETE. Cursed portals need 4 more fragments… someday. (P = forms, 4 = cat grenade, V = slam)');
+}
+/* ---- body slam + cat grenade ---- */
+function trySlam(){
+  if(curForm!=='catcasoh'||slamCd>0||!P.onGround||P.dead) return;
+  slamCd=5; slamPending=true;
+  P.vy=10.5; P.onGround=false;
+  sndWhoosh(false);
+  msg('🐱 BODY SLAM!',900);
+}
+function doSlamImpact(){
+  sndBoom(); camShake=1; doFlash('#c9a8ff');
+  var sw=new THREE.Mesh(new THREE.TorusGeometry(1,0.3,8,28),
+    new THREE.MeshBasicMaterial({color:0xc9a8ff}));
+  sw.rotation.x=Math.PI/2; sw.position.set(P.pos.x,0.3,P.pos.z);
+  world.add(sw);
+  shockwaves.push({mesh:sw,r:1,hit:true,speed:16,dmg:0});
+  combatTargets().forEach(function(t){
+    if(t.pos.distanceTo(P.pos)<4.5) t.hurt(35,true);
+  });
+  dogs.forEach(function(d){ if(!d.dead&&d.mesh.position.distanceTo(P.pos)<4.5) hurtDog(d,35,true); });
+  if(dogCasoh&&!dogCasoh.dead&&dogCasoh.mesh.position.distanceTo(P.pos)<5) hurtDogCasoh(35,true);
+}
+function spawnCatProp(pos,scale){
+  var c=makeDogFig(scale*0.8,CAT_FURS[(Math.random()*10)|0]); /* reuse quadruped, cat-ify */
+  c.traverse(function(m){ if(m.isMesh&&m.geometry===undefined){} });
+  var earFix=box(0.14,0.3,0.08,0xff9d5c);
+  c.position.copy(pos); c.position.y=0;
+  world.add(c);
+  catCats.push({mesh:c,ang:rand(0,6.28),t:rand(2,6)});
+  if(catCats.length>30){ var old=catCats.shift(); world.remove(old.mesh); }
+  sndMeow();
+  burst(pos.clone().setY(1),0xff8ac2,14,{speed:4,life:0.9});
+}
+function throwCatGrenade(){
+  if(!grenUnlocked||catGren<=0||P.dead) return;
+  catGren--; catHud();
+  var from=P.pos.clone().setY(1.5);
+  /* auto-aim: lob at the nearest enemy (bosses first) within 30 */
+  var tgt=null,bd=30;
+  var cand=combatTargets();
+  cand.forEach(function(t){ if(t.big){ var d=t.pos.distanceTo(P.pos); if(d<bd){ tgt=t.pos; bd=d; } } });
+  if(!tgt) cand.forEach(function(t){ var d=t.pos.distanceTo(P.pos); if(d<bd){ tgt=t.pos; bd=d; } });
+  if(!tgt&&trex&&PH==='boss') tgt=trex.group.position;
+  var m=new THREE.Mesh(new THREE.SphereGeometry(0.3,8,6),mat(0xff8ac2));
+  var ears=box(0.12,0.2,0.08,0xff8ac2); ears.position.set(-0.1,0.3,0); m.add(ears);
+  var ears2=box(0.12,0.2,0.08,0xff8ac2); ears2.position.set(0.1,0.3,0); m.add(ears2);
+  m.position.copy(from);
+  world.add(m);
+  var v;
+  if(tgt){
+    var dx=tgt.x-from.x, dz=tgt.z-from.z, T=clamp(Math.hypot(dx,dz)/13,0.4,1.3);
+    v=new THREE.Vector3(dx/T,0.5*16*T-1/T,dz/T);
+  } else {
+    v=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw)).multiplyScalar(12); v.y=7;
+  }
+  sndWhoosh(true); sndMeow();
+  eproj.push({mesh:m,v:v,grav:16,dmg:0,type:'catnade',t:0});
+}
+function catNadeBoom(pos){
+  sndMeow(); sndBoom(); doFlash('#ff8ac2');
+  burst(pos.clone().setY(1),0xff8ac2,22,{speed:6,life:1});
+  var R2=4.5, converted=0;
+  function near(p2){ return p2.distanceTo(pos)<R2; }
+  if(PH==='boss'&&trex&&bossState!=='dead'&&near(trex.group.position)){
+    spawnCatProp(trex.group.position.clone(),2);
+    bossHp=0; bossDie(); converted++;
+  }
+  ninjas.forEach(function(n){ if(n.active&&n.hp>0&&near(n.ref.group.position)){
+    spawnCatProp(n.ref.group.position.clone(),1); hurtNinja(n,99999,false); converted++; } });
+  if(golemObj&&golemHp>0&&PH==='golem'&&near(golemObj.group.position)){
+    spawnCatProp(golemObj.group.position.clone(),2); golemDamage(99999); converted++; }
+  hwHikers.forEach(function(h){ if(!h.dead&&near(h.ref.group.position)){
+    spawnCatProp(h.ref.group.position.clone(),0.9); hurtHwHiker(h,99999,false); converted++; } });
+  if(hwGod&&!hwGod.dead&&near(hwGod.ref.group.position)){
+    hwGod.dead=true; world.remove(hwGod.ref.group);
+    spawnCatProp(hwGod.ref.group.position.clone(),2.2);
+    msg('🐱 THE HIKER GOD IS NOW A CAT.',2600); converted++; }
+  fzombies.forEach(function(z){ if(!z.dead&&near(z.ref.group.position)){
+    spawnCatProp(z.ref.group.position.clone(),z.boss?2:1); hurtFzombie(z,99999,false); converted++; } });
+  dogs.forEach(function(d){ if(!d.dead&&near(d.mesh.position)){
+    spawnCatProp(d.mesh.position.clone(),1); hurtDog(d,99999,false); converted++; } });
+  if(dogCasoh&&!dogCasoh.dead&&near(dogCasoh.mesh.position)){
+    spawnCatProp(dogCasoh.mesh.position.clone(),2.4); hurtDogCasoh(99999,false); converted++; }
+  if(converted) msg('🧨 '+converted+' enem'+(converted>1?'ies':'y')+' turned into CAT'+(converted>1?'S':'')+'! 🐱',2200);
+}
+/* ---- AUTO-BUILD: 1 piece / 0.1s ---- */
+var autoBuild=false,autoT=0;
+function inBuildPhase(){
+  return PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'
+    ||PH==='build'||PH==='buildwalk'||furnMode;
+}
+function autoPlaceOne(){
+  if(PH==='citybuild') placeCityChunk();
+  else if(PH==='jgbuild') placeJgChunk();
+  else if(PH==='ocbuild') placeOcChunk();
+  else if(PH==='catbuild') placeCbChunk();
+  else placeStep();
+}
+function setAutoBuild(on){
+  autoBuild=on; autoT=0;
+  $('bAuto').classList.toggle('on',on);
+  $('bAuto').textContent='⚡ AUTO-BUILD: '+(on?'ON':'OFF');
+  sndUi();
+}
+$('bAuto').addEventListener('click',function(){ audioInit(); actx(); setAutoBuild(!autoBuild); });
+function updateAutoBuild(dt){
+  $('bAuto').style.display=inBuildPhase()?'block':'none';
+  if(!autoBuild) return;
+  if(!inBuildPhase()){ setAutoBuild(false); return; }
+  autoT+=dt;
+  while(autoT>=0.1&&inBuildPhase()){ autoT-=0.1; autoPlaceOne(); }
+}
+/* ---- act 5 per-frame ---- */
+function updateCW(dt){
+  if(slamCd>0) slamCd-=dt;
+  if(grenUnlocked&&catGren<3){ grenT+=dt; if(grenT>=45){ grenT=0; catGren++; catHud(); } }
+  if(waveBeacon){
+    waveBeacon.rotation.y+=dt;
+    if(!P.dead&&cafeFloors>=1&&P.pos.distanceTo(waveBeacon.position.clone().setY(0))<2.2) startWave();
+  }
+  /* café lot: start builds */
+  if(!wave&&scratchDogsDone>=5&&!P.dead
+     &&Math.abs(P.pos.x-CW.x)<6&&Math.abs(P.pos.z-CW.z)<5){
+    if(cafeFloors===0) startCafeBuild(1);
+    else if(cafeFloors===1&&catLvl>=10) startCafeBuild(2);
+  }
+  /* fragment shrine */
+  if(haveFrag&&!fragPlaced&&!P.dead
+     &&Math.hypot(P.pos.x-CW.x,P.pos.z-(CW.z-CW.r+10))<3) placeFragment();
+  /* dogs AI */
+  var coreP=new THREE.Vector3(CW.x,0,CW.z);
+  dogs.forEach(function(d){
+    if(d.dead) return;
+    var g=d.mesh;
+    if(d.stunT>0){ d.stunT-=dt; g.rotation.z=Math.sin(GTIME*20)*0.1; return; }
+    g.rotation.z=0;
+    if(d.passive){
+      d.walkT+=dt;
+      g.position.x+=Math.sin(d.walkT*0.7)*dt*1.2;
+      g.rotation.y=Math.sin(d.walkT*0.7)>0?Math.PI/2:-Math.PI/2;
+      return;
+    }
+    var dP=g.position.distanceTo(P.pos), dC=g.position.distanceTo(coreP);
+    var tgt=(wave&&dC<dP&&cafeFloors>=1)?coreP:P.pos;
+    var td=g.position.distanceTo(tgt);
+    if(td>1.6){
+      var dx=tgt.x-g.position.x, dz=tgt.z-g.position.z, l=Math.hypot(dx,dz)||1;
+      g.position.x+=dx/l*d.spd*dt; g.position.z+=dz/l*d.spd*dt;
+      g.rotation.y=Math.atan2(dx,dz);
+      d.walkT+=dt*8;
+    } else {
+      d.atkCd-=dt;
+      if(d.atkCd<=0){
+        d.atkCd=1.2; sndBark();
+        if(tgt===P.pos&&!P.dead) hurtPlayer(d.dmg,'Dog bite!');
+        else if(wave){ cafeHp-=d.dmg;
+          burst(coreP.clone().setY(1.5),0xff8ac2,4,{speed:3,life:0.5});
+          if(cafeHp<=0) endWave(false);
+        }
+      }
+    }
+  });
+  /* wave timer + spawns */
+  if(wave&&!wave.boss){
+    wave.t-=dt;
+    var tEl=$('timer');
+    tEl.style.display='block';
+    tEl.textContent='🛡️ L'+wave.lvl+' · '+Math.max(0,wave.t|0)+'s · café '+Math.max(0,cafeHp|0);
+    tEl.style.color=cafeHp<60?'#ff5340':'#ffd83d';
+    wave.spawnT-=dt;
+    var st3=waveDogStats(wave.lvl);
+    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<10){
+      wave.spawnT=st3.interval;
+      spawnDog(1,st3.fur,st3.hp,st3.dmg,st3.spd,st3.fat);
+    }
+    if(wave.t<=0) endWave(true);
+  }
+  if(wave&&wave.boss&&dogCasoh&&!dogCasoh.dead){
+    var g2=dogCasoh.mesh, dd=g2.position.distanceTo(P.pos);
+    if(dogCasoh.stunT>0){ dogCasoh.stunT-=dt; }
+    else if(dd>3){
+      var dx2=P.pos.x-g2.position.x, dz2=P.pos.z-g2.position.z, l2=Math.hypot(dx2,dz2)||1;
+      g2.position.x+=dx2/l2*3.4*dt; g2.position.z+=dz2/l2*3.4*dt;
+      g2.rotation.y=Math.atan2(dx2,dz2);
+    } else {
+      dogCasoh.atkCd-=dt;
+      if(dogCasoh.atkCd<=0&&!P.dead){
+        dogCasoh.atkCd=1.4;
+        hurtPlayer(24,'DOG CASOH chomps!');
+        sndBark(); sndRoar(false); camShake=0.6;
+      }
+    }
+    wave.spawnT-=dt;
+    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<4){
+      wave.spawnT=6;
+      var st4=waveDogStats(20);
+      spawnDog(1,st4.fur,st4.hp,st4.dmg,st4.spd,true);
+    }
+  }
+  /* converted cats wander + meow */
+  catCats.forEach(function(c){
+    c.t-=dt;
+    c.mesh.position.x+=Math.sin(c.ang)*dt*0.8;
+    c.mesh.position.z+=Math.cos(c.ang)*dt*0.8;
+    if(c.t<=0){ c.t=rand(3,8); c.ang=rand(0,6.28);
+      if(Math.random()<0.4) sndMeow(); }
+  });
+  /* body slam landing */
+  if(slamPending&&P.onGround&&!wasGround){ slamPending=false; doSlamImpact(); }
+  wasGround=P.onGround;
+}
+/* portal purchase + entry (in the city, north end by the billboard) */
+function ensureCatPortal(){
+  if(catPortalObj||!spatula) return;
+  catPortalObj=makePortal(CITY.x+6,CITY.z-38);
+  catPortalObj.userData.ring.material=new THREE.MeshBasicMaterial({color:0xff8ac2});
+  var s=textBoard('CAT WORLD\n300 STUD BUX',3.4,1.9,'#2a0a1a','#ffd0e0',24);
+  s.position.set(CITY.x+6,4.8,CITY.z-36);
+  world.add(s);
+}
+function updateAct5(dt){
+  updateAutoBuild(dt);
+  if(catPortalObj){
+    catPortalObj.userData.ring.rotation.z+=dt*2;
+    catPortalObj.userData.disc.rotation.z-=dt*3;
+    if((PH==='metro'||PH==='city')&&!P.dead&&padCd<=0
+       &&P.pos.distanceTo(catPortalObj.position)<2.2){
+      padCd=1.5;
+      if(!catUnlocked){
+        if(studBux<300){ msg('🔒 CAT WORLD costs 🪵 300 STUD BUX.<br><span style="font-size:55%">Win the golden spatula quest to afford it!</span>',2800); }
+        else {
+          studBux-=300; catUnlocked=true; sbuxHud(); save();
+          sndJingle(); sndMeow();
+          msg('💸 300 STUD BUX SPENT — CAT WORLD IS YOURS!',2600);
+          startCut5();
+        }
+      } else enterCW();
+    }
+  }
+  if(isCat&&PH==='cw') updateCW(dt);
+}
+function startCut5(){
+  PH='cut5'; cut5T=0; cutSkipOk=false; cutSpin=0;
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  if(!cutBackdrop){
+    cutBackdrop=new THREE.Mesh(new THREE.CylinderGeometry(9,9,14,24,1,true),
+      new THREE.MeshBasicMaterial({color:0x1a0a14,side:THREE.BackSide,fog:false}));
+    world.add(cutBackdrop);
+  }
+  cutBackdrop.visible=true;
+  cutBackdrop.position.set(P.pos.x,5,P.pos.z);
+  sndSparkle(); sndMeow();
+}
+function updateCut5(dt){
+  cut5T+=dt;
+  if(cut5T>1) cutSkipOk=true;
+  cutSpin+=dt*(2+Math.min(cut5T*3,14));
+  if(player) player.group.rotation.y=cutSpin;
+  var ca=cutSpin*0.12;
+  camera.position.set(P.pos.x+Math.sin(ca)*4.2,2.3,P.pos.z+Math.cos(ca)*4.2);
+  camera.lookAt(P.pos.x,1.3,P.pos.z);
+  if(Math.random()<0.5)
+    burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
+      Math.random()<0.5?0xff8ac2:0xff9d5c,2,{speed:2,life:0.6,grav:-2,size:0.7});
+  if(cut5T>2.2&&!isCat){
+    isCat=true; curForm='cat';
+    spawnPlayer('cat'); player.group.rotation.y=cutSpin;
+    burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0xff9d5c,26,{speed:6,life:0.9});
+    sndBoom(); sndMeow(); camShake=0.5;
+    msg('🐱 FELINE SURGE! 🐱<br><span style="font-size:70%">You are now… <b>A CAT.</b></span>',3400);
+  }
+  if(cut5T>5&&cut5T<5.1){
+    msg('🐾 Your punch is now a SCRATCH (it gets stronger every cat tier).<br><span style="font-size:55%">Dogs beware.</span>',3800);
+  }
+  if(cut5T>8){
+    if(cutBackdrop) cutBackdrop.visible=false;
+    enterCW();
+  }
+}
+function applyAct5Skip(sv){
+  if(sv.cw){
+    catUnlocked=true; isCat=true;
+    catLvl=sv.cl||0; cafeFloors=sv.cf||0; scratchDogsDone=5;
+    fragPlaced=!!sv.fr;
+    if(cafeFloors>=1){
+      buildCW();
+      if(!cbGroup){ cbGroup=new THREE.Group(); world.add(cbGroup); }
+      genCafe(1).forEach(function(dd){ cbGroup.add(dd.make()); });
+      if(cafeFloors>=2){
+        var slab=studdedBox(27,0.5,21,0xe8a3b8,0xd893a8);
+        slab.position.set(CW.x,4.15,CW.z); cbGroup.add(slab);
+        genCafe(2).forEach(function(dd){ cbGroup.add(dd.make()); });
+      }
+      cafeCore=cbGroup;
+    } else buildCW();
+    if(fragPlaced){ grenUnlocked=true; catGren=3; haveFrag=false; }
+  }
+}
+
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
 window.__dbg={
   phase:function(){ return PH; },
@@ -6141,7 +7005,30 @@ window.__dbg={
   setFishLvl:function(n){ fishLvl=n; placeJobBeacon(); },
   contestClickN:function(n){ for(var i=0;i<(n||1);i++) contestClick(); },
   forms:function(){ return {cur:curForm,unlocked:spatula}; },
-  setFormTo:setForm
+  setFormTo:setForm,
+  /* ---- Act 5 ---- */
+  cat:function(){ return {unlocked:catUnlocked,isCat:isCat,lvl:catLvl,floors:cafeFloors,
+    scratched:scratchDogsDone,frag:fragPlaced,haveFrag:haveFrag,gren:catGren,
+    wave:wave?{lvl:wave.lvl,t:Math.round(wave.t),boss:!!wave.boss}:null,
+    dogs:dogs.filter(function(d){ return !d.dead; }).length,
+    casoh:dogCasoh?{hp:dogCasoh.hp}:null,cafeHp:cafeHp}; },
+  buyCat:function(){ studBux=Math.max(studBux,300); catUnlocked=true; startCut5(); },
+  skipCut5:function(){ if(PH==='cut5') cut5T=99; },
+  gotoCW:function(){ catUnlocked=true; if(!isCat){ isCat=true; curForm='cat'; setFormFlags('cat'); spawnPlayer('cat'); } enterCW(); },
+  scratchAll:function(){ dogs.filter(function(d){ return !d.dead; }).forEach(function(d){ hurtDog(d,9999,false); }); },
+  cb:function(){ return {idx:cbIdx,total:cbChunks.length,stage:cbStage}; },
+  placeCb:function(n){ for(var i=0;i<(n||1);i++) placeCbChunk(true);
+    if(cbIdx>=cbChunks.length&&PH==='catbuild') finishCafeBuild(); },
+  startWaveNow:startWave,
+  winWave:function(){ if(wave&&!wave.boss) endWave(true);
+    else if(dogCasoh&&!dogCasoh.dead) hurtDogCasoh(99999,false); },
+  setCatLvl:function(n){ catLvl=n; catHud(); placeWaveBeacon(); },
+  giveFrag:function(){ haveFrag=true; },
+  placeFragNow:placeFragment,
+  slam:trySlam,
+  catNade:throwCatGrenade,
+  autoBuildOn:function(on){ setAutoBuild(on!==false); },
+  autoState:function(){ return {on:autoBuild,inBuild:inBuildPhase()}; }
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
 </script>
