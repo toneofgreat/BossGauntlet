@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="icon" href="data:,">
+<title>BRICK LEGEND — build the house, become the legend</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;background:#0b0e14;height:100%;
+    font-family:'Segoe UI',Arial,sans-serif;-webkit-user-select:none;user-select:none;
+    touch-action:none}
+  canvas{display:block}
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .bar{position:absolute;height:14px;border-radius:7px;background:#00000088;
+    border:2px solid #ffffff44;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:5px;transition:width .15s}
+  #hpBar{left:14px;top:14px;width:200px}
+  #hpBar i{background:linear-gradient(90deg,#e3342f,#ff7b3f);width:100%}
+  #tornBar{left:14px;top:36px;width:150px;display:none}
+  #tornBar i{background:linear-gradient(90deg,#39c7a5,#9be15d);width:0%}
+  #tornBar b{position:absolute;left:6px;top:-2px;font-size:10px;color:#fff;
+    text-shadow:0 1px 2px #000;font-weight:700;letter-spacing:1px}
+  #ammo{position:absolute;right:16px;bottom:110px;color:#fff;font-weight:800;
+    font-size:22px;text-shadow:0 2px 4px #000;display:none}
+  #obj{position:absolute;top:12px;left:50%;transform:translateX(-50%);
+    color:#fff;background:#000000a0;border:2px solid #ffd83d;border-radius:10px;
+    padding:6px 16px;font-weight:700;font-size:15px;max-width:86vw;text-align:center;
+    text-shadow:0 1px 2px #000}
+  #kills{position:absolute;top:56px;left:50%;transform:translateX(-50%);
+    color:#ffd83d;font-weight:900;font-size:18px;text-shadow:0 2px 3px #000;display:none}
+  #bossWrap{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);
+    width:min(560px,80vw);display:none}
+  #bossName{color:#ff5340;font-weight:900;font-size:20px;text-align:center;
+    text-shadow:0 2px 4px #000;letter-spacing:2px;margin-bottom:4px}
+  #bossBar{position:relative;width:100%;height:18px;border-radius:9px}
+  #bossBar i{background:linear-gradient(90deg,#ff2211,#ff9a00);width:100%}
+  #msg{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%) scale(.9);
+    color:#fff;font-weight:900;font-size:clamp(20px,4.5vw,40px);text-align:center;
+    text-shadow:0 3px 8px #000,0 0 24px #ffb300aa;opacity:0;transition:all .3s;
+    max-width:90vw;pointer-events:none}
+  #msg.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #hint{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+    color:#cfe6ff;font-size:13px;font-weight:600;text-shadow:0 1px 3px #000;
+    background:#00000070;padding:4px 12px;border-radius:8px;max-width:90vw;text-align:center}
+  #stepPop{position:absolute;color:#7dffd8;font-weight:900;font-size:16px;
+    text-shadow:0 2px 4px #000;pointer-events:none;opacity:0;transition:all .6s}
+  /* overlays */
+  .ov{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;background:#0a0d16ee;color:#fff;text-align:center}
+  .ov h1{font-size:clamp(30px,7vw,64px);margin:0 0 8px;font-weight:900;letter-spacing:2px;
+    background:linear-gradient(180deg,#ffe14d,#ff8a00);-webkit-background-clip:text;
+    background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 4px 0 #7a2c00) drop-shadow(0 8px 18px #000)}
+  .ov p{color:#bcd0e8;max-width:560px;margin:6px 18px;font-size:15px;line-height:1.5}
+  .ov button{pointer-events:auto;font-family:inherit;font-weight:900;font-size:18px;
+    padding:14px 34px;margin:8px;border-radius:14px;border:0;cursor:pointer;
+    background:linear-gradient(180deg,#ffd83d,#ff9500);color:#4a2500;
+    box-shadow:0 5px 0 #a35600,0 10px 24px #0009;letter-spacing:1px}
+  .ov button:active{transform:translateY(3px);box-shadow:0 2px 0 #a35600}
+  .ov button.alt{background:linear-gradient(180deg,#3b4b66,#232c40);color:#cfe0ff;
+    box-shadow:0 5px 0 #10151f,0 10px 24px #0009}
+  #death{display:none;background:#2a0505ee}
+  #death h1{background:linear-gradient(180deg,#ff6b5d,#c01000);-webkit-background-clip:text;background-clip:text}
+  /* mobile controls */
+  #mc{position:fixed;inset:0;z-index:20;pointer-events:none;display:none}
+  #stick{position:absolute;left:22px;bottom:22px;width:124px;height:124px;border-radius:50%;
+    background:#ffffff14;border:2px solid #ffffff33;pointer-events:auto}
+  #knob{position:absolute;left:37px;top:37px;width:50px;height:50px;border-radius:50%;
+    background:#ffffff55;border:2px solid #ffffffaa}
+  .mbtn{position:absolute;width:66px;height:66px;border-radius:50%;pointer-events:auto;
+    background:#ffffff1c;border:2px solid #ffffff44;color:#fff;font-weight:900;
+    font-size:12px;display:flex;align-items:center;justify-content:center;
+    text-shadow:0 1px 2px #000;font-family:inherit}
+  .mbtn:active{background:#ffd83d55}
+  #bJump{right:24px;bottom:26px}
+  #bPunch{right:100px;bottom:70px}
+  #bShoot{right:24px;bottom:170px;display:none;background:#ff3b3b33;border-color:#ff8a7a88}
+  #bReload{right:100px;bottom:200px;display:none}
+  #bEquip{right:24px;bottom:104px;display:none}
+  #bTorn{right:176px;bottom:30px;display:none;background:#39c7a533;border-color:#7dffd888}
+  #bThrow{right:24px;bottom:170px;display:none;background:#ff9a0033;border-color:#ffd83d88}
+  #tapNote{position:absolute;left:50%;top:64%;transform:translateX(-50%);color:#8fa4c4;font-size:13px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="bar" id="hpBar"><i></i></div>
+  <div class="bar" id="tornBar"><i></i><b>TORNADO</b></div>
+  <div id="ammo">8 / 8</div>
+  <div id="obj"></div>
+  <div id="kills"></div>
+  <div id="bossWrap"><div id="bossName">T-REX</div><div class="bar" id="bossBar"><i></i></div></div>
+  <div id="msg"></div>
+  <div id="hint"></div>
+  <div id="stepPop"></div>
+</div>
+<div id="mc">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="mbtn" id="bJump">JUMP</div>
+  <div class="mbtn" id="bPunch">PUNCH</div>
+  <div class="mbtn" id="bEquip">EQUIP</div>
+  <div class="mbtn" id="bShoot">SHOOT</div>
+  <div class="mbtn" id="bReload">RELOAD</div>
+  <div class="mbtn" id="bTorn">TORNADO</div>
+  <div class="mbtn" id="bThrow">THROW</div>
+</div>
+<div class="ov" id="start">
+  <h1>BRICK LEGEND</h1>
+  <p>You are a cool brick-built construction worker. Click the glowing <b style="color:#7df3ff">translucent cyan part</b> to snap each piece of your house into place — walls, windows, a door with its own little window and doorknob, a roof, grass and a pathway. Then things get... legendary.</p>
+  <p style="color:#8fa4c4;font-size:13px">Move: WASD / Arrow keys &nbsp;·&nbsp; Jump: Space &nbsp;·&nbsp; Mobile: joystick + buttons<br>Headphones recommended. The T-rex is LOUD.</p>
+  <div id="startBtns"><button id="btnPlay">BUILD THE HOUSE</button></div>
+  <div id="tapNote"></div>
+</div>
+<div class="ov" id="death">
+  <h1 id="deathTitle">CHOMPED!</h1>
+  <p id="deathText">The T-rex got you. Bosses reset when you fall — go again?</p>
+  <div><button id="btnRetry">RETRY BOSS</button><button class="alt" id="btnQuit">QUIT (GO HOME)</button></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   BRICK LEGEND — a fully brick-built adventure.
+   Phase flow: build -> path -> cutscene (transform) -> jungle
+   -> portal -> boss1 -> boss2 -> home (tornado unlocked)
+   ============================================================ */
+
+/* ---------------- AUDIO ENGINE (all synthesized) ---------------- */
+var AC=null, master=null, sfxGain=null, muted=false;
+function audioInit(){
+  if(AC) return;
+  try{
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    var comp=AC.createDynamicsCompressor();
+    comp.threshold.value=-14; comp.knee.value=20; comp.ratio.value=8;
+    comp.attack.value=0.003; comp.release.value=0.2;
+    master=AC.createGain(); master.gain.value=1.0;
+    sfxGain=AC.createGain(); sfxGain.gain.value=1.0;
+    sfxGain.connect(comp); comp.connect(master); master.connect(AC.destination);
+  }catch(e){ AC=null; }
+}
+function actx(){ if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+function noiseBuf(sec){
+  var a=actx(); if(!a) return null;
+  var b=a.createBuffer(1,Math.max(1,(sec*a.sampleRate)|0),a.sampleRate),d=b.getChannelData(0);
+  for(var i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  return b;
+}
+function env(g,t0,peak,dec){ g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(peak,t0+0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dec); }
+function blip(freq,type,peak,dec,when,slideTo){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime+(when||0), o=a.createOscillator(), g=a.createGain();
+  o.type=type||'square'; o.frequency.setValueAtTime(freq,t);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20,slideTo),t+dec);
+  env(g,t,peak,dec); o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t+dec+0.05);
+}
+function knock(freqCenter,peak,dec,when){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime+(when||0), s=a.createBufferSource(); s.buffer=noiseBuf(dec+0.05);
+  var f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freqCenter; f.Q.value=2.5;
+  var g=a.createGain(); env(g,t,peak,dec);
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+dec+0.05);
+}
+/* loud brick click when a build piece snaps in */
+function sndBrickClick(){
+  if(!actx()) return;
+  knock(2400,0.9,0.06,0);  knock(900,0.7,0.08,0.02);
+  blip(1900,'square',0.5,0.05,0,700);
+}
+/* quiet click footsteps while walking */
+function sndStep(){
+  if(!actx()) return;
+  knock(1600+Math.random()*900,0.14,0.045,0);
+}
+/* gun: synth zap + a little voice going "pew!" */
+function sndPew(){
+  if(!actx()) return;
+  blip(1750,'sawtooth',0.55,0.13,0,220);
+  blip(2600,'sine',0.3,0.08,0,500);
+  try{
+    if(window.speechSynthesis&&!speechSynthesis.speaking){
+      var u=new SpeechSynthesisUtterance('pew!');
+      u.rate=1.9; u.pitch=1.9; u.volume=0.85; speechSynthesis.speak(u);
+    }
+  }catch(e){}
+}
+function sndReload(){
+  if(!actx()) return;
+  knock(750,0.5,0.06,0); knock(500,0.5,0.06,0.22);
+  blip(300,'square',0.25,0.1,0.42,900); knock(1100,0.6,0.05,0.62);
+}
+function sndPunch(hit){
+  if(!actx()) return;
+  blip(hit?150:110,'sine',0.7,0.09,0,60); knock(hit?1900:600,0.35,0.05,0);
+}
+function sndChirp(){
+  if(!actx()) return;
+  var f=2300+Math.random()*1200;
+  blip(f,'sine',0.12,0.07,0,f*1.6); blip(f*1.1,'sine',0.10,0.06,0.12,f*1.8);
+}
+function sndSparkle(){
+  if(!actx()) return;
+  for(var i=0;i<6;i++) blip(900+i*420,'sine',0.16,0.18,i*0.06,(900+i*420)*2);
+}
+function sndStun(){ if(actx()){ blip(1200,'triangle',0.4,0.25,0,2400); } }
+function sndPortal(){
+  if(!actx()) return;
+  for(var i=0;i<5;i++) blip(220*(i+1),'sine',0.2,0.8,i*0.05);
+}
+/* T-REX ROAR — deliberately huge */
+function sndRoar(big){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime, dur=big?1.6:1.2;
+  var o=a.createOscillator(); o.type='sawtooth';
+  o.frequency.setValueAtTime(70,t); o.frequency.exponentialRampToValueAtTime(34,t+dur);
+  var sh=a.createWaveShaper(), curve=new Float32Array(256);
+  for(var i=0;i<256;i++){ var x=i/128-1; curve[i]=Math.tanh(3.2*x); }
+  sh.curve=curve;
+  var g=a.createGain(); g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(big?1.35:1.0,t+0.08);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(sh); sh.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t+dur+0.1);
+  var s=a.createBufferSource(); s.buffer=noiseBuf(dur);
+  var f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.setValueAtTime(600,t);
+  f.frequency.exponentialRampToValueAtTime(180,t+dur); f.Q.value=1.2;
+  var g2=a.createGain(); g2.gain.setValueAtTime(0.0001,t);
+  g2.gain.linearRampToValueAtTime(0.8,t+0.1);
+  g2.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  s.connect(f); f.connect(g2); g2.connect(sfxGain); s.start(t); s.stop(t+dur);
+  var sub=a.createOscillator(); sub.type='sine';
+  sub.frequency.setValueAtTime(46,t); sub.frequency.exponentialRampToValueAtTime(28,t+dur);
+  var g3=a.createGain(); env(g3,t,big?0.9:0.7,dur);
+  sub.connect(g3); g3.connect(sfxGain); sub.start(t); sub.stop(t+dur+0.1);
+}
+function sndTazer(){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime;
+  for(var i=0;i<12;i++) blip(2600+((i%3)*700),'square',0.28,0.03,i*0.035);
+  var s=a.createBufferSource(); s.buffer=noiseBuf(0.4);
+  var f=a.createBiquadFilter(); f.type='highpass'; f.frequency.value=3000;
+  var g=a.createGain(); env(g,t,0.2,0.4);
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.45);
+}
+/* lego blocks clattering down — wood knocks */
+function sndWoodFall(){
+  if(!actx()) return;
+  var n=3+((Math.random()*3)|0);
+  for(var i=0;i<n;i++) knock(300+Math.random()*450,0.45,0.09,i*(0.05+Math.random()*0.06));
+}
+function sndChomp(){
+  var a=actx(); if(!a) return;
+  blip(120,'sine',1.0,0.15,0,40); knock(400,0.8,0.2,0.02);
+  blip(90,'sine',1.0,0.18,0.24,35); knock(300,0.9,0.25,0.26);
+  knock(1800,0.4,0.3,0.28);
+}
+function sndTntFuse(){
+  var a=actx(); if(!a) return null;
+  var s=a.createBufferSource(); s.buffer=noiseBuf(2); s.loop=true;
+  var f=a.createBiquadFilter(); f.type='highpass'; f.frequency.value=4500;
+  var g=a.createGain(); g.gain.value=0.12;
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start();
+  return {stop:function(){ try{s.stop();}catch(e){} }};
+}
+function sndBoom(){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime;
+  blip(130,'sine',1.3,0.6,0,26);
+  var s=a.createBufferSource(); s.buffer=noiseBuf(0.7);
+  var f=a.createBiquadFilter(); f.type='lowpass';
+  f.frequency.setValueAtTime(3800,t); f.frequency.exponentialRampToValueAtTime(120,t+0.6);
+  var g=a.createGain(); env(g,t,1.1,0.65);
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.75);
+}
+/* looping sounds ------------------------------------------------ */
+function makeLoop(build){ // returns {set(vol), stop()}
+  var nodes=null, gain=null;
+  return {
+    set:function(v){
+      var a=actx(); if(!a) return;
+      if(!nodes){ gain=a.createGain(); gain.gain.value=0; nodes=build(a,gain); gain.connect(sfxGain); }
+      gain.gain.setTargetAtTime(v,a.currentTime,0.4);
+    },
+    stop:function(){ if(gain&&AC) gain.gain.setTargetAtTime(0,AC.currentTime,0.3); }
+  };
+}
+var windLoop=makeLoop(function(a,g){
+  var s=a.createBufferSource(); s.buffer=noiseBuf(3); s.loop=true;
+  var f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=380; f.Q.value=0.8;
+  var lfo=a.createOscillator(); lfo.frequency.value=0.17;
+  var lg=a.createGain(); lg.gain.value=190;
+  lfo.connect(lg); lg.connect(f.frequency); lfo.start();
+  s.connect(f); f.connect(g); s.start(); return [s,lfo];
+});
+var leafLoop=makeLoop(function(a,g){
+  var s=a.createBufferSource(); s.buffer=noiseBuf(2.7); s.loop=true;
+  var f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=5200; f.Q.value=0.7;
+  var lfo=a.createOscillator(); lfo.frequency.value=6;
+  var lg=a.createGain(); lg.gain.value=1900;
+  lfo.connect(lg); lg.connect(f.frequency); lfo.start();
+  s.connect(f); f.connect(g); s.start(); return [s,lfo];
+});
+var slideLoop=makeLoop(function(a,g){
+  var s=a.createBufferSource(); s.buffer=noiseBuf(2); s.loop=true;
+  s.playbackRate.value=1.4;
+  var f=a.createBiquadFilter(); f.type='highpass'; f.frequency.value=1200;
+  s.connect(f); f.connect(g); s.start(); return [s];
+});
+/* boss battle drums */
+var bossMusicTimer=null;
+function bossMusic(on,fast){
+  if(bossMusicTimer){ clearInterval(bossMusicTimer); bossMusicTimer=null; }
+  if(!on||!actx()) return;
+  var beat=0, step=fast?0.42:0.5;
+  bossMusicTimer=setInterval(function(){
+    if(!AC) return;
+    blip(52,'sine',0.75,0.18,0,30);                       // kick
+    if(beat%2===1) knock(6000,0.16,0.03,step/2);          // hat
+    if(beat%4===2) knock(1800,0.4,0.09,0);                // snare-ish
+    var bassNotes=fast?[41,49,55,49]:[41,41,49,37];
+    blip(bassNotes[beat%4],'sawtooth',0.28,step*0.8,0.02);
+    beat++;
+  },step*1000);
+}
+
+/* ---------------- SMALL HELPERS ---------------- */
+var $=function(id){ return document.getElementById(id); };
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function rand(a,b){ return a+Math.random()*(b-a); }
+var msgTimer=null;
+function msg(t,ms){
+  var el=$('msg'); el.innerHTML=t; el.classList.add('on');
+  if(msgTimer) clearTimeout(msgTimer);
+  msgTimer=setTimeout(function(){ el.classList.remove('on'); },ms||2600);
+}
+function obj(t){ $('obj').innerHTML=t; $('obj').style.display=t?'block':'none'; }
+function hint(t){ $('hint').innerHTML=t; $('hint').style.display=t?'block':'none'; }
+
+/* ---------------- THREE SETUP ---------------- */
+var IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+var renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.shadowMap.enabled=!IS_TOUCH;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.insertBefore(renderer.domElement,document.body.firstChild);
+var scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87c9ef);
+scene.fog=new THREE.Fog(0x87c9ef,60,220);
+var camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,0.1,600);
+addEventListener('resize',function(){
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+var amb=new THREE.AmbientLight(0xbfd9ff,0.55); scene.add(amb);
+var hemi=new THREE.HemisphereLight(0xcfe8ff,0x3d5c2a,0.5); scene.add(hemi);
+var sun=new THREE.DirectionalLight(0xfff2cf,1.0);
+sun.position.set(40,70,25);
+if(!IS_TOUCH){
+  sun.castShadow=true; sun.shadow.mapSize.set(1024,1024);
+  var sc=sun.shadow.camera; sc.left=-60; sc.right=60; sc.top=60; sc.bottom=-60; sc.far=220;
+}
+scene.add(sun);
+
+/* material / geometry caches */
+var _mats={};
+function mat(c){ if(!_mats[c]) _mats[c]=new THREE.MeshLambertMaterial({color:c}); return _mats[c]; }
+var _geos={};
+function boxGeo(w,h,d){ var k=w+'_'+h+'_'+d;
+  if(!_geos[k]) _geos[k]=new THREE.BoxGeometry(w,h,d); return _geos[k]; }
+var studGeo=new THREE.CylinderGeometry(0.16,0.16,0.14,10);
+function box(w,h,d,c){ var m=new THREE.Mesh(boxGeo(w,h,d),mat(c));
+  m.castShadow=!IS_TOUCH; m.receiveShadow=!IS_TOUCH; return m; }
+/* a studded plate/brick: studs on top, spaced ~0.55 */
+function studdedBox(w,h,d,c,studC){
+  var g=new THREE.Group(), b=box(w,h,d,c); g.add(b);
+  var nx=Math.max(1,Math.round(w/0.55)), nz=Math.max(1,Math.round(d/0.55));
+  if(nx*nz<=48){
+    for(var i=0;i<nx;i++) for(var j=0;j<nz;j++){
+      var s=new THREE.Mesh(studGeo,mat(studC||c));
+      s.position.set(-w/2+(i+0.5)*(w/nx),h/2+0.07,-d/2+(j+0.5)*(d/nz));
+      g.add(s);
+    }
+  }
+  return g;
+}
+/* glass */
+var glassMat=new THREE.MeshLambertMaterial({color:0xbfe9ff,transparent:true,opacity:0.45});
+var ghostMat=new THREE.MeshBasicMaterial({color:0x35e0ff,transparent:true,opacity:0.4,depthWrite:false});
+
+/* ---------------- MINIFIG ---------------- */
+function faceTexture(style){ // style: 'smile' | 'cool' | 'angry'
+  var cv=document.createElement('canvas'); cv.width=cv.height=64;
+  var x=cv.getContext('2d');
+  x.fillStyle='#f7c531'; x.fillRect(0,0,64,64);
+  x.fillStyle='#222';
+  if(style==='cool'){ x.fillRect(8,20,48,12); x.fillStyle='#111'; x.fillRect(10,22,18,8); x.fillRect(36,22,18,8); }
+  else { x.beginPath(); x.arc(21,26,4,0,7); x.fill(); x.beginPath(); x.arc(43,26,4,0,7); x.fill(); }
+  x.strokeStyle='#222'; x.lineWidth=3; x.beginPath();
+  if(style==='angry'){ x.moveTo(20,48); x.quadraticCurveTo(32,40,44,48); }
+  else { x.moveTo(20,42); x.quadraticCurveTo(32,52,44,42); }
+  x.stroke();
+  var t=new THREE.CanvasTexture(cv); return t;
+}
+function makeMinifig(o){ // o:{torso,legs,arms,face,hat,tie,backpack,gunHand}
+  var g=new THREE.Group(), r={};
+  var legL=new THREE.Group(), legR=new THREE.Group();
+  var lm=box(0.26,0.52,0.3,o.legs); lm.position.y=-0.26; legL.add(lm);
+  var rm=box(0.26,0.52,0.3,o.legs); rm.position.y=-0.26; legR.add(rm);
+  legL.position.set(-0.16,0.62,0); legR.position.set(0.16,0.62,0);
+  g.add(legL); g.add(legR); r.legL=legL; r.legR=legR;
+  var hips=box(0.62,0.14,0.32,o.legs); hips.position.y=0.68; g.add(hips);
+  var torso=box(0.68,0.58,0.36,o.torso); torso.position.y=1.04; g.add(torso); r.torso=torso;
+  if(o.tie){ var tie=box(0.12,0.4,0.04,o.tie); tie.position.set(0,1.06,0.2); g.add(tie); r.tie=tie; }
+  var armL=new THREE.Group(), armR=new THREE.Group();
+  var la=box(0.18,0.5,0.2,o.arms); la.position.y=-0.2; armL.add(la);
+  var ra=box(0.18,0.5,0.2,o.arms); ra.position.y=-0.2; armR.add(ra);
+  var lh=box(0.14,0.14,0.14,0xf7c531); lh.position.y=-0.5; armL.add(lh);
+  var rh=box(0.14,0.14,0.14,0xf7c531); rh.position.y=-0.5; armR.add(rh);
+  armL.position.set(-0.43,1.28,0); armR.position.set(0.43,1.28,0);
+  g.add(armL); g.add(armR); r.armL=armL; r.armR=armR;
+  var headG=new THREE.Group();
+  var head=new THREE.Mesh(boxGeo(0.42,0.42,0.42),[
+    mat(0xf7c531),mat(0xf7c531),mat(0xf7c531),mat(0xf7c531),
+    new THREE.MeshLambertMaterial({map:faceTexture(o.face||'smile')}),mat(0xf7c531)
+  ]);
+  head.castShadow=!IS_TOUCH; headG.add(head);
+  var hs=new THREE.Mesh(studGeo,mat(0xf7c531)); hs.position.y=0.28; headG.add(hs);
+  headG.position.y=1.58; g.add(headG); r.head=headG;
+  if(o.hat==='hardhat'){
+    var hg=new THREE.Group();
+    var dome=box(0.4,0.2,0.4,0xffb300); dome.position.y=0.28; hg.add(dome);
+    var top=box(0.28,0.12,0.28,0xffb300); top.position.y=0.42; hg.add(top);
+    var brim=box(0.56,0.06,0.56,0xffb300); brim.position.y=0.2; hg.add(brim);
+    headG.add(hg); r.hat=hg;
+  }
+  if(o.backpack){ var bp=box(0.5,0.5,0.22,o.backpack); bp.position.set(0,1.08,-0.3); g.add(bp);
+    var bp2=box(0.3,0.16,0.14,0x7a4a1e); bp2.position.set(0,1.4,-0.28); g.add(bp2); }
+  if(o.vest){ var v=box(0.7,0.34,0.38,0xff8a00); v.position.y=1.0; g.add(v);
+    var st=box(0.72,0.07,0.39,0xd9f24b); st.position.y=1.08; g.add(st); r.vest=v; }
+  if(o.gunHand){
+    var gun=new THREE.Group();
+    var b1=box(0.1,0.12,0.4,0x333333); gun.add(b1);
+    var b2=box(0.08,0.18,0.1,0x333333); b2.position.set(0,-0.12,0.1); gun.add(b2);
+    var b3=box(0.06,0.06,0.16,0x777777); b3.position.set(0,0.02,-0.24); gun.add(b3);
+    gun.position.set(0,-0.55,-0.12); gun.visible=false;
+    armR.add(gun); r.gun=gun;
+  }
+  g.traverse(function(m){ if(m.isMesh){ m.castShadow=!IS_TOUCH; } });
+  r.group=g; return r;
+}
+
+/* ---------------- WORLD: BASE / HOUSE ---------------- */
+var world=new THREE.Group(); scene.add(world);
+var groundMat=mat(0x6fb84a);
+var ground=new THREE.Mesh(new THREE.PlaneGeometry(900,900),groundMat);
+ground.rotation.x=-Math.PI/2; ground.position.y=-0.05; ground.receiveShadow=!IS_TOUCH;
+world.add(ground);
+/* construction site baseplate */
+var basePlate=studdedBox(16,0.3,12,0x9aa5ad,0x8b969e);
+basePlate.position.y=0.15; world.add(basePlate);
+
+/* House geometry constants */
+var WALL={x0:-5,x1:5,z0:-3.5,z1:3.5,rowH:0.9,thick:0.7};
+function brickShade(base,row){ // alternate row shading for brick-course look
+  var c=new THREE.Color(base); c.offsetHSL(0,0,(row%2)?0.045:-0.02);
+  return c.getHex();
+}
+function wallSeg(len,row,color){ // a run of bricks with visible seams
+  var g=new THREE.Group(), n=Math.max(1,Math.round(len/2)), seg=len/n;
+  var off=(row%2)?0:0; // seams shift feel via shade
+  for(var i=0;i<n;i++){
+    var b=box(seg-0.06,WALL.rowH-0.05,WALL.thick,brickShade(color,row+i));
+    b.position.x=-len/2+(i+0.5)*seg;
+    g.add(b);
+  }
+  return g;
+}
+function rowAt(axis,fixed,from,to,row,color,gaps){
+  // axis 'x': wall runs along x at z=fixed ; axis 'z': runs along z at x=fixed
+  var g=new THREE.Group(), y=0.3+(row+0.5)*WALL.rowH;
+  var spans=[[from,to]];
+  (gaps||[]).forEach(function(gap){
+    var out=[];
+    spans.forEach(function(sp){
+      if(gap[1]<=sp[0]||gap[0]>=sp[1]){ out.push(sp); return; }
+      if(gap[0]>sp[0]) out.push([sp[0],gap[0]]);
+      if(gap[1]<sp[1]) out.push([gap[1],sp[1]]);
+    });
+    spans=out;
+  });
+  spans.forEach(function(sp){
+    var len=sp[1]-sp[0]; if(len<0.2) return;
+    var seg=wallSeg(len,row,color), mid=(sp[0]+sp[1])/2;
+    if(axis==='x'){ seg.position.set(mid,y,fixed); }
+    else { seg.rotation.y=Math.PI/2; seg.position.set(fixed,y,mid); }
+    g.add(seg);
+  });
+  return g;
+}
+function windowAsm(axis,fixed,center,rowLo){ // 2 wide, 2 rows tall, white frame + glass + sill
+  var g=new THREE.Group(), y0=0.3+rowLo*WALL.rowH, h=2*WALL.rowH;
+  function fbox(w,hh,d){ return box(w,hh,d,0xf4f4f4); }
+  var parts=new THREE.Group();
+  var top=fbox(2.3,0.14,WALL.thick*0.9); top.position.y=h-0.07; parts.add(top);
+  var bot=fbox(2.5,0.18,WALL.thick*1.1); bot.position.y=0.02; parts.add(bot);
+  var l=fbox(0.14,h,WALL.thick*0.9); l.position.set(-1.08,h/2,0); parts.add(l);
+  var rr=fbox(0.14,h,WALL.thick*0.9); rr.position.set(1.08,h/2,0); parts.add(rr);
+  var mid=fbox(0.1,h,0.1); mid.position.set(0,h/2,0); parts.add(mid);
+  var mid2=fbox(2.1,0.1,0.1); mid2.position.set(0,h/2,0); parts.add(mid2);
+  var gl=new THREE.Mesh(boxGeo(2.05,h-0.2,0.08),glassMat); gl.position.y=h/2; parts.add(gl);
+  if(axis==='x'){ parts.position.set(center,y0,fixed); }
+  else { parts.rotation.y=Math.PI/2; parts.position.set(fixed,y0,center); }
+  g.add(parts); return g;
+}
+function doorAsm(){ // blue door slab in front-wall gap (x -1..1, z=z1)
+  var g=new THREE.Group();
+  var d=new THREE.Group();
+  var slab=box(1.7,2.5,0.16,0x2a6fd6); slab.position.y=1.25; d.add(slab);
+  for(var i=0;i<2;i++) for(var j=0;j<2;j++){
+    var p=box(0.6,0.9,0.05,0x2258aa);
+    p.position.set(-0.4+i*0.8,0.62+j*1.25,0.1); d.add(p);
+  }
+  d.position.set(0,0.3,WALL.z1);
+  g.add(d); g.userData.door=d; return g;
+}
+function doorWindowAsm(){
+  var g=new THREE.Group();
+  var fr=box(0.8,0.6,0.2,0xf4f4f4); fr.position.set(0,2.35,WALL.z1); g.add(fr);
+  var gl=new THREE.Mesh(boxGeo(0.6,0.42,0.24),glassMat); gl.position.set(0,2.35,WALL.z1); g.add(gl);
+  return g;
+}
+function doorknobAsm(){
+  var g=new THREE.Group();
+  var plate=box(0.16,0.3,0.06,0xffd83d); plate.position.set(0.62,1.5,WALL.z1+0.12); g.add(plate);
+  var knob=new THREE.Mesh(new THREE.SphereGeometry(0.09,10,8),mat(0xffe97a));
+  knob.position.set(0.62,1.5,WALL.z1+0.2); g.add(knob);
+  return g;
+}
+function gableAsm(side){ // triangle-ish stepped gable atop x-walls' ends? -> on z walls
+  var g=new THREE.Group(), z=side>0?WALL.z1:WALL.z0;
+  for(var r=0;r<3;r++){
+    var len=(WALL.x1-WALL.x0)-r*3.2;
+    var b=wallSeg(len,r,0xc62b21);
+    b.position.set(0,0.3+(5+r+0.5)*WALL.rowH,z);
+    g.add(b);
+  }
+  return g;
+}
+function roofSlope(side){ // side -1 back / +1 front
+  var g=new THREE.Group();
+  for(var r=0;r<4;r++){
+    var z=side*(WALL.z0*-1)*(1 - r*0.24), zz=side*(3.9-r*0.95);
+    var pl=studdedBox(11.4,0.32,1.35,0x54606e,0x47525f);
+    pl.position.set(0,0.3+5*WALL.rowH+r*0.62+0.16,zz);
+    g.add(pl);
+  }
+  return g;
+}
+function roofRidge(){
+  var g=new THREE.Group();
+  var pl=studdedBox(11.6,0.4,1.1,0x39424d,0x2f384e);
+  pl.position.set(0,0.3+5*WALL.rowH+4*0.62+0.3,0);
+  g.add(pl);
+  var chim=studdedBox(0.9,1.4,0.9,0xa33a2a,0x8c2f22);
+  chim.position.set(3.2,0.3+5*WALL.rowH+4*0.62+0.9,-1.2);
+  g.add(chim);
+  return g;
+}
+function grassPatch(x,z,w,d){
+  var g=studdedBox(w,0.22,d,0x53a832,0x479128);
+  g.position.set(x,0.11,z); return g;
+}
+function pathSeg(i){ // path runs +z from the door
+  var g=studdedBox(2.4,0.26,5,0xc9c2b4,0xb9b2a3);
+  g.position.set(0,0.13,6.5+i*5+2.5-2.5+0); g.position.z=8.5+i*5;
+  return g;
+}
+var PATH_END_Z=8.5+3*5+2.5; // last segment far edge
+var PATH_MID_Z=8.5+1*5+2.5; // halfway point of pathway
+
+/* -------- BUILD STEP LIST (each click = one snap) -------- */
+var RED=0xc62b21;
+var BUILD_STEPS=[];
+function step(label,camA,make){ BUILD_STEPS.push({label:label,cam:camA,make:make}); }
+/* left wall x0, window centered z=0 gap [-1.2,1.2] rows2-3 */
+(function(){
+  var gx=[[-1.2,1.2]];
+  step('Left wall — first bricks!',-Math.PI/2+0.5,function(){ return rowAt('z',WALL.x0,WALL.z0,WALL.z1,0,RED); });
+  step('Left wall — row 2',-Math.PI/2+0.5,function(){ return rowAt('z',WALL.x0,WALL.z0,WALL.z1,1,RED); });
+  step('Left wall — around the window',-Math.PI/2+0.4,function(){ return rowAt('z',WALL.x0,WALL.z0,WALL.z1,2,RED,gx); });
+  step('Left wall — row 4',-Math.PI/2+0.4,function(){ return rowAt('z',WALL.x0,WALL.z0,WALL.z1,3,RED,gx); });
+  step('Left wall — top row',-Math.PI/2+0.4,function(){ return rowAt('z',WALL.x0,WALL.z0,WALL.z1,4,RED); });
+  step('Left window frame',-Math.PI/2+0.3,function(){ return windowAsm('z',WALL.x0,0,2); });
+})();
+/* back wall z0 */
+(function(){
+  for(var r=0;r<5;r++)(function(r){
+    step('Back wall — row '+(r+1),Math.PI+0.4,function(){ return rowAt('x',WALL.z0,WALL.x0,WALL.x1,r,RED); });
+  })(r);
+})();
+/* right wall x1, window */
+(function(){
+  var gx=[[-1.2,1.2]];
+  step('Right wall — row 1',Math.PI/2-0.5,function(){ return rowAt('z',WALL.x1,WALL.z0,WALL.z1,0,RED); });
+  step('Right wall — row 2',Math.PI/2-0.5,function(){ return rowAt('z',WALL.x1,WALL.z0,WALL.z1,1,RED); });
+  step('Right wall — around the window',Math.PI/2-0.4,function(){ return rowAt('z',WALL.x1,WALL.z0,WALL.z1,2,RED,gx); });
+  step('Right wall — row 4',Math.PI/2-0.4,function(){ return rowAt('z',WALL.x1,WALL.z0,WALL.z1,3,RED,gx); });
+  step('Right wall — top row',Math.PI/2-0.4,function(){ return rowAt('z',WALL.x1,WALL.z0,WALL.z1,4,RED); });
+  step('Right window frame',Math.PI/2-0.3,function(){ return windowAsm('z',WALL.x1,0,2); });
+})();
+/* front wall z1, door gap x -1..1 rows 0..2 */
+(function(){
+  var dg=[[-1,1]];
+  step('Front wall — row 1',0.35,function(){ return rowAt('x',WALL.z1,WALL.x0,WALL.x1,0,RED,dg); });
+  step('Front wall — row 2',0.3,function(){ return rowAt('x',WALL.z1,WALL.x0,WALL.x1,1,RED,dg); });
+  step('Front wall — row 3',0.3,function(){ return rowAt('x',WALL.z1,WALL.x0,WALL.x1,2,RED,dg); });
+  step('Front wall — over the door',0.25,function(){ return rowAt('x',WALL.z1,WALL.x0,WALL.x1,3,RED); });
+  step('Front wall — top row',0.25,function(){ return rowAt('x',WALL.z1,WALL.x0,WALL.x1,4,RED); });
+  step('The front DOOR',0.15,function(){ return doorAsm(); });
+  step('A little window on the door',0.12,function(){ return doorWindowAsm(); });
+  step('The doorknob — shiny!',0.1,function(){ return doorknobAsm(); });
+})();
+/* roof */
+step('Back gable',Math.PI+0.3,function(){ return gableAsm(-1); });
+step('Front gable',0.3,function(){ return gableAsm(1); });
+step('Roof — back slope',Math.PI-0.6,function(){ return roofSlope(-1); });
+step('Roof — front slope',0.6,function(){ return roofSlope(1); });
+step('Roof ridge + chimney',0.9,function(){ return roofRidge(); });
+/* grass + path */
+step('Grass — left yard',-0.7,function(){ var g=new THREE.Group();
+  g.add(grassPatch(-11,2,6,10)); g.add(grassPatch(-11,-6,6,6)); return g; });
+step('Grass — right yard',0.7,function(){ var g=new THREE.Group();
+  g.add(grassPatch(11,2,6,10)); g.add(grassPatch(11,-6,6,6)); return g; });
+step('Grass — front lawn',0.4,function(){ var g=new THREE.Group();
+  g.add(grassPatch(-4.6,8.5,6.8,5)); g.add(grassPatch(4.6,8.5,6.8,5)); return g; });
+step('Pathway — piece 1',0.2,function(){ return pathSeg(0); });
+step('Pathway — piece 2',0.15,function(){ return pathSeg(1); });
+step('Pathway — piece 3',0.1,function(){ return pathSeg(2); });
+step('Pathway — piece 4 ... done!',0.05,function(){ return pathSeg(3); });
+
+/* ---------------- SCENERY: TREES, BIRDS, SUN RAYS ---------------- */
+function makeTree(kind){
+  var g=new THREE.Group();
+  if(kind===0){ // jungle canopy tree
+    var h=rand(4,7);
+    var t=box(0.7,h,0.7,0x7a4a1e); t.position.y=h/2; g.add(t);
+    for(var i=0;i<3;i++){
+      var s=rand(1.8,3.2);
+      var f=studdedBox(s,1.1,s,i%2?0x2e8b2e:0x3fae3b,0x2a7a2a);
+      f.position.set(rand(-0.7,0.7),h+0.4+i*1.0,rand(-0.7,0.7));
+      g.add(f);
+    }
+  } else if(kind===1){ // palm
+    var h=rand(5,8), lean=rand(-0.15,0.15);
+    for(var i=0;i<5;i++){
+      var t2=box(0.55,h/5,0.55,0x8a5a2a);
+      t2.position.set(lean*i,h/10+i*(h/5),0); g.add(t2);
+    }
+    for(var a=0;a<5;a++){
+      var leaf=box(2.6,0.14,0.7,0x2fae4a);
+      leaf.position.set(lean*5+Math.cos(a*1.256)*1.2,h+0.2,Math.sin(a*1.256)*1.2);
+      leaf.rotation.y=a*1.256; leaf.rotation.z=0.35;
+      g.add(leaf);
+    }
+  } else { // bush
+    var f2=studdedBox(rand(1.2,2),1,rand(1.2,2),0x2e8b2e,0x256e25);
+    f2.position.y=0.5; g.add(f2);
+  }
+  return g;
+}
+function makeBird(){
+  var g=new THREE.Group();
+  var body=box(0.34,0.24,0.5,0xffffff); g.add(body);
+  var head=box(0.22,0.2,0.22,0xffffff); head.position.set(0,0.12,0.3); g.add(head);
+  var beak=box(0.08,0.06,0.14,0xff9500); beak.position.set(0,0.1,0.46); g.add(beak);
+  var wl=box(0.5,0.05,0.3,0xdddddd); wl.position.set(-0.35,0.08,0);
+  var wr=box(0.5,0.05,0.3,0xdddddd); wr.position.set(0.35,0.08,0);
+  g.add(wl); g.add(wr);
+  return {group:g,wl:wl,wr:wr,ang:Math.random()*6.28,r:rand(8,20),h:rand(8,14),
+    speed:rand(0.3,0.6),cx:0,cz:0};
+}
+var birds=[];
+function spawnBirds(cx,cz,n){
+  for(var i=0;i<n;i++){
+    var b=makeBird(); b.cx=cx+rand(-15,15); b.cz=cz+rand(-15,15);
+    world.add(b.group); birds.push(b);
+  }
+}
+/* volumetric-ish sun rays */
+var rayGroup=new THREE.Group();
+(function(){
+  var rm=new THREE.MeshBasicMaterial({color:0xfff6c9,transparent:true,opacity:0.13,
+    side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+  for(var i=0;i<7;i++){
+    var w=rand(1.5,4);
+    var p=new THREE.Mesh(new THREE.PlaneGeometry(w,60),rm);
+    p.position.set(rand(-30,30),28,rand(-20,40));
+    p.rotation.z=rand(-0.35,-0.15); p.rotation.y=rand(0,3.14);
+    rayGroup.add(p);
+  }
+  var sunDisc=new THREE.Mesh(new THREE.CircleGeometry(6,24),
+    new THREE.MeshBasicMaterial({color:0xfff3b0,transparent:true,opacity:0.9,fog:false}));
+  sunDisc.position.set(80,120,60); sunDisc.lookAt(0,0,0);
+  scene.add(sunDisc);
+  scene.add(rayGroup);
+})();
+
+/* ---------------- JUNGLE ---------------- */
+var JUNGLE={z0:30,z1:130,x0:-45,x1:45};
+var jungleGroup=new THREE.Group(); jungleGroup.visible=false; world.add(jungleGroup);
+var treeList=[];
+function buildJungle(){
+  if(jungleGroup.children.length) return;
+  var floor=new THREE.Mesh(new THREE.PlaneGeometry(JUNGLE.x1-JUNGLE.x0+30,JUNGLE.z1-JUNGLE.z0+40),mat(0x3f8f2e));
+  floor.rotation.x=-Math.PI/2; floor.position.set(0,0.02,(JUNGLE.z0+JUNGLE.z1)/2);
+  floor.receiveShadow=!IS_TOUCH;
+  jungleGroup.add(floor);
+  for(var i=0;i<70;i++){
+    var x=rand(JUNGLE.x0,JUNGLE.x1), z=rand(JUNGLE.z0+4,JUNGLE.z1-4);
+    if(Math.abs(x)<3&&z<JUNGLE.z0+16) continue; // keep entrance open
+    var t=makeTree((Math.random()*3)|0);
+    t.position.set(x,0,z);
+    t.rotation.y=rand(0,6.28);
+    jungleGroup.add(t); treeList.push(t);
+  }
+  /* jungle gate arch at entrance */
+  var arch=new THREE.Group();
+  var p1=studdedBox(1,6,1,0x7a4a1e,0x6a3f18); p1.position.set(-3,3,JUNGLE.z0-2); arch.add(p1);
+  var p2=studdedBox(1,6,1,0x7a4a1e,0x6a3f18); p2.position.set(3,3,JUNGLE.z0-2); arch.add(p2);
+  var p3=studdedBox(7.4,1,1,0x2e8b2e,0x256e25); p3.position.set(0,6.4,JUNGLE.z0-2); arch.add(p3);
+  jungleGroup.add(arch);
+  spawnBirds(0,(JUNGLE.z0+JUNGLE.z1)/2,6);
+}
+
+/* ---------------- PORTAL ---------------- */
+var portal=null;
+function makePortal(x,z){
+  var g=new THREE.Group();
+  var ring=new THREE.Mesh(new THREE.TorusGeometry(1.8,0.28,10,28),
+    new THREE.MeshBasicMaterial({color:0x9b5cff}));
+  ring.position.y=2.4; g.add(ring);
+  var disc=new THREE.Mesh(new THREE.CircleGeometry(1.6,24),
+    new THREE.MeshBasicMaterial({color:0x5c2bd9,transparent:true,opacity:0.75,side:THREE.DoubleSide}));
+  disc.position.y=2.4; g.add(disc);
+  var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.35,2.4,40,12,1,true),
+    new THREE.MeshBasicMaterial({color:0xb98cff,transparent:true,opacity:0.16,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  beam.position.y=20; g.add(beam);
+  g.position.set(x,0,z);
+  g.userData.ring=ring; g.userData.disc=disc;
+  world.add(g);
+  return g;
+}
+
+/* ---------------- BOSS ARENA + T-REX ---------------- */
+var ARENA={x:0,z:400,r:26};
+var arenaGroup=new THREE.Group(); arenaGroup.visible=false; world.add(arenaGroup);
+function buildArena(){
+  if(arenaGroup.children.length) return;
+  var fl=new THREE.Mesh(new THREE.CircleGeometry(ARENA.r+6,36),mat(0x8a7a54));
+  fl.rotation.x=-Math.PI/2; fl.position.set(ARENA.x,0.02,ARENA.z); fl.receiveShadow=!IS_TOUCH;
+  arenaGroup.add(fl);
+  for(var a=0;a<26;a++){
+    var ang=a/26*Math.PI*2, rr=ARENA.r+rand(1,4);
+    var rock=studdedBox(rand(2,4),rand(3,8),rand(2,4),0x5c5648,0x4e493d);
+    rock.position.set(ARENA.x+Math.cos(ang)*rr,rand(1.5,3),ARENA.z+Math.sin(ang)*rr);
+    rock.rotation.y=rand(0,3.14);
+    arenaGroup.add(rock);
+  }
+  for(var i=0;i<10;i++){
+    var t=makeTree((Math.random()*2)|0);
+    var ang2=rand(0,6.28), rr2=ARENA.r+rand(4,9);
+    t.position.set(ARENA.x+Math.cos(ang2)*rr2,0,ARENA.z+Math.sin(ang2)*rr2);
+    arenaGroup.add(t);
+  }
+}
+function makeTrex(dark){
+  var C1=dark?0x23252b:0x2f7d32, C2=dark?0x15161a:0x256428, BELLY=dark?0x5c1f1f:0xcfe6a2;
+  var g=new THREE.Group(), r={};
+  var body=studdedBox(3.4,3.0,6.2,C1,C2); body.position.y=4.6; g.add(body);
+  var belly=box(2.6,2,4.6,BELLY); belly.position.set(0,3.9,0.3); g.add(belly);
+  var hipL=box(1.2,2.2,2.4,C2); hipL.position.set(-1.9,4,-.9); g.add(hipL);
+  var hipR=box(1.2,2.2,2.4,C2); hipR.position.set(1.9,4,-.9); g.add(hipR);
+  var legL=new THREE.Group(), legR=new THREE.Group();
+  function legParts(lg,sx){
+    var up=box(1,2,1.4,C1); up.position.y=-1; lg.add(up);
+    var lo=box(0.8,1.6,1,C2); lo.position.set(0,-2.6,0.2); lg.add(lo);
+    var ft=studdedBox(1.3,0.6,2.2,C1,C2); ft.position.set(0,-3.6,0.5); lg.add(ft);
+    for(var c=0;c<3;c++){ var claw=box(0.24,0.3,0.5,0xf0f0f0);
+      claw.position.set(-0.4+c*0.4,-3.6,1.7); lg.add(claw); }
+  }
+  legParts(legL); legParts(legR);
+  legL.position.set(-1.9,3.8,-0.9); legR.position.set(1.9,3.8,-0.9);
+  g.add(legL); g.add(legR); r.legL=legL; r.legR=legR;
+  var armL=box(0.5,0.5,1.4,C1); armL.position.set(-1.5,4.6,2.6); armL.rotation.x=0.4; g.add(armL);
+  var armR=box(0.5,0.5,1.4,C1); armR.position.set(1.5,4.6,2.6); armR.rotation.x=0.4; g.add(armR);
+  var neck=new THREE.Group();
+  var nb=box(1.8,1.8,1.8,C1); nb.position.set(0,0.5,0.5); neck.add(nb);
+  var headG=new THREE.Group();
+  var skull=studdedBox(2.0,1.5,2.8,C1,C2); skull.position.set(0,1.0,1.6); headG.add(skull);
+  var snout=box(1.5,1.0,1.6,C2); snout.position.set(0,0.85,3.2); headG.add(snout);
+  var eL=box(0.3,0.3,0.3,dark?0xff2211:0xffd83d); eL.position.set(-0.7,1.5,2.3); headG.add(eL);
+  var eR=box(0.3,0.3,0.3,dark?0xff2211:0xffd83d); eR.position.set(0.7,1.5,2.3); headG.add(eR);
+  var jaw=new THREE.Group();
+  var jb=box(1.4,0.6,2.6,C2); jb.position.set(0,-0.3,1.3); jaw.add(jb);
+  for(var t=0;t<5;t++){
+    var tt=box(0.2,0.4,0.2,0xffffff); tt.position.set(-0.55+t*0.28,0.05,2.4); jaw.add(tt);
+    var tu=box(0.2,0.4,0.2,0xffffff); tu.position.set(-0.55+t*0.28,-0.15,2.4); tu.userData.up=1;
+  }
+  for(var t2=0;t2<4;t2++){
+    var tw=box(0.2,0.42,0.2,0xffffff); tw.position.set(-0.45+t2*0.3,0.5,2.9);
+    headG.add(tw); // upper teeth
+  }
+  jaw.position.set(0,0.35,1.7); headG.add(jaw); r.jaw=jaw;
+  headG.position.set(0,1.2,0.8); neck.add(headG); r.head=headG;
+  neck.position.set(0,5.6,2.6); g.add(neck); r.neck=neck;
+  var tail=[], parent=g, tz=-3.2, ty=4.6, sc=1;
+  for(var s=0;s<4;s++){
+    var seg=new THREE.Group();
+    var sb=box(1.6*sc,1.4*sc,1.8,s%2?C2:C1); sb.position.z=-0.9; seg.add(sb);
+    seg.position.set(0,parent===g?ty:0,parent===g?tz:-1.7);
+    parent.add(seg); tail.push(seg); parent=seg; sc*=0.75;
+  }
+  r.tail=tail;
+  g.traverse(function(m){ if(m.isMesh) m.castShadow=!IS_TOUCH; });
+  r.group=g; return r;
+}
+
+/* ---------------- PARTICLES ---------------- */
+var parts=[];
+var partGeo=new THREE.BoxGeometry(0.16,0.16,0.16);
+function burst(pos,color,n,o){
+  o=o||{};
+  for(var i=0;i<n;i++){
+    var m=new THREE.Mesh(partGeo,new THREE.MeshBasicMaterial({color:color,transparent:true}));
+    m.position.copy(pos);
+    var sp=o.speed||4;
+    m.userData.v=new THREE.Vector3(rand(-sp,sp),rand(o.upMin==null?1:o.upMin,sp*1.4),rand(-sp,sp));
+    m.userData.life=o.life||0.9; m.userData.t=0;
+    m.userData.grav=o.grav==null?12:o.grav;
+    var s=o.size||1; m.scale.set(s,s,s);
+    world.add(m); parts.push(m);
+  }
+}
+function updateParts(dt){
+  for(var i=parts.length-1;i>=0;i--){
+    var m=parts[i]; m.userData.t+=dt;
+    if(m.userData.t>=m.userData.life){ world.remove(m); m.material.dispose(); parts.splice(i,1); continue; }
+    m.userData.v.y-=m.userData.grav*dt;
+    m.position.addScaledVector(m.userData.v,dt);
+    m.rotation.x+=dt*6; m.rotation.y+=dt*5;
+    m.material.opacity=1-m.userData.t/m.userData.life;
+  }
+}
+/* TNT crate */
+function tntTexture(){
+  var cv=document.createElement('canvas'); cv.width=cv.height=64;
+  var x=cv.getContext('2d');
+  x.fillStyle='#c8371f'; x.fillRect(0,0,64,64);
+  x.fillStyle='#e8d9b0'; x.fillRect(6,22,52,20);
+  x.fillStyle='#3a1208'; x.font='900 17px Arial'; x.textAlign='center';
+  x.fillText('TNT',32,38);
+  return new THREE.CanvasTexture(cv);
+}
+var tntMat=null;
+function makeTnt(){
+  if(!tntMat) tntMat=new THREE.MeshLambertMaterial({map:tntTexture()});
+  var m=new THREE.Mesh(boxGeo(0.8,0.8,0.8),tntMat);
+  m.castShadow=!IS_TOUCH;
+  return m;
+}
+
+/* ================================================================
+   GAME STATE
+   ================================================================ */
+var PH='menu';           // menu|build|buildwalk|path|cut|jungle|boss|home
+var P={pos:new THREE.Vector3(0,0,4.8),vy:0,onGround:true,hp:100,maxHp:100,
+  yaw:0,speed:6.5,slowT:0,stepAcc:0,dead:false};
+var player=null;         // current minifig refs
+var isBusiness=false;
+var hasGun=false,gunEquipped=false,ammo=8,MAG=8,reloading=false,reloadT=0,shootCd=0;
+var punchCd=0,punchAnimT=0;
+var tornadoOwned=false,tornCharge=0,TORN_MAX=4,tornActive=false,tornTick=0;
+var buildIdx=0,ghost=null,ghostPulse=0,camOrbit={a:0.5,target:0.5};
+var camYaw=0,camShake=0;
+var hikers=[],kills=0,HIKER_TOTAL=10;
+var portalObj=null,homePortal=null;
+var bossN=0,trex=null,bossHp=0,bossMaxHp=0,bossState='idle',bossT=0,bossCd=2.5,
+    shockwaves=[],fallBlocks=[],drones=[],tnts=[],tntPads=[],carried=false,
+    suctionOn=false,slideVol=0,chargeDir=new THREE.Vector3();
+var cutT=-1,cutSkipOk=false,gunMsgShown=false,bossFlowTimer=null;
+var tweens=[];
+var keys={};
+var GTIME=0;
+var SPAWN_AFTER=(function(){ // step index after which the character appears
+  for(var i=0;i<BUILD_STEPS.length;i++)
+    if(BUILD_STEPS[i].label.indexOf('piece 2')>=0) return i;
+  return BUILD_STEPS.length-3;
+})();
+function save(){
+  try{ localStorage.setItem('brickLegendSave',JSON.stringify({gun:hasGun?1:0,torn:tornadoOwned?1:0})); }catch(e){}
+}
+function loadSave(){
+  try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
+}
+function tween(dur,fn,done){ tweens.push({t:0,d:dur,fn:fn,done:done}); }
+function updateTweens(dt){
+  for(var i=tweens.length-1;i>=0;i--){
+    var tw=tweens[i]; tw.t+=dt; var k=clamp(tw.t/tw.d,0,1);
+    tw.fn(k);
+    if(k>=1){ tweens.splice(i,1); if(tw.done) tw.done(); }
+  }
+}
+
+/* ---------------- PLAYER SPAWN / SWAP ---------------- */
+function spawnPlayer(business){
+  if(player) world.remove(player.group);
+  isBusiness=business;
+  player=makeMinifig(business?
+    {torso:0x1c1f26,legs:0x14161c,arms:0x1c1f26,face:'cool',tie:0xc62b21,gunHand:true}:
+    {torso:0x2a6fd6,legs:0x3a3f4a,arms:0x2a6fd6,face:'smile',hat:'hardhat',vest:true});
+  player.group.position.copy(P.pos);
+  world.add(player.group);
+}
+function updateMobileUI(){
+  if(!IS_TOUCH){ $('mc').style.display='none'; return; }
+  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='cut')?'none':'block';
+  var inBoss=PH==='boss';
+  $('bEquip').style.display=(hasGun&&!inBoss)?'flex':'none';
+  $('bShoot').style.display=(gunEquipped&&!inBoss)?'flex':'none';
+  $('bReload').style.display=(gunEquipped&&!inBoss)?'flex':'none';
+  $('bThrow').style.display=(inBoss)?'flex':'none';
+  $('bTorn').style.display=tornadoOwned?'flex':'none';
+}
+
+/* ---------------- INPUT ---------------- */
+addEventListener('keydown',function(e){
+  keys[e.code]=true;
+  if(e.code==='Space') e.preventDefault();
+  if(PH==='menu') return;
+  if(e.code==='Digit1') toggleGun();
+  if(e.code==='KeyR') startReload();
+  if(e.code==='KeyQ'||e.code==='KeyT') tryTornado();
+  if(e.code==='KeyF') tryPunch();
+  if(e.code==='KeyE'&&PH==='boss'&&carried) throwTnt();
+});
+addEventListener('keyup',function(e){ keys[e.code]=false; });
+var pointer=new THREE.Vector2(),ray=new THREE.Raycaster();
+renderer.domElement.addEventListener('pointerdown',function(e){
+  audioInit(); actx();
+  if(PH==='build'||PH==='buildwalk'){ tryPlace(e); return; }
+  if(PH==='cut'){ if(cutSkipOk) cutT=99; return; }
+  if(PH==='boss'){ if(carried) throwTnt(); else tryPunch(); return; }
+  if(PH==='jungle'||PH==='home'||PH==='path'){
+    if(gunEquipped) shoot(); else tryPunch();
+  }
+});
+addEventListener('contextmenu',function(e){ e.preventDefault(); });
+/* mobile joystick */
+var stickVec={x:0,y:0};
+(function(){
+  var st=$('stick'),knob=$('knob'),id=null;
+  function setKnob(dx,dy){ knob.style.left=(37+dx*36)+'px'; knob.style.top=(37+dy*36)+'px'; }
+  st.addEventListener('touchstart',function(e){ id=e.changedTouches[0].identifier; e.preventDefault(); },{passive:false});
+  addEventListener('touchmove',function(e){
+    if(id===null) return;
+    for(var i=0;i<e.changedTouches.length;i++){
+      var t=e.changedTouches[i];
+      if(t.identifier!==id) continue;
+      var r=st.getBoundingClientRect();
+      var dx=(t.clientX-(r.left+62))/50,dy=(t.clientY-(r.top+62))/50;
+      var len=Math.hypot(dx,dy); if(len>1){ dx/=len; dy/=len; }
+      stickVec.x=dx; stickVec.y=dy; setKnob(dx,dy);
+    }
+  },{passive:false});
+  addEventListener('touchend',function(e){
+    for(var i=0;i<e.changedTouches.length;i++)
+      if(e.changedTouches[i].identifier===id){ id=null; stickVec.x=stickVec.y=0; setKnob(0,0); }
+  });
+})();
+function bindBtn(id,down,up){
+  var el=$(id);
+  el.addEventListener('touchstart',function(e){ e.preventDefault(); audioInit(); actx(); down(); },{passive:false});
+  if(up) el.addEventListener('touchend',function(e){ e.preventDefault(); up(); },{passive:false});
+}
+bindBtn('bJump',function(){ keys.Space=true; },function(){ keys.Space=false; });
+bindBtn('bPunch',function(){ tryPunch(); });
+bindBtn('bEquip',function(){ toggleGun(); });
+bindBtn('bShoot',function(){ shoot(); });
+bindBtn('bReload',function(){ startReload(); });
+bindBtn('bTorn',function(){ tryTornado(); });
+bindBtn('bThrow',function(){ if(carried) throwTnt(); });
+
+/* ---------------- BUILD PHASE ---------------- */
+var placedGroup=new THREE.Group(); world.add(placedGroup);
+function showGhost(){
+  if(ghost){ world.remove(ghost); ghost=null; }
+  if(buildIdx>=BUILD_STEPS.length) return;
+  var st=BUILD_STEPS[buildIdx];
+  ghost=st.make();
+  ghost.traverse(function(m){ if(m.isMesh){ m.material=ghostMat; m.castShadow=false; } });
+  world.add(ghost);
+  camOrbit.target=st.cam;
+  obj('🔨 '+st.label+' &nbsp;<span style="color:#7df3ff">('+(buildIdx+1)+'/'+BUILD_STEPS.length+')</span>');
+  hint(PH==='build'?'Click / tap the glowing cyan part to snap it in!':'Keep building — click the cyan part! (You can walk now: WASD + Space)');
+}
+function tryPlace(e){
+  if(!ghost) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb=new THREE.Box3().setFromObject(ghost); bb.expandByScalar(1.3);
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan part</b>!'); return; }
+  placeStep();
+}
+function placeStep(silent){
+  if(buildIdx>=BUILD_STEPS.length) return;
+  var st=BUILD_STEPS[buildIdx];
+  if(ghost){ world.remove(ghost); ghost=null; }
+  var g=st.make(); placedGroup.add(g);
+  if(!silent){
+    sndBrickClick();
+    var bb=new THREE.Box3().setFromObject(g),c=bb.getCenter(new THREE.Vector3());
+    burst(c,0x7df3ff,8,{speed:2.5,life:0.5,grav:6,size:0.8});
+    g.scale.set(1.22,1.22,1.22);
+    tween(0.16,function(k){ var s=1.22-0.22*k; g.scale.set(s,s,s); });
+    camShake=Math.min(camShake+0.12,0.3);
+  }
+  buildIdx++;
+  if(buildIdx===SPAWN_AFTER+1&&!player&&!silent){
+    spawnPlayer(false); PH='buildwalk'; updateMobileUI();
+    msg('There YOU are! 👷<br><span style="font-size:60%">WASD / arrows to move · Space to jump · joystick on mobile</span>',3800);
+  }
+  if(buildIdx>=BUILD_STEPS.length){
+    PH='path';
+    if(!player) spawnPlayer(false);
+    updateMobileUI();
+    obj('🏠 House complete! Walk down your new path...');
+    hint('Walk to the end of the pathway.');
+    if(!silent){ sndSparkle(); msg('🏠 HOUSE COMPLETE!<br><span style="font-size:60%">Beautiful. Now take a walk.</span>',3000); }
+  } else showGhost();
+}
+
+/* ---------------- GUN ---------------- */
+function toggleGun(){
+  if(!hasGun||PH==='boss') return;
+  gunEquipped=!gunEquipped;
+  if(player&&player.gun) player.gun.visible=gunEquipped;
+  $('ammo').style.display=gunEquipped?'block':'none';
+  msg(gunEquipped?'🔫 Gun equipped':'Gun holstered',1200);
+  knock(800,0.4,0.06,0);
+  updateMobileUI(); updateAmmoHud();
+}
+function updateAmmoHud(){ $('ammo').textContent=reloading?'RELOADING…':(ammo+' / '+MAG); }
+function startReload(){
+  if(!gunEquipped||reloading||ammo>=MAG) return;
+  reloading=true; reloadT=1.25; sndReload(); updateAmmoHud();
+}
+function shoot(){
+  if(!gunEquipped||PH==='boss') return;
+  if(reloading||shootCd>0) return;
+  if(ammo<=0){ startReload(); return; }
+  ammo--; shootCd=0.22; sndPew(); updateAmmoHud();
+  if(player){ player.armR.rotation.x=-1.5; tween(0.18,function(k){ if(player) player.armR.rotation.x=-1.5+1.5*k; }); }
+  /* auto-aim nearest hiker in front */
+  var best=null,bd=30;
+  var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
+  hikers.forEach(function(h){
+    if(h.dead) return;
+    var d=h.ref.group.position.distanceTo(P.pos);
+    if(d>bd) return;
+    var dir=h.ref.group.position.clone().sub(P.pos).normalize();
+    if(dir.dot(fwd)>0.55){ best=h; bd=d; }
+  });
+  var from=P.pos.clone().add(new THREE.Vector3(Math.sin(P.yaw)*0.4,1.3,Math.cos(P.yaw)*0.4));
+  var to=best?best.ref.group.position.clone().setY(1.2):from.clone().addScaledVector(fwd,24);
+  /* tracer (shared geometry/material, scaled per shot) */
+  var dir2=to.clone().sub(from),len=dir2.length();
+  if(!window._trGeo){ window._trGeo=new THREE.CylinderGeometry(0.03,0.03,1,5);
+    window._trMat=new THREE.MeshBasicMaterial({color:0xfff06a}); }
+  var tr=new THREE.Mesh(window._trGeo,window._trMat);
+  tr.scale.y=len;
+  tr.position.copy(from).addScaledVector(dir2,0.5);
+  tr.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir2.clone().normalize());
+  world.add(tr);
+  setTimeout(function(){ world.remove(tr); },70);
+  burst(from,0xffe14d,4,{speed:1.5,life:0.25,grav:0,size:0.7});
+  if(best) hurtHiker(best,18,false);
+  if(ammo===0){ hint('Out of ammo — press R / RELOAD.'); }
+}
+
+/* ---------------- PUNCH ---------------- */
+function tryPunch(){
+  if(punchCd>0||!player||PH==='cut'||PH==='menu') return;
+  punchCd=0.45; punchAnimT=0.22;
+  player.armR.rotation.x=-1.7;
+  var hit=false;
+  var targets=hikers.filter(function(h){ return !h.dead; });
+  targets.forEach(function(h){
+    var d=h.ref.group.position.distanceTo(P.pos);
+    if(d<1.9){
+      var dir=h.ref.group.position.clone().sub(P.pos).normalize();
+      var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
+      if(dir.dot(fwd)>0.2){ hurtHiker(h,12,tornActive); hit=true; }
+    }
+  });
+  drones.forEach(function(dr){
+    if(dr.dead) return;
+    if(dr.mesh.position.distanceTo(P.pos)<2.4){ dr.hp--; hit=true;
+      burst(dr.mesh.position,0x9aa5ad,6,{speed:3,life:0.5});
+      if(dr.hp<=0) killDrone(dr);
+    }
+  });
+  sndPunch(hit);
+}
+
+/* ---------------- TORNADO ---------------- */
+function tryTornado(){
+  if(!tornadoOwned||tornActive||PH==='cut'||PH==='menu') return;
+  if(tornCharge<1){ msg('Tornado charging… '+Math.floor(tornCharge/TORN_MAX*100)+'%',1200); return; }
+  tornActive=true; tornTick=0;
+  windLoop.set(0.65); leafLoop.set(0.5);
+  msg('🌪️ TORNADO!',1200);
+}
+function stopTornado(){
+  tornActive=false;
+  leafLoop.set(0);
+  if(PH==='jungle') windLoop.set(0.3);
+  else if(PH==='boss') windLoop.set(0.15);
+  else if(PH==='home') windLoop.set(0.12);
+  else windLoop.set(0);
+}
+function updateTornado(dt){
+  if(tornActive){
+    tornCharge-=dt;
+    tornTick-=dt;
+    if(player){ player.group.rotation.y+=dt*22; }
+    /* leaves + wind swirl */
+    if(Math.random()<0.6){
+      var a=rand(0,6.28),r=rand(0.5,2.2);
+      var pcol=Math.random()<0.7?0x4caf50:0x8bc34a;
+      var p=new THREE.Mesh(partGeo,new THREE.MeshBasicMaterial({color:pcol,transparent:true}));
+      p.position.set(P.pos.x+Math.cos(a)*r,rand(0.2,2),P.pos.z+Math.sin(a)*r);
+      p.userData.v=new THREE.Vector3(-Math.sin(a)*6,rand(2,5),Math.cos(a)*6);
+      p.userData.life=0.7; p.userData.t=0; p.userData.grav=2;
+      world.add(p); parts.push(p);
+    }
+    if(tornTick<=0){
+      tornTick=0.35;
+      hikers.forEach(function(h){
+        if(h.dead) return;
+        if(h.ref.group.position.distanceTo(P.pos)<3.2){
+          hurtHiker(h,7,true);
+          var kb=h.ref.group.position.clone().sub(P.pos).setY(0).normalize();
+          h.ref.group.position.addScaledVector(kb,1.2);
+        }
+      });
+      drones.forEach(function(dr){
+        if(!dr.dead&&dr.mesh.position.distanceTo(P.pos)<3.5){ dr.hp--; if(dr.hp<=0) killDrone(dr); }
+      });
+    }
+    if(tornCharge<=0){ tornCharge=0; stopTornado(); }
+  } else if(tornadoOwned&&tornCharge<TORN_MAX){
+    tornCharge=Math.min(TORN_MAX,tornCharge+dt/3); // 1s of spin per 3s, auto
+  }
+  if(tornadoOwned){
+    $('tornBar').style.display='block';
+    $('tornBar').firstElementChild.style.width=(tornCharge/TORN_MAX*100)+'%';
+  }
+}
+
+/* ---------------- CUTSCENE (transformation) ---------------- */
+var cutBackdrop=null,cutSpin=0;
+function startCutscene(){
+  PH='cut'; cutT=0; cutSkipOk=false; cutSpin=0;
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  if(!cutBackdrop){
+    cutBackdrop=new THREE.Mesh(new THREE.CylinderGeometry(9,9,14,24,1,true),
+      new THREE.MeshBasicMaterial({color:0x0a0618,side:THREE.BackSide,fog:false}));
+    world.add(cutBackdrop);
+  }
+  cutBackdrop.visible=true;
+  cutBackdrop.position.set(P.pos.x,5,P.pos.z);
+  sndSparkle();
+}
+function updateCutscene(dt){
+  cutT+=dt;
+  if(cutT>1) cutSkipOk=true;
+  cutSpin+=dt*(2+Math.min(cutT*3,14));
+  if(player) player.group.rotation.y=cutSpin;
+  /* camera close-up orbit */
+  var ca=cutSpin*0.12;
+  camera.position.set(P.pos.x+Math.sin(ca)*4.2,2.3+Math.sin(cutT*0.8)*0.4,P.pos.z+Math.cos(ca)*4.2);
+  camera.lookAt(P.pos.x,1.3,P.pos.z);
+  if(Math.random()<0.5)
+    burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
+      Math.random()<0.5?0xffe14d:0x7df3ff,2,{speed:2,life:0.6,grav:-2,size:0.7});
+  if(cutT>1.4&&cutT<1.5&&player&&player.hat&&player.hat.visible){
+    player.hat.visible=false; sndSparkle();
+    burst(new THREE.Vector3(P.pos.x,2.2,P.pos.z),0xffb300,10,{speed:4,life:0.8});
+  }
+  if(cutT>2.2&&!isBusiness){
+    spawnPlayer(true); player.group.rotation.y=cutSpin;
+    burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0xffffff,26,{speed:6,life:0.9});
+    sndBoom(); camShake=0.5;
+    msg('⚡ POWER SURGE! ⚡<br><span style="font-size:70%">You are now… <b>THE BUSINESSMAN.</b></span>',3200);
+  }
+  if(cutT>4.4&&cutT<4.5&&!gunMsgShown){
+    gunMsgShown=true;
+    msg('🔫 You got a GUN!<br><span style="font-size:55%">Press <b>1</b> to equip it (EQUIP button on mobile).<br>SHOOT and RELOAD controls only appear while it\'s equipped.</span>',4600);
+  }
+  if(cutT>8){
+    /* reveal the jungle */
+    cutBackdrop.visible=false;
+    hasGun=true; save();
+    buildJungle(); jungleGroup.visible=true;
+    windLoop.set(0.3);
+    spawnHikers();
+    PH='jungle'; updateMobileUI();
+    obj('🌴 Get through the brick jungle! Hikers chase you if you get within 10 bricks.');
+    hint('Punch: F / click · Equip gun: 1 (SHOOT/RELOAD buttons only show while equipped) · Kill all 10 hikers to reveal something…');
+    if(!gunMsgShown){
+      gunMsgShown=true;
+      setTimeout(function(){
+        msg('🔫 You got a GUN!<br><span style="font-size:55%">Press <b>1</b> to equip it (EQUIP button on mobile).<br>SHOOT and RELOAD controls only appear while it\'s equipped.</span>',4600);
+      },4000);
+    }
+    $('kills').style.display='block'; updateKillHud();
+    msg('🌬️ Do you hear the wind?<br><span style="font-size:60%">A whole BRICK JUNGLE lies ahead…</span>',3600);
+    camYaw=0; P.yaw=0; // face into the jungle (+z)
+  }
+}
+
+/* ---------------- HIKERS ---------------- */
+var HIKER_COLORS=[0x8d6e63,0x607d8b,0x795548,0x556b2f,0x6d4c41];
+function spawnHikers(){
+  if(hikers.length) return;
+  for(var i=0;i<HIKER_TOTAL;i++){
+    var ref=makeMinifig({torso:HIKER_COLORS[i%HIKER_COLORS.length],legs:0x4e5a3a,
+      arms:HIKER_COLORS[(i+2)%HIKER_COLORS.length],face:'angry',backpack:0x9e3b2f});
+    var x=rand(JUNGLE.x0+6,JUNGLE.x1-6),z=rand(JUNGLE.z0+12,JUNGLE.z1-10);
+    ref.group.position.set(x,0,z);
+    world.add(ref.group);
+    hikers.push({ref:ref,hp:30,dead:false,state:'wander',tx:x,tz:z,
+      atkCd:0,stunT:0,walkT:Math.random()*6,retargetT:0});
+  }
+}
+function updateKillHud(){ $('kills').textContent='⛏️ Hikers: '+kills+' / '+HIKER_TOTAL; }
+function hurtHiker(h,dmg,fromTornado){
+  if(h.dead) return;
+  h.hp-=dmg; h.state='chase';
+  burst(h.ref.group.position.clone().setY(1.2),0xffd83d,4,{speed:2.5,life:0.4});
+  if(fromTornado&&Math.random()<0.2&&h.stunT<=0){
+    h.stunT=2.2; sndStun();
+    burst(h.ref.group.position.clone().setY(2),0xfff06a,8,{speed:1.5,life:0.9,grav:-1});
+    msgFloat(h.ref.group.position,'STUNNED!');
+  }
+  if(h.hp<=0){
+    h.dead=true; kills++; updateKillHud();
+    sndWoodFall();
+    burst(h.ref.group.position.clone().setY(1),HIKER_COLORS[(Math.random()*5)|0],16,{speed:5,life:1.1});
+    world.remove(h.ref.group);
+    if(kills>=HIKER_TOTAL&&!portalObj){
+      setTimeout(spawnPortal,900);
+    }
+  }
+}
+function msgFloat(pos,txt){ /* simple: reuse stepPop element */
+  var el=$('stepPop'),v=pos.clone().setY(2.4).project(camera);
+  el.textContent=txt;
+  el.style.left=((v.x*0.5+0.5)*innerWidth)+'px';
+  el.style.top=((-v.y*0.5+0.5)*innerHeight)+'px';
+  el.style.opacity=1; el.style.transform='translateY(0)';
+  setTimeout(function(){ el.style.opacity=0; el.style.transform='translateY(-30px)'; },60);
+}
+function updateHikers(dt){
+  hikers.forEach(function(h){
+    if(h.dead) return;
+    var g=h.ref.group,d=g.position.distanceTo(P.pos);
+    if(h.stunT>0){
+      h.stunT-=dt;
+      g.rotation.z=Math.sin(GTIME*20)*0.12;
+      if(Math.random()<0.1) burst(g.position.clone().setY(2.1),0xfff06a,1,{speed:1,life:0.5,grav:-2,size:0.6});
+      return;
+    }
+    g.rotation.z=0;
+    if(d<=10&&!P.dead) h.state='chase';
+    else if(h.state==='chase'&&d>26) h.state='wander';
+    var spd=0,tx,tz;
+    if(h.state==='chase'){
+      spd=5.2; tx=P.pos.x; tz=P.pos.z;
+      if(d<1.5){
+        spd=0;
+        h.atkCd-=dt;
+        if(h.atkCd<=0&&!P.dead){
+          h.atkCd=1.1; hurtPlayer(8,'A hiker punched you!');
+          sndPunch(true);
+          h.ref.armR.rotation.x=-1.6;
+          (function(hh){ tween(0.25,function(k){ hh.ref.armR.rotation.x=-1.6+1.6*k; }); })(h);
+        }
+      }
+    } else {
+      spd=2;
+      h.retargetT-=dt;
+      if(h.retargetT<=0){ h.retargetT=rand(2,5);
+        h.tx=clamp(h.ref.group.position.x+rand(-10,10),JUNGLE.x0+4,JUNGLE.x1-4);
+        h.tz=clamp(h.ref.group.position.z+rand(-10,10),JUNGLE.z0+6,JUNGLE.z1-6); }
+      tx=h.tx; tz=h.tz;
+      if(Math.hypot(tx-g.position.x,tz-g.position.z)<1) spd=0;
+    }
+    if(spd>0){
+      var dx=tx-g.position.x,dz=tz-g.position.z,l=Math.hypot(dx,dz)||1;
+      g.position.x+=dx/l*spd*dt; g.position.z+=dz/l*spd*dt;
+      g.rotation.y=Math.atan2(dx,dz);
+      h.walkT+=dt*spd*1.6;
+      h.ref.legL.rotation.x=Math.sin(h.walkT)*0.8;
+      h.ref.legR.rotation.x=-Math.sin(h.walkT)*0.8;
+      h.ref.armL.rotation.x=-Math.sin(h.walkT)*0.6;
+      h.ref.armR.rotation.x=Math.sin(h.walkT)*0.6;
+    }
+  });
+}
+
+/* ---------------- PORTAL SPAWN / ENTER ---------------- */
+function spawnPortal(){
+  if(portalObj) return;
+  var t=treeList.length?treeList[(Math.random()*treeList.length)|0]:null;
+  var x=t?t.position.x+rand(-3,3):rand(-20,20),
+      z=t?t.position.z+rand(-3,3):rand(JUNGLE.z0+20,JUNGLE.z1-20);
+  x=clamp(x,JUNGLE.x0+5,JUNGLE.x1-5); z=clamp(z,JUNGLE.z0+8,JUNGLE.z1-8);
+  portalObj=makePortal(x,z);
+  sndPortal(); camShake=0.4;
+  obj('🌀 A PORTAL appeared in the trees! Get to it!');
+  msg('🌀 A portal tore open in the trees!<br><span style="font-size:60%">Find the purple beam of light.</span>',3800);
+}
+function updatePortals(dt){
+  [portalObj,homePortal].forEach(function(po){
+    if(!po) return;
+    po.userData.ring.rotation.z+=dt*2;
+    po.userData.disc.rotation.z-=dt*3;
+    if(Math.random()<0.2)
+      burst(po.position.clone().add(new THREE.Vector3(rand(-1.5,1.5),rand(1,3.5),rand(-1.5,1.5))),
+        0xb98cff,1,{speed:1,life:0.7,grav:-3,size:0.7});
+  });
+  if(portalObj&&(PH==='jungle')&&P.pos.distanceTo(portalObj.position)<2.2) enterBoss(1);
+  if(homePortal&&PH==='home'&&P.pos.distanceTo(homePortal.position)<2.2) enterBoss(1);
+}
+
+/* ---------------- BOSS ---------------- */
+function enterBoss(n){
+  buildArena(); arenaGroup.visible=true;
+  bossN=n; PH='boss';
+  gunEquipped=false; if(player&&player.gun) player.gun.visible=false;
+  $('ammo').style.display='none';
+  P.pos.set(ARENA.x,0,ARENA.z-ARENA.r+4); P.vy=0; P.hp=P.maxHp;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  if(trex){ world.remove(trex.group); trex=null; }
+  trex=makeTrex(n===2);
+  trex.group.position.set(ARENA.x,0,ARENA.z+8);
+  world.add(trex.group);
+  bossMaxHp=n===2?14:10; bossHp=bossMaxHp;
+  bossState='intro'; bossT=0; bossCd=n===2?1.9:2.8;
+  clearBossEntities();
+  carried=false;
+  setupTntPads();
+  $('bossWrap').style.display='block';
+  $('bossName').textContent=n===2?'☠️ MEGA T-REX ☠️':'🦖 T-REX 🦖';
+  updateBossHud();
+  $('kills').style.display='none';
+  obj(n===2?'☠️ ROUND 2. It brought a bigger, angrier friend.':'🦖 BOSS FIGHT!');
+  hint('NO GUN in here! Walk over a TNT crate to grab it, then click / THROW to hurl it at the T-rex. Jump the shockwaves!');
+  windLoop.set(0.15);
+  bossMusic(true,n===2);
+  sndRoar(true); camShake=1.0;
+  msg(n===2?'☠️ MEGA T-REX ☠️':'🦖 T-REX! 🦖<br><span style="font-size:55%">Throw TNT. Dodge everything. Survive.</span>',3200);
+  updateMobileUI();
+}
+function updateBossHud(){ $('bossBar').firstElementChild.style.width=(bossHp/bossMaxHp*100)+'%'; }
+function setupTntPads(){
+  tntPads.forEach(function(p){ world.remove(p.mesh); world.remove(p.pad); });
+  tntPads.length=0;
+  for(var i=0;i<5;i++){
+    var a=i/5*Math.PI*2+0.6;
+    var x=ARENA.x+Math.cos(a)*(ARENA.r-5),z=ARENA.z+Math.sin(a)*(ARENA.r-5);
+    var pad=studdedBox(1.6,0.14,1.6,0x8f8571,0x7d745f); pad.position.set(x,0.07,z); world.add(pad);
+    var crate=makeTnt(); crate.position.set(x,0.85,z); world.add(crate);
+    tntPads.push({mesh:crate,pad:pad,x:x,z:z,respawn:0,has:true});
+  }
+}
+function throwTnt(){
+  if(!carried) return;
+  carried=false;
+  var from=P.pos.clone().setY(1.6);
+  var target=trex?trex.group.position.clone().setY(4):from.clone().add(new THREE.Vector3(0,0,5));
+  var dx=target.x-from.x,dz=target.z-from.z,dist=Math.hypot(dx,dz);
+  var T=clamp(dist/14,0.5,1.4);
+  var v=new THREE.Vector3(dx/T,(target.y-from.y)/T+0.5*16*T,dz/T);
+  var m=makeTnt(); m.position.copy(from); world.add(m);
+  tnts.push({mesh:m,v:v,fuse:sndTntFuse(),t:0});
+  knock(600,0.4,0.06,0);
+  if(player){ player.armR.rotation.x=-2.4; tween(0.3,function(k){ if(player) player.armR.rotation.x=-2.4+2.4*k; }); }
+}
+function updateTnts(dt){
+  for(var i=tnts.length-1;i>=0;i--){
+    var t=tnts[i]; t.t+=dt;
+    t.v.y-=16*dt;
+    t.mesh.position.addScaledVector(t.v,dt);
+    t.mesh.rotation.x+=dt*7; t.mesh.rotation.z+=dt*5;
+    var hitTrex=trex&&t.mesh.position.distanceTo(trex.group.position.clone().setY(t.mesh.position.y))<3.6
+      &&t.mesh.position.y<9;
+    if(t.mesh.position.y<=0.3||hitTrex||t.t>4){
+      if(t.fuse) t.fuse.stop();
+      sndBoom(); camShake=0.8;
+      burst(t.mesh.position.clone().setY(Math.max(0.5,t.mesh.position.y)),0xff9500,22,{speed:8,life:0.8});
+      burst(t.mesh.position.clone().setY(Math.max(0.5,t.mesh.position.y)),0x4a4a4a,12,{speed:5,life:1.1});
+      if(trex&&t.mesh.position.distanceTo(trex.group.position.clone().setY(t.mesh.position.y))<5) bossDamage(1);
+      world.remove(t.mesh); tnts.splice(i,1);
+    }
+  }
+  /* pads: pickup + respawn */
+  tntPads.forEach(function(p){
+    if(p.has){
+      p.mesh.rotation.y+=dt;
+      if(!carried&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.4){
+        p.has=false; p.respawn=6; world.remove(p.mesh);
+        carried=true; knock(900,0.5,0.05,0);
+        hint('💣 TNT in hand — click / THROW to hurl it at the T-rex!');
+      }
+    } else {
+      p.respawn-=dt;
+      if(p.respawn<=0){ p.has=true; p.mesh.position.set(p.x,0.85,p.z); world.add(p.mesh); }
+    }
+  });
+}
+function clearBossEntities(){
+  shockwaves.forEach(function(s){ world.remove(s.mesh); }); shockwaves.length=0;
+  fallBlocks.forEach(function(f){ world.remove(f.mesh); if(f.shadow) world.remove(f.shadow); });
+  fallBlocks.length=0;
+  drones.forEach(function(d){ if(d.beam){ world.remove(d.beam); d.beam=null; } world.remove(d.mesh); d.dead=true; });
+  drones.length=0;
+  tnts.forEach(function(t){ world.remove(t.mesh); if(t.fuse) t.fuse.stop(); }); tnts.length=0;
+  suctionOn=false; slideLoop.set(0);
+  if(bossFlowTimer){ clearTimeout(bossFlowTimer); bossFlowTimer=null; }
+}
+function bossDamage(n){
+  if(!trex||bossState==='dead') return;
+  bossHp-=n; updateBossHud();
+  burst(trex.group.position.clone().setY(5),0xff5340,10,{speed:6,life:0.7});
+  if(Math.random()<0.4) sndRoar(false);
+  if(bossHp<=0){ bossDie(); return; }
+  trex.group.position.y=0.3;
+  tween(0.25,function(k){ if(trex) trex.group.position.y=0.3*(1-k); });
+}
+function bossDie(){
+  bossState='dead'; bossT=0;
+  bossMusic(false);
+  sndRoar(true); sndWoodFall();
+  setTimeout(sndWoodFall,300); setTimeout(sndWoodFall,650); setTimeout(sndWoodFall,1000);
+  camShake=1.2;
+  clearBossEntities(); // nothing left alive can kill the player after the boss falls
+  for(var i=0;i<40;i++){
+    var c=[0x2f7d32,0x256428,0x23252b,0xcfe6a2][(Math.random()*4)|0];
+    burst(trex.group.position.clone().add(new THREE.Vector3(rand(-3,3),rand(1,7),rand(-3,3))),c,2,{speed:7,life:1.4});
+  }
+  if(bossN===1){
+    msg('🦖 DOWN!<br><span style="font-size:55%">…wait. The ground is still shaking…</span>',3200);
+    bossFlowTimer=setTimeout(function(){ bossFlowTimer=null; if(PH==='boss'&&!P.dead) enterBoss(2); },3400);
+  } else {
+    msg('🏆 BOTH T-REX DEFEATED! 🏆',3000);
+    bossFlowTimer=setTimeout(function(){ bossFlowTimer=null; winGame(); },2600);
+  }
+}
+function winGame(){
+  if(PH!=='boss'||P.dead) return;
+  bossMusic(false);
+  sndSparkle(); setTimeout(sndSparkle,400);
+  tornadoOwned=true; tornCharge=TORN_MAX; save();
+  $('bossWrap').style.display='none';
+  arenaGroup.visible=false;
+  if(trex){ world.remove(trex.group); trex=null; }
+  PH='home';
+  P.pos.set(0,0,6); P.vy=0; P.hp=P.maxHp;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  windLoop.set(0.12);
+  if(!homePortal){ homePortal=makePortal(6,PATH_END_Z); }
+  obj('🏡 HOME SWEET BRICK HOME — you earned the 🌪️ TORNADO!');
+  hint('Tornado: Q (or TORNADO button) — spins you up, 20% chance to STUN anyone you hit. 1s of spin per 3s of charge, 4s max. The purple portal = boss rematch.');
+  msg('🌪️ TORNADO ABILITY UNLOCKED!<br><span style="font-size:55%">Press Q / TORNADO. It charges itself: 3s per second of spin, 4s max.</span>',5200);
+  burst(P.pos.clone().setY(1.5),0x7dffd8,24,{speed:5,life:1.2});
+  updateMobileUI();
+}
+/* T-rex behaviour */
+function updateBoss(dt){
+  if(!trex) return;
+  var g=trex.group,d2p=g.position.distanceTo(P.pos);
+  bossT+=dt;
+  /* idle animations always */
+  var wt=GTIME*6;
+  trex.tail.forEach(function(seg,i){ seg.rotation.y=Math.sin(GTIME*2.4+i)*0.28; });
+  if(bossState==='dead'){
+    g.rotation.z=Math.min(g.rotation.z+dt*1.4,Math.PI/2*0.9);
+    g.position.y=Math.max(g.position.y-dt*1.2,-1.2);
+    return;
+  }
+  /* face player unless charging */
+  if(bossState!=='charge'){
+    var ang=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+    g.rotation.y+=(ang-g.rotation.y)*(1-Math.pow(0.02,dt));
+  }
+  if(bossState==='intro'){
+    trex.jaw.rotation.x=Math.sin(bossT*10)*0.4+0.4;
+    if(bossT>1.6){ bossState='idle'; bossT=0; trex.jaw.rotation.x=0.1; }
+    return;
+  }
+  if(bossState==='idle'){
+    /* stalk the player */
+    var spd=bossN===2?4.6:3.2;
+    if(d2p>5){
+      g.position.x+=Math.sin(g.rotation.y)*spd*dt;
+      g.position.z+=Math.cos(g.rotation.y)*spd*dt;
+      trex.legL.rotation.x=Math.sin(wt)*0.5; trex.legR.rotation.x=-Math.sin(wt)*0.5;
+      if(Math.sin(wt)*Math.sin(wt-dt*6)<0){ knock(150,0.5,0.12,0); camShake=Math.min(camShake+0.08,0.3); }
+    } else { trex.legL.rotation.x=trex.legR.rotation.x=0; }
+    trex.jaw.rotation.x=0.1+Math.sin(GTIME*3)*0.06;
+    if(bossT>bossCd){
+      bossT=0;
+      var moves=['roar','stomp','charge','rain','tazer','suction'];
+      var mv=moves[(Math.random()*moves.length)|0];
+      if(bossN===2&&Math.random()<0.35) spawnDrone(); // extra harassment
+      startBossMove(mv);
+    }
+  }
+  else if(bossState==='roar'){
+    trex.jaw.rotation.x=Math.min(bossT*4,0.9);
+    trex.neck.rotation.x=-Math.min(bossT*2,0.35);
+    if(bossT>1.3){ bossState='idle'; bossT=0; trex.neck.rotation.x=0; trex.jaw.rotation.x=0.1; }
+  }
+  else if(bossState==='stompPrep'){
+    trex.legR.rotation.x=-Math.min(bossT*3,1.2);
+    if(bossT>0.55){
+      bossState='idle'; bossT=0; trex.legR.rotation.x=0;
+      sndWoodFall(); blip(70,'sine',1.1,0.3,0,30); camShake=0.9;
+      var sw=new THREE.Mesh(new THREE.TorusGeometry(1,0.3,8,28),
+        new THREE.MeshBasicMaterial({color:0xd7c9a3}));
+      sw.rotation.x=Math.PI/2; sw.position.set(g.position.x,0.3,g.position.z);
+      world.add(sw);
+      shockwaves.push({mesh:sw,r:1,hit:false});
+      if(bossN===2) setTimeout(function(){
+        if(bossState==='dead'||PH!=='boss') return;
+        var sw2=new THREE.Mesh(new THREE.TorusGeometry(1,0.3,8,28),
+          new THREE.MeshBasicMaterial({color:0xffb37a}));
+        sw2.rotation.x=Math.PI/2; sw2.position.set(g.position.x,0.3,g.position.z);
+        world.add(sw2); shockwaves.push({mesh:sw2,r:1,hit:false});
+        sndWoodFall();
+      },500);
+    }
+  }
+  else if(bossState==='chargePrep'){
+    g.position.y=Math.sin(bossT*20)*0.1;
+    if(bossT>0.7){
+      bossState='charge'; bossT=0;
+      chargeDir.set(P.pos.x-g.position.x,0,P.pos.z-g.position.z).normalize();
+      g.rotation.y=Math.atan2(chargeDir.x,chargeDir.z);
+      sndRoar(false);
+    }
+  }
+  else if(bossState==='charge'){
+    var cs=bossN===2?26:21;
+    g.position.addScaledVector(chargeDir,cs*dt);
+    trex.legL.rotation.x=Math.sin(GTIME*18)*0.7; trex.legR.rotation.x=-Math.sin(GTIME*18)*0.7;
+    camShake=Math.min(camShake+dt*2,0.5);
+    if(d2p<3.8&&!P.dead){ hurtPlayer(25,'The T-rex ran you over!');
+      var kb=P.pos.clone().sub(g.position).setY(0).normalize();
+      P.pos.addScaledVector(kb,4); P.vy=7; }
+    var dc=Math.hypot(g.position.x-ARENA.x,g.position.z-ARENA.z);
+    if(dc>ARENA.r-2||bossT>1.4){
+      bossState='idle'; bossT=0; g.position.y=0;
+      if(dc>ARENA.r-2){ sndWoodFall(); sndWoodFall(); camShake=1.0;
+        for(var i=0;i<8;i++) spawnFallBlock(g.position.x+rand(-6,6),g.position.z+rand(-6,6),0.3); }
+      var dcv=new THREE.Vector3(g.position.x-ARENA.x,0,g.position.z-ARENA.z);
+      if(dcv.length()>ARENA.r-3){ dcv.setLength(ARENA.r-3); g.position.x=ARENA.x+dcv.x; g.position.z=ARENA.z+dcv.z; }
+    }
+  }
+  else if(bossState==='rain'){
+    trex.neck.rotation.x=-0.3;
+    if(bossT<(bossN===2?5:3.6)&&Math.random()<dt*3){
+      spawnFallBlock(P.pos.x+rand(-5,5),P.pos.z+rand(-5,5),0.85);
+    }
+    if(bossT>(bossN===2?5:3.6)){ bossState='idle'; bossT=0; trex.neck.rotation.x=0; }
+  }
+  else if(bossState==='suction'){
+    if(P.dead){ slideLoop.set(0); bossState='idle'; bossT=0; suctionOn=false;
+      trex.jaw.rotation.x=0.1; trex.neck.rotation.x=0; return; }
+    trex.jaw.rotation.x=1.1;
+    trex.neck.rotation.x=0.15;
+    suctionOn=true;
+    var mouth=new THREE.Vector3(Math.sin(g.rotation.y),0,Math.cos(g.rotation.y)).multiplyScalar(4.5)
+      .add(g.position).setY(0);
+    var pull=mouth.clone().sub(P.pos).setY(0);
+    var pd=pull.length();
+    if(pd>0.1){
+      pull.normalize();
+      var strength=(bossN===2?13:10)*(P.onGround?1:0.55);
+      P.pos.addScaledVector(pull,strength*dt*clamp(1-pd/26,0.15,1)*2.4);
+    }
+    slideVol=P.onGround?0.5:0.2; slideLoop.set(slideVol);
+    if(Math.random()<0.4)
+      burst(P.pos.clone().setY(0.3),0xd7c9a3,1,{speed:1,life:0.4,grav:2,size:0.7});
+    if(pd<2.6&&!P.dead){
+      trex.jaw.rotation.x=0;
+      sndChomp();
+      killPlayer('CHOMPED!','The T-rex sucked you right into its mouth. Bosses reset — go again?');
+      bossState='idle'; bossT=0; suctionOn=false; slideLoop.set(0);
+    }
+    if(bossT>(bossN===2?5:4)){ bossState='idle'; bossT=0; suctionOn=false;
+      trex.jaw.rotation.x=0.1; trex.neck.rotation.x=0; slideLoop.set(0); }
+  }
+  /* body contact */
+  if(bossState!=='charge'&&d2p<3.4&&!P.dead){
+    if(!trex._touchCd||trex._touchCd<=0){
+      trex._touchCd=1.0;
+      hurtPlayer(15,'Too close to the T-rex!');
+      var kb2=P.pos.clone().sub(g.position).setY(0).normalize();
+      P.pos.addScaledVector(kb2,3); P.vy=6;
+      trex.jaw.rotation.x=0.8;
+      tween(0.3,function(k){ if(trex) trex.jaw.rotation.x=0.8-0.7*k; });
+      sndPunch(true);
+    }
+  }
+  if(trex._touchCd>0) trex._touchCd-=dt;
+}
+function startBossMove(mv){
+  if(mv==='roar'){ bossState='roar'; bossT=0; sndRoar(bossN===2); camShake=0.8;
+    if(P.pos.distanceTo(trex.group.position)<10) P.slowT=1.4; }
+  else if(mv==='stomp'){ bossState='stompPrep'; bossT=0; }
+  else if(mv==='charge'){ bossState='chargePrep'; bossT=0; }
+  else if(mv==='rain'){ bossState='rain'; bossT=0; sndRoar(false); msg('🧱 BLOCKS INCOMING!',1200); }
+  else if(mv==='tazer'){ bossState='idle'; bossT=0; spawnDrone(); if(bossN===2) spawnDrone(); }
+  else if(mv==='suction'){ bossState='suction'; bossT=0;
+    sndRoar(false); slideLoop.set(0.3);
+    msg('😱 IT\'S SUCKING YOU IN — RUN + JUMP AWAY!',1800); }
+}
+function spawnFallBlock(x,z,dmgScale){
+  var dcv=Math.hypot(x-ARENA.x,z-ARENA.z);
+  if(dcv>ARENA.r-1) return;
+  var shadow=new THREE.Mesh(new THREE.CircleGeometry(1.1,16),
+    new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.35}));
+  shadow.rotation.x=-Math.PI/2; shadow.position.set(x,0.06,z);
+  world.add(shadow);
+  var colors=[0xc62b21,0x2a6fd6,0xffd83d,0x2e8b2e];
+  var q=function(v){ return Math.round(v*4)/4; }; // quantize so the geometry cache stays bounded
+  var m=studdedBox(q(rand(1,1.8)),q(rand(0.8,1.4)),q(rand(1,1.8)),colors[(Math.random()*4)|0]);
+  m.position.set(x,26,z); world.add(m);
+  fallBlocks.push({mesh:m,shadow:shadow,warn:0.8,vy:0,x:x,z:z,dead:0,dmgScale:dmgScale||1});
+}
+function updateFallBlocks(dt){
+  for(var i=fallBlocks.length-1;i>=0;i--){
+    var f=fallBlocks[i];
+    if(f.warn>0){ f.warn-=dt;
+      f.shadow.material.opacity=0.2+0.25*Math.abs(Math.sin(GTIME*10));
+      if(f.warn<=0){ f.vy=-2; } continue; }
+    f.vy-=42*dt;
+    f.mesh.position.y+=f.vy*dt;
+    f.mesh.rotation.y+=dt*3;
+    if(f.mesh.position.y<=0.6&&f.dead===0){
+      f.mesh.position.y=0.6; f.dead=0.9; f.vy=0;
+      sndWoodFall(); camShake=Math.min(camShake+0.25,0.7);
+      burst(f.mesh.position,0xd7c9a3,6,{speed:3,life:0.5});
+      if(!P.dead&&Math.hypot(P.pos.x-f.x,P.pos.z-f.z)<1.7&&P.pos.y<1.6)
+        hurtPlayer(Math.round(18*f.dmgScale),'Squashed by a falling block!');
+    } else if(f.dead>0){
+      f.dead-=dt;
+      if(f.dead<=0.4){ f.mesh.traverse(function(m){ if(m.isMesh&&m.material.transparent!==true){} }); }
+      if(f.dead<=0){ world.remove(f.mesh); world.remove(f.shadow); fallBlocks.splice(i,1); }
+    }
+  }
+  for(var j=shockwaves.length-1;j>=0;j--){
+    var s=shockwaves[j];
+    s.r+=14*(bossN===2?1.25:1)*dt;
+    s.mesh.scale.set(s.r,s.r,1);
+    if(!s.hit&&!P.dead&&P.pos.y<0.9){
+      var pd=Math.hypot(P.pos.x-s.mesh.position.x,P.pos.z-s.mesh.position.z);
+      if(Math.abs(pd-s.r)<0.9){ s.hit=true; hurtPlayer(15,'Shockwave! Jump over the rings!'); P.vy=8; }
+    }
+    if(s.r>ARENA.r+6){ world.remove(s.mesh); shockwaves.splice(j,1); }
+  }
+}
+function spawnDrone(){
+  var m=new THREE.Group();
+  var body=box(0.7,0.5,0.7,0x9aa5ad); m.add(body);
+  var eye=box(0.2,0.2,0.1,0xff2211); eye.position.set(0,0,0.4); m.add(eye);
+  var rotor=box(1.2,0.06,0.16,0x444444); rotor.position.y=0.4; m.add(rotor);
+  var prong1=box(0.08,0.4,0.08,0x666666); prong1.position.set(-0.25,-0.4,0); m.add(prong1);
+  var prong2=box(0.08,0.4,0.08,0x666666); prong2.position.set(0.25,-0.4,0); m.add(prong2);
+  m.position.set(ARENA.x+rand(-8,8),5,ARENA.z+rand(-8,8));
+  world.add(m);
+  drones.push({mesh:m,rotor:rotor,hp:2,dead:false,life:12,zapCd:2,lock:0,beam:null});
+  sndTazer();
+}
+function killDrone(d){
+  d.dead=true;
+  if(d.beam){ world.remove(d.beam); d.beam=null; }
+  burst(d.mesh.position,0x9aa5ad,12,{speed:5,life:0.9});
+  sndWoodFall();
+  world.remove(d.mesh);
+}
+function updateDrones(dt){
+  for(var i=drones.length-1;i>=0;i--){
+    var d=drones[i];
+    if(d.dead){ drones.splice(i,1); continue; }
+    d.life-=dt;
+    if(d.life<=0){ killDrone(d); drones.splice(i,1); continue; }
+    d.rotor.rotation.y+=dt*24;
+    var tgt=P.pos.clone().setY(4.2+Math.sin(GTIME*2)*0.5);
+    d.mesh.position.lerp(tgt.add(new THREE.Vector3(Math.sin(GTIME+i*2)*4,0,Math.cos(GTIME+i*2)*4)),dt*0.9);
+    d.mesh.lookAt(P.pos.clone().setY(1));
+    if(d.lock>0){
+      d.lock-=dt;
+      if(d.beam){
+        var from=d.mesh.position,to=P.pos.clone().setY(1.1);
+        var dir=to.clone().sub(from);
+        d.beam.scale.y=dir.length();
+        d.beam.position.copy(from).addScaledVector(dir,0.5);
+        d.beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize());
+      }
+      if(d.lock<=0){
+        if(d.beam){ d.beam.material.color.setHex(0x66e0ff); d.beam.scale.x=d.beam.scale.z=4; }
+        sndTazer();
+        if(d.mesh.position.distanceTo(P.pos.clone().setY(d.mesh.position.y))<15&&!P.dead){
+          hurtPlayer(10,'ZAPPED by a tazer drone!');
+          P.slowT=1.2;
+          burst(P.pos.clone().setY(1.4),0x66e0ff,10,{speed:3,life:0.5});
+        }
+        (function(dd){ setTimeout(function(){ if(dd.beam){ world.remove(dd.beam); dd.beam=null; } },140); })(d);
+        d.zapCd=bossN===2?1.6:2.3;
+      }
+    } else {
+      d.zapCd-=dt;
+      if(d.zapCd<=0&&d.mesh.position.distanceTo(P.pos.clone().setY(d.mesh.position.y))<16){
+        d.lock=0.55;
+        var geo=new THREE.CylinderGeometry(0.02,0.02,1,4);
+        d.beam=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0xff4444}));
+        world.add(d.beam);
+      }
+    }
+  }
+}
+
+/* ---------------- DAMAGE / DEATH ---------------- */
+function hurtPlayer(dmg,why){
+  if(P.dead) return;
+  P.hp-=dmg;
+  $('hpBar').firstElementChild.style.width=clamp(P.hp/P.maxHp*100,0,100)+'%';
+  camShake=Math.min(camShake+0.3,0.8);
+  burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
+  if(P.hp<=0){
+    if(PH==='boss') killPlayer('SMASHED!',why+' Bosses reset when you fall — go again?');
+    else {
+      P.dead=true;
+      msg('💀 Knocked out!<br><span style="font-size:55%">Waking up at the jungle gate…</span>',2600);
+      setTimeout(function(){
+        P.hp=P.maxHp; P.dead=false;
+        $('hpBar').firstElementChild.style.width='100%';
+        P.pos.set(0,0,JUNGLE.z0-4); P.vy=0;
+        if(player) player.group.position.copy(P.pos);
+      },1800);
+    }
+  }
+}
+function killPlayer(title,text){
+  if(P.dead) return;
+  P.dead=true;
+  bossMusic(false); slideLoop.set(0);
+  $('deathTitle').textContent='💀 '+title;
+  $('deathText').textContent=text;
+  $('death').style.display='flex';
+}
+$('btnRetry').addEventListener('click',function(){
+  $('death').style.display='none';
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  enterBoss(bossN);
+});
+$('btnQuit').addEventListener('click',function(){
+  $('death').style.display='none';
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  bossMusic(false);
+  clearBossEntities();
+  arenaGroup.visible=false;
+  $('bossWrap').style.display='none';
+  if(trex){ world.remove(trex.group); trex=null; }
+  if(tornadoOwned){ // already beat the game once: quit goes home
+    PH='home';
+    P.pos.set(0,0,6); P.vy=0;
+    camYaw=Math.PI; P.yaw=Math.PI;
+    windLoop.set(0.12);
+    obj('🏡 Home again. The purple portal is a boss rematch.');
+  } else {
+    PH='jungle';
+    P.pos.set(0,0,JUNGLE.z0-4); P.vy=0;
+    camYaw=0; P.yaw=0;
+    windLoop.set(0.3);
+    obj('🌴 Back in the jungle. The portal is still there…');
+    if(kills<HIKER_TOTAL) $('kills').style.display='block';
+  }
+  if(player) player.group.position.copy(P.pos);
+  updateMobileUI();
+});
+
+/* ---------------- PLAYER UPDATE ---------------- */
+function playerControlAllowed(){
+  return player&&!P.dead&&PH!=='cut'&&PH!=='menu'&&PH!=='build';
+}
+function updatePlayer(dt){
+  if(!playerControlAllowed()) return;
+  var ix=0,iz=0;
+  if(keys.KeyW||keys.ArrowUp) iz+=1;
+  if(keys.KeyS||keys.ArrowDown) iz-=1;
+  if(keys.KeyA||keys.ArrowLeft) ix-=1;
+  if(keys.KeyD||keys.ArrowRight) ix+=1;
+  ix+=stickVec.x; iz-=stickVec.y;
+  var l=Math.hypot(ix,iz);
+  if(l>1){ ix/=l; iz/=l; }
+  var spd=P.speed*(P.slowT>0?0.45:1)*(tornActive?1.15:1);
+  if(P.slowT>0) P.slowT-=dt;
+  /* camera-relative movement */
+  var sinY=Math.sin(camYaw),cosY=Math.cos(camYaw);
+  var vx=(ix*cosY+iz*sinY)*spd, vz=(iz*cosY-ix*sinY)*spd;
+  var moving=l>0.15;
+  if(moving){
+    P.pos.x+=vx*dt; P.pos.z+=vz*dt;
+    P.yaw=Math.atan2(vx,vz);
+    /* footstep clicks (quieter than build clicks) */
+    if(P.onGround){
+      P.stepAcc+=Math.hypot(vx,vz)*dt;
+      if(P.stepAcc>1.1){ P.stepAcc=0; sndStep(); }
+    }
+  }
+  /* jump + gravity */
+  if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; knock(1200,0.2,0.05,0); }
+  P.vy-=30*dt; P.pos.y+=P.vy*dt;
+  if(P.pos.y<=0){ P.pos.y=0; if(!P.onGround){ sndStep(); } P.onGround=true; P.vy=0; }
+  /* world bounds */
+  if(PH==='boss'){
+    var dc=new THREE.Vector3(P.pos.x-ARENA.x,0,P.pos.z-ARENA.z);
+    if(dc.length()>ARENA.r-1){ dc.setLength(ARENA.r-1); P.pos.x=ARENA.x+dc.x; P.pos.z=ARENA.z+dc.z; }
+  } else {
+    P.pos.x=clamp(P.pos.x,-60,60);
+    P.pos.z=clamp(P.pos.z,-20,jungleGroup.visible?JUNGLE.z1-2:PATH_END_Z+6);
+    /* keep out of the house walls (simple box) */
+    if(P.pos.y<4&&P.pos.x>WALL.x0-0.6&&P.pos.x<WALL.x1+0.6&&P.pos.z>WALL.z0-0.6&&P.pos.z<WALL.z1+0.6
+       &&buildIdx>SPAWN_AFTER){
+      if(!(Math.abs(P.pos.x)<1&&P.pos.z>WALL.z1-1.2)){ // allow doorway
+        var pushZ=P.pos.z>0?WALL.z1+0.6:WALL.z0-0.6;
+        var pushX=P.pos.x>0?WALL.x1+0.6:WALL.x0-0.6;
+        if(Math.abs(P.pos.z-pushZ)<Math.abs(P.pos.x-pushX)) P.pos.z=pushZ; else P.pos.x=pushX;
+      }
+    }
+  }
+  /* visuals */
+  player.group.position.copy(P.pos);
+  if(!tornActive){
+    player.group.rotation.y+=(P.yaw-player.group.rotation.y)*(1-Math.pow(0.0001,dt));
+    if(moving&&P.onGround){
+      var wt=GTIME*11;
+      player.legL.rotation.x=Math.sin(wt)*0.9;
+      player.legR.rotation.x=-Math.sin(wt)*0.9;
+      player.armL.rotation.x=-Math.sin(wt)*0.7;
+      if(punchAnimT<=0) player.armR.rotation.x=Math.sin(wt)*0.7;
+    } else if(!P.onGround){
+      player.legL.rotation.x=0.5; player.legR.rotation.x=-0.3;
+      player.armL.rotation.x=-2.6; if(punchAnimT<=0) player.armR.rotation.x=-2.6;
+    } else {
+      player.legL.rotation.x*=0.8; player.legR.rotation.x*=0.8;
+      player.armL.rotation.x*=0.8; if(punchAnimT<=0) player.armR.rotation.x*=0.8;
+    }
+  } else {
+    player.legL.rotation.x=0.4; player.legR.rotation.x=-0.4;
+    player.armL.rotation.z=1.2; player.armR.rotation.z=-1.2;
+  }
+  if(!tornActive){ player.armL.rotation.z*=0.8; player.armR.rotation.z*=0.8; }
+  if(punchAnimT>0){ punchAnimT-=dt;
+    player.armR.rotation.x=-1.7+(0.22-punchAnimT)/0.22*1.7; }
+  if(punchCd>0) punchCd-=dt;
+  if(shootCd>0) shootCd-=dt;
+  if(reloading){ reloadT-=dt;
+    if(reloadT<=0){ reloading=false; ammo=MAG; updateAmmoHud(); } }
+  /* cutscene trigger */
+  if(PH==='path'&&P.pos.z>=PATH_MID_Z&&buildIdx>=BUILD_STEPS.length) startCutscene();
+  /* soft nudge toward jungle */
+  if(PH==='path'&&P.pos.z>PATH_END_Z+3) P.pos.z=PATH_END_Z+3;
+}
+
+/* ---------------- CAMERA ---------------- */
+function updateCamera(dt){
+  if(PH==='menu') {
+    var a=GTIME*0.12;
+    camera.position.set(Math.sin(a)*24,10,Math.cos(a)*24);
+    camera.lookAt(0,3,0);
+  }
+  else if(PH==='build'){
+    camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt));
+    camera.position.set(Math.sin(camOrbit.a)*20,11,Math.cos(camOrbit.a)*20);
+    camera.lookAt(0,3,2);
+  }
+  else if(PH==='cut'){ /* handled in updateCutscene */ }
+  else if(player){
+    var targetYaw=P.yaw;
+    /* only swing camera when moving forwardish, to avoid spin */
+    var dy=targetYaw-camYaw;
+    while(dy>Math.PI) dy-=Math.PI*2;
+    while(dy<-Math.PI) dy+=Math.PI*2;
+    if(!tornActive) camYaw+=dy*(1-Math.pow(0.25,dt));
+    var dist=PH==='boss'?11:8,h=PH==='boss'?6:4.6;
+    var cx=P.pos.x-Math.sin(camYaw)*dist,
+        cz=P.pos.z-Math.cos(camYaw)*dist;
+    camera.position.x+=(cx-camera.position.x)*(1-Math.pow(0.001,dt));
+    camera.position.z+=(cz-camera.position.z)*(1-Math.pow(0.001,dt));
+    camera.position.y+=((P.pos.y+h)-camera.position.y)*(1-Math.pow(0.001,dt));
+    camera.lookAt(P.pos.x,P.pos.y+1.6,P.pos.z);
+  }
+  if(camShake>0){
+    camShake-=dt*1.6;
+    camera.position.x+=rand(-camShake,camShake)*0.5;
+    camera.position.y+=rand(-camShake,camShake)*0.5;
+  }
+}
+
+/* ---------------- AMBIENT ---------------- */
+var chirpT=3;
+function updateAmbient(dt){
+  /* birds */
+  birds.forEach(function(b){
+    b.ang+=b.speed*dt;
+    b.group.position.set(b.cx+Math.cos(b.ang)*b.r,b.h+Math.sin(b.ang*2)*1.2,b.cz+Math.sin(b.ang)*b.r);
+    b.group.rotation.y=-b.ang+Math.PI;
+    var f=Math.sin(GTIME*9+b.r)*0.7;
+    b.wl.rotation.z=f; b.wr.rotation.z=-f;
+  });
+  if(birds.length&&PH!=='menu'&&PH!=='cut'&&PH!=='boss'){
+    chirpT-=dt;
+    if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
+  }
+  rayGroup.rotation.y+=dt*0.02;
+  if(ghost){
+    ghostPulse+=dt*5;
+    ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
+  }
+}
+
+/* ---------------- MAIN LOOP ---------------- */
+var lastT=performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  var now=performance.now(),dt=Math.min((now-lastT)/1000,0.05);
+  lastT=now; GTIME+=dt;
+  updateTweens(dt);
+  updateParts(dt);
+  updateAmbient(dt);
+  updateCamera(dt);
+  if(PH==='cut') updateCutscene(dt);
+  else {
+    updatePlayer(dt);
+    if(PH==='jungle'||PH==='home') updateHikers(dt);
+    updatePortals(dt);
+    if(PH==='boss'){ updateBoss(dt); updateTnts(dt); updateFallBlocks(dt); updateDrones(dt); }
+    updateTornado(dt);
+  }
+  renderer.render(scene,camera);
+}
+animate();
+
+/* ---------------- BOOT / MENU ---------------- */
+function startBuild(){
+  $('start').style.display='none';
+  audioInit(); actx();
+  PH='build';
+  showGhost();
+  spawnBirds(0,-14,3);
+  msg('👷 Time to build!<br><span style="font-size:55%">Click the glowing cyan part to snap each piece in.</span>',3500);
+  updateMobileUI();
+}
+function startSkip(sv){
+  $('start').style.display='none';
+  audioInit(); actx();
+  for(var i=0;i<BUILD_STEPS.length;i++) placeStep(true);
+  hasGun=true;
+  tornadoOwned=!!(sv&&sv.torn);
+  if(tornadoOwned) tornCharge=TORN_MAX;
+  spawnPlayer(true);
+  P.pos.set(0,0,PATH_END_Z); if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  buildJungle(); jungleGroup.visible=true;
+  spawnHikers(); windLoop.set(0.3);
+  spawnBirds(0,-14,3);
+  PH='jungle';
+  obj('🌴 Back to the jungle! Kill all 10 hikers to open the portal.');
+  hint('1 = equip gun · click/SHOOT = pew pew · R = reload · F = punch'+(tornadoOwned?' · Q = tornado':''));
+  $('kills').style.display='block'; updateKillHud();
+  updateMobileUI();
+}
+(function(){
+  var sv=loadSave();
+  $('btnPlay').addEventListener('click',startBuild);
+  if(sv&&sv.gun){
+    var b=document.createElement('button');
+    b.className='alt'; b.textContent='SKIP TO THE JUNGLE';
+    b.addEventListener('click',function(){ startSkip(sv); });
+    $('startBtns').appendChild(b);
+  }
+  if(IS_TOUCH) $('tapNote').textContent='Mobile detected — joystick + buttons will appear in game.';
+})();
+
+/* ---------------- DEBUG API (for automated playtests) ---------------- */
+window.__dbg={
+  phase:function(){ return PH; },
+  buildIdx:function(){ return buildIdx; },
+  steps:BUILD_STEPS.length,
+  place:function(n){ for(var i=0;i<(n||1);i++) placeStep(true);
+    if(buildIdx>SPAWN_AFTER&&!player){ spawnPlayer(false); if(PH==='build') PH=buildIdx>=BUILD_STEPS.length?'path':'buildwalk'; updateMobileUI(); }
+    showGhostSafe(); },
+  tp:function(x,z){ P.pos.set(x,0,z); if(player) player.group.position.copy(P.pos); },
+  pos:function(){ return {x:P.pos.x,y:P.pos.y,z:P.pos.z}; },
+  hp:function(){ return P.hp; },
+  giveGun:function(){ hasGun=true; updateMobileUI(); },
+  equip:function(){ toggleGun(); },
+  shoot:shoot, punch:tryPunch, reload:startReload,
+  killHikers:function(){ hikers.forEach(function(h){ hurtHiker(h,9999,false); }); },
+  hikers:function(){ return hikers.filter(function(h){ return !h.dead; }).length; },
+  kills:function(){ return kills; },
+  portal:function(){ return portalObj?{x:portalObj.position.x,z:portalObj.position.z}:null; },
+  skipCut:function(){ if(PH==='cut') cutT=99; },
+  gotoBoss:function(n){ if(!player) spawnPlayer(true); hasGun=true; enterBoss(n||1); },
+  bossHp:function(){ return bossHp; },
+  bossState:function(){ return bossState; },
+  hitBoss:function(n){ bossDamage(n||1); },
+  tnt:function(){ return {carried:carried,thrown:tnts.length}; },
+  grabTnt:function(){ carried=true; },
+  throwTnt:throwTnt,
+  giveTornado:function(){ tornadoOwned=true; tornCharge=TORN_MAX; updateMobileUI(); },
+  tornado:function(){ return {owned:tornadoOwned,charge:tornCharge,active:tornActive}; },
+  useTornado:tryTornado,
+  win:winGame,
+  audio:function(){ return !!AC; },
+  startBuild:startBuild, startSkip:function(){ startSkip(loadSave()); }
+};
+function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
+</script>
+</body>
+</html>

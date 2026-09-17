@@ -112,6 +112,8 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-ocn canvas{width:100%;height:100%}
 .bg-spc{background:linear-gradient(135deg,#05030f 0%,#1a0a3a 55%,#3a1a6a 100%)}
 .bg-spc canvas{width:100%;height:100%}
+.bg-brl{background:linear-gradient(135deg,#3a7bd5 0%,#79c1f2 55%,#b8e6ff 100%)}
+.bg-brl canvas{width:100%;height:100%}
 .bg-cdy{background:linear-gradient(135deg,#3a1030 0%,#ff7ad0 55%,#ffe27a 100%)}
 .bg-cdy canvas{width:100%;height:100%}
 .bg-nin{background:linear-gradient(135deg,#1a0a14 0%,#3a1020 50%,#0a0a12 100%)}
@@ -129,6 +131,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="brick-legend.html" class="card" data-launched="2026-09-17">
+    <div class="card-img bg-brl"><canvas id="c35"></canvas></div>
+    <div class="card-body">
+      <h2>BRICK LEGEND</h2>
+      <p>Everything is bricks. Start as a construction worker: click the glowing cyan ghost piece to snap your house together brick by brick &mdash; walls, windows, a door with its own tiny window and doorknob, a roof, grass and a pathway. Halfway down the path a sparkle-storm transforms you into THE BUSINESSMAN (with a gun that goes &ldquo;pew! pew!&rdquo;). Survive a brick jungle of 10 chasing hikers, find the portal, and fight TWO screaming T-rexes with thrown TNT &mdash; dodge shockwaves, falling blocks, tazer drones and its vacuum mouth. Win and you unlock the leaf-whirling TORNADO ability. Loud. PC + mobile.</p>
+      <span class="tag" style="background:#0a3a1a;color:#7dffa0">3D ADVENTURE &middot; BUILD + BOSS &middot; LOUD</span>
+    </div>
+  </a>
   <a href="oofcubes/index.html" class="card">
     <div class="card-img bg-oof"><canvas id="c34"></canvas></div>
     <div class="card-body">
@@ -1986,6 +1996,66 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
     ctx.fillStyle='#fff';ctx.font='bold 10px Trebuchet MS,Arial';ctx.fillText('= ?',gx+1,py-10);
     ctx.fillStyle='#ffd23f';ctx.font='bold 12px Arial';ctx.textAlign='left';
     ctx.fillText('🧮 MATH OBBY',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Brick Legend preview: brick house, minifig on the path, T-rex in the jungle ----
+(function(){
+  const c=document.getElementById('c35'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function stud(x,y,wd,col){ctx.fillStyle=col;for(let i=x+3;i<x+wd-3;i+=8)ctx.fillRect(i,y-3,5,3);}
+  function draw(){
+    t+=0.02;
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#5db9f0');g.addColorStop(.7,'#a8e0ff');g.addColorStop(1,'#4d9c3a');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    // sun + rays
+    ctx.fillStyle='rgba(255,240,170,.9)';ctx.beginPath();ctx.arc(w*0.85,18,11,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(255,240,170,.35)';ctx.lineWidth=3;
+    for(let i=0;i<5;i++){const a=t*0.3+i*1.26;ctx.beginPath();ctx.moveTo(w*0.85,18);
+      ctx.lineTo(w*0.85+Math.cos(a)*30,18+Math.abs(Math.sin(a))*34);ctx.stroke();}
+    const gy=h*0.78;
+    // jungle trees (right)
+    for(let i=0;i<4;i++){const tx=w*0.6+i*w*0.11,th=26+((i*17)%12),sway=sin(t*1.4+i)*1.5;
+      ctx.fillStyle='#7a4a1e';ctx.fillRect(tx,gy-th,7,th);
+      ctx.fillStyle=i%2?'#2e8b2e':'#3fae3b';ctx.fillRect(tx-9+sway,gy-th-16,25,18);
+      stud(tx-9+sway,gy-th-16,25,'#256e25');}
+    // T-rex head peeking out
+    const ry=gy-34+sin(t*2)*2;
+    ctx.fillStyle='#2f7d32';ctx.fillRect(w*0.76,ry,30,14);ctx.fillRect(w*0.8,ry-8,16,10);
+    ctx.fillStyle='#ffd83d';ctx.fillRect(w*0.82,ry-5,4,4);
+    ctx.fillStyle='#fff';for(let i=0;i<4;i++)ctx.fillRect(w*0.77+i*6,ry+11,3,4);
+    // brick house (left)
+    const hx=w*0.06,hw=w*0.34,hy=gy-40;
+    ctx.fillStyle='#54606e';ctx.beginPath();ctx.moveTo(hx-6,hy);ctx.lineTo(hx+hw/2,hy-20);ctx.lineTo(hx+hw+6,hy);ctx.fill();
+    for(let r=0;r<5;r++){ctx.fillStyle=r%2?'#d43a2e':'#c62b21';ctx.fillRect(hx,hy+r*8,hw,8);}
+    ctx.strokeStyle='rgba(0,0,0,.15)';ctx.lineWidth=1;
+    for(let r=1;r<5;r++){ctx.beginPath();ctx.moveTo(hx,hy+r*8);ctx.lineTo(hx+hw,hy+r*8);ctx.stroke();}
+    ctx.fillStyle='#f4f4f4';ctx.fillRect(hx+6,hy+10,16,14);ctx.fillStyle='#bfe9ff';ctx.fillRect(hx+8,hy+12,12,10);
+    ctx.fillStyle='#2a6fd6';ctx.fillRect(hx+hw-22,hy+14,14,26);
+    ctx.fillStyle='#bfe9ff';ctx.fillRect(hx+hw-19,hy+17,8,6);
+    ctx.fillStyle='#ffd83d';ctx.beginPath();ctx.arc(hx+hw-11,hy+30,2,0,7);ctx.fill();
+    // ghost cyan piece being placed
+    ctx.fillStyle='rgba(53,224,255,'+(0.35+0.25*Math.abs(sin(t*3)))+')';
+    ctx.fillRect(hx+hw+4,hy+24,18,10);stud(hx+hw+4,hy+24,18,'rgba(53,224,255,.5)');
+    // path + walking minifig
+    ctx.fillStyle='#c9c2b4';ctx.fillRect(w*0.42,gy,w*0.16,h-gy);
+    const mx=w*0.47,my=gy-2+sin(t*6)*1;
+    ctx.fillStyle='#14161c';ctx.fillRect(mx,my-10,10,8);
+    ctx.fillStyle='#1c1f26';ctx.fillRect(mx-1,my-19,12,9);
+    ctx.fillStyle='#c62b21';ctx.fillRect(mx+4,my-18,2,6);
+    ctx.fillStyle='#f7c531';ctx.fillRect(mx+1,my-28,8,8);
+    ctx.fillStyle='#222';ctx.fillRect(mx+1,my-25,8,3);
+    ctx.fillStyle='#333';ctx.fillRect(mx+9,my-16,7,3);
+    // wordmark, top-left, over a scrim (badge owns top-right)
+    ctx.fillStyle='rgba(10,20,40,.55)';ctx.fillRect(0,0,112,24);
+    ctx.fillStyle='#ffd83d';ctx.font='bold 12px Arial';ctx.textAlign='left';
+    ctx.fillText('🧱 BRICK LEGEND',6,16);
     requestAnimationFrame(draw);
   }
   draw();
