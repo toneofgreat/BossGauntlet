@@ -1864,7 +1864,7 @@ function updateBoss(dt){
     if(pd>0.1){
       pull.normalize();
       var strength=(bossN===2?13:10)*(P.onGround?1:0.55);
-      P.pos.addScaledVector(pull,strength*dt*clamp(1-pd/26,0.15,1)*2.4);
+      P.pos.addScaledVector(pull,strength*dt*clamp(1-pd/26,0.15,1)*0.8); // 3x slower suck
     }
     slideVol=P.onGround?0.5:0.2; slideLoop.set(slideVol);
     if(Math.random()<0.4)
