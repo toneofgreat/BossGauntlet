@@ -4056,6 +4056,74 @@ function xpHud(){
     ' · '+Math.floor(xp)+'/'+hi+' XP · 📜 '+tasksDone+'/'+TASK_NEED[lvl+1]+' tasks');
 }
 /* ---- HIKER TASKS: hard jobs from marked hikers; tiers require them ---- */
+/* ---- casoh, the legendary hiker ---- */
+function makeCasohSprite(){
+  var cv=document.createElement('canvas'); cv.width=256; cv.height=380;
+  var x=cv.getContext('2d');
+  x.textAlign='center';
+  /* name tag */
+  x.fillStyle='rgba(10,14,24,0.88)'; x.fillRect(48,4,160,44);
+  x.strokeStyle='#ffd83d'; x.lineWidth=3; x.strokeRect(48,4,160,44);
+  x.fillStyle='#ffffff'; x.font='900 30px Arial'; x.fillText('casoh',128,36);
+  /* framed portrait */
+  x.fillStyle='#e8e0c8'; x.fillRect(43,56,170,200);
+  var bg=x.createRadialGradient(128,150,20,128,156,120);
+  bg.addColorStop(0,'#5a4632'); bg.addColorStop(1,'#221a10');
+  x.fillStyle=bg; x.fillRect(48,61,160,190);
+  /* the green blob man himself, painted with real shading */
+  var hg=x.createRadialGradient(112,132,16,128,152,82);
+  hg.addColorStop(0,'#aec86a'); hg.addColorStop(0.6,'#7ba03a'); hg.addColorStop(1,'#48631c');
+  x.fillStyle=hg;
+  x.beginPath(); x.ellipse(128,152,60,68,0,0,7); x.fill();
+  [-1,1].forEach(function(s){ /* trumpet ears */
+    x.fillStyle='#7ba03a';
+    x.beginPath(); x.ellipse(128+s*64,108,16,10,s*0.5,0,7); x.fill();
+    x.fillStyle='#3d541a';
+    x.beginPath(); x.ellipse(128+s*70,106,6,4,s*0.5,0,7); x.fill();
+  });
+  [-1,1].forEach(function(s){ /* eyes + brows */
+    x.fillStyle='#f6f2e8'; x.beginPath(); x.ellipse(128+s*24,140,13,10,0,0,7); x.fill();
+    x.fillStyle='#7a5230'; x.beginPath(); x.arc(128+s*22,142,5.5,0,7); x.fill();
+    x.fillStyle='#1c130b'; x.beginPath(); x.arc(128+s*22,142,2.8,0,7); x.fill();
+    x.fillStyle='#ffffff'; x.beginPath(); x.arc(128+s*20,139,1.7,0,7); x.fill();
+    x.strokeStyle='#55702a'; x.lineWidth=4;
+    x.beginPath(); x.moveTo(128+s*36,128); x.quadraticCurveTo(128+s*22,121,128+s*10,129); x.stroke();
+  });
+  x.fillStyle='#8fae4d'; /* big nose */
+  x.beginPath(); x.ellipse(128,166,15,10,0,0,7); x.fill();
+  x.fillStyle='#48631c';
+  x.beginPath(); x.arc(122,170,2.4,0,7); x.fill();
+  x.beginPath(); x.arc(134,170,2.4,0,7); x.fill();
+  x.strokeStyle='#3d541a'; x.lineWidth=5; /* smug smile */
+  x.beginPath(); x.moveTo(100,188); x.quadraticCurveTo(128,208,156,188); x.stroke();
+  x.strokeStyle='rgba(255,255,255,0.75)'; x.lineWidth=3;
+  x.beginPath(); x.moveTo(108,193); x.quadraticCurveTo(128,203,148,193); x.stroke();
+  x.strokeStyle='rgba(60,84,26,0.5)'; x.lineWidth=3; /* chin crease */
+  x.beginPath(); x.moveTo(112,212); x.quadraticCurveTo(128,218,144,212); x.stroke();
+  x.fillStyle='#e8e0c8'; /* shirt + vest */
+  x.beginPath(); x.moveTo(74,251); x.quadraticCurveTo(128,212,182,251); x.closePath(); x.fill();
+  x.fillStyle='#5a4326'; x.fillRect(48,242,28,9); x.fillRect(180,242,28,9);
+  /* the caption */
+  x.fillStyle='rgba(0,0,0,0.88)'; x.fillRect(20,264,216,76);
+  x.strokeStyle='#7dffa0'; x.lineWidth=2; x.strokeRect(20,264,216,76);
+  x.fillStyle='#ffd83d'; x.font='700 22px Arial';
+  x.fillText('erm what then',128,296);
+  x.fillText('green blob man?',128,326);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true}));
+  sp.scale.set(2.7,4,1);
+  sp.position.y=4.1;
+  return sp;
+}
+function markCasoh(){
+  for(var i=0;i<hwHikers.length;i++) if(!hwHikers[i].dead&&hwHikers[i].casoh) return;
+  for(var j=0;j<hwHikers.length;j++){
+    var h=hwHikers[j];
+    if(h.dead||h.giver) continue;
+    h.casoh=true;
+    h.ref.group.add(makeCasohSprite());
+    return;
+  }
+}
 function markTaskGivers(){
   var marked=0;
   hwHikers.forEach(function(h){ if(h.mark){ marked++; } });
@@ -4071,6 +4139,7 @@ function markTaskGivers(){
     h.ref.group.add(dot);
     h.mark=mk;
   }
+  markCasoh();
 }
 function spawnCollectibles(n,color,label){
   for(var i=0;i<n;i++){
