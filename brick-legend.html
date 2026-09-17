@@ -155,6 +155,17 @@ function audioInit(){
     master=AC.createGain(); master.gain.value=1.0;
     sfxGain=AC.createGain(); sfxGain.gain.value=1.0;
     sfxGain.connect(comp); comp.connect(master); master.connect(AC.destination);
+    /* a little space: feedback-delay reverb send so everything sounds bigger */
+    var revSend=AC.createGain(); revSend.gain.value=0.30;
+    var rd1=AC.createDelay(0.6); rd1.delayTime.value=0.127;
+    var rd2=AC.createDelay(0.6); rd2.delayTime.value=0.211;
+    var rfb=AC.createGain(); rfb.gain.value=0.36;
+    var rlp=AC.createBiquadFilter(); rlp.type='lowpass'; rlp.frequency.value=2400;
+    sfxGain.connect(revSend);
+    revSend.connect(rd1); revSend.connect(rd2);
+    rd1.connect(rlp); rd2.connect(rlp);
+    rlp.connect(rfb); rfb.connect(rd1);
+    rlp.connect(comp);
   }catch(e){ AC=null; }
 }
 function actx(){ if(AC&&AC.state==='suspended') AC.resume(); return AC; }
@@ -198,6 +209,8 @@ function sndPew(){
   if(!actx()) return;
   blip(1750,'sawtooth',0.55,0.13,0,220);
   blip(2600,'sine',0.3,0.08,0,500);
+  knock(4200,0.25,0.03,0);            // muzzle crack
+  blip(95,'sine',0.35,0.09,0,50);     // sub thump
   try{
     if(window.speechSynthesis&&!speechSynthesis.speaking){
       var u=new SpeechSynthesisUtterance('pew!');
@@ -234,6 +247,14 @@ function sndRoar(big){
   var t=a.currentTime, dur=big?1.6:1.2;
   var o=a.createOscillator(); o.type='sawtooth';
   o.frequency.setValueAtTime(70,t); o.frequency.exponentialRampToValueAtTime(34,t+dur);
+  var vib=a.createOscillator(); vib.frequency.value=9;      // throaty growl vibrato
+  var vg=a.createGain(); vg.gain.value=7;
+  vib.connect(vg); vg.connect(o.frequency); vib.start(t); vib.stop(t+dur+0.1);
+  var scream=a.createOscillator(); scream.type='sawtooth';  // high scream layer
+  scream.frequency.setValueAtTime(240,t+0.05);
+  scream.frequency.exponentialRampToValueAtTime(90,t+dur*0.8);
+  var sg=a.createGain(); env(sg,t+0.05,big?0.4:0.28,dur*0.8);
+  scream.connect(sg); sg.connect(sfxGain); scream.start(t+0.05); scream.stop(t+dur);
   var sh=a.createWaveShaper(), curve=new Float32Array(256);
   for(var i=0;i<256;i++){ var x=i/128-1; curve[i]=Math.tanh(3.2*x); }
   sh.curve=curve;
@@ -292,7 +313,54 @@ function sndBoom(){
   f.frequency.setValueAtTime(3800,t); f.frequency.exponentialRampToValueAtTime(120,t+0.6);
   var g=a.createGain(); env(g,t,1.1,0.65);
   s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.75);
+  for(var i=0;i<4;i++) knock(1200+Math.random()*1400,0.25,0.05,0.2+i*0.09); // debris crackle
 }
+/* ---- extra sweeteners so there's a sound on EVERYTHING ---- */
+function sndWhoosh(hi){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime, s=a.createBufferSource(); s.buffer=noiseBuf(0.3);
+  var f=a.createBiquadFilter(); f.type='bandpass'; f.Q.value=1.4;
+  f.frequency.setValueAtTime(hi?900:380,t);
+  f.frequency.exponentialRampToValueAtTime(hi?2600:1500,t+0.22);
+  var g=a.createGain(); env(g,t,0.32,0.26);
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.3);
+}
+function sndHurt(){
+  if(!actx()) return;
+  blip(85,'sine',0.5,0.12,0,45); knock(1100,0.3,0.05,0);
+}
+function sndPickup(){
+  if(!actx()) return;
+  blip(520,'square',0.3,0.07,0,900); blip(880,'square',0.24,0.06,0.07,1300);
+}
+function sndFanfare(){
+  if(!actx()) return;
+  var N=[523,659,784,1047,1318];
+  for(var i=0;i<N.length;i++){
+    blip(N[i],'triangle',0.32,0.35,i*0.11);
+    blip(N[i]/2,'sine',0.2,0.4,i*0.11);
+  }
+  sndSparkle();
+}
+function sndJingle(){
+  if(!actx()) return;
+  var N=[1318,1568,2093,1568,2093,2637];
+  for(var i=0;i<N.length;i++) blip(N[i],'sine',0.22,0.14,i*0.07);
+}
+function sndChime(){
+  if(!actx()) return;
+  blip(880,'sine',0.3,0.7,0); blip(1320,'sine',0.22,0.6,0.08); blip(1760,'sine',0.18,0.5,0.16);
+}
+function sndSplash(){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime, s=a.createBufferSource(); s.buffer=noiseBuf(0.4);
+  var f=a.createBiquadFilter(); f.type='lowpass';
+  f.frequency.setValueAtTime(2400,t); f.frequency.exponentialRampToValueAtTime(300,t+0.35);
+  var g=a.createGain(); env(g,t,0.55,0.38);
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+0.42);
+  blip(190,'sine',0.3,0.15,0,60);
+}
+function sndUi(){ if(actx()){ knock(1900,0.3,0.03,0); blip(700,'square',0.12,0.04,0.01); } }
 /* looping sounds ------------------------------------------------ */
 function makeLoop(build){ // returns {set(vol), stop()}
   var nodes=null, gain=null;
@@ -742,7 +810,28 @@ var rayGroup=new THREE.Group();
   sunDisc.position.set(80,120,60); sunDisc.lookAt(0,0,0);
   scene.add(sunDisc);
   scene.add(rayGroup);
+  sunDiscMesh=sunDisc;
 })();
+/* ---- lighting moods: every boss fight goes DARK, each with its own tint ---- */
+var sunDiscMesh; // assigned in the IIFE above (declaration hoists; no initializer so it is not overwritten)
+var MOODS={
+  day:   {sky:0x87c9ef,fog:[60,220],amb:0.55,hemi:0.5,sun:1.0,sunC:0xfff2cf},
+  boss:  {sky:0x2b161a,fog:[26,110],amb:0.28,hemi:0.2,sun:0.45,sunC:0xff7a55}, // blood dusk
+  ninja: {sky:0x10141f,fog:[24,100],amb:0.3,hemi:0.2,sun:0.4,sunC:0x8fa8ff},   // moonlit dojo
+  bridge:{sky:0x16231d,fog:[26,110],amb:0.3,hemi:0.22,sun:0.5,sunC:0xa9d8b4},  // swamp gloom
+  golem: {sky:0x201808,fog:[26,120],amb:0.32,hemi:0.2,sun:0.5,sunC:0xffc966},  // molten gold dark
+  lib:   {sky:0x221a12,fog:[22,85],amb:0.5,hemi:0.28,sun:0.32,sunC:0xffd9a3},  // candlelight
+};
+function setMood(k){
+  var m=MOODS[k]||MOODS.day;
+  scene.background.setHex(m.sky);
+  scene.fog.color.setHex(m.sky);
+  scene.fog.near=m.fog[0]; scene.fog.far=m.fog[1];
+  amb.intensity=m.amb; hemi.intensity=m.hemi;
+  sun.intensity=m.sun; sun.color.setHex(m.sunC);
+  rayGroup.visible=(k==='day'||!k);
+  if(sunDiscMesh) sunDiscMesh.visible=(k==='day'||!k);
+}
 
 /* ---------------- JUNGLE ---------------- */
 var JUNGLE={z0:30,z1:130,x0:-45,x1:45};
@@ -812,6 +901,19 @@ function buildArena(){
     t.position.set(ARENA.x+Math.cos(ang2)*rr2,0,ARENA.z+Math.sin(ang2)*rr2);
     arenaGroup.add(t);
   }
+  /* gnawed bones scattered around the pit */
+  for(var b2=0;b2<6;b2++){
+    var bone=new THREE.Group();
+    var shaft=box(0.22,0.22,rand(1.4,2.4),0xe8e0c8); bone.add(shaft);
+    [-1,1].forEach(function(e){
+      var k1=box(0.4,0.4,0.4,0xe8e0c8); k1.position.set(0.1,0.08,e*shaft.geometry.parameters.depth/2); bone.add(k1);
+      var k2=box(0.4,0.4,0.4,0xd8d0b8); k2.position.set(-0.1,-0.05,e*shaft.geometry.parameters.depth/2); bone.add(k2);
+    });
+    var ba=rand(0,6.28), br2=rand(4,ARENA.r-3);
+    bone.position.set(ARENA.x+Math.cos(ba)*br2,0.25,ARENA.z+Math.sin(ba)*br2);
+    bone.rotation.y=rand(0,3.14); bone.rotation.z=rand(-0.15,0.15);
+    arenaGroup.add(bone);
+  }
 }
 function makeTrex(dark){
   var C1=dark?0x23252b:0x2f7d32, C2=dark?0x15161a:0x256428, BELLY=dark?0x5c1f1f:0xcfe6a2;
@@ -833,18 +935,46 @@ function makeTrex(dark){
   g.add(legL); g.add(legR); r.legL=legL; r.legR=legR;
   var armL=box(0.5,0.5,1.4,C1); armL.position.set(-1.5,4.6,2.6); armL.rotation.x=0.4; g.add(armL);
   var armR=box(0.5,0.5,1.4,C1); armR.position.set(1.5,4.6,2.6); armR.rotation.x=0.4; g.add(armR);
+  /* tiny arm claws */
+  [-1.5,1.5].forEach(function(ax){
+    for(var c=0;c<2;c++){ var cl=box(0.12,0.12,0.35,0xf0ead6);
+      cl.position.set(ax-0.12+c*0.24,4.35,3.35); cl.rotation.x=0.5; g.add(cl); }
+  });
+  /* back spikes along the spine */
+  var SPIKE=dark?0x3a3d46:0xcfe6a2;
+  for(var sp=0;sp<6;sp++){
+    var sc2=1-Math.abs(sp-2)*0.14;
+    var spk=box(0.28,0.75*sc2,0.5,SPIKE);
+    spk.position.set(0,6.25+0.15*sc2,2.2-sp*1.1);
+    spk.rotation.x=0.78; g.add(spk);
+  }
+  /* scale patches on the flanks */
+  for(var pc=0;pc<5;pc++){
+    var pl2=box(0.5,0.5,0.08,C2);
+    pl2.position.set(pc%2?-1.74:1.74,rand(3.8,5.4),rand(-2,2));
+    pl2.rotation.y=Math.PI/2; g.add(pl2);
+  }
   var neck=new THREE.Group();
   var nb=box(1.8,1.8,1.8,C1); nb.position.set(0,0.5,0.5); neck.add(nb);
   var headG=new THREE.Group();
   var skull=studdedBox(2.0,1.5,2.8,C1,C2); skull.position.set(0,1.0,1.6); headG.add(skull);
   var snout=box(1.5,1.0,1.6,C2); snout.position.set(0,0.85,3.2); headG.add(snout);
-  var eL=box(0.3,0.3,0.3,dark?0xff2211:0xffd83d); eL.position.set(-0.7,1.5,2.3); headG.add(eL);
-  var eR=box(0.3,0.3,0.3,dark?0xff2211:0xffd83d); eR.position.set(0.7,1.5,2.3); headG.add(eR);
+  /* nostrils + brow ridges + glowing eyes with pupils */
+  var noL=box(0.18,0.14,0.1,0x111111); noL.position.set(-0.35,1.2,4.02); headG.add(noL);
+  var noR=box(0.18,0.14,0.1,0x111111); noR.position.set(0.35,1.2,4.02); headG.add(noR);
+  var brL=box(0.5,0.2,0.5,C2); brL.position.set(-0.7,1.78,2.3); brL.rotation.z=0.15; headG.add(brL);
+  var brR=box(0.5,0.2,0.5,C2); brR.position.set(0.7,1.78,2.3); brR.rotation.z=-0.15; headG.add(brR);
+  var eyeMat=new THREE.MeshBasicMaterial({color:dark?0xff2211:0xffd83d});
+  var eL=new THREE.Mesh(boxGeo(0.3,0.3,0.3),eyeMat); eL.position.set(-0.7,1.5,2.3); headG.add(eL);
+  var eR=new THREE.Mesh(boxGeo(0.3,0.3,0.3),eyeMat); eR.position.set(0.7,1.5,2.3); headG.add(eR);
+  var puL=box(0.1,0.14,0.06,0x111111); puL.position.set(-0.7,1.5,2.48); headG.add(puL);
+  var puR=box(0.1,0.14,0.06,0x111111); puR.position.set(0.7,1.5,2.48); headG.add(puR);
   var jaw=new THREE.Group();
   var jb=box(1.4,0.6,2.6,C2); jb.position.set(0,-0.3,1.3); jaw.add(jb);
+  var tongue=box(0.7,0.1,1.6,0xb03a3a); tongue.position.set(0,-0.02,1.2); jaw.add(tongue);
   for(var t=0;t<5;t++){
     var tt=box(0.2,0.4,0.2,0xffffff); tt.position.set(-0.55+t*0.28,0.05,2.4); jaw.add(tt);
-    var tu=box(0.2,0.4,0.2,0xffffff); tu.position.set(-0.55+t*0.28,-0.15,2.4); tu.userData.up=1;
+    var tu=box(0.16,0.3,0.16,0xf0ead6); tu.position.set(-0.48+t*0.26,0.1,1.9); jaw.add(tu);
   }
   for(var t2=0;t2<4;t2++){
     var tw=box(0.2,0.42,0.2,0xffffff); tw.position.set(-0.45+t2*0.3,0.5,2.9);
@@ -857,6 +987,8 @@ function makeTrex(dark){
   for(var s=0;s<4;s++){
     var seg=new THREE.Group();
     var sb=box(1.6*sc,1.4*sc,1.8,s%2?C2:C1); sb.position.z=-0.9; seg.add(sb);
+    var tspk=box(0.2*sc+0.08,0.4*sc+0.1,0.4,SPIKE);
+    tspk.position.set(0,0.75*sc+0.1,-0.9); tspk.rotation.x=0.7; seg.add(tspk);
     seg.position.set(0,parent===g?ty:0,parent===g?tz:-1.7);
     parent.add(seg); tail.push(seg); parent=seg; sc*=0.75;
   }
@@ -1137,7 +1269,7 @@ function toggleGun(){
   if(player&&player.gun) player.gun.visible=gunEquipped;
   $('ammo').style.display=gunEquipped?'block':'none';
   msg(gunEquipped?'🔫 Gun equipped':'Gun holstered',1200);
-  knock(800,0.4,0.06,0);
+  knock(800,0.4,0.06,0); knock(1400,0.4,0.04,0.08);
   updateMobileUI(); updateAmmoHud();
 }
 function updateAmmoHud(){ $('ammo').textContent=reloading?'RELOADING…':(ammo+' / '+MAG); }
@@ -1483,6 +1615,7 @@ function enterBoss(n){
   hint('NO GUN in here! Walk over a TNT crate to grab it, then click / THROW to hurl it at the T-rex. Jump the shockwaves!');
   windLoop.set(0.15);
   bossMusic(true,n===2);
+  setMood('boss'); sndWhoosh(false);
   sndRoar(true); camShake=1.0;
   msg(n===2?'☠️ MEGA T-REX ☠️':'🦖 T-REX! 🦖<br><span style="font-size:55%">Throw TNT. Dodge everything. Survive.</span>',3200);
   updateMobileUI();
@@ -1509,7 +1642,7 @@ function throwTnt(){
   var v=new THREE.Vector3(dx/T,(target.y-from.y)/T+0.5*16*T,dz/T);
   var m=makeTnt(); m.position.copy(from); world.add(m);
   tnts.push({mesh:m,v:v,fuse:sndTntFuse(),t:0});
-  knock(600,0.4,0.06,0);
+  knock(600,0.4,0.06,0); sndWhoosh(true);
   if(player){ player.armR.rotation.x=-2.4; tween(0.3,function(k){ if(player) player.armR.rotation.x=-2.4+2.4*k; }); }
 }
 function updateTnts(dt){
@@ -1535,7 +1668,7 @@ function updateTnts(dt){
       p.mesh.rotation.y+=dt;
       if(!carried&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.4){
         p.has=false; p.respawn=6; world.remove(p.mesh);
-        carried=true; knock(900,0.5,0.05,0);
+        carried=true; sndPickup();
         hint('💣 TNT in hand — click / THROW to hurl it at the T-rex!');
       }
     } else {
@@ -1585,7 +1718,8 @@ function bossDie(){
 function winGame(){
   if(PH!=='boss'||P.dead) return;
   bossMusic(false);
-  sndSparkle(); setTimeout(sndSparkle,400);
+  setMood('day');
+  sndFanfare(); setTimeout(sndSparkle,400);
   tornadoOwned=true; tornCharge=TORN_MAX; save();
   $('bossWrap').style.display='none';
   arenaGroup.visible=false;
@@ -1615,10 +1749,13 @@ function updateBoss(dt){
     g.position.y=Math.max(g.position.y-dt*1.2,-1.2);
     return;
   }
-  /* face player unless charging */
+  /* face player unless charging (wrap the delta so it never turns the long way) */
   if(bossState!=='charge'){
     var ang=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
-    g.rotation.y+=(ang-g.rotation.y)*(1-Math.pow(0.02,dt));
+    var dAng=ang-g.rotation.y;
+    while(dAng>Math.PI) dAng-=Math.PI*2;
+    while(dAng<-Math.PI) dAng+=Math.PI*2;
+    g.rotation.y+=dAng*(1-Math.pow(0.02,dt));
   }
   if(bossState==='intro'){
     trex.jaw.rotation.x=Math.sin(bossT*10)*0.4+0.4;
@@ -1626,8 +1763,8 @@ function updateBoss(dt){
     return;
   }
   if(bossState==='idle'){
-    /* stalk the player */
-    var spd=bossN===2?4.6:3.2;
+    /* stalk the player (slow, heavy stomps) */
+    var spd=bossN===2?3.3:2.3;
     if(d2p>5){
       g.position.x+=Math.sin(g.rotation.y)*spd*dt;
       g.position.z+=Math.cos(g.rotation.y)*spd*dt;
@@ -1678,7 +1815,7 @@ function updateBoss(dt){
     }
   }
   else if(bossState==='charge'){
-    var cs=bossN===2?26:21;
+    var cs=bossN===2?21:17;
     g.position.addScaledVector(chargeDir,cs*dt);
     trex.legL.rotation.x=Math.sin(GTIME*18)*0.7; trex.legR.rotation.x=-Math.sin(GTIME*18)*0.7;
     camShake=Math.min(camShake+dt*2,0.5);
@@ -1865,6 +2002,7 @@ function updateDrones(dt){
 function hurtPlayer(dmg,why){
   if(P.dead) return;
   P.hp-=dmg;
+  sndHurt();
   $('hpBar').firstElementChild.style.width=clamp(P.hp/P.maxHp*100,0,100)+'%';
   camShake=Math.min(camShake+0.3,0.8);
   burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
@@ -1897,6 +2035,7 @@ function killPlayer(title,text,retry){
 }
 $('btnRetry').addEventListener('click',function(){
   $('death').style.display='none';
+  sndUi();
   P.dead=false; P.hp=P.maxHp;
   $('hpBar').firstElementChild.style.width='100%';
   var f=deathRetry; deathRetry=null;
@@ -1909,6 +2048,7 @@ $('btnQuit').addEventListener('click',function(){
   bossMusic(false);
   clearBossEntities();
   clearAct2Fights();
+  setMood('day'); sndUi();
   arenaGroup.visible=false;
   $('bossWrap').style.display='none';
   if(trex){ world.remove(trex.group); trex=null; }
@@ -1997,7 +2137,7 @@ function updatePlayer(dt){
     if(P.pos.y>=5.5&&vx<0) P.pos.x=4.6; // hop onto the roof
   }
   /* jump + gravity */
-  if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; knock(1200,0.2,0.05,0); }
+  if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; sndWhoosh(true); }
   if(!onLadder){
     P.vy-=30*dt; P.pos.y+=P.vy*dt;
     var gy=groundYAt();
@@ -2152,7 +2292,7 @@ animate();
 /* ---------------- BOOT / MENU ---------------- */
 function startBuild(){
   $('start').style.display='none';
-  audioInit(); actx();
+  audioInit(); actx(); sndUi();
   PH='build';
   showGhost();
   spawnBirds(0,-14,3);
@@ -2161,7 +2301,7 @@ function startBuild(){
 }
 function startSkip(sv){
   $('start').style.display='none';
-  audioInit(); actx();
+  audioInit(); actx(); sndUi();
   for(var i=0;i<BUILD_STEPS.length;i++) placeStep(true);
   hasGun=true;
   tornadoOwned=!!(sv&&sv.torn);
@@ -2302,6 +2442,7 @@ function act2Begin(){
   if(PH!=='cut2') return;
   cutBackdrop.visible=false;
   PH='home';
+  setMood('day');
   tornCharge=TORN_MAX;
   save();
   windLoop.set(0.12);
@@ -2442,7 +2583,7 @@ function placeBookOnStatue(){
   if(statueObj.userData.beam) statueObj.userData.beam.material.color.setHex(0xffe97a);
   bux=100; save(); updateBuxHud();
   PH='home'; // quest complete — back to normal home life
-  sndSparkle(); setTimeout(sndSparkle,350); doFlash('#ffe97a');
+  sndJingle(); setTimeout(sndFanfare,500); doFlash('#ffe97a');
   for(var i=0;i<5;i++)
     burst(statueObj.position.clone().add(new THREE.Vector3(rand(-2,2),rand(2,6),rand(-2,2))),
       [0xffd83d,0x7dffd8,0xff7bd5][i%3],10,{speed:5,life:1.2});
@@ -2492,6 +2633,7 @@ function startNinjaFight(){
   ninjas.length=0; ninjaIdx=0; ninjaT=0; nextNinjaT=-1;
   spawnNinja(0); ninjaIdx=1;
   battleMusic(true);
+  setMood('ninja'); sndWhoosh(false);
   windLoop.set(0.15);
   obj('🥷 Beat ALL 3 elemental ninjas — under 10 MINUTES or the bridge collapses!');
   hint('Glock: 1 to equip · tap = shoot · R reload · F punch · Q tornado · die once = all 3 reset');
@@ -2540,7 +2682,7 @@ function ninjaVictory(){
   clearHazards(); // nothing lingering may kill the player during the victory pause
   $('timer').style.display='none';
   doFlash('#ffffff');
-  sndSparkle(); setTimeout(sndSparkle,300);
+  sndFanfare(); setTimeout(sndSparkle,300);
   msg('🥷 ALL 3 NINJAS DOWN — in '+Math.round(ninjaT)+'s!<br><span style="font-size:55%">The bridge still stands. GO GO GO!</span>',3200);
   a2Timer=setTimeout(function(){ a2Timer=null; if(PH==='ninja') startBridge(); },2600);
 }
@@ -2586,7 +2728,7 @@ function updateOneNinja(n,dt){
     var dir=toP.clone().normalize().applyAxisAngle(UPV,ang);
     n.dashV.copy(dir.multiplyScalar(13));
     burst(g.position.clone().setY(0.4),0xdddddd,5,{speed:2,life:0.3});
-    knock(2200,0.22,0.04,0);
+    sndWhoosh(true);
   }
   g.position.addScaledVector(n.dashV,dt);
   n.dashV.multiplyScalar(Math.pow(0.02,dt));
@@ -2761,6 +2903,7 @@ function startBridge(){
   if(player) player.group.position.copy(P.pos);
   camYaw=0; P.yaw=0;
   battleMusic(true);
+  setMood('bridge'); sndWhoosh(false);
   windLoop.set(0.25);
   obj('🐊 CROSS THE BRIDGE — it\'s falling apart! Kill ALL '+GATOR_TOTAL+' gators to open the gate!');
   hint('Planks crumble behind you — keep moving, jump the gaps, don\'t fall in!');
@@ -2782,7 +2925,7 @@ function hurtGator(ga,dmg,fromTorn){
     msg('🐊 '+gatorKills+' / '+GATOR_TOTAL+' gators!',1400);
     if(gatorKills>=GATOR_TOTAL&&bridgeGate&&bridgeGate.parent){
       bridgeGroup.remove(bridgeGate);
-      sndSparkle(); doFlash('#ffffff');
+      sndFanfare(); doFlash('#ffffff');
       msg('🚪 GATE OPEN!<br><span style="font-size:55%">The fancy mansion awaits…</span>',3000);
       obj('🏰 Walk through the gate to the GOLDEN MANSION!');
     }
@@ -2805,7 +2948,7 @@ function updateBridge(dt){
       if(p.mesh.position.y<0){
         p.gone=true;
         burst(new THREE.Vector3(p.mesh.position.x,0.7,p.z),0x4fc3f7,8,{speed:3,life:0.6});
-        sndWoodFall();
+        sndSplash(); sndWoodFall();
         bridgeGroup.remove(p.mesh);
       }
     }
@@ -2858,7 +3001,7 @@ function updateBridge(dt){
       var k2=Math.min(ga.arc,1);
       m.position.lerpVectors(ga.from,ga.to,k2);
       m.position.y=ga.from.y+(ga.to.y-ga.from.y)*k2+Math.sin(k2*Math.PI)*1.4;
-      if(k2>=1){ ga.state='water'; ga.cd=rand(1.5,3);
+      if(k2>=1){ ga.state='water'; ga.cd=rand(1.5,3); sndSplash();
         burst(m.position.clone().setY(0.7),0x4fc3f7,6,{speed:2,life:0.5}); }
     }
   });
@@ -2925,6 +3068,7 @@ function startGolem(){
   $('bossName').textContent='🗿 GIANT GOLDEN GOLEM 🗿';
   $('bossBar').firstElementChild.style.width='100%';
   battleMusic(true);
+  setMood('golem'); sndWhoosh(false);
   sndRoar(true); doFlash('#ffe97a'); camShake=1;
   obj('🗿 Beat the GIANT GOLDEN GOLEM inside the mansion!');
   hint('Shoot it, punch it, tornado it. Jump the gold shockwaves, dodge the shard volleys!');
@@ -2943,7 +3087,7 @@ function golemDie(){
   golemState='dead'; golemT=0;
   battleMusic(false);
   clearHazards(); // no leftover shockwave/shard may kill the player after the win
-  sndRoar(true); sndWoodFall();
+  sndRoar(true); sndWoodFall(); setTimeout(sndFanfare,1200);
   setTimeout(sndWoodFall,350); setTimeout(sndWoodFall,700);
   doFlash('#ffe97a'); camShake=1.2;
   for(var i=0;i<30;i++)
@@ -2962,7 +3106,10 @@ function updateGolem(dt){
     return;
   }
   var ang=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
-  g.rotation.y+=(ang-g.rotation.y)*(1-Math.pow(0.02,dt));
+  var dAng=ang-g.rotation.y;
+  while(dAng>Math.PI) dAng-=Math.PI*2;
+  while(dAng<-Math.PI) dAng+=Math.PI*2;
+  g.rotation.y+=dAng*(1-Math.pow(0.02,dt));
   golemObj.armL.rotation.x=Math.sin(GTIME*2)*0.15;
   golemObj.armR.rotation.x=-Math.sin(GTIME*2)*0.15;
   if(golemState==='intro'){
@@ -2973,7 +3120,8 @@ function updateGolem(dt){
     if(dd>5){
       g.position.x+=Math.sin(g.rotation.y)*2.6*dt;
       g.position.z+=Math.cos(g.rotation.y)*2.6*dt;
-      if(Math.random()<dt*2){ knock(140,0.5,0.14,0); camShake=Math.min(camShake+0.1,0.3); }
+      if(Math.random()<dt*2){ knock(140,0.5,0.14,0); blip(52,'sine',0.5,0.18,0,28);
+        camShake=Math.min(camShake+0.1,0.3); }
     }
     if(golemT>golemCd){
       golemT=0;
@@ -3064,7 +3212,8 @@ function enterMlib(){
   if(player) player.group.position.copy(P.pos);
   camYaw=0; P.yaw=0;
   windLoop.set(0);
-  doFlash('#ffffff'); sndPortal();
+  setMood('lib');
+  doFlash('#ffffff'); sndPortal(); sndWhoosh(false);
   obj('📚 THE LIBRARY ROOM — one of these 6 doors is unlocked. FIND IT!');
   hint('Walk up to each door. Locked ones knock — keep trying until one opens!');
   msg('📚 One random door just unlocked…',3000);
@@ -3109,7 +3258,8 @@ function enterLib2(){
   P.pos.set(LIB2.x,0,LIB2.z-18); P.vy=0;
   if(player) player.group.position.copy(P.pos);
   camYaw=0; P.yaw=0;
-  doFlash('#ffffff'); sndPortal();
+  setMood('lib');
+  doFlash('#ffffff'); sndPortal(); sndWhoosh(false);
   obj('📖 Find the GOLDEN BOOK somewhere in this MONSTROSITY of a library!');
   hint('Look for the golden glow between the shelves.');
   msg('📚 A WHOLE NEW LIBRARY?!<br><span style="font-size:55%">The golden book is in here somewhere…</span>',3400);
@@ -3155,7 +3305,8 @@ function updateAct2(dt){
             P.pos.set(0,0,10); P.vy=0;
             if(player) player.group.position.copy(P.pos);
             camYaw=0; P.yaw=0; windLoop.set(0.12);
-            sndPortal();
+            setMood('day');
+            sndPortal(); sndWhoosh(false);
             msg(hasBook?'🚪 It leads home — now put that book on the statue!':'🚪 Nothing but dusty novels this time. It leads home.',3200);
             obj(hasBook?'🗿 Put the GOLDEN BOOK on the T-REX SLAYER statue!':'🏆 Gauntlet re-cleared! Your brick kingdom awaits.');
           } else enterLib2();
@@ -3175,7 +3326,7 @@ function updateAct2(dt){
     bookMesh.position.y=1.4+Math.sin(GTIME*2)*0.15;
     if(P.pos.distanceTo(bookMesh.position)<1.9){
       hasBook=true;
-      doFlash('#ffe97a'); sndSparkle();
+      doFlash('#ffe97a'); sndChime(); sndSparkle();
       burst(bookMesh.position.clone(),0xffe14d,20,{speed:4,life:1});
       lib2Group.remove(bookMesh); bookMesh=null;
       msg('📖 THE GOLDEN BOOK!<br><span style="font-size:55%">It hums… and drags you back to the jungle.</span>',3200);
@@ -3191,7 +3342,8 @@ function updateAct2(dt){
       if(player) player.group.position.copy(P.pos);
       camYaw=0; P.yaw=0;
       windLoop.set(0.3);
-      doFlash('#ffffff'); sndPortal();
+      setMood('day');
+      doFlash('#ffffff'); sndPortal(); sndWhoosh(false);
       obj('🗿 Put the GOLDEN BOOK on the T-REX SLAYER statue! Follow the gold beam.');
       if(statueObj&&statueObj.userData.beam)
         statueObj.userData.beam.material.color.setHex(0xffd83d);
@@ -3203,10 +3355,10 @@ function updateAct2(dt){
       0xffe97a,1,{speed:0.6,life:0.8,grav:-2,size:0.6});
 }
 $('btnWarnGo').addEventListener('click',function(){
-  flashesOn=true; warnShown=true; $('warn').style.display='none'; audioInit(); actx();
+  flashesOn=true; warnShown=true; $('warn').style.display='none'; audioInit(); actx(); sndUi();
 });
 $('btnWarnSafe').addEventListener('click',function(){
-  flashesOn=false; warnShown=true; $('warn').style.display='none'; audioInit(); actx();
+  flashesOn=false; warnShown=true; $('warn').style.display='none'; audioInit(); actx(); sndUi();
 });
 /* Act-2 rich skip: rebuild everything a returning tycoon already had */
 function applyRichSkip(sv){
