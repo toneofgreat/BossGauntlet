@@ -2302,7 +2302,7 @@ function groundYAt(){
     for(var tp2=0;tp2<taskPlats.length;tp2++){
       var pp=taskPlats[tp2];
       if(pp.orb) continue;
-      if(Math.abs(P.pos.x-pp.x)<1.5&&Math.abs(P.pos.z-pp.z)<1.5&&P.pos.y>pp.y-0.5) return pp.y;
+      if(Math.abs(P.pos.x-pp.x)<2&&Math.abs(P.pos.z-pp.z)<2&&P.pos.y>pp.y-0.7) return pp.y;
     }
   }
   /* the house roof is walkable */
@@ -4387,21 +4387,21 @@ function clearTaskProps(){
   hwHikers.forEach(function(h){ if(h.flee){ h.flee=false;
     if(h.fleeMark){ h.ref.group.remove(h.fleeMark); h.fleeMark=null; } } });
 }
-function startTask(giver){
+function startTask(giver,forceT){
   var types=['berries','firewood','race','runaway','plats'];
-  var t=types[(Math.random()*types.length)|0];
+  var t=forceT||types[(Math.random()*types.length)|0];
   var L=lvl;
   task={type:t,giver:giver,have:0,need:0,timeLeft:0,desc:''};
   if(t==='berries'){
-    task.need=8+L*3; task.timeLeft=70-L*9;
+    task.need=6+L*2; task.timeLeft=85-L*5;
     spawnCollectibles(task.need,0xff4d6d);
     task.desc='Pick '+task.need+' glowing BERRIES';
   } else if(t==='firewood'){
-    task.need=7+L*3; task.timeLeft=64-L*8;
+    task.need=5+L*2; task.timeLeft=80-L*5;
     spawnCollectibles(task.need,0x8a5a2a);
     task.desc='Gather '+task.need+' FIREWOOD bundles';
   } else if(t==='race'){
-    task.need=1; task.timeLeft=26-L*3;
+    task.need=1; task.timeLeft=34-L*2;
     var a=rand(0,6.28);
     taskFlag=new THREE.Group();
     var pole=box(0.2,4,0.2,0xf4f4f4); pole.position.y=2; taskFlag.add(pole);
@@ -4414,7 +4414,7 @@ function startTask(giver){
     world.add(taskFlag);
     task.desc='RACE to the red flag';
   } else if(t==='runaway'){
-    task.need=1; task.timeLeft=40-L*5;
+    task.need=1; task.timeLeft=48-L*3;
     var cand=hwHikers.filter(function(h){ return !h.dead&&!h.giver; });
     var run=cand[(Math.random()*cand.length)|0];
     run.flee=true;
@@ -4424,16 +4424,17 @@ function startTask(giver){
     task.runner=run;
     task.desc='CATCH the runaway hiker (red mark)';
   } else {
-    task.need=1; task.timeLeft=50-L*6;
+    /* the obby — now actually jumpable: low rises, big pads, generous time */
+    task.need=1; task.timeLeft=90-L*3;
     var bx=giver.ref.group.position.x, bz=giver.ref.group.position.z;
     for(var p2=0;p2<6;p2++){
-      var pm=studdedBox(2.6,0.4,2.6,0x7d8791,0x6d7680);
-      pm.position.set(bx+Math.cos(p2*1.9)*3.2,1.8+p2*1.9,bz+Math.sin(p2*1.9)*3.2);
+      var pm=studdedBox(3.6,0.4,3.6,0x7d8791,0x6d7680);
+      pm.position.set(bx+Math.cos(p2*1.2)*3,1.2+p2*1.1,bz+Math.sin(p2*1.2)*3);
       world.add(pm);
       taskPlats.push({mesh:pm,x:pm.position.x,z:pm.position.z,y:pm.position.y+0.2});
     }
-    var orb=new THREE.Mesh(boxGeo(0.8,0.8,0.8),new THREE.MeshBasicMaterial({color:0x7dffd8}));
-    orb.position.set(bx+Math.cos(6*1.9)*3.2,1.8+6*1.9,bz+Math.sin(6*1.9)*3.2);
+    var orb=new THREE.Mesh(boxGeo(0.9,0.9,0.9),new THREE.MeshBasicMaterial({color:0x7dffd8}));
+    orb.position.set(bx+Math.cos(6*1.2)*3,1.2+6*1.1,bz+Math.sin(6*1.2)*3);
     world.add(orb);
     taskPlats.push({mesh:orb,x:orb.position.x,z:orb.position.z,y:orb.position.y,orb:true});
     task.desc='CLIMB the floating platforms to the glowing orb';
@@ -4477,7 +4478,7 @@ function updateTask(dt){
     for(var i=taskItems.length-1;i>=0;i--){
       var it=taskItems[i];
       it.rotation.y+=dt*2;
-      if(Math.hypot(P.pos.x-it.position.x,P.pos.z-it.position.z)<1.7){
+      if(Math.hypot(P.pos.x-it.position.x,P.pos.z-it.position.z)<2.3){
         world.remove(it); taskItems.splice(i,1);
         task.have++; sndPickup();
         burst(it.position.clone().setY(1),0x8bc34a,6,{speed:3,life:0.5});
@@ -4485,7 +4486,7 @@ function updateTask(dt){
       }
     }
   } else if(task.type==='race'){
-    if(taskFlag&&Math.hypot(P.pos.x-taskFlag.position.x,P.pos.z-taskFlag.position.z)<2.6){
+    if(taskFlag&&Math.hypot(P.pos.x-taskFlag.position.x,P.pos.z-taskFlag.position.z)<3.4){
       task.have=1; completeTask(); return;
     }
   } else if(task.type==='runaway'){
@@ -4499,8 +4500,8 @@ function updateTask(dt){
     }
   } else if(task.type==='plats'){
     var orb2=taskPlats[taskPlats.length-1];
-    if(orb2&&orb2.mesh.position.distanceTo(P.pos.clone().setY(orb2.y))<2.2
-       &&Math.abs(P.pos.y-orb2.y)<2.4){
+    if(orb2&&orb2.mesh.position.distanceTo(P.pos.clone().setY(orb2.y))<3
+       &&Math.abs(P.pos.y-orb2.y)<3){
       task.have=1; completeTask(); return;
     }
   }
@@ -5169,8 +5170,8 @@ function updateHW(dt){
     } else if(h.flee){
       /* runaway task target sprints away from you every frame */
       var fdx=g.position.x-P.pos.x, fdz=g.position.z-P.pos.z, fl9=Math.hypot(fdx,fdz)||1;
-      g.position.x=clamp(g.position.x+fdx/fl9*5.4*dt,HW.x-HW.r+3,HW.x+HW.r-3);
-      g.position.z=clamp(g.position.z+fdz/fl9*5.4*dt,HW.z-HW.r+3,HW.z+HW.r-3);
+      g.position.x=clamp(g.position.x+fdx/fl9*4.6*dt,HW.x-HW.r+3,HW.x+HW.r-3);
+      g.position.z=clamp(g.position.z+fdz/fl9*4.6*dt,HW.z-HW.r+3,HW.z+HW.r-3);
       g.rotation.y=Math.atan2(fdx,fdz);
       h.walkT+=dt*9;
       h.ref.legL.rotation.x=Math.sin(h.walkT)*0.9;
@@ -7012,6 +7013,11 @@ window.__dbg={
       var d=h.ref.group.position.distanceTo(P.pos); if(d<bd){ g2=h; bd=d; } } });
     if(g2){ __dbg.tp(g2.ref.group.position.x+1,g2.ref.group.position.z); } },
   winTask:function(){ if(task){ task.have=task.need; completeTask(); } },
+  taskType:function(t){ var g2=null,bd=1e9;
+    hwHikers.forEach(function(h){ if(!h.dead&&h.giver){
+      var d=h.ref.group.position.distanceTo(P.pos); if(d<bd){ g2=h; bd=d; } } });
+    if(g2&&!task){ startTask(g2,t); } },
+  plats:function(){ return taskPlats.map(function(p){ return {x:p.x,y:p.y,z:p.z,orb:!!p.orb}; }); },
   failTask:function(){ failTask(); },
   givers:function(){ return hwHikers.filter(function(h){ return !h.dead&&h.giver; }).length; },
   wave:doWave,
