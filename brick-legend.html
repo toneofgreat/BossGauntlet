@@ -218,10 +218,24 @@ function sndPew(){
     }
   }catch(e){}
 }
-function sndReload(){
+function scrape(f0,f1,dur,when,peak){ // short filtered-noise sweep (metal sliding)
+  var a=actx(); if(!a) return;
+  var t=a.currentTime+(when||0), s=a.createBufferSource(); s.buffer=noiseBuf(dur+0.05);
+  var f=a.createBiquadFilter(); f.type='bandpass'; f.Q.value=3.5;
+  f.frequency.setValueAtTime(f0,t); f.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  var g=a.createGain(); env(g,t,peak||0.3,dur);
+  s.connect(f); f.connect(g); g.connect(sfxGain); s.start(t); s.stop(t+dur+0.05);
+}
+function sndReload(){ // realistic: mag release -> mag out -> mag in -> slide rack
   if(!actx()) return;
-  knock(750,0.5,0.06,0); knock(500,0.5,0.06,0.22);
-  blip(300,'square',0.25,0.1,0.42,900); knock(1100,0.6,0.05,0.62);
+  knock(2100,0.5,0.025,0); blip(950,'square',0.15,0.035,0.01);   // mag release click
+  scrape(750,320,0.14,0.07,0.3);                                  // mag slides out
+  knock(420,0.45,0.05,0.24);                                      // mag hits the palm
+  scrape(300,700,0.1,0.5,0.28);                                   // fresh mag shoved in
+  knock(520,0.6,0.045,0.6); blip(230,'sine',0.4,0.07,0.61,85);    // mag seats with a thunk
+  scrape(450,1500,0.11,0.92,0.34);                                // slide pulled back
+  knock(1500,0.7,0.03,1.05); knock(650,0.55,0.05,1.07);           // slide snaps forward
+  blip(310,'square',0.28,0.05,1.06,130);                          // chambered
 }
 function sndPunch(hit){
   if(!actx()) return;
@@ -1856,10 +1870,14 @@ function updateBoss(dt){
     if(Math.random()<0.4)
       burst(P.pos.clone().setY(0.3),0xd7c9a3,1,{speed:1,life:0.4,grav:2,size:0.7});
     if(pd<2.6&&!P.dead){
-      trex.jaw.rotation.x=0;
-      sndChomp();
-      killPlayer('CHOMPED!','The T-rex sucked you right into its mouth. Bosses reset — go again?');
+      /* chomp insta-kill removed: it's a big bite + you get spat out */
       bossState='idle'; bossT=0; suctionOn=false; slideLoop.set(0);
+      trex.jaw.rotation.x=0.1; trex.neck.rotation.x=0;
+      sndChomp();
+      hurtPlayer(25,'The T-rex BIT you — but you wriggled free!');
+      var away=P.pos.clone().sub(g.position).setY(0).normalize();
+      P.pos.addScaledVector(away,6); P.vy=9;
+      camShake=0.8;
     }
     if(bossT>(bossN===2?5:4)){ bossState='idle'; bossT=0; suctionOn=false;
       trex.jaw.rotation.x=0.1; trex.neck.rotation.x=0; slideLoop.set(0); }
@@ -2166,6 +2184,18 @@ function updatePlayer(dt){
   } else if(PH==='lib2'){
     P.pos.x=clamp(P.pos.x,LIB2.x-19,LIB2.x+19);
     P.pos.z=clamp(P.pos.z,LIB2.z-19,LIB2.z+19);
+  } else if(PH==='city'){
+    P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
+    P.pos.z=clamp(P.pos.z,CITY.z-40,CITY.z+48);
+    for(var ci=0;ci<cityColliders.length;ci++){
+      var cc=cityColliders[ci];
+      var dxc=P.pos.x-cc.x, dzc=P.pos.z-cc.z;
+      if(Math.abs(dxc)<cc.hw+0.5&&Math.abs(dzc)<cc.hd+0.5&&P.pos.y<3){
+        var px3=(cc.hw+0.5-Math.abs(dxc)), pz3=(cc.hd+0.5-Math.abs(dzc));
+        if(px3<pz3) P.pos.x=cc.x+(dxc>0?1:-1)*(cc.hw+0.5);
+        else P.pos.z=cc.z+(dzc>0?1:-1)*(cc.hd+0.5);
+      }
+    }
   } else {
     P.pos.x=clamp(P.pos.x,-60,60);
     P.pos.z=clamp(P.pos.z,-20,jungleGroup.visible?JUNGLE.z1-2:PATH_END_Z+6);
@@ -2247,7 +2277,7 @@ function updateAmbient(dt){
     var f=Math.sin(GTIME*9+b.r)*0.7;
     b.wl.rotation.z=f; b.wr.rotation.z=-f;
   });
-  if(birds.length&&(PH==='build'||PH==='buildwalk'||PH==='path'||PH==='jungle'||PH==='home')){
+  if(birds.length&&(PH==='build'||PH==='buildwalk'||PH==='path'||PH==='jungle'||PH==='home'||PH==='city')){
     chirpT-=dt;
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
@@ -2275,6 +2305,7 @@ function animate(){
     if(PH==='jungle'||PH==='home') updateHikers(dt);
     updatePortals(dt);
     if(PH==='boss'){ updateBoss(dt); updateTnts(dt); updateFallBlocks(dt); updateDrones(dt); }
+    if(PH==='city') updateCity(dt);
     if(PH==='ninja') updateNinjas(dt);
     if(PH==='bridge') updateBridge(dt);
     if(PH==='golem') updateGolem(dt);
@@ -2332,15 +2363,11 @@ function startSkip(sv){
 }
 (function(){
   var sv=loadSave();
-  $('btnPlay').addEventListener('click',startBuild);
-  if(sv&&sv.gun){
-    var b=document.createElement('button');
-    b.className='alt';
-    b.textContent=sv.rich?'CONTINUE (TYCOON)':'SKIP TO THE JUNGLE';
-    b.addEventListener('click',function(){ startSkip(sv); });
-    $('startBtns').appendChild(b);
-  }
-  if(IS_TOUCH) $('tapNote').textContent='Mobile detected — joystick + buttons will appear in game.';
+  $('btnPlay').textContent='🏙️ ENTER BRICK CITY';
+  $('btnPlay').addEventListener('click',startCity);
+  var note=sv&&sv.gun?'Your save is waiting on a golden pad in the city.':'';
+  if(IS_TOUCH) note+=(note?' ':'')+'Mobile detected — joystick + buttons will appear in game.';
+  $('tapNote').textContent=note;
 })();
 
 /* ================================================================
@@ -3375,6 +3402,238 @@ function applyRichSkip(sv){
   }
 }
 
+/* ================================================================
+   BRICK CITY — the pre-game hub. Walk around as your character in a
+   detailed city (200+ parts), then step on a glowing pad to play.
+   ================================================================ */
+var CITY={x:-300,z:0}, cityGroup=null, cityPartCount=0, cityColliders=[], cityPads=[];
+function textBoard(txt,w,h,bg,fg,size){
+  var cv=document.createElement('canvas'); cv.width=256; cv.height=128;
+  var x=cv.getContext('2d');
+  x.fillStyle=bg; x.fillRect(0,0,256,128);
+  x.strokeStyle=fg; x.lineWidth=6; x.strokeRect(6,6,244,116);
+  x.fillStyle=fg; x.font='900 '+(size||34)+'px Arial'; x.textAlign='center'; x.textBaseline='middle';
+  var lines=txt.split('\n');
+  lines.forEach(function(l,i){ x.fillText(l,128,64+(i-(lines.length-1)/2)*40); });
+  var m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+    new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));
+  return m;
+}
+function buildCity(){
+  if(cityGroup) return;
+  cityGroup=new THREE.Group(); world.add(cityGroup);
+  var CX=CITY.x, CZ=CITY.z;
+  function at(m,x,y,z){ m.position.set(CX+x,y,CZ+z); cityGroup.add(m); return m; }
+  function collide(x,z,hw,hd){ cityColliders.push({x:CX+x,z:CZ+z,hw:hw,hd:hd}); }
+  /* ground + crossing roads + sidewalks */
+  at(new THREE.Mesh(new THREE.PlaneGeometry(110,110),mat(0x4f9c3f)),0,0.01,0).rotation.x=-Math.PI/2;
+  var roadNS=box(9,0.12,100,0x3b3f45); at(roadNS,0,0.06,0);
+  var roadEW=box(100,0.12,9,0x3b3f45); at(roadEW,0,0.06,0);
+  for(var i=0;i<10;i++){
+    if(Math.abs(i*9-40)>6){ at(box(0.35,0.14,2.6,0xfff4c9),0,0.13,-40+i*9); at(box(2.6,0.14,0.35,0xfff4c9),-40+i*9,0.13,0); }
+  }
+  for(var cw=0;cw<5;cw++){ at(box(0.9,0.14,6.5,0xffffff),-2.2+cw*1.1,0.135,7.6);
+    at(box(6.5,0.14,0.9,0xffffff),7.6,0.135,-2.2+cw*1.1); }
+  [[-27,-27],[27,-27],[-27,27],[27,27]].forEach(function(q){
+    var sw=studdedBox(44,0.22,44,0x9aa5ad,0x8b969e); sw.position.set(CX+q[0],0.11,CZ+q[1]); cityGroup.add(sw);
+  });
+  /* buildings: two per quadrant, windowed and roofed */
+  var BLD=[
+    {x:-24,z:-24,w:14,d:12,h:14,c:0xc62b21,shop:'BRICK\nBURGERS'},
+    {x:-38,z:-18,w:10,d:10,h:9,c:0xe0a020,shop:null},
+    {x:24,z:-24,w:12,d:12,h:17,c:0x2a6fd6,shop:'MINIFIG\nMART'},
+    {x:38,z:-16,w:10,d:8,h:8,c:0x7a4a1e,shop:null},
+    {x:-24,z:24,w:12,d:14,h:12,c:0x2e8b2e,shop:'BLOCK\nBANK'},
+    {x:-38,z:18,w:10,d:9,h:10,c:0x9b5cff,shop:null},
+    {x:26,z:26,w:15,d:12,h:11,c:0xd4af37,shop:null},
+    {x:38,z:14,w:9,d:9,h:13,c:0x607d8b,shop:null}
+  ];
+  BLD.forEach(function(b){
+    var body=studdedBox(b.w,b.h,b.d,b.c,new THREE.Color(b.c).offsetHSL(0,0,-0.06).getHex());
+    body.position.set(CX+b.x,b.h/2,CZ+b.z); cityGroup.add(body);
+    collide(b.x,b.z,b.w/2,b.d/2);
+    var faceZ=b.z>0?b.z-b.d/2:b.z+b.d/2, dir=b.z>0?-1:1;
+    var door=box(1.8,2.6,0.25,0x3a2c14);
+    door.position.set(CX+b.x,1.3,CZ+faceZ+dir*0.15); cityGroup.add(door);
+    var knob=box(0.14,0.14,0.14,0xffd83d);
+    knob.position.set(CX+b.x+0.6,1.2,CZ+faceZ+dir*0.32); cityGroup.add(knob);
+    var floors=Math.min(4,((b.h-3)/2.6)|0), cols=Math.min(4,(b.w/3)|0);
+    for(var f=0;f<floors;f++) for(var c2=0;c2<cols;c2++){
+      var wx=b.x-((cols-1)/2)*2.6+c2*2.6, wy=3.4+f*2.6;
+      var fr=box(1.5,1.7,0.2,0xf4f4f4);
+      fr.position.set(CX+wx,wy,CZ+faceZ+dir*0.12); cityGroup.add(fr);
+      var gl=new THREE.Mesh(boxGeo(1.2,1.4,0.24),glassMat);
+      gl.position.set(CX+wx,wy,CZ+faceZ+dir*0.12); cityGroup.add(gl);
+      if(f===0&&c2===0&&b.w>10){ var sill=box(1.7,0.14,0.4,0xf4f4f4);
+        sill.position.set(CX+wx,wy-0.95,CZ+faceZ+dir*0.28); cityGroup.add(sill); }
+    }
+    var lip=studdedBox(b.w+0.6,0.5,b.d+0.6,0x4a4f57,0x3f444b);
+    lip.position.set(CX+b.x,b.h+0.25,CZ+b.z); cityGroup.add(lip);
+    var ac=box(1.6,1,1.6,0x9aa5ad); ac.position.set(CX+b.x-b.w/4,b.h+1,CZ+b.z); cityGroup.add(ac);
+    if(b.h>12){ var ant=box(0.16,3,0.16,0x333333);
+      ant.position.set(CX+b.x+b.w/4,b.h+2,CZ+b.z); cityGroup.add(ant);
+      var blink=new THREE.Mesh(boxGeo(0.3,0.3,0.3),new THREE.MeshBasicMaterial({color:0xff2211}));
+      blink.position.set(CX+b.x+b.w/4,b.h+3.6,CZ+b.z); cityGroup.add(blink); }
+    if(b.shop){
+      var aw=box(b.w*0.5,0.2,1.6,0xffffff);
+      aw.position.set(CX+b.x,2.9,CZ+faceZ+dir*0.9); aw.rotation.x=dir*0.25; cityGroup.add(aw);
+      for(var st2=0;st2<4;st2++){ var stripe=box(b.w*0.5/4-0.1,0.22,1.5,st2%2?0xc62b21:0xffffff);
+        stripe.position.set(CX+b.x-b.w*0.25+ (st2+0.5)*(b.w*0.5/4),2.9,CZ+faceZ+dir*0.9);
+        stripe.rotation.x=dir*0.25; cityGroup.add(stripe); }
+      var sign=textBoard(b.shop,4,2,'#1c2333','#ffd83d',30);
+      sign.position.set(CX+b.x,4.6,CZ+faceZ+dir*0.4);
+      if(dir<0) sign.rotation.y=Math.PI;
+      cityGroup.add(sign);
+    }
+  });
+  /* street props */
+  for(var sl=0;sl<6;sl++){
+    var lx=(sl%2?6.2:-6.2), lz=-36+sl*14.5;
+    var pole=box(0.22,5,0.22,0x2f3540); pole.position.set(CX+lx,2.5,CZ+lz); cityGroup.add(pole);
+    var arm=box(1.6,0.16,0.16,0x2f3540); arm.position.set(CX+lx+(sl%2?-0.8:0.8),4.9,CZ+lz); cityGroup.add(arm);
+    var lamp=new THREE.Mesh(boxGeo(0.5,0.3,0.5),new THREE.MeshBasicMaterial({color:0xfff0b8}));
+    lamp.position.set(CX+lx+(sl%2?-1.5:1.5),4.8,CZ+lz); cityGroup.add(lamp);
+  }
+  [[6.4,6.4],[-6.4,-6.4]].forEach(function(tl){
+    var p=box(0.24,3.6,0.24,0x2f3540); p.position.set(CX+tl[0],1.8,CZ+tl[1]); cityGroup.add(p);
+    var hd=box(0.7,1.8,0.5,0x1c2026); hd.position.set(CX+tl[0],4.2,CZ+tl[1]); cityGroup.add(hd);
+    [[0xff2211,4.8],[0xffd83d,4.2],[0x2ecc40,3.6]].forEach(function(li){
+      var l2=new THREE.Mesh(boxGeo(0.32,0.32,0.2),new THREE.MeshBasicMaterial({color:li[0]}));
+      l2.position.set(CX+tl[0],li[1],CZ+tl[1]+0.3); cityGroup.add(l2);
+    });
+  });
+  [[-9,-14],[9,16]].forEach(function(hp){
+    var hy=box(0.5,0.8,0.5,0xc62b21); hy.position.set(CX+hp[0],0.6,CZ+hp[1]); cityGroup.add(hy);
+    var hc=box(0.7,0.24,0.7,0xc62b21); hc.position.set(CX+hp[0],1.1,CZ+hp[1]); cityGroup.add(hc);
+    var hn=box(0.24,0.24,0.7,0xffd83d); hn.position.set(CX+hp[0],0.7,CZ+hp[1]); cityGroup.add(hn);
+  });
+  for(var bn=0;bn<4;bn++){
+    var bx2=(bn%2?12:-12), bz2=(bn<2?-9:9);
+    var seat=studdedBox(2.6,0.2,0.8,0x8a5a2a,0x6f4820); seat.position.set(CX+bx2,0.6,CZ+bz2); cityGroup.add(seat);
+    var back=box(2.6,0.8,0.16,0x8a5a2a); back.position.set(CX+bx2,1.2,CZ+bz2-0.35); cityGroup.add(back);
+    [[-1,0],[1,0]].forEach(function(lg2){ var leg=box(0.2,0.6,0.7,0x2f3540);
+      leg.position.set(CX+bx2+lg2[0],0.3,CZ+bz2); cityGroup.add(leg); });
+  }
+  [[14,-9],[-14,10],[10,12]].forEach(function(tc){
+    var can=box(0.7,1,0.7,0x4a4f57); can.position.set(CX+tc[0],0.7,CZ+tc[1]); cityGroup.add(can);
+    var lid=studdedBox(0.85,0.16,0.85,0x3a3f45,0x30343a); lid.position.set(CX+tc[0],1.28,CZ+tc[1]); cityGroup.add(lid);
+  });
+  var mb=box(0.8,1.1,0.6,0x2a6fd6); mb.position.set(CX-12,0.85,CZ+13); cityGroup.add(mb);
+  var mbTop=box(0.8,0.4,0.6,0x2258aa); mbTop.position.set(CX-12,1.55,CZ+13); cityGroup.add(mbTop);
+  for(var tr2=0;tr2<8;tr2++){
+    var t3=makeTree(tr2%3===2?2:0);
+    var tx2=(tr2%2?1:-1)*rand(12,40), tz2=(tr2<4?1:-1)*rand(12,40);
+    if(Math.abs(tx2)<8||Math.abs(tz2)<8) tz2+=12;
+    t3.position.set(CX+tx2,0,CZ+tz2); cityGroup.add(t3);
+  }
+  /* fountain plaza */
+  var basin=studdedBox(5,0.8,5,0x9aa5ad,0x8b969e); basin.position.set(CX+18,0.4,CZ-16); cityGroup.add(basin);
+  var wat=new THREE.Mesh(new THREE.CircleGeometry(2,16),
+    new THREE.MeshBasicMaterial({color:0x66d9ef,transparent:true,opacity:0.8}));
+  wat.rotation.x=-Math.PI/2; wat.position.set(CX+18,0.82,CZ-16); cityGroup.add(wat);
+  var jet=box(0.5,1.6,0.5,0x66d9ef); jet.position.set(CX+18,1.6,CZ-16); cityGroup.add(jet);
+  collide(18,-16,2.6,2.6);
+  /* parked brick cars */
+  var CARC=[0xc62b21,0xffd83d,0x2a6fd6,0x2e8b2e,0xffffff];
+  for(var cr=0;cr<5;cr++){
+    var car=new THREE.Group();
+    var bodyC=box(1.8,0.7,3.6,CARC[cr]); bodyC.position.y=0.75; car.add(bodyC);
+    var cab=box(1.6,0.7,1.8,CARC[cr]); cab.position.set(0,1.35,-0.2); car.add(cab);
+    var ws=new THREE.Mesh(boxGeo(1.4,0.55,1.9),glassMat); ws.position.set(0,1.38,-0.2); car.add(ws);
+    [[-0.95,1.1],[0.95,1.1],[-0.95,-1.3],[0.95,-1.3]].forEach(function(w2){
+      var wh=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.35,10),mat(0x1c2026));
+      wh.rotation.z=Math.PI/2; wh.position.set(w2[0],0.45,w2[1]); car.add(wh);
+    });
+    var hl1=box(0.3,0.2,0.1,0xfff0b8); hl1.position.set(-0.5,0.8,1.85); car.add(hl1);
+    var hl2=box(0.3,0.2,0.1,0xfff0b8); hl2.position.set(0.5,0.8,1.85); car.add(hl2);
+    var tl1=box(0.3,0.2,0.1,0xc62b21); tl1.position.set(-0.5,0.8,-1.85); car.add(tl1);
+    var tl2=box(0.3,0.2,0.1,0xc62b21); tl2.position.set(0.5,0.8,-1.85); car.add(tl2);
+    var px2=(cr%2?6.3:-6.3), pz2=12+((cr*11)%34);
+    if(cr>2) pz2=-pz2;
+    car.position.set(CX+px2,0,CZ+pz2);
+    cityGroup.add(car);
+    collide(px2,pz2,1.2,2);
+  }
+  /* billboard */
+  var bp1=box(0.4,7,0.4,0x2f3540); bp1.position.set(CX-3,3.5,CZ-42); cityGroup.add(bp1);
+  var bp2=box(0.4,7,0.4,0x2f3540); bp2.position.set(CX+3,3.5,CZ-42); cityGroup.add(bp2);
+  var bb2=textBoard('🧱 BRICK LEGEND\nWELCOME TO THE CITY',9,4.2,'#12203a','#ffd83d',26);
+  bb2.position.set(CX,7.5,CZ-41.8); cityGroup.add(bb2);
+  /* construction-site START pads */
+  function cityPad(label,color,x,z,mode){
+    var pad=studdedBox(3,0.3,3,color,new THREE.Color(color).offsetHSL(0,0,-0.08).getHex());
+    pad.position.set(CX+x,0.15,CZ+z); cityGroup.add(pad);
+    var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.3,1.5,26,10,1,true),
+      new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:0.16,
+        depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    beam.position.set(CX+x,13,CZ+z); cityGroup.add(beam);
+    var post=box(0.2,3.2,0.2,0x2f3540); post.position.set(CX+x,1.6,CZ+z-1.9); cityGroup.add(post);
+    var sign=textBoard(label,3.4,1.8,'#0a2a12','#7dffa0',30);
+    sign.position.set(CX+x,3.4,CZ+z-1.9); cityGroup.add(sign);
+    cityPads.push({x:CX+x,z:CZ+z,mode:mode,pad:pad});
+  }
+  cityPad('START\nSTORY',0x35e0ff,-16,-13,'story');
+  var sv0=loadSave();
+  if(sv0&&sv0.gun) cityPad(sv0.rich?'CONTINUE\nTYCOON':'SKIP TO\nJUNGLE',0xffd83d,16,-13,'skip');
+  /* construction props by the story pad */
+  for(var cn=0;cn<4;cn++){
+    var cone=box(0.4,0.8,0.4,0xff8a00); cone.position.set(CX-20+cn*1.6,0.5,CZ-9.5); cityGroup.add(cone);
+    var coneT=box(0.2,0.4,0.2,0xffffff); coneT.position.set(CX-20+cn*1.6,1.0,CZ-9.5); cityGroup.add(coneT);
+  }
+  var bar1=box(3.4,0.25,0.25,0xff8a00); bar1.position.set(CX-17.6,1.1,CZ-9.5); cityGroup.add(bar1);
+  var crane=box(0.5,8,0.5,0xffb300); crane.position.set(CX-21,4,CZ-17); cityGroup.add(crane);
+  var craneArm=box(7,0.4,0.5,0xffb300); craneArm.position.set(CX-18,8,CZ-17); cityGroup.add(craneArm);
+  var hook=box(0.16,2.4,0.16,0x333333); hook.position.set(CX-15,6.6,CZ-17); cityGroup.add(hook);
+  var crate2=studdedBox(1.4,1.4,1.4,0xc62b21,0xa02318); crate2.position.set(CX-15,4.9,CZ-17); cityGroup.add(crate2);
+  /* count every mesh so we can brag about it */
+  cityPartCount=0;
+  cityGroup.traverse(function(m){ if(m.isMesh) cityPartCount++; });
+}
+function startCity(){
+  $('start').style.display='none';
+  audioInit(); actx(); sndUi();
+  buildCity();
+  var sv=loadSave();
+  hasGun=!!(sv&&sv.gun);
+  tornadoOwned=!!(sv&&sv.torn);
+  if(tornadoOwned) tornCharge=TORN_MAX;
+  if(sv&&sv.rich){ rich=true; bux=sv.bux||0; updateBuxHud(); spawnPlayer('rich'); spawnBodyguards(); }
+  else spawnPlayer(hasGun?true:false);
+  P.pos.set(CITY.x+2,0,CITY.z+22); P.vy=0;
+  player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  PH='city';
+  setMood('day');
+  spawnBirds(CITY.x,CITY.z,4);
+  obj('🏙️ WELCOME TO BRICK CITY — walk to a glowing pad to play!');
+  hint('WASD / joystick to move · Space jump · drag to look around · the cyan pad starts the story'+(hasGun?' · gold pad continues your save':''));
+  msg('🏙️ BRICK CITY<br><span style="font-size:55%">This is you. Have a stroll — then step on a glowing pad.</span>',4200);
+  updateMobileUI();
+}
+function leaveCityTo(mode){
+  sndPortal(); sndWhoosh(false);
+  if(mode==='story'){
+    /* fresh story run: strip pre-game gear */
+    hasGun=false; gunEquipped=false; tornadoOwned=false; rich=false;
+    bodyguards.forEach(function(b){ world.remove(b.ref.group); }); bodyguards.length=0;
+    $('ammo').style.display='none'; $('tornBar').style.display='none';
+    if(player){ world.remove(player.group); player=null; }
+    P.pos.set(0,0,4.8); P.vy=0; camYaw=0; P.yaw=0;
+    startBuild();
+  } else {
+    startSkip(loadSave());
+  }
+}
+function updateCity(dt){
+  cityPads.forEach(function(p){
+    p.pad.position.y=0.15+Math.sin(GTIME*3+p.x)*0.06;
+    if(Math.random()<0.06)
+      burst(new THREE.Vector3(p.x+rand(-1,1),rand(0.5,2.5),p.z+rand(-1,1)),
+        p.mode==='story'?0x35e0ff:0xffd83d,1,{speed:0.8,life:0.6,grav:-2,size:0.6});
+    if(!P.dead&&Math.hypot(P.pos.x-p.x,P.pos.z-p.z)<1.7) leaveCityTo(p.mode);
+  });
+}
+
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
 window.__dbg={
   phase:function(){ return PH; },
@@ -3452,7 +3711,12 @@ window.__dbg={
   carrying:function(){ return hasBook; },
   buxN:function(){ return bux; },
   statuePos:function(){ return statueObj?{x:statueObj.position.x,z:statueObj.position.z}:null; },
-  guards:function(){ return bodyguards.length; }
+  guards:function(){ return bodyguards.length; },
+  /* ---- Brick City hub ---- */
+  startCity:startCity,
+  cityParts:function(){ return cityPartCount; },
+  cityPads:function(){ return cityPads.map(function(p){ return {x:p.x,z:p.z,mode:p.mode}; }); },
+  bossMove:function(mv){ startBossMove(mv); }
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
 </script>
