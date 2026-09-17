@@ -80,6 +80,13 @@
   #bTorn{right:176px;bottom:30px;display:none;background:#39c7a533;border-color:#7dffd888}
   #bThrow{right:24px;bottom:170px;display:none;background:#ff9a0033;border-color:#ffd83d88}
   #tapNote{position:absolute;left:50%;top:64%;transform:translateX(-50%);color:#8fa4c4;font-size:13px;pointer-events:none}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:35;transition:opacity .12s}
+  #timer{position:absolute;top:14px;right:16px;color:#ffd83d;font-weight:900;font-size:22px;
+    text-shadow:0 2px 4px #000;display:none;font-variant-numeric:tabular-nums}
+  #bux{position:absolute;top:44px;right:16px;color:#ffe97a;font-weight:900;font-size:15px;
+    text-shadow:0 2px 4px #000;display:none}
+  #warn{display:none;background:#1a0505f2}
+  #warn h1{background:linear-gradient(180deg,#ffe14d,#ff3b3b);-webkit-background-clip:text;background-clip:text}
 </style>
 </head>
 <body>
@@ -93,7 +100,10 @@
   <div id="msg"></div>
   <div id="hint"></div>
   <div id="stepPop"></div>
+  <div id="timer"></div>
+  <div id="bux"></div>
 </div>
+<div id="flash"></div>
 <div id="mc">
   <div id="stick"><div id="knob"></div></div>
   <div class="mbtn" id="bJump">JUMP</div>
@@ -110,6 +120,14 @@
   <p style="color:#8fa4c4;font-size:13px">Move: WASD / Arrow keys &nbsp;·&nbsp; Jump: Space &nbsp;·&nbsp; Camera: drag the screen &nbsp;·&nbsp; Mobile: joystick + buttons<br>Headphones recommended. The T-rex is LOUD.</p>
   <div id="startBtns"><button id="btnPlay">BUILD THE HOUSE</button></div>
   <div id="tapNote"></div>
+</div>
+<div class="ov" id="warn">
+  <h1>⚠️ EPILEPSY WARNING ⚠️</h1>
+  <p><b>PHOTOSENSITIVITY / SEIZURE WARNING:</b> the fights ahead contain <b>INSANE flashing lights</b> —
+  bright full-screen flashes on every gunshot, hit and explosion. If you (or anyone watching) are
+  sensitive to flashing lights, choose FLASHES OFF.</p>
+  <div><button id="btnWarnGo">CONTINUE — FLASHES ON</button>
+  <button class="alt" id="btnWarnSafe">CONTINUE — FLASHES OFF</button></div>
 </div>
 <div class="ov" id="death">
   <h1 id="deathTitle">CHOMPED!</h1>
@@ -436,6 +454,23 @@ function makeMinifig(o){ // o:{torso,legs,arms,face,hat,tie,backpack,gunHand}
     var top=box(0.28,0.12,0.28,0xffb300); top.position.y=0.42; hg.add(top);
     var brim=box(0.56,0.06,0.56,0xffb300); brim.position.y=0.2; hg.add(brim);
     headG.add(hg); r.hat=hg;
+  }
+  if(o.hat==='tophat'){
+    var th=new THREE.Group();
+    var brim2=box(0.6,0.06,0.6,0x111116); brim2.position.y=0.22; th.add(brim2);
+    var tube=box(0.38,0.44,0.38,0x111116); tube.position.y=0.46; th.add(tube);
+    var band=box(0.4,0.1,0.4,0xd4af37); band.position.y=0.3; th.add(band);
+    headG.add(th); r.hat=th;
+  }
+  if(o.headband){
+    var hb=box(0.46,0.1,0.46,o.headband); hb.position.y=0.12; headG.add(hb);
+    var tail1=box(0.08,0.3,0.04,o.headband); tail1.position.set(0.12,-0.02,-0.28); tail1.rotation.x=0.4; headG.add(tail1);
+  }
+  if(o.fancy){
+    var shirt=box(0.3,0.5,0.06,0xf4f4f4); shirt.position.set(0,1.06,0.19); g.add(shirt);
+    for(var bt=0;bt<3;bt++){ var btn=box(0.07,0.07,0.04,0xd4af37);
+      btn.position.set(0.2,0.88+bt*0.18,0.2); g.add(btn); }
+    var tail=box(0.66,0.4,0.1,o.torso); tail.position.set(0,0.62,-0.22); g.add(tail);
   }
   if(o.backpack){ var bp=box(0.5,0.5,0.22,o.backpack); bp.position.set(0,1.08,-0.3); g.add(bp);
     var bp2=box(0.3,0.16,0.14,0x7a4a1e); bp2.position.set(0,1.4,-0.28); g.add(bp2); }
@@ -893,6 +928,18 @@ var bossN=0,trex=null,bossHp=0,bossMaxHp=0,bossState='idle',bossT=0,bossCd=2.5,
     shockwaves=[],fallBlocks=[],drones=[],tnts=[],tntPads=[],carried=false,
     suctionOn=false,slideVol=0,chargeDir=new THREE.Vector3();
 var cutT=-1,cutSkipOk=false,gunMsgShown=false,bossFlowTimer=null;
+/* ---- Act 2 state ---- */
+var rich=false,bodyguards=[],cut2T=-1;
+var STEPS=null; // active build queue (BUILD_STEPS or FURN_STEPS); set at boot
+var furnMode=false,ladderBuilt=false,statueObj=null,roofPortal=null;
+var warnShown=false,flashesOn=false,deathRetry=null;
+var ninjas=[],ninjaIdx=0,ninjaT=0,NINJA_LIMIT=600,nextNinjaT=-1,ninjaGroup=null;
+var eproj=[],lavaPools=[];
+var BR={z0:742,z1:798,y:3},bridgeGroup=null,planks=[],gators=[],gatorKills=0,GATOR_TOTAL=5,bridgeGate=null;
+var GAR={x:0,z:860,r:22},golemObj=null,golemHp=0,GOLEM_MAX=150,golemState='idle',golemT=0,golemCd=2.4,golemGroup=null;
+var NARENA={x:0,z:700,r:20};
+var MLIB={x:0,z:930},mlibGroup=null,mlibDoors=[],doorIdx=-1,doorKnockCd=0;
+var LIB2={x:0,z:1010},lib2Group=null,bookMesh=null,hasBook=false,bookT=-1,bux=0;
 var tweens=[];
 var keys={};
 var GTIME=0;
@@ -902,7 +949,8 @@ var SPAWN_AFTER=(function(){ // step index after which the character appears
   return BUILD_STEPS.length-3;
 })();
 function save(){
-  try{ localStorage.setItem('brickLegendSave',JSON.stringify({gun:hasGun?1:0,torn:tornadoOwned?1:0})); }catch(e){}
+  try{ localStorage.setItem('brickLegendSave',JSON.stringify(
+    {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux})); }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -917,18 +965,22 @@ function updateTweens(dt){
 }
 
 /* ---------------- PLAYER SPAWN / SWAP ---------------- */
-function spawnPlayer(business){
+function spawnPlayer(kind){
   if(player) world.remove(player.group);
-  isBusiness=business;
-  player=makeMinifig(business?
+  isBusiness=!!kind;
+  player=makeMinifig(kind==='rich'?
+    {torso:0x23252e,legs:0x17181f,arms:0x23252e,face:'cool',tie:0xd4af37,
+     hat:'tophat',fancy:true,gunHand:true}:
+    kind?
     {torso:0x1c1f26,legs:0x14161c,arms:0x1c1f26,face:'cool',tie:0xc62b21,gunHand:true}:
     {torso:0x2a6fd6,legs:0x3a3f4a,arms:0x2a6fd6,face:'smile',hat:'hardhat',vest:true});
+  if(player.gun) player.gun.visible=gunEquipped;
   player.group.position.copy(P.pos);
   world.add(player.group);
 }
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
-  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='cut')?'none':'block';
+  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='cut'||PH==='cut2')?'none':'block';
   var inBoss=PH==='boss';
   $('bEquip').style.display=(hasGun&&!inBoss)?'flex':'none';
   $('bShoot').style.display=(gunEquipped&&!inBoss)?'flex':'none';
@@ -971,8 +1023,11 @@ addEventListener('pointerup',function(e){
   if(drag.moved>9) return; // it was a camera drag, not a tap
   if(PH==='build'||PH==='buildwalk'){ tryPlace(e); return; }
   if(PH==='cut'){ if(cutSkipOk) cutT=99; return; }
+  if(PH==='cut2'){ if(cutSkipOk) cut2T=99; return; }
   if(PH==='boss'){ if(carried) throwTnt(); else tryPunch(); return; }
-  if(PH==='jungle'||PH==='home'||PH==='path'){
+  if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
+  if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -1015,30 +1070,36 @@ bindBtn('bThrow',function(){ if(carried) throwTnt(); });
 
 /* ---------------- BUILD PHASE ---------------- */
 var placedGroup=new THREE.Group(); world.add(placedGroup);
+STEPS=BUILD_STEPS;
 function showGhost(){
   if(ghost){ world.remove(ghost); ghost=null; }
-  if(buildIdx>=BUILD_STEPS.length) return;
-  var st=BUILD_STEPS[buildIdx];
+  if(buildIdx>=STEPS.length) return;
+  var st=STEPS[buildIdx];
   ghost=st.make();
   ghost.traverse(function(m){ if(m.isMesh){ m.material=ghostMat; m.castShadow=false; } });
   world.add(ghost);
   camOrbit.target=st.cam;
-  obj('🔨 '+st.label+' &nbsp;<span style="color:#7df3ff">('+(buildIdx+1)+'/'+BUILD_STEPS.length+')</span>');
-  hint(PH==='build'?'Click / tap the glowing cyan part to snap it in!':'Keep building — click the cyan part! (You can walk now: WASD + Space)');
+  obj('🔨 '+st.label+' &nbsp;<span style="color:#7df3ff">('+(buildIdx+1)+'/'+STEPS.length+')</span>');
+  if(furnMode) hint('Walk up to the glowing cyan piece and tap it to build it!');
+  else hint(PH==='build'?'Click / tap the glowing cyan part to snap it in!':'Keep building — click the cyan part! (You can walk now: WASD + Space)');
 }
-function tryPlace(e){
-  if(!ghost) return;
+function tryPlace(e,soft){
+  if(!ghost) return false;
   var r=renderer.domElement.getBoundingClientRect();
   pointer.x=((e.clientX-r.left)/r.width)*2-1;
   pointer.y=-((e.clientY-r.top)/r.height)*2+1;
   ray.setFromCamera(pointer,camera);
   var bb=new THREE.Box3().setFromObject(ghost); bb.expandByScalar(1.3);
-  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan part</b>!'); return; }
+  if(!ray.ray.intersectsBox(bb)){
+    if(!soft) hint('Click the <b style="color:#7df3ff">glowing cyan part</b>!');
+    return false;
+  }
   placeStep();
+  return true;
 }
 function placeStep(silent){
-  if(buildIdx>=BUILD_STEPS.length) return;
-  var st=BUILD_STEPS[buildIdx];
+  if(buildIdx>=STEPS.length) return;
+  var st=STEPS[buildIdx];
   if(ghost){ world.remove(ghost); ghost=null; }
   var g=st.make(); placedGroup.add(g);
   if(!silent){
@@ -1050,18 +1111,23 @@ function placeStep(silent){
     camShake=Math.min(camShake+0.12,0.3);
   }
   buildIdx++;
-  if(buildIdx===SPAWN_AFTER+1&&!player&&!silent){
-    spawnPlayer(false); PH='buildwalk'; updateMobileUI();
-    msg('There YOU are! 👷<br><span style="font-size:60%">WASD / arrows to move · Space to jump · joystick on mobile<br>Drag the screen (not a button) to move the camera</span>',4600);
+  if(STEPS===BUILD_STEPS){
+    if(buildIdx===SPAWN_AFTER+1&&!player&&!silent){
+      spawnPlayer(false); PH='buildwalk'; updateMobileUI();
+      msg('There YOU are! 👷<br><span style="font-size:60%">WASD / arrows to move · Space to jump · joystick on mobile<br>Drag the screen (not a button) to move the camera</span>',4600);
+    }
+    if(buildIdx>=STEPS.length){
+      PH='path'; houseBuilt=true;
+      if(!player) spawnPlayer(false);
+      updateMobileUI();
+      obj('🏠 House complete! Walk down your new path...');
+      hint('Walk to the end of the pathway.');
+      if(!silent){ sndSparkle(); msg('🏠 HOUSE COMPLETE!<br><span style="font-size:60%">Beautiful. Now take a walk.</span>',3000); }
+    } else showGhost();
+  } else { /* Act 2 furnishing queue */
+    if(buildIdx>=STEPS.length) finishFurnishing(silent);
+    else showGhost();
   }
-  if(buildIdx>=BUILD_STEPS.length){
-    PH='path';
-    if(!player) spawnPlayer(false);
-    updateMobileUI();
-    obj('🏠 House complete! Walk down your new path...');
-    hint('Walk to the end of the pathway.');
-    if(!silent){ sndSparkle(); msg('🏠 HOUSE COMPLETE!<br><span style="font-size:60%">Beautiful. Now take a walk.</span>',3000); }
-  } else showGhost();
 }
 
 /* ---------------- GUN ---------------- */
@@ -1079,24 +1145,46 @@ function startReload(){
   if(!gunEquipped||reloading||ammo>=MAG) return;
   reloading=true; reloadT=1.25; sndReload(); updateAmmoHud();
 }
+function doFlash(c){
+  if(flashesOn!==true) return;
+  var f=$('flash');
+  f.style.background=c||'#fff';
+  f.style.transition='none'; f.style.opacity=0.85;
+  void f.offsetWidth;
+  f.style.transition='opacity .12s'; f.style.opacity=0;
+}
+function gunDmg(){ return rich?10:18; } // the tycoon's glock is fancy but sorta weak
+/* everything the gun / fists / tornado can hit right now */
+function combatTargets(){
+  var list=[];
+  hikers.forEach(function(h){ if(!h.dead)
+    list.push({pos:h.ref.group.position,y:1.2,hurt:function(d,t){ hurtHiker(h,d,t); }}); });
+  ninjas.forEach(function(n){ if(n.active&&n.hp>0)
+    list.push({pos:n.ref.group.position,y:1.2,hurt:function(d,t){ hurtNinja(n,d,t); }}); });
+  gators.forEach(function(ga){ if(ga.hp>0&&ga.state!=='water')
+    list.push({pos:ga.mesh.position,y:0.6,hurt:function(d,t){ hurtGator(ga,d,t); }}); });
+  if(golemObj&&golemHp>0&&PH==='golem')
+    list.push({pos:golemObj.group.position,y:4,big:true,hurt:function(d){ golemDamage(d); }});
+  return list;
+}
 function shoot(){
   if(!gunEquipped||PH==='boss') return;
   if(reloading||shootCd>0) return;
   if(ammo<=0){ startReload(); return; }
   ammo--; shootCd=0.22; sndPew(); updateAmmoHud();
+  if(rich) doFlash(['#ffffff','#aee6ff','#ffe9a8','#ffb8f0'][(Math.random()*4)|0]);
   if(player){ player.armR.rotation.x=-1.5; tween(0.18,function(k){ if(player) player.armR.rotation.x=-1.5+1.5*k; }); }
-  /* auto-aim nearest hiker in front */
+  /* auto-aim nearest target in front */
   var best=null,bd=30;
   var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
-  hikers.forEach(function(h){
-    if(h.dead) return;
-    var d=h.ref.group.position.distanceTo(P.pos);
+  combatTargets().forEach(function(t){
+    var d=t.pos.distanceTo(P.pos);
     if(d>bd) return;
-    var dir=h.ref.group.position.clone().sub(P.pos).normalize();
-    if(dir.dot(fwd)>0.55){ best=h; bd=d; }
+    var dir=t.pos.clone().sub(P.pos).setY(0).normalize();
+    if(dir.dot(fwd)>(t.big?0.3:0.55)){ best=t; bd=d; }
   });
   var from=P.pos.clone().add(new THREE.Vector3(Math.sin(P.yaw)*0.4,1.3,Math.cos(P.yaw)*0.4));
-  var to=best?best.ref.group.position.clone().setY(1.2):from.clone().addScaledVector(fwd,24);
+  var to=best?best.pos.clone().setY(best.y):from.clone().addScaledVector(fwd,24);
   /* tracer (shared geometry/material, scaled per shot) */
   var dir2=to.clone().sub(from),len=dir2.length();
   if(!window._trGeo){ window._trGeo=new THREE.CylinderGeometry(0.03,0.03,1,5);
@@ -1108,7 +1196,7 @@ function shoot(){
   world.add(tr);
   setTimeout(function(){ world.remove(tr); },70);
   burst(from,0xffe14d,4,{speed:1.5,life:0.25,grav:0,size:0.7});
-  if(best) hurtHiker(best,18,false);
+  if(best) best.hurt(gunDmg(),false);
   if(ammo===0){ hint('Out of ammo — press R / RELOAD.'); }
 }
 
@@ -1118,13 +1206,12 @@ function tryPunch(){
   punchCd=0.45; punchAnimT=0.22;
   player.armR.rotation.x=-1.7;
   var hit=false;
-  var targets=hikers.filter(function(h){ return !h.dead; });
-  targets.forEach(function(h){
-    var d=h.ref.group.position.distanceTo(P.pos);
-    if(d<1.9){
-      var dir=h.ref.group.position.clone().sub(P.pos).normalize();
+  combatTargets().forEach(function(t){
+    var d=t.pos.distanceTo(P.pos);
+    if(d<(t.big?4.2:1.9)){
+      var dir=t.pos.clone().sub(P.pos).setY(0).normalize();
       var fwd=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw));
-      if(dir.dot(fwd)>0.2){ hurtHiker(h,12,tornActive); hit=true; }
+      if(dir.dot(fwd)>0.2){ t.hurt(12,tornActive); hit=true; }
     }
   });
   drones.forEach(function(dr){
@@ -1170,12 +1257,13 @@ function updateTornado(dt){
     }
     if(tornTick<=0){
       tornTick=0.35;
-      hikers.forEach(function(h){
-        if(h.dead) return;
-        if(h.ref.group.position.distanceTo(P.pos)<3.2){
-          hurtHiker(h,7,true);
-          var kb=h.ref.group.position.clone().sub(P.pos).setY(0).normalize();
-          h.ref.group.position.addScaledVector(kb,1.2);
+      combatTargets().forEach(function(t){
+        if(t.pos.distanceTo(P.pos)<(t.big?4.5:3.2)){
+          t.hurt(7,!t.big); // 20% stun chance rolls inside each hurt fn
+          if(!t.big){
+            var kb=t.pos.clone().sub(P.pos).setY(0).normalize();
+            t.pos.addScaledVector(kb,1.2);
+          }
         }
       });
       drones.forEach(function(dr){
@@ -1358,7 +1446,7 @@ function spawnPortal(){
   msg('🌀 A portal tore open in the trees!<br><span style="font-size:60%">Find the purple beam of light.</span>',3800);
 }
 function updatePortals(dt){
-  [portalObj,homePortal].forEach(function(po){
+  [portalObj,roofPortal].forEach(function(po){
     if(!po) return;
     po.userData.ring.rotation.z+=dt*2;
     po.userData.disc.rotation.z-=dt*3;
@@ -1367,7 +1455,6 @@ function updatePortals(dt){
         0xb98cff,1,{speed:1,life:0.7,grav:-3,size:0.7});
   });
   if(portalObj&&(PH==='jungle')&&P.pos.distanceTo(portalObj.position)<2.2) enterBoss(1);
-  if(homePortal&&PH==='home'&&P.pos.distanceTo(homePortal.position)<2.2) enterBoss(1);
 }
 
 /* ---------------- BOSS ---------------- */
@@ -1503,17 +1590,17 @@ function winGame(){
   $('bossWrap').style.display='none';
   arenaGroup.visible=false;
   if(trex){ world.remove(trex.group); trex=null; }
-  PH='home';
+  /* the jungle portal burns out for good */
+  if(portalObj){ burst(portalObj.position.clone().setY(2.4),0xb98cff,20,{speed:5,life:1});
+    world.remove(portalObj); portalObj=null; }
   P.pos.set(0,0,6); P.vy=0; P.hp=P.maxHp;
   if(player) player.group.position.copy(P.pos);
   camYaw=Math.PI; P.yaw=Math.PI;
   windLoop.set(0.12);
-  if(!homePortal){ homePortal=makePortal(6,PATH_END_Z); }
-  obj('🏡 HOME SWEET BRICK HOME — you earned the 🌪️ TORNADO!');
-  hint('Tornado: Q (or TORNADO button) — spins you up, 20% chance to STUN anyone you hit. 1s of spin per 3s of charge, 4s max. The purple portal = boss rematch.');
-  msg('🌪️ TORNADO ABILITY UNLOCKED!<br><span style="font-size:55%">Press Q / TORNADO. It charges itself: 3s per second of spin, 4s max.</span>',5200);
-  burst(P.pos.clone().setY(1.5),0x7dffd8,24,{speed:5,life:1.2});
-  updateMobileUI();
+  if(rich){ // rematch win — no second transformation
+    PH='home'; obj('🏡 Home again.'); updateMobileUI(); return;
+  }
+  startCut2(); // worker -> businessman -> TYCOON
 }
 /* T-rex behaviour */
 function updateBoss(dt){
@@ -1666,14 +1753,16 @@ function startBossMove(mv){
     sndRoar(false); slideLoop.set(0.3);
     msg('😱 IT\'S SUCKING YOU IN — RUN + JUMP AWAY!',1800); }
 }
-function spawnFallBlock(x,z,dmgScale){
-  var dcv=Math.hypot(x-ARENA.x,z-ARENA.z);
-  if(dcv>ARENA.r-1) return;
+function spawnFallBlock(x,z,dmgScale,bnd){
+  var bcx=bnd?bnd.x:ARENA.x, bcz=bnd?bnd.z:ARENA.z, brr=bnd?bnd.r:ARENA.r;
+  var dcv=Math.hypot(x-bcx,z-bcz);
+  if(dcv>brr-1) return;
   var shadow=new THREE.Mesh(new THREE.CircleGeometry(1.1,16),
     new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.35}));
   shadow.rotation.x=-Math.PI/2; shadow.position.set(x,0.06,z);
   world.add(shadow);
-  var colors=[0xc62b21,0x2a6fd6,0xffd83d,0x2e8b2e];
+  var colors=(bnd&&bnd.gold)?[0xd4af37,0xf3d97a,0xb8912b,0xffe97a]
+    :[0xc62b21,0x2a6fd6,0xffd83d,0x2e8b2e];
   var q=function(v){ return Math.round(v*4)/4; }; // quantize so the geometry cache stays bounded
   var m=studdedBox(q(rand(1,1.8)),q(rand(0.8,1.4)),q(rand(1,1.8)),colors[(Math.random()*4)|0]);
   m.position.set(x,26,z); world.add(m);
@@ -1702,11 +1791,11 @@ function updateFallBlocks(dt){
   }
   for(var j=shockwaves.length-1;j>=0;j--){
     var s=shockwaves[j];
-    s.r+=14*(bossN===2?1.25:1)*dt;
+    s.r+=(s.speed||14*(bossN===2?1.25:1))*dt;
     s.mesh.scale.set(s.r,s.r,1);
     if(!s.hit&&!P.dead&&P.pos.y<0.9){
       var pd=Math.hypot(P.pos.x-s.mesh.position.x,P.pos.z-s.mesh.position.z);
-      if(Math.abs(pd-s.r)<0.9){ s.hit=true; hurtPlayer(15,'Shockwave! Jump over the rings!'); P.vy=8; }
+      if(Math.abs(pd-s.r)<0.9){ s.hit=true; hurtPlayer(s.dmg||15,'Shockwave! Jump over the rings!'); P.vy=8; }
     }
     if(s.r>ARENA.r+6){ world.remove(s.mesh); shockwaves.splice(j,1); }
   }
@@ -1781,6 +1870,9 @@ function hurtPlayer(dmg,why){
   burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
   if(P.hp<=0){
     if(PH==='boss') killPlayer('SMASHED!',why+' Bosses reset when you fall — go again?');
+    else if(PH==='ninja') killPlayer('SLICED!','The ninjas got you — die once and you face ALL THREE again.',startNinjaFight);
+    else if(PH==='bridge') killPlayer('GATOR FOOD!',why+' Try the bridge again.',startBridge);
+    else if(PH==='golem') killPlayer('FLATTENED!','The Golden Golem crushed you into a 2x2 plate.',startGolem);
     else {
       P.dead=true;
       msg('💀 Knocked out!<br><span style="font-size:55%">Waking up at the jungle gate…</span>',2600);
@@ -1793,10 +1885,12 @@ function hurtPlayer(dmg,why){
     }
   }
 }
-function killPlayer(title,text){
+function killPlayer(title,text,retry){
   if(P.dead) return;
-  P.dead=true;
-  bossMusic(false); slideLoop.set(0);
+  P.dead=true; deathRetry=retry||null;
+  bossMusic(false); battleMusic(false); slideLoop.set(0);
+  if(a2Timer){ clearTimeout(a2Timer); a2Timer=null; } // no victory handoff may fire under the overlay
+  $('btnRetry').textContent=retry?'RETRY':'RETRY BOSS';
   $('deathTitle').textContent='💀 '+title;
   $('deathText').textContent=text;
   $('death').style.display='flex';
@@ -1805,23 +1899,25 @@ $('btnRetry').addEventListener('click',function(){
   $('death').style.display='none';
   P.dead=false; P.hp=P.maxHp;
   $('hpBar').firstElementChild.style.width='100%';
-  enterBoss(bossN);
+  var f=deathRetry; deathRetry=null;
+  if(f) f(); else enterBoss(bossN);
 });
 $('btnQuit').addEventListener('click',function(){
   $('death').style.display='none';
-  P.dead=false; P.hp=P.maxHp;
+  P.dead=false; P.hp=P.maxHp; deathRetry=null;
   $('hpBar').firstElementChild.style.width='100%';
   bossMusic(false);
   clearBossEntities();
+  clearAct2Fights();
   arenaGroup.visible=false;
   $('bossWrap').style.display='none';
   if(trex){ world.remove(trex.group); trex=null; }
-  if(tornadoOwned){ // already beat the game once: quit goes home
+  if(tornadoOwned){ // already beat the T-rex: quit goes home
     PH='home';
     P.pos.set(0,0,6); P.vy=0;
     camYaw=Math.PI; P.yaw=Math.PI;
     windLoop.set(0.12);
-    obj('🏡 Home again. The purple portal is a boss rematch.');
+    obj(rich?'🏡 Home again. The roof portal is waiting when you\'re ready.':'🏡 Home again.');
   } else {
     PH='jungle';
     P.pos.set(0,0,JUNGLE.z0-4); P.vy=0;
@@ -1835,8 +1931,35 @@ $('btnQuit').addEventListener('click',function(){
 });
 
 /* ---------------- PLAYER UPDATE ---------------- */
+var houseBuilt=false;
+function groundYAt(){
+  if(PH==='bridge'){
+    if(P.pos.z<BR.z0+0.4||P.pos.z>BR.z1-0.4) return BR.y; // stone ledges
+    for(var i=0;i<planks.length;i++){
+      var p=planks[i];
+      if(p.alive&&Math.abs(P.pos.z-p.z)<1.35&&Math.abs(P.pos.x)<1.9) return BR.y;
+    }
+    return -99; // over the water
+  }
+  /* the house roof is walkable */
+  if(houseBuilt&&(PH==='home'||PH==='jungle'||PH==='path')
+     &&P.pos.x>WALL.x0-0.8&&P.pos.x<WALL.x1+0.8
+     &&P.pos.z>WALL.z0-0.8&&P.pos.z<WALL.z1+0.8&&P.pos.y>4.4) return 5.55;
+  return 0;
+}
+function collideHouseWalls(){
+  /* thin wall colliders so the inside of the house is walkable through the door */
+  if(!houseBuilt||P.pos.y>4.2) return;
+  var t=0.75;
+  if(P.pos.x<=WALL.x0-t||P.pos.x>=WALL.x1+t||P.pos.z<=WALL.z0-t||P.pos.z>=WALL.z1+t) return;
+  if(Math.abs(P.pos.x-WALL.x0)<t) P.pos.x=P.pos.x<WALL.x0?WALL.x0-t:WALL.x0+t;
+  if(Math.abs(P.pos.x-WALL.x1)<t) P.pos.x=P.pos.x<WALL.x1?WALL.x1-t:WALL.x1+t;
+  if(Math.abs(P.pos.z-WALL.z0)<t) P.pos.z=P.pos.z<WALL.z0?WALL.z0-t:WALL.z0+t;
+  if(Math.abs(P.pos.z-WALL.z1)<t&&Math.abs(P.pos.x)>=0.95) // door gap stays open
+    P.pos.z=P.pos.z<WALL.z1?WALL.z1-t:WALL.z1+t;
+}
 function playerControlAllowed(){
-  return player&&!P.dead&&PH!=='cut'&&PH!=='menu'&&PH!=='build';
+  return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='menu'&&PH!=='build';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
@@ -1863,26 +1986,52 @@ function updatePlayer(dt){
       if(P.stepAcc>1.1){ P.stepAcc=0; sndStep(); }
     }
   }
+  /* ladder climbing (right side of the house, once built) */
+  var onLadder=false;
+  if(ladderBuilt&&(PH==='home'||PH==='jungle'||PH==='path')
+     &&P.pos.x>4.9&&P.pos.x<7.2&&Math.abs(P.pos.z)<1.5&&P.pos.y<6.2&&l>0.15){
+    onLadder=true;
+    P.vy=0; P.onGround=false;
+    P.pos.y=Math.min(P.pos.y+4.5*dt,6.2);
+    if(P.pos.y>0.4&&Math.random()<dt*4) sndStep();
+    if(P.pos.y>=5.5&&vx<0) P.pos.x=4.6; // hop onto the roof
+  }
   /* jump + gravity */
   if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; knock(1200,0.2,0.05,0); }
-  P.vy-=30*dt; P.pos.y+=P.vy*dt;
-  if(P.pos.y<=0){ P.pos.y=0; if(!P.onGround){ sndStep(); } P.onGround=true; P.vy=0; }
+  if(!onLadder){
+    P.vy-=30*dt; P.pos.y+=P.vy*dt;
+    var gy=groundYAt();
+    if(P.pos.y<=gy&&P.vy<=0){ P.pos.y=gy; if(!P.onGround){ sndStep(); } P.onGround=true; P.vy=0; }
+    else if(P.pos.y>gy+0.02) P.onGround=false;
+  }
+  /* fell off the bridge -> the gators are waiting */
+  if(PH==='bridge'&&P.pos.y<1.1&&!P.dead){
+    sndChomp();
+    killPlayer('GATOR FOOD!','You fell in the water — the gators had a snack. Try the bridge again.',startBridge);
+  }
   /* world bounds */
   if(PH==='boss'){
     var dc=new THREE.Vector3(P.pos.x-ARENA.x,0,P.pos.z-ARENA.z);
     if(dc.length()>ARENA.r-1){ dc.setLength(ARENA.r-1); P.pos.x=ARENA.x+dc.x; P.pos.z=ARENA.z+dc.z; }
+  } else if(PH==='ninja'){
+    var dn=new THREE.Vector3(P.pos.x-NARENA.x,0,P.pos.z-NARENA.z);
+    if(dn.length()>NARENA.r-1){ dn.setLength(NARENA.r-1); P.pos.x=NARENA.x+dn.x; P.pos.z=NARENA.z+dn.z; }
+  } else if(PH==='golem'){
+    var dg2=new THREE.Vector3(P.pos.x-GAR.x,0,P.pos.z-GAR.z);
+    if(dg2.length()>GAR.r-1){ dg2.setLength(GAR.r-1); P.pos.x=GAR.x+dg2.x; P.pos.z=GAR.z+dg2.z; }
+  } else if(PH==='bridge'){
+    P.pos.x=clamp(P.pos.x,-2.1,2.1);
+    P.pos.z=clamp(P.pos.z,BR.z0-5,BR.z1+7);
+  } else if(PH==='mlib'){
+    P.pos.x=clamp(P.pos.x,MLIB.x-10.5,MLIB.x+10.5);
+    P.pos.z=clamp(P.pos.z,MLIB.z-7.5,MLIB.z+7.5);
+  } else if(PH==='lib2'){
+    P.pos.x=clamp(P.pos.x,LIB2.x-19,LIB2.x+19);
+    P.pos.z=clamp(P.pos.z,LIB2.z-19,LIB2.z+19);
   } else {
     P.pos.x=clamp(P.pos.x,-60,60);
     P.pos.z=clamp(P.pos.z,-20,jungleGroup.visible?JUNGLE.z1-2:PATH_END_Z+6);
-    /* keep out of the house walls (simple box) */
-    if(P.pos.y<4&&P.pos.x>WALL.x0-0.6&&P.pos.x<WALL.x1+0.6&&P.pos.z>WALL.z0-0.6&&P.pos.z<WALL.z1+0.6
-       &&buildIdx>SPAWN_AFTER){
-      if(!(Math.abs(P.pos.x)<1&&P.pos.z>WALL.z1-1.2)){ // allow doorway
-        var pushZ=P.pos.z>0?WALL.z1+0.6:WALL.z0-0.6;
-        var pushX=P.pos.x>0?WALL.x1+0.6:WALL.x0-0.6;
-        if(Math.abs(P.pos.z-pushZ)<Math.abs(P.pos.x-pushX)) P.pos.z=pushZ; else P.pos.x=pushX;
-      }
-    }
+    collideHouseWalls();
   }
   /* visuals */
   player.group.position.copy(P.pos);
@@ -1930,10 +2079,11 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20,11,Math.cos(camOrbit.a)*20);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='cut'){ /* handled in updateCutscene */ }
+  else if(PH==='cut'||PH==='cut2'){ /* handled in cutscene updaters */ }
   else if(player){
     /* camera yaw is player-controlled only (drag to look) — it never moves on its own */
-    var dist=PH==='boss'?11:8,h=PH==='boss'?6:4.6;
+    var far2=(PH==='boss'||PH==='golem');
+    var dist=far2?11:8,h=far2?6:4.6;
     var cx=P.pos.x-Math.sin(camYaw)*dist,
         cz=P.pos.z-Math.cos(camYaw)*dist;
     camera.position.x+=(cx-camera.position.x)*(1-Math.pow(0.001,dt));
@@ -1959,7 +2109,7 @@ function updateAmbient(dt){
     var f=Math.sin(GTIME*9+b.r)*0.7;
     b.wl.rotation.z=f; b.wr.rotation.z=-f;
   });
-  if(birds.length&&PH!=='menu'&&PH!=='cut'&&PH!=='boss'){
+  if(birds.length&&(PH==='build'||PH==='buildwalk'||PH==='path'||PH==='jungle'||PH==='home')){
     chirpT-=dt;
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
@@ -1981,11 +2131,18 @@ function animate(){
   updateAmbient(dt);
   updateCamera(dt);
   if(PH==='cut') updateCutscene(dt);
+  else if(PH==='cut2') updateCut2(dt);
   else {
     updatePlayer(dt);
     if(PH==='jungle'||PH==='home') updateHikers(dt);
     updatePortals(dt);
     if(PH==='boss'){ updateBoss(dt); updateTnts(dt); updateFallBlocks(dt); updateDrones(dt); }
+    if(PH==='ninja') updateNinjas(dt);
+    if(PH==='bridge') updateBridge(dt);
+    if(PH==='golem') updateGolem(dt);
+    if(PH==='ninja'||PH==='bridge'||PH==='golem'){ updateEproj(dt); updateFallBlocks(dt); }
+    updateAct2(dt);
+    updateBodyguards(dt);
     updateTornado(dt);
   }
   renderer.render(scene,camera);
@@ -2009,16 +2166,30 @@ function startSkip(sv){
   hasGun=true;
   tornadoOwned=!!(sv&&sv.torn);
   if(tornadoOwned) tornCharge=TORN_MAX;
-  spawnPlayer(true);
-  P.pos.set(0,0,PATH_END_Z); if(player) player.group.position.copy(P.pos);
-  camYaw=0; P.yaw=0;
   buildJungle(); jungleGroup.visible=true;
-  spawnHikers(); windLoop.set(0.3);
   spawnBirds(0,-14,3);
-  PH='jungle';
-  obj('🌴 Back to the jungle! Kill all 10 hikers to open the portal.');
-  hint('1 = equip gun · click/SHOOT = pew pew · R = reload · F = punch'+(tornadoOwned?' · Q = tornado':''));
-  $('kills').style.display='block'; updateKillHud();
+  if(sv&&sv.rich){ /* returning TYCOON: everything from Act 2 is already built */
+    applyRichSkip(sv);
+    P.pos.set(0,0,6); if(player) player.group.position.copy(P.pos);
+    camYaw=Math.PI; P.yaw=Math.PI;
+    windLoop.set(0.12);
+    PH='home';
+    if(bux>=100){
+      obj('🏆 Your brick kingdom, complete. The roof portal reruns the ninja gauntlet.');
+    } else {
+      obj('🏡 Welcome back, TYCOON. The ROOF portal leads to the ninjas… and beyond, the golden book.');
+    }
+    hint('Climb the ladder on the right of the house to reach the roof portal. Q = tornado.');
+  } else {
+    spawnPlayer(true);
+    P.pos.set(0,0,PATH_END_Z); if(player) player.group.position.copy(P.pos);
+    camYaw=0; P.yaw=0;
+    spawnHikers(); windLoop.set(0.3);
+    PH='jungle';
+    obj('🌴 Back to the jungle! Kill all 10 hikers to open the portal.');
+    hint('1 = equip gun · click/SHOOT = pew pew · R = reload · F = punch'+(tornadoOwned?' · Q = tornado':''));
+    $('kills').style.display='block'; updateKillHud();
+  }
   updateMobileUI();
 }
 (function(){
@@ -2026,12 +2197,1033 @@ function startSkip(sv){
   $('btnPlay').addEventListener('click',startBuild);
   if(sv&&sv.gun){
     var b=document.createElement('button');
-    b.className='alt'; b.textContent='SKIP TO THE JUNGLE';
+    b.className='alt';
+    b.textContent=sv.rich?'CONTINUE (TYCOON)':'SKIP TO THE JUNGLE';
     b.addEventListener('click',function(){ startSkip(sv); });
     $('startBtns').appendChild(b);
   }
   if(IS_TOUCH) $('tapNote').textContent='Mobile detected — joystick + buttons will appear in game.';
 })();
+
+/* ================================================================
+   ACT 2 — THE TYCOON
+   furniture + ladder building, roof portal, elemental ninjas (10-min
+   bridge timer), gator bridge, golden golem, library door hunt,
+   the golden book and 100 LEGO BUX.
+   ================================================================ */
+var UPV=new THREE.Vector3(0,1,0), a2Timer=null, carryBook=null;
+
+/* ---- intense battle music (ninjas / gators / golem) ---- */
+var battleTimer=null;
+function battleMusic(on){
+  if(battleTimer){ clearInterval(battleTimer); battleTimer=null; }
+  if(!on||!actx()) return;
+  var beat=0, step=0.36;
+  battleTimer=setInterval(function(){
+    if(!AC) return;
+    blip(58,'sine',0.85,0.15,0,30);
+    knock(6500,0.16,0.02,step/2);
+    if(beat%4===2) knock(2000,0.5,0.08,0);
+    var notes=[44,44,52,58,44,44,62,55];
+    blip(notes[beat%8],'sawtooth',0.34,step*0.9,0.02);
+    if(beat%8===7) blip(880,'square',0.18,0.3,0,1760);
+    beat++;
+  },step*1000);
+}
+function updateBuxHud(){
+  var e=$('bux'); e.style.display=bux>0?'block':'none';
+  e.textContent='🧱 '+bux+' LEGO BUX';
+}
+function clearHazards(){ /* anything mid-air that could still hurt the player */
+  eproj.forEach(function(p){ world.remove(p.mesh); }); eproj.length=0;
+  lavaPools.forEach(function(p){ world.remove(p.mesh); }); lavaPools.length=0;
+  shockwaves.forEach(function(s){ world.remove(s.mesh); }); shockwaves.length=0;
+  fallBlocks.forEach(function(f){ world.remove(f.mesh); if(f.shadow) world.remove(f.shadow); });
+  fallBlocks.length=0;
+}
+function clearAct2Fights(){
+  battleMusic(false);
+  if(a2Timer){ clearTimeout(a2Timer); a2Timer=null; }
+  $('timer').style.display='none';
+  clearHazards();
+  ninjas.forEach(function(n){ if(n.ref.group.parent) world.remove(n.ref.group); }); ninjas.length=0;
+  nextNinjaT=-1;
+  gators.forEach(function(ga){ if(ga.mesh.parent) world.remove(ga.mesh); }); gators.length=0;
+  if(golemObj){ world.remove(golemObj.group); golemObj=null; }
+  golemState='idle';
+  if(!trex) $('bossWrap').style.display='none';
+}
+
+/* ---- TYCOON transformation cutscene ---- */
+function startCut2(){
+  PH='cut2'; cut2T=0; cutSkipOk=false; cutSpin=0;
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  if(!cutBackdrop){
+    cutBackdrop=new THREE.Mesh(new THREE.CylinderGeometry(9,9,14,24,1,true),
+      new THREE.MeshBasicMaterial({color:0x0a0618,side:THREE.BackSide,fog:false}));
+    world.add(cutBackdrop);
+  }
+  cutBackdrop.visible=true;
+  cutBackdrop.position.set(P.pos.x,5,P.pos.z);
+  sndSparkle();
+}
+function updateCut2(dt){
+  cut2T+=dt;
+  if(cut2T>1) cutSkipOk=true;
+  cutSpin+=dt*(2+Math.min(cut2T*3,14));
+  if(player) player.group.rotation.y=cutSpin;
+  var ca=cutSpin*0.12;
+  camera.position.set(P.pos.x+Math.sin(ca)*4.2,2.3+Math.sin(cut2T*0.8)*0.4,P.pos.z+Math.cos(ca)*4.2);
+  camera.lookAt(P.pos.x,1.3,P.pos.z);
+  if(Math.random()<0.5)
+    burst(new THREE.Vector3(P.pos.x+rand(-1,1),rand(0.4,2.6),P.pos.z+rand(-1,1)),
+      Math.random()<0.5?0xffd83d:0xf3d97a,2,{speed:2,life:0.6,grav:-2,size:0.7});
+  if(cut2T>2.2&&!rich){
+    rich=true;
+    spawnPlayer('rich'); player.group.rotation.y=cutSpin;
+    burst(new THREE.Vector3(P.pos.x,1.2,P.pos.z),0xffe97a,26,{speed:6,life:0.9});
+    sndBoom(); camShake=0.5;
+    msg('💰 MONEY SURGE! 💰<br><span style="font-size:70%">You are now… <b>THE TYCOON.</b></span>',3200);
+  }
+  if(cut2T>4.2&&rich&&!bodyguards.length){
+    spawnBodyguards();
+    bodyguards.forEach(function(b){
+      burst(b.ref.group.position.clone().setY(1.2),0xffffff,10,{speed:3,life:0.6}); });
+    sndSparkle();
+    msg('🕴️🕴️ You hired TWO BODYGUARDS.<br><span style="font-size:55%">They follow you everywhere. Very intimidating.</span>',3400);
+  }
+  if(cut2T>6.6&&cut2T<6.7){
+    msg('🔫 New GLOCK: fancy… but sorta weak (10 dmg).<br><span style="font-size:55%">You keep your 🌪️ TORNADO — fully charged.</span>',3800);
+  }
+  if(cut2T>9) act2Begin();
+}
+function act2Begin(){
+  if(PH!=='cut2') return;
+  cutBackdrop.visible=false;
+  PH='home';
+  tornCharge=TORN_MAX;
+  save();
+  windLoop.set(0.12);
+  spawnStatue();
+  hikers.forEach(function(h){ if(!h.dead){ h.dead=true; world.remove(h.ref.group); } });
+  $('kills').style.display='none';
+  STEPS=FURN_STEPS; buildIdx=0; furnMode=true; showGhost();
+  msg('🛋️ Now furnish your house!<br><span style="font-size:55%">…and a T-REX SLAYER statue just rose in the jungle.</span>',4600);
+  hint('Walk in through the front door and tap the cyan pieces. Tornado: Q / TORNADO.');
+  updateMobileUI();
+}
+function spawnBodyguards(){
+  if(bodyguards.length) return;
+  for(var i=0;i<2;i++){
+    var ref=makeMinifig({torso:0x14161c,legs:0x0e1014,arms:0x14161c,face:'cool'});
+    ref.group.position.set(P.pos.x+(i?1.6:-1.6),0,P.pos.z-1.2);
+    world.add(ref.group);
+    bodyguards.push({ref:ref,off:i?1.5:-1.5,walk:0});
+  }
+}
+function updateBodyguards(dt){
+  if(!bodyguards.length) return;
+  if(PH==='menu'||PH==='cut'||PH==='cut2'||PH==='bridge'||PH==='mlib'||PH==='lib2') return;
+  bodyguards.forEach(function(b){
+    var back=new THREE.Vector3(-Math.sin(P.yaw),0,-Math.cos(P.yaw));
+    var right=new THREE.Vector3(-Math.cos(P.yaw),0,Math.sin(P.yaw));
+    var t=P.pos.clone().addScaledVector(back,1.9).addScaledVector(right,b.off);
+    t.y=0;
+    var g=b.ref.group,d=g.position.distanceTo(t);
+    if(d>0.4){
+      g.position.lerp(t,1-Math.pow(0.03,dt));
+      b.walk+=dt*9;
+      b.ref.legL.rotation.x=Math.sin(b.walk)*0.7;
+      b.ref.legR.rotation.x=-Math.sin(b.walk)*0.7;
+    } else { b.ref.legL.rotation.x*=0.8; b.ref.legR.rotation.x*=0.8; }
+    g.rotation.y=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+  });
+}
+
+/* ---- FURNITURE + LADDER build steps ---- */
+var WOOD=0x8a5a2a, WOOD2=0x6f4820, FURN_STEPS=[];
+function fstep(label,make){ FURN_STEPS.push({label:label,cam:0.3,make:make}); }
+fstep('Bed frame',function(){ var g=new THREE.Group();
+  var f=box(2.0,0.5,3.0,WOOD); f.position.set(-3.4,0.55,-1.6); g.add(f);
+  var hb=box(2.0,1.1,0.18,WOOD2); hb.position.set(-3.4,1.0,-3.0); g.add(hb);
+  return g; });
+fstep('Mattress, pillow + blanket',function(){ var g=new THREE.Group();
+  var m=box(1.9,0.28,2.9,0xf4f4f4); m.position.set(-3.4,0.95,-1.6); g.add(m);
+  var p=box(0.9,0.22,0.6,0x9ecfff); p.position.set(-3.4,1.2,-2.6); g.add(p);
+  var b=box(1.92,0.16,1.5,0xc62b21); b.position.set(-3.4,1.12,-0.9); g.add(b);
+  return g; });
+fstep('Table + chairs',function(){ var g=new THREE.Group();
+  var top=studdedBox(1.9,0.16,1.2,WOOD,WOOD2); top.position.set(0.6,1.15,-1.4); g.add(top);
+  [[-0.8,-0.45],[0.8,-0.45],[-0.8,0.45],[0.8,0.45]].forEach(function(o){
+    var lg=box(0.14,0.95,0.14,WOOD2); lg.position.set(0.6+o[0],0.6,-1.4+o[1]); g.add(lg); });
+  var cup=box(0.2,0.24,0.2,0x2a6fd6); cup.position.set(0.4,1.35,-1.3); g.add(cup);
+  [[-1.5,0],[2.7,0]].forEach(function(o){
+    var st=box(0.6,0.5,0.6,WOOD); st.position.set(0.6+o[0]-0.6,0.55,-1.4); g.add(st);
+    var bk=box(0.6,0.8,0.12,WOOD2); bk.position.set(0.6+o[0]-0.6,1.2,-1.4+(o[0]<0?-0.25:0.25)); g.add(bk); });
+  return g; });
+fstep('Shelves',function(){ var g=new THREE.Group();
+  var fr=box(2.4,2.4,0.35,WOOD2); fr.position.set(-0.8,1.5,-3.05); g.add(fr);
+  for(var i=0;i<3;i++){ var bd=box(2.2,0.1,0.4,WOOD); bd.position.set(-0.8,0.85+i*0.7,-3.0); g.add(bd); }
+  return g; });
+fstep('Books for the shelves',function(){ var g=new THREE.Group();
+  var cols=[0xc62b21,0x2a6fd6,0x2e8b2e,0xffd83d,0x9b5cff];
+  for(var i=0;i<3;i++) for(var j=0;j<6;j++){
+    var bk=box(0.18,0.44,0.3,cols[(i+j)%5]);
+    bk.position.set(-1.7+j*0.36,1.15+i*0.7,-3.0); g.add(bk); }
+  return g; });
+fstep('Closet',function(){ var g=new THREE.Group();
+  var c=box(1.5,3.0,0.9,WOOD2); c.position.set(4.0,1.8,-2.6); g.add(c);
+  var topT=studdedBox(1.6,0.16,1.0,WOOD,WOOD2); topT.position.set(4.0,3.38,-2.6); g.add(topT);
+  return g; });
+fstep('Closet doors + knobs',function(){ var g=new THREE.Group();
+  var d1=box(0.68,2.7,0.12,WOOD); d1.position.set(3.63,1.75,-2.1); g.add(d1);
+  var d2=box(0.68,2.7,0.12,WOOD); d2.position.set(4.37,1.75,-2.1); g.add(d2);
+  var k1=box(0.1,0.1,0.1,0xffd83d); k1.position.set(3.9,1.7,-2.0); g.add(k1);
+  var k2=box(0.1,0.1,0.1,0xffd83d); k2.position.set(4.1,1.7,-2.0); g.add(k2);
+  return g; });
+function ladderPart(y0,y1){
+  var g=new THREE.Group();
+  var r1=box(0.14,y1-y0,0.14,0xffb300); r1.position.set(5.75,(y0+y1)/2,-0.45); g.add(r1);
+  var r2=box(0.14,y1-y0,0.14,0xffb300); r2.position.set(5.75,(y0+y1)/2,0.45); g.add(r2);
+  for(var y=y0+0.3;y<y1;y+=0.5){
+    var rung=box(0.12,0.12,1.0,0xffd83d); rung.position.set(5.75,y,0); g.add(rung);
+  }
+  return g;
+}
+fstep('LEGO ladder — lower half',function(){ return ladderPart(0.1,3.1); });
+fstep('LEGO ladder — top half',function(){ return ladderPart(3.1,6.1); });
+function finishFurnishing(silent){
+  furnMode=false; ladderBuilt=true;
+  if(ghost){ world.remove(ghost); ghost=null; }
+  spawnRoofPortal();
+  obj('🌀 A new portal appeared ON YOUR ROOF! Climb the ladder on the right side of the house.');
+  hint('Walk into the ladder and hold toward it to climb. The roof portal leads to the NINJA DOJO.');
+  if(!silent){ sndSparkle(); msg('🪜 LADDER BUILT!<br><span style="font-size:55%">…and a portal just opened on your ROOF.</span>',4200); }
+}
+function spawnRoofPortal(){
+  if(roofPortal) return;
+  roofPortal=makePortal(0,0);
+  roofPortal.position.y=5.55;
+  sndPortal();
+}
+
+/* ---- T-REX SLAYER statue ---- */
+function spawnStatue(){
+  if(statueObj) return;
+  var GOLD=0xd4af37,GOLD2=0xb8912b;
+  var g=new THREE.Group();
+  var b1=studdedBox(4.2,1.0,4.2,0x6d7680,0x5d656e); b1.position.y=0.5; g.add(b1);
+  var b2=studdedBox(3.0,0.8,3.0,0x7d8791,0x6d7680); b2.position.y=1.4; g.add(b2);
+  var legs=box(1.0,1.1,0.6,GOLD2); legs.position.y=2.35; g.add(legs);
+  var torso=box(1.3,1.1,0.7,GOLD); torso.position.y=3.45; g.add(torso);
+  var head=studdedBox(0.8,0.8,0.8,GOLD,GOLD2); head.position.y=4.5; g.add(head);
+  var armR=box(0.35,1.3,0.35,GOLD); armR.position.set(0.95,4.3,0); armR.rotation.z=-0.5; g.add(armR);
+  var sword=box(0.16,1.8,0.16,0xf3d97a); sword.position.set(1.45,5.35,0); sword.rotation.z=-0.5; g.add(sword);
+  var armL=box(0.35,1.0,0.35,GOLD); armL.position.set(-0.85,3.6,0); g.add(armL);
+  var skull=box(1.1,0.8,1.5,GOLD2); skull.position.set(-1.2,2.3,0.9); skull.rotation.z=0.5; g.add(skull);
+  for(var t=0;t<3;t++){ var tt=box(0.12,0.25,0.12,0xffffff);
+    tt.position.set(-1.6+t*0.35,2.0,1.55); g.add(tt); }
+  var slot=studdedBox(0.9,0.5,0.9,0x5d656e,0x4d555e); slot.position.set(1.3,2.05,1.3); g.add(slot);
+  var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.3,1.6,36,10,1,true),
+    new THREE.MeshBasicMaterial({color:0xffe97a,transparent:true,opacity:0.14,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  beam.position.y=18; g.add(beam); g.userData.beam=beam;
+  g.position.set(-16,0,72);
+  world.add(g); statueObj=g;
+}
+function placeBookOnStatue(){
+  if(!hasBook) return;
+  hasBook=false;
+  if(carryBook){ world.remove(carryBook); carryBook=null; }
+  var bk=box(0.6,0.16,0.45,0xffd83d);
+  bk.position.copy(statueObj.position).add(new THREE.Vector3(1.3,2.4,1.3));
+  world.add(bk);
+  if(statueObj.userData.beam) statueObj.userData.beam.material.color.setHex(0xffe97a);
+  bux=100; save(); updateBuxHud();
+  PH='home'; // quest complete — back to normal home life
+  sndSparkle(); setTimeout(sndSparkle,350); doFlash('#ffe97a');
+  for(var i=0;i<5;i++)
+    burst(statueObj.position.clone().add(new THREE.Vector3(rand(-2,2),rand(2,6),rand(-2,2))),
+      [0xffd83d,0x7dffd8,0xff7bd5][i%3],10,{speed:5,life:1.2});
+  msg('💰 100 LEGO BUX! 💰<br><span style="font-size:55%">(they do nothing… yet)</span>',5200);
+  obj('🏆 100% COMPLETE! You built it, fought it, and shelved it. Enjoy your brick kingdom.');
+}
+
+/* ---- NINJA DOJO ---- */
+var ninjaArenaBuilt=false;
+function buildNinjaArena(){
+  if(ninjaArenaBuilt) return; ninjaArenaBuilt=true;
+  ninjaGroup=new THREE.Group(); world.add(ninjaGroup);
+  var fl=new THREE.Mesh(new THREE.CircleGeometry(NARENA.r+5,36),mat(0x3a3f4a));
+  fl.rotation.x=-Math.PI/2; fl.position.set(NARENA.x,0.02,NARENA.z); fl.receiveShadow=!IS_TOUCH;
+  ninjaGroup.add(fl);
+  for(var a=0;a<22;a++){
+    var ang=a/22*Math.PI*2, rr=NARENA.r+rand(1,4);
+    var rock=studdedBox(rand(2,3.5),rand(2.5,6),rand(2,3.5),0x2e323b,0x262a31);
+    rock.position.set(NARENA.x+Math.cos(ang)*rr,rand(1.2,2.4),NARENA.z+Math.sin(ang)*rr);
+    rock.rotation.y=rand(0,3.14);
+    ninjaGroup.add(rock);
+  }
+  for(var i2=0;i2<4;i2++){
+    var la=i2/4*Math.PI*2+0.4;
+    var pole=box(0.25,3.4,0.25,0x2a2118);
+    pole.position.set(NARENA.x+Math.cos(la)*(NARENA.r-3),1.7,NARENA.z+Math.sin(la)*(NARENA.r-3));
+    ninjaGroup.add(pole);
+    var lamp=new THREE.Mesh(boxGeo(0.7,0.7,0.7),
+      new THREE.MeshBasicMaterial({color:0xffb84d}));
+    lamp.position.set(pole.position.x,3.6,pole.position.z);
+    ninjaGroup.add(lamp);
+  }
+  var p1=box(0.7,6,0.7,0xc62b21); p1.position.set(-3,3,NARENA.z-NARENA.r-1); ninjaGroup.add(p1);
+  var p2=box(0.7,6,0.7,0xc62b21); p2.position.set(3,3,NARENA.z-NARENA.r-1); ninjaGroup.add(p2);
+  var p3=box(8,0.6,0.8,0xc62b21); p3.position.set(0,6.2,NARENA.z-NARENA.r-1); ninjaGroup.add(p3);
+  var p4=box(9,0.5,0.7,0x8f1f16); p4.position.set(0,6.9,NARENA.z-NARENA.r-1); ninjaGroup.add(p4);
+}
+function startNinjaFight(){
+  clearAct2Fights();
+  buildNinjaArena();
+  PH='ninja'; ninjaWon=false;
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(NARENA.x,0,NARENA.z-NARENA.r+3); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  ninjas.length=0; ninjaIdx=0; ninjaT=0; nextNinjaT=-1;
+  spawnNinja(0); ninjaIdx=1;
+  battleMusic(true);
+  windLoop.set(0.15);
+  obj('🥷 Beat ALL 3 elemental ninjas — under 10 MINUTES or the bridge collapses!');
+  hint('Glock: 1 to equip · tap = shoot · R reload · F punch · Q tornado · die once = all 3 reset');
+  updateMobileUI();
+}
+function spawnNinja(i){
+  var els=['water','lava','earth'], el=els[i];
+  var cols={water:{t:0x1e88e5,l:0x0d47a1,hb:0x81d4fa},
+            lava:{t:0xef5350,l:0xbf360c,hb:0xffab40},
+            earth:{t:0x795548,l:0x4e342e,hb:0xa1887f}}[el];
+  var ref=makeMinifig({torso:cols.t,legs:cols.l,arms:0x22242a,face:'angry',headband:cols.hb});
+  var a=rand(0,6.28);
+  ref.group.position.set(NARENA.x+Math.cos(a)*10,0,NARENA.z+Math.sin(a)*10);
+  world.add(ref.group);
+  ninjas.push({ref:ref,el:el,hp:80,active:true,atkCd:2,atkMelee:1,dashCd:1.2,
+    dashV:new THREE.Vector3(),stunT:0,walkT:0,burst:0,burstT:0,rockCount:0});
+  var names={water:'🌊 WATER NINJA',lava:'🌋 LAVA NINJA',earth:'⛰️ EARTH NINJA'};
+  msg(names[el]+'!<br><span style="font-size:55%">'+(i+1)+' of 3</span>',2600);
+  doFlash(el==='water'?'#4fc3f7':el==='lava'?'#ff7043':'#a1887f');
+  sndRoar(false);
+}
+function hurtNinja(n,dmg,fromTorn){
+  if(n.hp<=0) return;
+  n.hp-=dmg;
+  burst(n.ref.group.position.clone().setY(1.2),0xffffff,4,{speed:2.5,life:0.4});
+  doFlash('#ffffff');
+  if(fromTorn&&Math.random()<0.2&&n.stunT<=0){
+    n.stunT=2.2; sndStun();
+    burst(n.ref.group.position.clone().setY(2),0xfff06a,8,{speed:1.5,life:0.9,grav:-1});
+  }
+  if(n.hp<=0){
+    n.active=false;
+    sndWoodFall();
+    doFlash(n.el==='water'?'#4fc3f7':n.el==='lava'?'#ff7043':'#a1887f');
+    burst(n.ref.group.position.clone().setY(1),
+      n.el==='water'?0x1e88e5:n.el==='lava'?0xef5350:0x795548,18,{speed:5,life:1.1});
+    world.remove(n.ref.group);
+    if(ninjaIdx<3) nextNinjaT=1.4;
+    else ninjaVictory();
+  }
+}
+var ninjaWon=false;
+function ninjaVictory(){
+  ninjaWon=true;
+  battleMusic(false);
+  clearHazards(); // nothing lingering may kill the player during the victory pause
+  $('timer').style.display='none';
+  doFlash('#ffffff');
+  sndSparkle(); setTimeout(sndSparkle,300);
+  msg('🥷 ALL 3 NINJAS DOWN — in '+Math.round(ninjaT)+'s!<br><span style="font-size:55%">The bridge still stands. GO GO GO!</span>',3200);
+  a2Timer=setTimeout(function(){ a2Timer=null; if(PH==='ninja') startBridge(); },2600);
+}
+function spawnEproj(m,v,grav,dmg,type){
+  world.add(m);
+  eproj.push({mesh:m,v:v,grav:grav,dmg:dmg,type:type,t:0});
+}
+function ninjaShoot(n){
+  var g=n.ref.group;
+  if(n.el==='water'){
+    var m=new THREE.Mesh(boxGeo(0.3,0.3,0.5),new THREE.MeshBasicMaterial({color:0x4fc3f7}));
+    m.position.copy(g.position).setY(1.3);
+    var v=P.pos.clone().setY(1.1).sub(m.position).normalize().multiplyScalar(15);
+    spawnEproj(m,v,0,8,'water');
+    blip(900,'sine',0.3,0.15,0,300);
+  } else if(n.el==='lava'){
+    var m2=new THREE.Mesh(boxGeo(0.55,0.55,0.55),new THREE.MeshBasicMaterial({color:0xff7043}));
+    m2.position.copy(g.position).setY(1.4);
+    var dx=P.pos.x-m2.position.x, dz=P.pos.z-m2.position.z, T=0.9;
+    spawnEproj(m2,new THREE.Vector3(dx/T,0.5*16*T-0.3/T,dz/T),16,12,'lava');
+    knock(500,0.4,0.12,0);
+  } else {
+    var m3=new THREE.Mesh(boxGeo(0.6,0.5,0.6),mat(0x6d4c41));
+    m3.position.copy(g.position).setY(1.4);
+    var dx2=P.pos.x-m3.position.x, dz2=P.pos.z-m3.position.z, T2=0.8;
+    spawnEproj(m3,new THREE.Vector3(dx2/T2,0.5*16*T2,dz2/T2),16,15,'rock');
+    knock(300,0.5,0.12,0);
+  }
+}
+function updateOneNinja(n,dt){
+  var g=n.ref.group, toP=P.pos.clone().sub(g.position).setY(0), dd=toP.length()||0.001;
+  if(n.stunT>0){
+    n.stunT-=dt; g.rotation.z=Math.sin(GTIME*20)*0.12;
+    if(Math.random()<0.1) burst(g.position.clone().setY(2.1),0xfff06a,1,{speed:1,life:0.5,grav:-2,size:0.6});
+    return;
+  }
+  g.rotation.z=0;
+  g.rotation.y=Math.atan2(toP.x,toP.z);
+  n.dashCd-=dt;
+  if(n.dashCd<=0){
+    n.dashCd=rand(1.2,2.2);
+    var ang=Math.random()<0.6?(Math.random()<0.5?1:-1)*Math.PI/2:0;
+    var dir=toP.clone().normalize().applyAxisAngle(UPV,ang);
+    n.dashV.copy(dir.multiplyScalar(13));
+    burst(g.position.clone().setY(0.4),0xdddddd,5,{speed:2,life:0.3});
+    knock(2200,0.22,0.04,0);
+  }
+  g.position.addScaledVector(n.dashV,dt);
+  n.dashV.multiplyScalar(Math.pow(0.02,dt));
+  g.position.addScaledVector(toP.clone().normalize(),(dd-8)*0.9*dt);
+  var dn=new THREE.Vector3(g.position.x-NARENA.x,0,g.position.z-NARENA.z);
+  if(dn.length()>NARENA.r-1){ dn.setLength(NARENA.r-1);
+    g.position.x=NARENA.x+dn.x; g.position.z=NARENA.z+dn.z; }
+  n.walkT+=dt*8;
+  n.ref.legL.rotation.x=Math.sin(n.walkT)*0.7;
+  n.ref.legR.rotation.x=-Math.sin(n.walkT)*0.7;
+  if(dd<1.9){
+    n.atkMelee-=dt;
+    if(n.atkMelee<=0&&!P.dead){
+      n.atkMelee=1.1;
+      hurtPlayer(10,'Ninja strike!'); sndPunch(true);
+      doFlash('#ffffff');
+      n.ref.armR.rotation.x=-1.7;
+      (function(nn){ tween(0.25,function(k){ nn.ref.armR.rotation.x=-1.7+1.7*k; }); })(n);
+    }
+  }
+  n.atkCd-=dt;
+  if(n.atkCd<=0&&dd>3.5){
+    n.atkCd=n.el==='water'?2.3:2.7;
+    if(n.el==='water'){ n.burst=3; n.burstT=0; }
+    else if(n.el==='earth'){
+      n.rockCount++;
+      if(n.rockCount%3===0){
+        sndWoodFall();
+        var sw=new THREE.Mesh(new THREE.TorusGeometry(1,0.3,8,28),
+          new THREE.MeshBasicMaterial({color:0x8d6e63}));
+        sw.rotation.x=Math.PI/2; sw.position.set(g.position.x,0.3,g.position.z);
+        world.add(sw);
+        shockwaves.push({mesh:sw,r:1,hit:false,speed:12,dmg:12});
+      } else ninjaShoot(n);
+    }
+    else ninjaShoot(n);
+  }
+  if(n.burst>0){
+    n.burstT-=dt;
+    if(n.burstT<=0){ n.burstT=0.16; n.burst--; ninjaShoot(n); }
+  }
+}
+function updateNinjas(dt){
+  if(ninjaWon){ $('timer').style.display='none'; return; } // fight is over, bridge handoff pending
+  ninjaT+=dt;
+  var left=Math.max(0,NINJA_LIMIT-ninjaT);
+  var mm=(left/60)|0, ss=(left%60)|0;
+  var tEl=$('timer');
+  tEl.style.display='block';
+  tEl.textContent='⏳ '+mm+':'+(ss<10?'0':'')+ss;
+  tEl.style.color=left<60?'#ff5340':'#ffd83d';
+  if(left<=0&&!P.dead){
+    doFlash('#ff2200'); sndBoom(); sndWoodFall();
+    killPlayer('TOO SLOW!','Ten minutes passed — the rickety bridge collapsed into the gator water. Beat all three ninjas faster!',startNinjaFight);
+    return;
+  }
+  if(nextNinjaT>0&&!P.dead){
+    nextNinjaT-=dt;
+    if(nextNinjaT<=0){ nextNinjaT=-1; spawnNinja(ninjaIdx); ninjaIdx++; }
+  }
+  ninjas.forEach(function(n){ if(n.hp>0&&n.active) updateOneNinja(n,dt); });
+}
+function updateEproj(dt){
+  for(var i=eproj.length-1;i>=0;i--){
+    var p=eproj[i]; p.t+=dt;
+    p.v.y-=p.grav*dt;
+    p.mesh.position.addScaledVector(p.v,dt);
+    p.mesh.rotation.x+=dt*6; p.mesh.rotation.y+=dt*5;
+    var gone=false;
+    if(!P.dead&&p.mesh.position.distanceTo(P.pos.clone().setY(p.mesh.position.y))<1.1
+       &&Math.abs(p.mesh.position.y-P.pos.y-1)<1.6){
+      hurtPlayer(p.dmg,p.type==='water'?'Water blast!':p.type==='lava'?'Fireball!':'Rock!');
+      doFlash(p.type==='water'?'#4fc3f7':p.type==='lava'?'#ff5722':'#a1887f');
+      if(p.type==='water') P.slowT=1.2;
+      gone=true;
+    }
+    if(!gone&&p.mesh.position.y<=0.25){
+      if(p.type==='lava'){
+        var pool=new THREE.Mesh(new THREE.CircleGeometry(1.4,16),
+          new THREE.MeshBasicMaterial({color:0xff5722,transparent:true,opacity:0.75}));
+        pool.rotation.x=-Math.PI/2;
+        pool.position.set(p.mesh.position.x,0.06,p.mesh.position.z);
+        world.add(pool);
+        lavaPools.push({mesh:pool,t:4,tick:0});
+        knock(700,0.4,0.2,0);
+      } else { burst(p.mesh.position.clone().setY(0.3),0x8d6e63,5,{speed:3,life:0.5}); sndWoodFall(); }
+      gone=true;
+    }
+    if(p.t>6) gone=true;
+    if(gone){ world.remove(p.mesh); eproj.splice(i,1); }
+  }
+  for(var j=lavaPools.length-1;j>=0;j--){
+    var lp=lavaPools[j];
+    lp.t-=dt; lp.tick-=dt;
+    lp.mesh.material.opacity=Math.min(0.75,lp.t*0.4);
+    if(lp.tick<=0&&!P.dead&&P.pos.y<0.5
+       &&Math.hypot(P.pos.x-lp.mesh.position.x,P.pos.z-lp.mesh.position.z)<1.5){
+      lp.tick=0.4; hurtPlayer(5,'Standing in LAVA!'); doFlash('#ff5722');
+    }
+    if(lp.t<=0){ world.remove(lp.mesh); lavaPools.splice(j,1); }
+  }
+}
+
+/* ---- GATOR BRIDGE ---- */
+var bridgeBuilt=false;
+function buildBridgeStatic(){
+  if(bridgeBuilt) return; bridgeBuilt=true;
+  bridgeGroup=new THREE.Group(); world.add(bridgeGroup);
+  var water=new THREE.Mesh(new THREE.PlaneGeometry(70,110),
+    new THREE.MeshLambertMaterial({color:0x1e7d8c,transparent:true,opacity:0.92}));
+  water.rotation.x=-Math.PI/2; water.position.set(0,0.55,(BR.z0+BR.z1)/2);
+  bridgeGroup.add(water);
+  var l1=studdedBox(8,3,6,0x6d7680,0x5d656e); l1.position.set(0,1.5,BR.z0-2.6); bridgeGroup.add(l1);
+  var l2=studdedBox(8,3,6,0x6d7680,0x5d656e); l2.position.set(0,1.5,BR.z1+2.6); bridgeGroup.add(l2);
+  for(var s=0;s<2;s++){
+    var post1=box(0.3,2.4,0.3,WOOD2); post1.position.set(s?2.1:-2.1,BR.y+1,BR.z0-0.5); bridgeGroup.add(post1);
+    var post2=box(0.3,2.4,0.3,WOOD2); post2.position.set(s?2.1:-2.1,BR.y+1,BR.z1+0.5); bridgeGroup.add(post2);
+  }
+  var gp1=box(0.5,4,0.5,0x4d555e); gp1.position.set(-2,BR.y+2,BR.z1+4); bridgeGroup.add(gp1);
+  var gp2=box(0.5,4,0.5,0x4d555e); gp2.position.set(2,BR.y+2,BR.z1+4); bridgeGroup.add(gp2);
+  bridgeGate=studdedBox(3.6,3.4,0.4,0x8f6a2a,0x7a5a22);
+  bridgeGate.position.set(0,BR.y+1.7,BR.z1+4);
+  bridgeGroup.add(bridgeGate);
+}
+function makeGator(){
+  var g=new THREE.Group(), GRN=0x2e7d32, GRN2=0x1b5e20;
+  var body=studdedBox(1.1,0.55,2.3,GRN,GRN2); body.position.y=0.35; g.add(body);
+  var snout=box(0.7,0.3,1.3,GRN2); snout.position.set(0,0.3,1.7); g.add(snout);
+  var jaw=box(0.68,0.16,1.25,0x9ccc65); jaw.position.set(0,0.12,1.68); g.add(jaw);
+  for(var t=0;t<4;t++){ var tt=box(0.1,0.18,0.1,0xffffff);
+    tt.position.set(-0.22+t*0.15,0.24,2.25); g.add(tt); }
+  var e1=box(0.16,0.16,0.16,0xffd83d); e1.position.set(-0.28,0.55,1.1); g.add(e1);
+  var e2=box(0.16,0.16,0.16,0xffd83d); e2.position.set(0.28,0.55,1.1); g.add(e2);
+  var tail1=box(0.7,0.4,1.1,GRN); tail1.position.set(0,0.3,-1.6); g.add(tail1);
+  var tail2=box(0.45,0.3,0.9,GRN2); tail2.position.set(0,0.26,-2.5); g.add(tail2);
+  [[-0.65,0.6],[0.65,0.6],[-0.65,-0.7],[0.65,-0.7]].forEach(function(o){
+    var lg=box(0.3,0.35,0.3,GRN2); lg.position.set(o[0],0.18,o[1]); g.add(lg); });
+  g.traverse(function(m){ if(m.isMesh) m.castShadow=!IS_TOUCH; });
+  return g;
+}
+function startBridge(){
+  clearAct2Fights();
+  buildBridgeStatic();
+  if(bridgeGate&&!bridgeGate.parent) bridgeGroup.add(bridgeGate);
+  /* (re)build planks */
+  planks.forEach(function(p){ if(p.mesh.parent) p.mesh.parent.remove(p.mesh); });
+  planks.length=0;
+  var gapAt={5:1,11:1,16:1}, i=0;
+  for(var z=BR.z0+1.4;z<BR.z1-0.8;z+=2.8){
+    if(!gapAt[i]){
+      var p=studdedBox(3.8,0.3,2.4,0x9a6a34,0x7a5228);
+      p.position.set(0,BR.y-0.15,z);
+      bridgeGroup.add(p);
+      planks.push({mesh:p,z:z,alive:true,shake:-1,fallV:0,gone:false});
+    }
+    i++;
+  }
+  gators.forEach(function(ga){ if(ga.mesh.parent) world.remove(ga.mesh); });
+  gators.length=0; gatorKills=0;
+  for(var gi=0;gi<GATOR_TOTAL;gi++){
+    var m=makeGator();
+    var gz=BR.z0+7+gi*10, gx=(gi%2?5:-5);
+    m.position.set(gx,0.5,gz);
+    world.add(m);
+    gators.push({mesh:m,hp:40,state:'water',homeX:gx,homeZ:gz,cd:rand(0.5,2.5),
+      deckT:0,snapCd:0,stunT:0,arc:-1,from:new THREE.Vector3(),to:new THREE.Vector3()});
+  }
+  PH='bridge';
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(0,BR.y,BR.z0-2.5); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  battleMusic(true);
+  windLoop.set(0.25);
+  obj('🐊 CROSS THE BRIDGE — it\'s falling apart! Kill ALL '+GATOR_TOTAL+' gators to open the gate!');
+  hint('Planks crumble behind you — keep moving, jump the gaps, don\'t fall in!');
+  msg('🌉 THE GATOR BRIDGE!<br><span style="font-size:55%">You made it in time… but it\'s still falling apart.</span>',3400);
+  updateMobileUI();
+}
+function hurtGator(ga,dmg,fromTorn){
+  if(ga.hp<=0) return;
+  ga.hp-=dmg;
+  burst(ga.mesh.position.clone().setY(0.8),0x9ccc65,4,{speed:2.5,life:0.4});
+  doFlash('#7dff9a');
+  if(fromTorn&&Math.random()<0.2&&ga.stunT<=0){ ga.stunT=2.2; sndStun(); }
+  if(ga.hp<=0){
+    gatorKills++;
+    sndWoodFall();
+    burst(ga.mesh.position.clone().setY(0.6),0x2e7d32,16,{speed:5,life:1});
+    burst(ga.mesh.position.clone().setY(0.4),0x4fc3f7,10,{speed:4,life:0.8});
+    world.remove(ga.mesh);
+    msg('🐊 '+gatorKills+' / '+GATOR_TOTAL+' gators!',1400);
+    if(gatorKills>=GATOR_TOTAL&&bridgeGate&&bridgeGate.parent){
+      bridgeGroup.remove(bridgeGate);
+      sndSparkle(); doFlash('#ffffff');
+      msg('🚪 GATE OPEN!<br><span style="font-size:55%">The fancy mansion awaits…</span>',3000);
+      obj('🏰 Walk through the gate to the GOLDEN MANSION!');
+    }
+  }
+}
+function updateBridge(dt){
+  planks.forEach(function(p){
+    if(p.gone) return;
+    if(p.alive){
+      if(P.pos.z>p.z+1.15&&p.shake<0){ p.shake=0.7; knock(600,0.3,0.08,0); }
+      if(p.shake>=0){
+        p.shake-=dt;
+        p.mesh.position.x=Math.sin(GTIME*40)*0.07;
+        if(p.shake<=0){ p.alive=false; p.fallV=0; }
+      }
+    } else {
+      p.fallV-=25*dt;
+      p.mesh.position.y+=p.fallV*dt;
+      p.mesh.rotation.x+=dt*2;
+      if(p.mesh.position.y<0){
+        p.gone=true;
+        burst(new THREE.Vector3(p.mesh.position.x,0.7,p.z),0x4fc3f7,8,{speed:3,life:0.6});
+        sndWoodFall();
+        bridgeGroup.remove(p.mesh);
+      }
+    }
+  });
+  gators.forEach(function(ga){
+    if(ga.hp<=0) return;
+    var m=ga.mesh;
+    if(ga.stunT>0){ ga.stunT-=dt; m.rotation.z=Math.sin(GTIME*20)*0.1; return; }
+    m.rotation.z=0;
+    if(ga.state==='water'){
+      m.position.y=0.5+Math.sin(GTIME*2+ga.homeZ)*0.1;
+      m.position.z+=(clamp(P.pos.z,BR.z0+2,BR.z1-2)-m.position.z)*dt*0.4;
+      m.rotation.y=Math.atan2(0-m.position.x,P.pos.z-m.position.z);
+      ga.cd-=dt;
+      if(ga.cd<=0&&Math.abs(m.position.z-P.pos.z)<8&&P.pos.z>BR.z0-1){
+        ga.state='lunge'; ga.arc=0;
+        ga.from.copy(m.position);
+        ga.to.set(clamp(P.pos.x+rand(-1,1),-1.6,1.6),BR.y,clamp(P.pos.z+rand(-1.5,1.5),BR.z0+1,BR.z1-1));
+        sndRoar(false); doFlash('#7dff9a');
+      }
+    } else if(ga.state==='lunge'){
+      ga.arc+=dt/0.7;
+      var k=Math.min(ga.arc,1);
+      m.position.lerpVectors(ga.from,ga.to,k);
+      m.position.y=ga.from.y+(ga.to.y-ga.from.y)*k+Math.sin(k*Math.PI)*2.6;
+      m.rotation.y=Math.atan2(ga.to.x-ga.from.x,ga.to.z-ga.from.z);
+      if(k>=1){ ga.state='deck'; ga.deckT=4.5; knock(300,0.6,0.12,0); camShake=0.4; }
+    } else if(ga.state==='deck'){
+      ga.deckT-=dt;
+      var toP=P.pos.clone().sub(m.position).setY(0), dd=toP.length()||0.001;
+      if(dd>1.2){ m.position.addScaledVector(toP.normalize(),3.6*dt); }
+      m.rotation.y=Math.atan2(toP.x,toP.z);
+      m.position.y=BR.y;
+      ga.snapCd-=dt;
+      if(dd<1.7&&ga.snapCd<=0&&!P.dead){
+        ga.snapCd=1.2;
+        hurtPlayer(15,'GATOR BITE!');
+        blip(110,'sine',0.8,0.12,0,45); knock(500,0.6,0.15,0.02);
+        doFlash('#7dff9a');
+        var kb=P.pos.clone().sub(m.position).setY(0).normalize();
+        P.pos.addScaledVector(kb,1.6);
+      }
+      if(ga.deckT<=0){
+        ga.state='dive'; ga.arc=0;
+        ga.from.copy(m.position);
+        ga.to.set(ga.homeX,0.5,m.position.z);
+      }
+    } else if(ga.state==='dive'){
+      ga.arc+=dt/0.6;
+      var k2=Math.min(ga.arc,1);
+      m.position.lerpVectors(ga.from,ga.to,k2);
+      m.position.y=ga.from.y+(ga.to.y-ga.from.y)*k2+Math.sin(k2*Math.PI)*1.4;
+      if(k2>=1){ ga.state='water'; ga.cd=rand(1.5,3);
+        burst(m.position.clone().setY(0.7),0x4fc3f7,6,{speed:2,life:0.5}); }
+    }
+  });
+  if(gatorKills>=GATOR_TOTAL&&P.pos.z>BR.z1+4.5) startGolem();
+}
+
+/* ---- GOLDEN GOLEM ---- */
+var golemHallBuilt=false;
+function buildGolemHall(){
+  if(golemHallBuilt) return; golemHallBuilt=true;
+  golemGroup=new THREE.Group(); world.add(golemGroup);
+  var fl=new THREE.Mesh(new THREE.CircleGeometry(GAR.r+5,36),mat(0xa08b52));
+  fl.rotation.x=-Math.PI/2; fl.position.set(GAR.x,0.02,GAR.z); fl.receiveShadow=!IS_TOUCH;
+  golemGroup.add(fl);
+  for(var a=0;a<10;a++){
+    var ang=a/10*Math.PI*2;
+    var col=studdedBox(1.4,9,1.4,0xd4af37,0xb8912b);
+    col.position.set(GAR.x+Math.cos(ang)*(GAR.r+1),4.5,GAR.z+Math.sin(ang)*(GAR.r+1));
+    golemGroup.add(col);
+  }
+  var fw=studdedBox(16,8,1.4,0xcfb46a,0xb99c50);
+  fw.position.set(GAR.x,4,GAR.z-GAR.r-3); golemGroup.add(fw);
+  var fd=box(3,5,1.6,0x3a2c14); fd.position.set(GAR.x,2.5,GAR.z-GAR.r-3); golemGroup.add(fd);
+}
+function makeGolem(){
+  var G1=0xd4af37,G2=0xb8912b,g=new THREE.Group(),r={};
+  var legL=studdedBox(1.3,3,1.5,G2,G1); legL.position.set(-1,1.5,0); g.add(legL);
+  var legR=studdedBox(1.3,3,1.5,G2,G1); legR.position.set(1,1.5,0); g.add(legR);
+  var torso=studdedBox(3.6,3.2,2.2,G1,G2); torso.position.y=4.6; g.add(torso);
+  var chest=box(2.2,1.8,0.4,0xf3d97a); chest.position.set(0,4.8,1.15); g.add(chest);
+  var core=box(0.8,0.8,0.3,0xff2211); core.position.set(0,4.8,1.35); g.add(core);
+  function makeArm(sx){
+    var arm=new THREE.Group();
+    var up=box(1,2.6,1,G2); up.position.y=-1.3; arm.add(up);
+    var fist=studdedBox(1.5,1.3,1.5,G1,G2); fist.position.y=-3; arm.add(fist);
+    arm.position.set(sx*2.6,6,0);
+    g.add(arm);
+    return arm;
+  }
+  r.armL=makeArm(-1); r.armR=makeArm(1);
+  var head=studdedBox(1.7,1.5,1.6,G1,G2); head.position.y=7.1; g.add(head);
+  var e1=new THREE.Mesh(boxGeo(0.35,0.35,0.2),new THREE.MeshBasicMaterial({color:0xff2211}));
+  e1.position.set(-0.45,7.2,0.85); g.add(e1);
+  var e2=new THREE.Mesh(boxGeo(0.35,0.35,0.2),new THREE.MeshBasicMaterial({color:0xff2211}));
+  e2.position.set(0.45,7.2,0.85); g.add(e2);
+  g.traverse(function(m){ if(m.isMesh) m.castShadow=!IS_TOUCH; });
+  r.group=g; r.touchCd=0;
+  return r;
+}
+function startGolem(){
+  clearAct2Fights();
+  buildGolemHall();
+  PH='golem';
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(GAR.x,0,GAR.z-GAR.r+3); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  golemObj=makeGolem();
+  golemObj.group.position.set(GAR.x,0,GAR.z+8);
+  world.add(golemObj.group);
+  golemHp=GOLEM_MAX; golemState='intro'; golemT=0;
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='🗿 GIANT GOLDEN GOLEM 🗿';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true);
+  sndRoar(true); doFlash('#ffe97a'); camShake=1;
+  obj('🗿 Beat the GIANT GOLDEN GOLEM inside the mansion!');
+  hint('Shoot it, punch it, tornado it. Jump the gold shockwaves, dodge the shard volleys!');
+  msg('🗿 GIANT GOLDEN GOLEM 🗿',2800);
+  updateMobileUI();
+}
+function golemDamage(d){
+  if(!golemObj||golemState==='dead') return;
+  golemHp-=d;
+  $('bossBar').firstElementChild.style.width=clamp(golemHp/GOLEM_MAX*100,0,100)+'%';
+  burst(golemObj.group.position.clone().setY(5),0xffe97a,6,{speed:4,life:0.6});
+  doFlash('#ffe97a');
+  if(golemHp<=0) golemDie();
+}
+function golemDie(){
+  golemState='dead'; golemT=0;
+  battleMusic(false);
+  clearHazards(); // no leftover shockwave/shard may kill the player after the win
+  sndRoar(true); sndWoodFall();
+  setTimeout(sndWoodFall,350); setTimeout(sndWoodFall,700);
+  doFlash('#ffe97a'); camShake=1.2;
+  for(var i=0;i<30;i++)
+    burst(golemObj.group.position.clone().add(new THREE.Vector3(rand(-2,2),rand(1,7),rand(-2,2))),
+      [0xd4af37,0xf3d97a,0xb8912b][(Math.random()*3)|0],2,{speed:7,life:1.3});
+  msg('🗿 GOLEM DOWN!<br><span style="font-size:55%">Somewhere in the library… a door just unlocked.</span>',3400);
+  a2Timer=setTimeout(function(){ a2Timer=null; if(PH==='golem') enterMlib(); },3000);
+}
+function updateGolem(dt){
+  if(!golemObj) return;
+  var g=golemObj.group, dd=g.position.distanceTo(P.pos);
+  golemT+=dt;
+  if(golemState==='dead'){
+    g.rotation.z=Math.min(g.rotation.z+dt*1.2,1.3);
+    g.position.y=Math.max(g.position.y-dt*1.5,-2);
+    return;
+  }
+  var ang=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+  g.rotation.y+=(ang-g.rotation.y)*(1-Math.pow(0.02,dt));
+  golemObj.armL.rotation.x=Math.sin(GTIME*2)*0.15;
+  golemObj.armR.rotation.x=-Math.sin(GTIME*2)*0.15;
+  if(golemState==='intro'){
+    if(golemT>1.4){ golemState='idle'; golemT=0; }
+    return;
+  }
+  if(golemState==='idle'){
+    if(dd>5){
+      g.position.x+=Math.sin(g.rotation.y)*2.6*dt;
+      g.position.z+=Math.cos(g.rotation.y)*2.6*dt;
+      if(Math.random()<dt*2){ knock(140,0.5,0.14,0); camShake=Math.min(camShake+0.1,0.3); }
+    }
+    if(golemT>golemCd){
+      golemT=0;
+      var mv=['slam','rain','volley','flash'][(Math.random()*4)|0];
+      if(mv==='slam'){ golemState='slamPrep'; }
+      else if(mv==='rain'){
+        sndRoar(false); msg('🧱 GOLD BLOCKS!',1100);
+        for(var i=0;i<6;i++)
+          spawnFallBlock(P.pos.x+rand(-5,5),P.pos.z+rand(-5,5),1,
+            {x:GAR.x,z:GAR.z,r:GAR.r,gold:true});
+      }
+      else if(mv==='volley'){
+        sndTazer(); doFlash('#ffe97a');
+        for(var s=-2;s<=2;s++){
+          var m=new THREE.Mesh(boxGeo(0.4,0.4,0.7),
+            new THREE.MeshBasicMaterial({color:0xf3d97a}));
+          m.position.copy(g.position).setY(5);
+          var dir=P.pos.clone().setY(1).sub(m.position).normalize()
+            .applyAxisAngle(UPV,s*0.22).multiplyScalar(13);
+          spawnEproj(m,dir,0,12,'shard');
+        }
+      }
+      else { sndRoar(bossN===2); doFlash('#ffffff');
+        if(dd<11) P.slowT=1.4; camShake=0.8; }
+    }
+  }
+  else if(golemState==='slamPrep'){
+    golemObj.armR.rotation.x=-Math.min(golemT*4,2.2);
+    if(golemT>0.6){
+      golemState='idle'; golemT=0;
+      golemObj.armR.rotation.x=0;
+      sndWoodFall(); blip(65,'sine',1.1,0.3,0,28); camShake=0.9; doFlash('#ffe97a');
+      var sw=new THREE.Mesh(new THREE.TorusGeometry(1,0.35,8,28),
+        new THREE.MeshBasicMaterial({color:0xf3d97a}));
+      sw.rotation.x=Math.PI/2; sw.position.set(g.position.x,0.3,g.position.z);
+      world.add(sw);
+      shockwaves.push({mesh:sw,r:1,hit:false,speed:13,dmg:18});
+    }
+  }
+  if(dd<3.4&&!P.dead){
+    if(golemObj.touchCd<=0){
+      golemObj.touchCd=1;
+      hurtPlayer(20,'The Golem swatted you!');
+      var kb=P.pos.clone().sub(g.position).setY(0).normalize();
+      P.pos.addScaledVector(kb,3.5); P.vy=6;
+      sndPunch(true);
+    }
+  }
+  if(golemObj.touchCd>0) golemObj.touchCd-=dt;
+}
+
+/* ---- LIBRARIES + GOLDEN BOOK ---- */
+var mlibBuilt=false,lib2Built=false;
+function buildMlib(){
+  if(mlibBuilt) return; mlibBuilt=true;
+  mlibGroup=new THREE.Group(); world.add(mlibGroup);
+  var fl=studdedBox(23,0.3,17,0x7a5a3a,0x6a4e32);
+  fl.position.set(MLIB.x,0.15,MLIB.z); mlibGroup.add(fl);
+  var wN=box(23,7,0.8,0x5a4228); wN.position.set(MLIB.x,3.5,MLIB.z+8.4); mlibGroup.add(wN);
+  var wS=box(23,7,0.8,0x5a4228); wS.position.set(MLIB.x,3.5,MLIB.z-8.4); mlibGroup.add(wS);
+  var wE=box(0.8,7,17,0x5a4228); wE.position.set(MLIB.x+11.4,3.5,MLIB.z); mlibGroup.add(wE);
+  var wW=box(0.8,7,17,0x5a4228); wW.position.set(MLIB.x-11.4,3.5,MLIB.z); mlibGroup.add(wW);
+  var cols=[0xc62b21,0x2a6fd6,0x2e8b2e,0xffd83d,0x9b5cff];
+  for(var i=0;i<14;i++){
+    var bk=box(0.3,rand(0.5,0.9),0.5,cols[i%5]);
+    bk.position.set(MLIB.x-9+i*1.4,6.2,MLIB.z+7.8); mlibGroup.add(bk);
+    var bk2=box(0.3,rand(0.5,0.9),0.5,cols[(i+2)%5]);
+    bk2.position.set(MLIB.x-9+i*1.4,6.2,MLIB.z-7.8); mlibGroup.add(bk2);
+  }
+  mlibDoors.length=0;
+  for(var d=0;d<6;d++){
+    var side=d<3?-1:1, zz=MLIB.z-5+(d%3)*5;
+    var fr=box(0.5,4.2,2.6,0x3a2c14); fr.position.set(MLIB.x+side*10.8,2.1,zz); mlibGroup.add(fr);
+    var slab=box(0.3,3.6,2,WOOD); slab.position.set(MLIB.x+side*10.5,1.8,zz); mlibGroup.add(slab);
+    var kn=box(0.14,0.14,0.14,0xffd83d); kn.position.set(MLIB.x+side*10.3,1.7,zz+0.7); mlibGroup.add(kn);
+    mlibDoors.push({x:MLIB.x+side*10.2,z:zz});
+  }
+  var lamp=new THREE.Mesh(boxGeo(1,0.5,1),new THREE.MeshBasicMaterial({color:0xffe0a3}));
+  lamp.position.set(MLIB.x,6.6,MLIB.z); mlibGroup.add(lamp);
+}
+function enterMlib(){
+  buildMlib();
+  clearAct2Fights();
+  $('bossWrap').style.display='none';
+  PH='mlib';
+  doorIdx=(Math.random()*6)|0;
+  P.pos.set(MLIB.x,0,MLIB.z-6); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  windLoop.set(0);
+  doFlash('#ffffff'); sndPortal();
+  obj('📚 THE LIBRARY ROOM — one of these 6 doors is unlocked. FIND IT!');
+  hint('Walk up to each door. Locked ones knock — keep trying until one opens!');
+  msg('📚 One random door just unlocked…',3000);
+  updateMobileUI();
+}
+function buildLib2(){
+  if(lib2Built) return; lib2Built=true;
+  lib2Group=new THREE.Group(); world.add(lib2Group);
+  var fl=studdedBox(42,0.3,42,0x6a4e32,0x5a4228);
+  fl.position.set(LIB2.x,0.15,LIB2.z); lib2Group.add(fl);
+  [[0,21],[0,-21],[21,0],[-21,0]].forEach(function(o){
+    var w=box(o[0]?0.8:42,9,o[0]?42:0.8,0x4a3820);
+    w.position.set(LIB2.x+o[0],4.5,LIB2.z+o[1]); lib2Group.add(w);
+  });
+  var cols=[0xc62b21,0x2a6fd6,0x2e8b2e,0xffd83d,0x9b5cff,0xff7043];
+  var spots=[];
+  for(var r=0;r<4;r++) for(var c=0;c<4;c++){
+    var sx=LIB2.x-15+c*10, sz=LIB2.z-13.5+r*9;
+    var sh=studdedBox(6.5,5,1.3,0x7a5a3a,0x6a4e32);
+    sh.position.set(sx,2.5,sz); lib2Group.add(sh);
+    for(var lvl=0;lvl<3;lvl++) for(var b=0;b<8;b++){
+      if(Math.random()<0.25) continue;
+      var bk=box(0.36,0.7,0.3,cols[(r+c+lvl+b)%6]);
+      bk.position.set(sx-2.8+b*0.8,1.1+lvl*1.5,sz+0.85); lib2Group.add(bk);
+    }
+    spots.push({x:sx+rand(-2.5,2.5),z:sz+1.8});
+  }
+  var spot=spots[(Math.random()*spots.length)|0];
+  bookMesh=new THREE.Group();
+  var cover=box(0.55,0.16,0.42,0xffd83d); bookMesh.add(cover);
+  var pages=box(0.48,0.1,0.36,0xfff8dc); pages.position.y=0.06; bookMesh.add(pages);
+  var glow=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.7,14,8,1,true),
+    new THREE.MeshBasicMaterial({color:0xffe97a,transparent:true,opacity:0.22,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  glow.position.y=7; bookMesh.add(glow);
+  bookMesh.position.set(spot.x,1.4,spot.z);
+  lib2Group.add(bookMesh);
+}
+function enterLib2(){
+  buildLib2();
+  PH='lib2';
+  P.pos.set(LIB2.x,0,LIB2.z-18); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  doFlash('#ffffff'); sndPortal();
+  obj('📖 Find the GOLDEN BOOK somewhere in this MONSTROSITY of a library!');
+  hint('Look for the golden glow between the shelves.');
+  msg('📚 A WHOLE NEW LIBRARY?!<br><span style="font-size:55%">The golden book is in here somewhere…</span>',3400);
+  updateMobileUI();
+}
+
+/* ---- ACT 2 shared per-frame logic ---- */
+function updateAct2(dt){
+  if(doorKnockCd>0) doorKnockCd-=dt;
+  /* roof portal entry -> epilepsy warning -> ninja dojo (works from home OR jungle roaming) */
+  if(roofPortal&&(PH==='home'||PH==='jungle')&&!P.dead&&P.pos.y>4.5
+     &&Math.hypot(P.pos.x-roofPortal.position.x,P.pos.z-roofPortal.position.z)<2.1){
+    if(!warnShown){
+      if($('warn').style.display!=='flex') $('warn').style.display='flex';
+    } else startNinjaFight();
+  }
+  /* carrying the golden book above your head */
+  if(hasBook&&player){
+    if(!carryBook){
+      carryBook=new THREE.Group();
+      var cb=box(0.55,0.16,0.42,0xffd83d); carryBook.add(cb);
+      var cp=box(0.48,0.1,0.36,0xfff8dc); cp.position.y=0.06; carryBook.add(cp);
+      world.add(carryBook);
+    }
+    carryBook.position.copy(P.pos).add(new THREE.Vector3(0,2.5+Math.sin(GTIME*2)*0.12,0));
+    carryBook.rotation.y+=dt*2;
+    if(Math.random()<0.15)
+      burst(carryBook.position.clone(),0xffe14d,1,{speed:0.8,life:0.5,grav:-1,size:0.6});
+  } else if(carryBook&&!hasBook){ world.remove(carryBook); carryBook=null; }
+  /* statue: place the book */
+  if(statueObj&&hasBook&&(PH==='jungle'||PH==='home')
+     &&P.pos.distanceTo(statueObj.position)<3.4) placeBookOnStatue();
+  /* library door hunt */
+  if(PH==='mlib'&&!P.dead){
+    for(var i=0;i<mlibDoors.length;i++){
+      var d=mlibDoors[i];
+      if(Math.hypot(P.pos.x-d.x,P.pos.z-d.z)<1.8){
+        if(i===doorIdx){
+          doFlash('#ffffff'); sndSparkle();
+          if(hasBook||bux>=100){
+            /* replay run: the golden book is already found — the door just leads home */
+            PH=hasBook?'jungle':'home';
+            P.pos.set(0,0,10); P.vy=0;
+            if(player) player.group.position.copy(P.pos);
+            camYaw=0; P.yaw=0; windLoop.set(0.12);
+            sndPortal();
+            msg(hasBook?'🚪 It leads home — now put that book on the statue!':'🚪 Nothing but dusty novels this time. It leads home.',3200);
+            obj(hasBook?'🗿 Put the GOLDEN BOOK on the T-REX SLAYER statue!':'🏆 Gauntlet re-cleared! Your brick kingdom awaits.');
+          } else enterLib2();
+        }
+        else if(doorKnockCd<=0){
+          doorKnockCd=0.9;
+          knock(350,0.5,0.1,0); knock(300,0.4,0.1,0.16);
+          msg('🚪 Locked…',900);
+        }
+        break;
+      }
+    }
+  }
+  /* golden book pickup */
+  if(PH==='lib2'&&bookMesh&&!hasBook){
+    bookMesh.rotation.y+=dt*2;
+    bookMesh.position.y=1.4+Math.sin(GTIME*2)*0.15;
+    if(P.pos.distanceTo(bookMesh.position)<1.9){
+      hasBook=true;
+      doFlash('#ffe97a'); sndSparkle();
+      burst(bookMesh.position.clone(),0xffe14d,20,{speed:4,life:1});
+      lib2Group.remove(bookMesh); bookMesh=null;
+      msg('📖 THE GOLDEN BOOK!<br><span style="font-size:55%">It hums… and drags you back to the jungle.</span>',3200);
+      bookT=1.8;
+    }
+  }
+  if(bookT>0){
+    bookT-=dt;
+    if(bookT<=0){
+      bookT=-1;
+      PH='jungle';
+      P.pos.set(0,0,34); P.vy=0;
+      if(player) player.group.position.copy(P.pos);
+      camYaw=0; P.yaw=0;
+      windLoop.set(0.3);
+      doFlash('#ffffff'); sndPortal();
+      obj('🗿 Put the GOLDEN BOOK on the T-REX SLAYER statue! Follow the gold beam.');
+      if(statueObj&&statueObj.userData.beam)
+        statueObj.userData.beam.material.color.setHex(0xffd83d);
+      updateMobileUI();
+    }
+  }
+  if(statueObj&&Math.random()<0.04)
+    burst(statueObj.position.clone().add(new THREE.Vector3(rand(-1,1),rand(2,5),rand(-1,1))),
+      0xffe97a,1,{speed:0.6,life:0.8,grav:-2,size:0.6});
+}
+$('btnWarnGo').addEventListener('click',function(){
+  flashesOn=true; warnShown=true; $('warn').style.display='none'; audioInit(); actx();
+});
+$('btnWarnSafe').addEventListener('click',function(){
+  flashesOn=false; warnShown=true; $('warn').style.display='none'; audioInit(); actx();
+});
+/* Act-2 rich skip: rebuild everything a returning tycoon already had */
+function applyRichSkip(sv){
+  rich=true;
+  bux=(sv&&sv.bux)||0; updateBuxHud();
+  spawnPlayer('rich');
+  spawnBodyguards();
+  spawnStatue();
+  STEPS=FURN_STEPS; buildIdx=0; furnMode=true;
+  while(buildIdx<FURN_STEPS.length) placeStep(true);
+  kills=HIKER_TOTAL;
+  if(bux>=100&&statueObj){
+    var bk=box(0.6,0.16,0.45,0xffd83d);
+    bk.position.copy(statueObj.position).add(new THREE.Vector3(1.3,2.4,1.3));
+    world.add(bk);
+  }
+}
 
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
 window.__dbg={
@@ -2064,7 +3256,53 @@ window.__dbg={
   useTornado:tryTornado,
   win:winGame,
   audio:function(){ return !!AC; },
-  startBuild:startBuild, startSkip:function(){ startSkip(loadSave()); }
+  startBuild:startBuild, startSkip:function(){ startSkip(loadSave()); },
+  /* ---- Act 2 ---- */
+  rich:function(){ return rich; },
+  act2:function(){ /* jump straight to furnished tycoon home */
+    hasGun=true; tornadoOwned=true; tornCharge=TORN_MAX;
+    if(!houseBuilt){ STEPS=BUILD_STEPS; while(buildIdx<BUILD_STEPS.length) placeStep(true); }
+    buildJungle(); jungleGroup.visible=true; kills=HIKER_TOTAL;
+    hikers.forEach(function(h){ if(!h.dead){ h.dead=true; world.remove(h.ref.group); } });
+    applyRichSkip({bux:bux});
+    PH='home';
+    P.pos.set(0,0,6); if(player) player.group.position.copy(P.pos);
+    camYaw=Math.PI; P.yaw=Math.PI;
+    updateMobileUI();
+  },
+  startFurnish:function(){ STEPS=FURN_STEPS; buildIdx=0; furnMode=true; showGhost(); },
+  furn:function(){ return {mode:furnMode,idx:buildIdx,total:FURN_STEPS.length,ladder:ladderBuilt}; },
+  roofPortalPos:function(){ return roofPortal?{x:roofPortal.position.x,y:roofPortal.position.y,z:roofPortal.position.z}:null; },
+  tpY:function(x,y,z){ P.pos.set(x,y,z); if(player) player.group.position.copy(P.pos); },
+  warnOpen:function(){ return $('warn').style.display==='flex'; },
+  acceptWarn:function(on){ flashesOn=!!on; warnShown=true; $('warn').style.display='none'; },
+  flashes:function(){ return flashesOn; },
+  gotoNinja:function(){ if(!player) spawnPlayer('rich'); rich=true; hasGun=true; warnShown=true; startNinjaFight(); },
+  ninjaState:function(){ return {idx:ninjaIdx,time:ninjaT,
+    live:ninjas.filter(function(n){ return n.hp>0; }).length,
+    hp:ninjas.length?ninjas[ninjas.length-1].hp:0}; },
+  setNinjaTime:function(t){ ninjaT=t; },
+  killNinja:function(){ var n=ninjas[ninjas.length-1]; if(n&&n.hp>0) hurtNinja(n,9999,false); },
+  gotoBridge:function(){ if(!player) spawnPlayer('rich'); rich=true; hasGun=true; startBridge(); },
+  bridgeState:function(){ return {kills:gatorKills,
+    planks:planks.filter(function(p){ return p.alive; }).length,
+    gate:!!(bridgeGate&&bridgeGate.parent)}; },
+  killGator:function(){ for(var i=0;i<gators.length;i++)
+    if(gators[i].hp>0){ hurtGator(gators[i],9999,false); return; } },
+  gotoGolem:function(){ if(!player) spawnPlayer('rich'); rich=true; hasGun=true; startGolem(); },
+  golem:function(){ return {hp:golemHp,state:golemState}; },
+  hitGolem:function(n){ golemDamage(n||10); },
+  gotoMlib:function(){ if(!player) spawnPlayer('rich'); enterMlib(); },
+  doorIdx:function(){ return doorIdx; },
+  doors:function(){ return mlibDoors.map(function(d){ return {x:d.x,z:d.z}; }); },
+  gotoLib2:function(){ if(!player) spawnPlayer('rich'); enterLib2(); },
+  bookPos:function(){ return bookMesh?{x:bookMesh.position.x,z:bookMesh.position.z}:null; },
+  giveBook:function(){ hasBook=true;
+    if(bookMesh){ lib2Group.remove(bookMesh); bookMesh=null; } spawnStatue(); },
+  carrying:function(){ return hasBook; },
+  buxN:function(){ return bux; },
+  statuePos:function(){ return statueObj?{x:statueObj.position.x,z:statueObj.position.z}:null; },
+  guards:function(){ return bodyguards.length; }
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
 </script>
