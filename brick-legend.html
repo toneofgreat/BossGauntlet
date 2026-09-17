@@ -1096,7 +1096,7 @@ var SPAWN_AFTER=(function(){ // step index after which the character appears
 })();
 function save(){
   try{ localStorage.setItem('brickLegendSave',JSON.stringify(
-    {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux})); }catch(e){}
+    {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0})); }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -1126,7 +1126,7 @@ function spawnPlayer(kind){
 }
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
-  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='cut'||PH==='cut2')?'none':'block';
+  $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='cut'||PH==='cut2')?'none':'block';
   var inBoss=PH==='boss';
   $('bEquip').style.display=(hasGun&&!inBoss)?'flex':'none';
   $('bShoot').style.display=(gunEquipped&&!inBoss)?'flex':'none';
@@ -1167,6 +1167,7 @@ addEventListener('pointerup',function(e){
   if(drag.id!==e.pointerId) return;
   drag.id=null;
   if(drag.moved>9) return; // it was a camera drag, not a tap
+  if(PH==='citybuild'){ tryPlaceCity(e); return; }
   if(PH==='build'||PH==='buildwalk'){ tryPlace(e); return; }
   if(PH==='cut'){ if(cutSkipOk) cutT=99; return; }
   if(PH==='cut2'){ if(cutSkipOk) cut2T=99; return; }
@@ -2247,6 +2248,11 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20,11,Math.cos(camOrbit.a)*20);
     camera.lookAt(0,3,2);
   }
+  else if(PH==='citybuild'){
+    camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt));
+    camera.position.set(CITY.x+Math.sin(camOrbit.a)*62,34,CITY.z+Math.cos(camOrbit.a)*62);
+    camera.lookAt(CITY.x,2,CITY.z);
+  }
   else if(PH==='cut'||PH==='cut2'){ /* handled in cutscene updaters */ }
   else if(player){
     /* camera yaw is player-controlled only (drag to look) — it never moves on its own */
@@ -2282,7 +2288,7 @@ function updateAmbient(dt){
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost){
+  if(ghost||PH==='citybuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2323,6 +2329,7 @@ function startBuild(){
   $('start').style.display='none';
   audioInit(); actx(); sndUi();
   PH='build';
+  STEPS=BUILD_STEPS; buildIdx=0; furnMode=false;
   showGhost();
   spawnBirds(0,-14,3);
   msg('👷 Time to build!<br><span style="font-size:55%">Click the glowing cyan part to snap each piece in.</span>',3500);
@@ -3407,6 +3414,7 @@ function applyRichSkip(sv){
    detailed city (200+ parts), then step on a glowing pad to play.
    ================================================================ */
 var CITY={x:-300,z:0}, cityGroup=null, cityPartCount=0, cityColliders=[], cityPads=[];
+var cityChunks=[], cityBuildIdx=0, cityDone=false;
 function textBoard(txt,w,h,bg,fg,size){
   var cv=document.createElement('canvas'); cv.width=256; cv.height=128;
   var x=cv.getContext('2d');
@@ -3427,6 +3435,12 @@ function buildCity(){
   function collide(x,z,hw,hd){ cityColliders.push({x:CX+x,z:CZ+z,hw:hw,hd:hd}); }
   /* ground + crossing roads + sidewalks */
   at(new THREE.Mesh(new THREE.PlaneGeometry(110,110),mat(0x4f9c3f)),0,0.01,0).rotation.x=-Math.PI/2;
+  /* chunk markers: everything between two marks is one build-step of the city */
+  var _ck0=cityGroup.children.length;
+  function markChunk(label,cam){
+    cityChunks.push({label:label,cam:cam,from:_ck0,to:cityGroup.children.length});
+    _ck0=cityGroup.children.length;
+  }
   var roadNS=box(9,0.12,100,0x3b3f45); at(roadNS,0,0.06,0);
   var roadEW=box(100,0.12,9,0x3b3f45); at(roadEW,0,0.06,0);
   for(var i=0;i<10;i++){
@@ -3434,9 +3448,11 @@ function buildCity(){
   }
   for(var cw=0;cw<5;cw++){ at(box(0.9,0.14,6.5,0xffffff),-2.2+cw*1.1,0.135,7.6);
     at(box(6.5,0.14,0.9,0xffffff),7.6,0.135,-2.2+cw*1.1); }
+  markChunk('Roads & crosswalks',0.2);
   [[-27,-27],[27,-27],[-27,27],[27,27]].forEach(function(q){
     var sw=studdedBox(44,0.22,44,0x9aa5ad,0x8b969e); sw.position.set(CX+q[0],0.11,CZ+q[1]); cityGroup.add(sw);
   });
+  markChunk('Sidewalks',0.8);
   /* buildings: two per quadrant, windowed and roofed */
   var BLD=[
     {x:-24,z:-24,w:14,d:12,h:14,c:0xc62b21,shop:'BRICK\nBURGERS'},
@@ -3485,6 +3501,7 @@ function buildCity(){
       if(dir<0) sign.rotation.y=Math.PI;
       cityGroup.add(sign);
     }
+    markChunk(b.shop?b.shop.replace('\n',' '):'Apartment block',Math.atan2(b.x,b.z));
   });
   /* street props */
   for(var sl=0;sl<6;sl++){
@@ -3502,6 +3519,7 @@ function buildCity(){
       l2.position.set(CX+tl[0],li[1],CZ+tl[1]+0.3); cityGroup.add(l2);
     });
   });
+  markChunk('Streetlights & signals',-0.5);
   [[-9,-14],[9,16]].forEach(function(hp){
     var hy=box(0.5,0.8,0.5,0xc62b21); hy.position.set(CX+hp[0],0.6,CZ+hp[1]); cityGroup.add(hy);
     var hc=box(0.7,0.24,0.7,0xc62b21); hc.position.set(CX+hp[0],1.1,CZ+hp[1]); cityGroup.add(hc);
@@ -3520,12 +3538,14 @@ function buildCity(){
   });
   var mb=box(0.8,1.1,0.6,0x2a6fd6); mb.position.set(CX-12,0.85,CZ+13); cityGroup.add(mb);
   var mbTop=box(0.8,0.4,0.6,0x2258aa); mbTop.position.set(CX-12,1.55,CZ+13); cityGroup.add(mbTop);
+  markChunk('Hydrants, benches & mail',2.6);
   for(var tr2=0;tr2<8;tr2++){
     var t3=makeTree(tr2%3===2?2:0);
     var tx2=(tr2%2?1:-1)*rand(12,40), tz2=(tr2<4?1:-1)*rand(12,40);
     if(Math.abs(tx2)<8||Math.abs(tz2)<8) tz2+=12;
     t3.position.set(CX+tx2,0,CZ+tz2); cityGroup.add(t3);
   }
+  markChunk('City trees',-2.2);
   /* fountain plaza */
   var basin=studdedBox(5,0.8,5,0x9aa5ad,0x8b969e); basin.position.set(CX+18,0.4,CZ-16); cityGroup.add(basin);
   var wat=new THREE.Mesh(new THREE.CircleGeometry(2,16),
@@ -3533,6 +3553,7 @@ function buildCity(){
   wat.rotation.x=-Math.PI/2; wat.position.set(CX+18,0.82,CZ-16); cityGroup.add(wat);
   var jet=box(0.5,1.6,0.5,0x66d9ef); jet.position.set(CX+18,1.6,CZ-16); cityGroup.add(jet);
   collide(18,-16,2.6,2.6);
+  markChunk('Fountain plaza',2.3);
   /* parked brick cars */
   var CARC=[0xc62b21,0xffd83d,0x2a6fd6,0x2e8b2e,0xffffff];
   for(var cr=0;cr<5;cr++){
@@ -3554,11 +3575,13 @@ function buildCity(){
     cityGroup.add(car);
     collide(px2,pz2,1.2,2);
   }
+  markChunk('Parked brick cars',1.1);
   /* billboard */
   var bp1=box(0.4,7,0.4,0x2f3540); bp1.position.set(CX-3,3.5,CZ-42); cityGroup.add(bp1);
   var bp2=box(0.4,7,0.4,0x2f3540); bp2.position.set(CX+3,3.5,CZ-42); cityGroup.add(bp2);
   var bb2=textBoard('🧱 BRICK LEGEND\nWELCOME TO THE CITY',9,4.2,'#12203a','#ffd83d',26);
   bb2.position.set(CX,7.5,CZ-41.8); cityGroup.add(bb2);
+  markChunk('The billboard',3.1);
   /* construction-site START pads */
   function cityPad(label,color,x,z,mode){
     var pad=studdedBox(3,0.3,3,color,new THREE.Color(color).offsetHSL(0,0,-0.08).getHex());
@@ -3585,15 +3608,105 @@ function buildCity(){
   var craneArm=box(7,0.4,0.5,0xffb300); craneArm.position.set(CX-18,8,CZ-17); cityGroup.add(craneArm);
   var hook=box(0.16,2.4,0.16,0x333333); hook.position.set(CX-15,6.6,CZ-17); cityGroup.add(hook);
   var crate2=studdedBox(1.4,1.4,1.4,0xc62b21,0xa02318); crate2.position.set(CX-15,4.9,CZ-17); cityGroup.add(crate2);
+  markChunk('Construction site + the START pads!',-2.3);
   /* count every mesh so we can brag about it */
   cityPartCount=0;
   cityGroup.traverse(function(m){ if(m.isMesh) cityPartCount++; });
 }
+/* ---- building the city yourself, chunk by cyan-ghost chunk ---- */
+function chunkObjects(ch){
+  var out=[];
+  for(var i=ch.from;i<ch.to;i++) out.push(cityGroup.children[i]);
+  return out;
+}
+function startCityBuild(){
+  buildCity();
+  cityChunks.forEach(function(ch){
+    chunkObjects(ch).forEach(function(o){
+      o.traverse(function(m){ if(m.isMesh&&!m.userData.om) m.userData.om=m.material; });
+      o.visible=false;
+    });
+  });
+  cityBuildIdx=0;
+  PH='citybuild';
+  setMood('day');
+  camOrbit.a=0.2;
+  showCityGhost();
+  msg('🏙️ FIRST: BUILD BRICK CITY!<br><span style="font-size:55%">Click the glowing cyan part to raise the city, piece by piece.</span>',4600);
+  updateMobileUI();
+}
+function showCityGhost(){
+  var ch=cityChunks[cityBuildIdx];
+  if(!ch) return;
+  chunkObjects(ch).forEach(function(o){
+    o.visible=true;
+    o.traverse(function(m){ if(m.isMesh){ m.material=ghostMat; } });
+  });
+  camOrbit.target=ch.cam;
+  obj('🔨 '+ch.label+' &nbsp;<span style="color:#7df3ff">('+(cityBuildIdx+1)+'/'+cityChunks.length+')</span>');
+  hint('Click / tap the glowing cyan part to build it!');
+}
+function placeCityChunk(silent){
+  var ch=cityChunks[cityBuildIdx];
+  if(!ch) return;
+  var objs=chunkObjects(ch);
+  objs.forEach(function(o){
+    o.visible=true;
+    o.traverse(function(m){ if(m.isMesh&&m.userData.om) m.material=m.userData.om; });
+    if(!silent){
+      o.scale.set(1.18,1.18,1.18);
+      (function(oo){ tween(0.16,function(k){ var s=1.18-0.18*k; oo.scale.set(s,s,s); }); })(o);
+    }
+  });
+  if(!silent){
+    sndBrickClick();
+    var bb=new THREE.Box3();
+    objs.forEach(function(o){ bb.expandByObject(o); });
+    var c=bb.getCenter(new THREE.Vector3());
+    burst(c,0x7df3ff,10,{speed:3,life:0.6,grav:6,size:0.9});
+    camShake=Math.min(camShake+0.15,0.35);
+  }
+  cityBuildIdx++;
+  if(cityBuildIdx>=cityChunks.length) finishCityBuild(silent);
+  else showCityGhost();
+}
+function tryPlaceCity(e){
+  var ch=cityChunks[cityBuildIdx];
+  if(!ch) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb=new THREE.Box3();
+  chunkObjects(ch).forEach(function(o){ bb.expandByObject(o); });
+  bb.expandByScalar(2);
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan part</b>!'); return; }
+  placeCityChunk();
+}
+function finishCityBuild(silent){
+  cityDone=true;
+  if(silent) return;
+  save();
+  sndFanfare();
+  spawnPlayer(false);
+  P.pos.set(CITY.x+2,0,CITY.z+22); P.vy=0;
+  player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  PH='city';
+  spawnBirds(CITY.x,CITY.z,4);
+  obj('🏙️ BRICK CITY BUILT! Walk to the glowing cyan pad to start the story!');
+  hint('WASD / joystick to move · Space jump · drag to look around');
+  msg('🏙️ YOU BUILT BRICK CITY!<br><span style="font-size:55%">And there YOU are. Go step on the glowing pad.</span>',4600);
+  updateMobileUI();
+}
 function startCity(){
   $('start').style.display='none';
   audioInit(); actx(); sndUi();
+  var sv0=loadSave();
+  if(!(sv0&&(sv0.gun||sv0.city))){ startCityBuild(); return; } // new players BUILD the city first
   buildCity();
-  var sv=loadSave();
+  cityDone=true; cityBuildIdx=cityChunks.length;
+  var sv=sv0;
   hasGun=!!(sv&&sv.gun);
   tornadoOwned=!!(sv&&sv.torn);
   if(tornadoOwned) tornCharge=TORN_MAX;
@@ -3716,6 +3829,9 @@ window.__dbg={
   startCity:startCity,
   cityParts:function(){ return cityPartCount; },
   cityPads:function(){ return cityPads.map(function(p){ return {x:p.x,z:p.z,mode:p.mode}; }); },
+  cityBuild:function(){ return {idx:cityBuildIdx,total:cityChunks.length,done:cityDone}; },
+  placeCity:function(n){ for(var i=0;i<(n||1);i++) placeCityChunk(cityBuildIdx<cityChunks.length-1);
+    if(cityBuildIdx>=cityChunks.length&&PH==='citybuild') finishCityBuild(false); },
   bossMove:function(mv){ startBossMove(mv); }
 };
 function showGhostSafe(){ if(PH==='build'||PH==='buildwalk') showGhost(); }
