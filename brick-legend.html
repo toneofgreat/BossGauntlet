@@ -2249,9 +2249,13 @@ function updateCamera(dt){
     camera.lookAt(0,3,2);
   }
   else if(PH==='citybuild'){
-    camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt));
-    camera.position.set(CITY.x+Math.sin(camOrbit.a)*62,34,CITY.z+Math.cos(camOrbit.a)*62);
-    camera.lookAt(CITY.x,2,CITY.z);
+    camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
+    camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
+    var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
+    cc.x+=(cityCam.x-cc.x)*k; cc.y+=(cityCam.y-cc.y)*k; cc.z+=(cityCam.z-cc.z)*k;
+    cc.r+=(cityCam.r-cc.r)*k; cc.h+=(cityCam.h-cc.h)*k;
+    camera.position.set(cc.x+Math.sin(camOrbit.a)*cc.r,cc.h,cc.z+Math.cos(camOrbit.a)*cc.r);
+    camera.lookAt(cc.x,cc.y,cc.z);
   }
   else if(PH==='cut'||PH==='cut2'){ /* handled in cutscene updaters */ }
   else if(player){
@@ -3415,6 +3419,9 @@ function applyRichSkip(sv){
    ================================================================ */
 var CITY={x:-300,z:0}, cityGroup=null, cityPartCount=0, cityColliders=[], cityPads=[];
 var cityChunks=[], cityBuildIdx=0, cityDone=false;
+/* house-style close-up build camera: swoops to each chunk being placed */
+var cityCam={x:CITY.x,y:6,z:CITY.z,r:52,h:30,
+  cur:{x:CITY.x,y:10,z:CITY.z+30,r:78,h:48}};
 function textBoard(txt,w,h,bg,fg,size){
   var cv=document.createElement('canvas'); cv.width=256; cv.height=128;
   var x=cv.getContext('2d');
@@ -3650,10 +3657,17 @@ function startCityBuild(){
 function showCityGhost(){
   var ch=cityChunks[cityBuildIdx];
   if(!ch) return;
+  var bb=new THREE.Box3();
   chunkObjects(ch).forEach(function(o){
     o.visible=true;
     o.traverse(function(m){ if(m.isMesh){ m.material=ghostMat; } });
+    bb.expandByObject(o);
   });
+  /* aim the camera at this piece, close for small things, back for big ones */
+  var c=bb.getCenter(new THREE.Vector3()), sz=bb.getSize(new THREE.Vector3());
+  cityCam.x=c.x; cityCam.y=Math.max(1.5,c.y); cityCam.z=c.z;
+  cityCam.r=clamp(Math.max(sz.x,sz.z)*0.9+9,13,58);
+  cityCam.h=clamp(sz.y*1.1+c.y+6,8,42);
   camOrbit.target=ch.cam;
   obj('🔨 '+ch.label+' &nbsp;<span style="color:#7df3ff">('+(cityBuildIdx+1)+'/'+cityChunks.length+')</span>');
   hint('Click / tap the glowing cyan part to build it!');
