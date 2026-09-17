@@ -73,7 +73,7 @@
     text-shadow:0 1px 2px #000;font-family:inherit}
   .mbtn:active{background:#ffd83d55}
   #bJump{right:24px;bottom:26px}
-  #bPunch{right:100px;bottom:70px}
+  #bPunch{left:34px;bottom:168px;background:#ff3b3b22;border-color:#ff8a7a66} /* far from the friendly buttons — no accidental punches */
   #bShoot{right:24px;bottom:170px;display:none;background:#ff3b3b33;border-color:#ff8a7a88}
   #bReload{right:100px;bottom:200px;display:none}
   #bEquip{right:24px;bottom:104px;display:none}
@@ -1111,7 +1111,7 @@ var SPAWN_AFTER=(function(){ // step index after which the character appears
 function save(){
   try{ localStorage.setItem('brickLegendSave',JSON.stringify(
     {gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
-     jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood})); }catch(e){}
+     jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone})); }catch(e){}
 }
 function loadSave(){
   try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
@@ -2149,6 +2149,14 @@ function groundYAt(){
       if(p.alive&&Math.abs(P.pos.z-p.z)<1.35&&Math.abs(P.pos.x)<1.9) return BR.y;
     }
     return -99; // over the water
+  }
+  /* hiker-task climbing platforms */
+  if(PH==='hw'&&taskPlats.length){
+    for(var tp2=0;tp2<taskPlats.length;tp2++){
+      var pp=taskPlats[tp2];
+      if(pp.orb) continue;
+      if(Math.abs(P.pos.x-pp.x)<1.5&&Math.abs(P.pos.z-pp.z)<1.5&&P.pos.y>pp.y-0.5) return pp.y;
+    }
   }
   /* the house roof is walkable */
   if(houseBuilt&&(PH==='home'||PH==='jungle'||PH==='path')
@@ -4029,6 +4037,9 @@ var HW={x:-300,z:430,r:74};
 var hwGroup=null,hwHikers=[],hwGod=null,hwState='none',hwUnlocked=false,godWon=false;
 var xp=0,XP_LVLS=[0,300,900,1800,3600],lvl=0,waveCd=0,studBux=0,battleLeft=0;
 var LVL_NAMES=['BASIC HIKER','TRAIL HIKER','RIDGE HIKER','SUMMIT HIKER','HIKER PRE-GOD'];
+/* tiers are EARNED: cumulative hiker-tasks required to reach each level */
+var TASK_NEED=[0,2,5,9,14];
+var tasksDone=0,task=null,taskItems=[],taskFlag=null,taskPlats=[],taskCd=0,taskBlockMsgCd=0;
 function woodHud(){ var e=$('wood');
   e.style.display=(isHiker&&!hwUnlocked)?'block':'none';
   e.textContent='🪓 Wood: '+wood+' / '+WOOD_NEED; }
@@ -4041,7 +4052,164 @@ function xpHud(){
   var lo=XP_LVLS[lvl]||0, hi=XP_LVLS[lvl+1]||XP_LVLS[XP_LVLS.length-1];
   var f=lvl>=XP_LVLS.length-1?1:clamp((xp-lo)/(hi-lo),0,1);
   w.firstElementChild.firstElementChild.style.width=(f*100)+'%';
-  w.lastElementChild.textContent=LVL_NAMES[lvl]+(lvl>=XP_LVLS.length-1?' — approach the GOD!':' · '+Math.floor(xp)+' / '+hi+' XP');
+  w.lastElementChild.textContent=LVL_NAMES[lvl]+(lvl>=XP_LVLS.length-1?' — approach the GOD!':
+    ' · '+Math.floor(xp)+'/'+hi+' XP · 📜 '+tasksDone+'/'+TASK_NEED[lvl+1]+' tasks');
+}
+/* ---- HIKER TASKS: hard jobs from marked hikers; tiers require them ---- */
+function markTaskGivers(){
+  var marked=0;
+  hwHikers.forEach(function(h){ if(h.mark){ marked++; } });
+  for(var i=0;i<hwHikers.length&&marked<6;i++){
+    var h=hwHikers[i];
+    if(h.dead||h.mark) continue;
+    h.giver=true; marked++;
+    var mk=new THREE.Mesh(boxGeo(0.22,0.5,0.22),new THREE.MeshBasicMaterial({color:0xffd83d}));
+    mk.position.y=2.6;
+    h.ref.group.add(mk);
+    var dot=new THREE.Mesh(boxGeo(0.2,0.16,0.2),new THREE.MeshBasicMaterial({color:0xffd83d}));
+    dot.position.y=2.2;
+    h.ref.group.add(dot);
+    h.mark=mk;
+  }
+}
+function spawnCollectibles(n,color,label){
+  for(var i=0;i<n;i++){
+    var g=new THREE.Group();
+    var c=box(0.45,0.45,0.45,color); c.position.y=0.8; g.add(c);
+    var glow=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.5,8,8,1,true),
+      new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:0.25,
+        depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    glow.position.y=4; g.add(glow);
+    var a=rand(0,6.28), rr=rand(8,HW.r-6);
+    g.position.set(HW.x+Math.cos(a)*rr,0,HW.z+Math.sin(a)*rr);
+    world.add(g);
+    taskItems.push(g);
+  }
+}
+function clearTaskProps(){
+  taskItems.forEach(function(o){ world.remove(o); }); taskItems.length=0;
+  if(taskFlag){ world.remove(taskFlag); taskFlag=null; }
+  taskPlats.forEach(function(p){ world.remove(p.mesh); }); taskPlats.length=0;
+  hwHikers.forEach(function(h){ if(h.flee){ h.flee=false;
+    if(h.fleeMark){ h.ref.group.remove(h.fleeMark); h.fleeMark=null; } } });
+}
+function startTask(giver){
+  var types=['berries','firewood','race','runaway','plats'];
+  var t=types[(Math.random()*types.length)|0];
+  var L=lvl;
+  task={type:t,giver:giver,have:0,need:0,timeLeft:0,desc:''};
+  if(t==='berries'){
+    task.need=8+L*3; task.timeLeft=70-L*9;
+    spawnCollectibles(task.need,0xff4d6d);
+    task.desc='Pick '+task.need+' glowing BERRIES';
+  } else if(t==='firewood'){
+    task.need=7+L*3; task.timeLeft=64-L*8;
+    spawnCollectibles(task.need,0x8a5a2a);
+    task.desc='Gather '+task.need+' FIREWOOD bundles';
+  } else if(t==='race'){
+    task.need=1; task.timeLeft=26-L*3;
+    var a=rand(0,6.28);
+    taskFlag=new THREE.Group();
+    var pole=box(0.2,4,0.2,0xf4f4f4); pole.position.y=2; taskFlag.add(pole);
+    var fl=box(1.6,1,0.1,0xc62b21); fl.position.set(0.9,3.4,0); taskFlag.add(fl);
+    var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.3,1.4,30,10,1,true),
+      new THREE.MeshBasicMaterial({color:0xff4d6d,transparent:true,opacity:0.18,
+        depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    beam.position.y=15; taskFlag.add(beam);
+    taskFlag.position.set(HW.x+Math.cos(a)*(HW.r-6),0,HW.z+Math.sin(a)*(HW.r-6));
+    world.add(taskFlag);
+    task.desc='RACE to the red flag';
+  } else if(t==='runaway'){
+    task.need=1; task.timeLeft=40-L*5;
+    var cand=hwHikers.filter(function(h){ return !h.dead&&!h.giver; });
+    var run=cand[(Math.random()*cand.length)|0];
+    run.flee=true;
+    run.fleeMark=new THREE.Mesh(boxGeo(0.24,0.6,0.24),new THREE.MeshBasicMaterial({color:0xff2211}));
+    run.fleeMark.position.y=2.6;
+    run.ref.group.add(run.fleeMark);
+    task.runner=run;
+    task.desc='CATCH the runaway hiker (red mark)';
+  } else {
+    task.need=1; task.timeLeft=50-L*6;
+    var bx=giver.ref.group.position.x, bz=giver.ref.group.position.z;
+    for(var p2=0;p2<6;p2++){
+      var pm=studdedBox(2.6,0.4,2.6,0x7d8791,0x6d7680);
+      pm.position.set(bx+Math.cos(p2*1.9)*3.2,1.8+p2*1.9,bz+Math.sin(p2*1.9)*3.2);
+      world.add(pm);
+      taskPlats.push({mesh:pm,x:pm.position.x,z:pm.position.z,y:pm.position.y+0.2});
+    }
+    var orb=new THREE.Mesh(boxGeo(0.8,0.8,0.8),new THREE.MeshBasicMaterial({color:0x7dffd8}));
+    orb.position.set(bx+Math.cos(6*1.9)*3.2,1.8+6*1.9,bz+Math.sin(6*1.9)*3.2);
+    world.add(orb);
+    taskPlats.push({mesh:orb,x:orb.position.x,z:orb.position.z,y:orb.position.y,orb:true});
+    task.desc='CLIMB the floating platforms to the glowing orb';
+  }
+  sndUi(); sndChime();
+  msg('📜 HIKER TASK ('+LVL_NAMES[lvl]+' tier):<br><b>'+task.desc+'</b><br><span style="font-size:55%">'+Math.round(task.timeLeft)+' seconds. GO!</span>',4200);
+  obj('📜 '+task.desc+' — '+task.need+' needed');
+}
+function failTask(silent){
+  if(!task) return;
+  clearTaskProps();
+  task=null; taskCd=3;
+  $('timer').style.display='none';
+  if(!silent){
+    knock(220,0.6,0.2,0); doFlash('#553333');
+    msg('⏰ TASK FAILED.<br><span style="font-size:55%">Find a hiker with a yellow ❕ to try again.</span>',3200);
+    obj('🏕️ Task failed — find another ❕ hiker.');
+  }
+}
+function completeTask(){
+  clearTaskProps();
+  task=null; taskCd=2;
+  tasksDone++; xp+=150; save();
+  $('timer').style.display='none';
+  sndFanfare(); doFlash('#8bc34a');
+  var needNext=TASK_NEED[Math.min(lvl+1,TASK_NEED.length-1)];
+  msg('✅ TASK COMPLETE! (+150 XP)<br><span style="font-size:55%">📜 '+tasksDone+' / '+needNext+' tasks toward the next tier.</span>',3800);
+  obj('🏕️ '+(tasksDone>=needNext?'Tier tasks DONE — keep earning XP!':'Find more ❕ hikers: '+tasksDone+'/'+needNext+' tasks.'));
+  xpHud();
+}
+function updateTask(dt){
+  if(taskCd>0) taskCd-=dt;
+  if(!task) return;
+  task.timeLeft-=dt;
+  var tEl=$('timer');
+  tEl.style.display='block';
+  tEl.textContent='📜 '+Math.max(0,task.timeLeft|0)+'s · '+task.have+'/'+task.need;
+  tEl.style.color=task.timeLeft<10?'#ff5340':'#ffd83d';
+  if(task.timeLeft<=0){ failTask(); return; }
+  if(task.type==='berries'||task.type==='firewood'){
+    for(var i=taskItems.length-1;i>=0;i--){
+      var it=taskItems[i];
+      it.rotation.y+=dt*2;
+      if(Math.hypot(P.pos.x-it.position.x,P.pos.z-it.position.z)<1.7){
+        world.remove(it); taskItems.splice(i,1);
+        task.have++; sndPickup();
+        burst(it.position.clone().setY(1),0x8bc34a,6,{speed:3,life:0.5});
+        if(task.have>=task.need){ completeTask(); return; }
+      }
+    }
+  } else if(task.type==='race'){
+    if(taskFlag&&Math.hypot(P.pos.x-taskFlag.position.x,P.pos.z-taskFlag.position.z)<2.6){
+      task.have=1; completeTask(); return;
+    }
+  } else if(task.type==='runaway'){
+    var run=task.runner;
+    if(!run||run.dead){ failTask(); return; }
+    if(run.ref.group.position.distanceTo(P.pos)<1.7){
+      task.have=1;
+      run.ref.armR.rotation.z=-2.6;
+      (function(hh){ tween(0.6,function(k){ hh.ref.armR.rotation.z=-2.6+2.6*k; }); })(run);
+      completeTask(); return;
+    }
+  } else if(task.type==='plats'){
+    var orb2=taskPlats[taskPlats.length-1];
+    if(orb2&&orb2.mesh.position.distanceTo(P.pos.clone().setY(orb2.y))<2.2
+       &&Math.abs(P.pos.y-orb2.y)<2.4){
+      task.have=1; completeTask(); return;
+    }
+  }
 }
 
 /* ---- the 500-piece jungle build ---- */
@@ -4443,14 +4611,15 @@ function enterHW(){
   if(!hwHikers.length){ spawnHwHikers(110); spawnHwGod(); }
   PH='hw';
   setMood('day');
+  markTaskGivers();
   P.pos.set(HW.x,0,HW.z+HW.r-8); P.vy=0;
   if(player) player.group.position.copy(P.pos);
   camYaw=Math.PI; P.yaw=Math.PI;
   windLoop.set(0.2);
   sndPortal(); sndWhoosh(false);
   woodHud(); xpHud(); save();
-  obj('🏕️ HIKER WORLD — they think you\'re one of them. Hang out near hikers to gain XP. DON\'T attack…');
-  hint('Wave: G / WAVE button (+5 XP) · XP flows when you\'re near 3+ hikers · reach HIKER PRE-GOD ('+XP_LVLS[4]+' XP) and the god may crown you');
+  obj('🏕️ HIKER WORLD — hang out for XP, and do TASKS for hikers with a yellow ❕ to earn tiers. DON\'T attack…');
+  hint('Wave: G / WAVE (+5 XP) · tiers need XP AND completed ❕ tasks ('+TASK_NEED[4]+' total for PRE-GOD) · tasks are timed and HARD');
   msg('🏕️ HIKER WORLD<br><span style="font-size:55%">Hundreds of hikers… and the HIKER GOD on the mound. Blend in.</span>',4600);
   updateMobileUI();
 }
@@ -4493,6 +4662,7 @@ function hurtHwGod(dmg,fromTorn){
 }
 function turnHostile(why){
   if(hwState!=='peace') return;
+  failTask(true);
   hwState='hostile';
   battleMusic(true); setMood('boss');
   xpHud();
@@ -4501,12 +4671,13 @@ function turnHostile(why){
 }
 function resetHWPeace(){
   hwState='peace';
+  failTask(true);
   battleMusic(false); setMood('day');
   hwHikers.forEach(function(h){ if(h.ref.group.parent) world.remove(h.ref.group); });
   hwHikers.length=0;
   if(hwGod&&hwGod.ref.group.parent) world.remove(hwGod.ref.group);
   hwGod=null;
-  spawnHwHikers(110); spawnHwGod();
+  spawnHwHikers(110); spawnHwGod(); markTaskGivers();
   isGod=false;
   if(player&&player.group.scale.x>1.5){ spawnPlayer('hiker'); P.maxHp=100; }
   P.pos.set(HW.x,0,HW.z+HW.r-8);
@@ -4517,6 +4688,7 @@ function resetHWPeace(){
 }
 function startCoronation(){
   if(hwState!=='peace'||lvl<XP_LVLS.length-1||isGod) return;
+  failTask(true);
   hwState='coron';
   battleMusic(false);
   sndFanfare(); doFlash('#ffe97a');
@@ -4611,8 +4783,10 @@ var hwFrame=0;
 function updateHW(dt){
   hwFrame++;
   if(waveCd>0) waveCd-=dt;
-  /* XP while peaceful and socializing */
+  /* XP while peaceful and socializing + TASKS gate the tiers */
   if(hwState==='peace'&&!isGod){
+    updateTask(dt);
+    if(taskBlockMsgCd>0) taskBlockMsgCd-=dt;
     var near=0;
     for(var i=0;i<hwHikers.length;i++){
       if(!hwHikers[i].dead&&hwHikers[i].ref.group.position.distanceTo(P.pos)<9) near++;
@@ -4620,12 +4794,24 @@ function updateHW(dt){
     }
     if(near>=3) xp+=dt;
     var newLvl=0;
-    for(var l6=XP_LVLS.length-1;l6>=0;l6--){ if(xp>=XP_LVLS[l6]){ newLvl=l6; break; } }
+    for(var l6=XP_LVLS.length-1;l6>=0;l6--){
+      if(xp>=XP_LVLS[l6]&&tasksDone>=TASK_NEED[l6]){ newLvl=l6; break; }
+    }
     if(newLvl>lvl){
       lvl=newLvl; save();
       sndFanfare(); doFlash('#8bc34a');
-      msg('⬆️ LEVEL UP: <b>'+LVL_NAMES[lvl]+'</b>'+(lvl>=XP_LVLS.length-1?'<br><span style="font-size:55%">The god watches you. Approach the mound…</span>':''),3600);
+      msg('⬆️ TIER UP: <b>'+LVL_NAMES[lvl]+'</b>'+(lvl>=XP_LVLS.length-1?'<br><span style="font-size:55%">The god watches you. Approach the mound…</span>':''),3600);
+    } else if(lvl<XP_LVLS.length-1&&xp>=XP_LVLS[lvl+1]&&tasksDone<TASK_NEED[lvl+1]&&taskBlockMsgCd<=0){
+      taskBlockMsgCd=20;
+      msg('📜 The hikers demand PROOF.<br><span style="font-size:55%">Complete '+(TASK_NEED[lvl+1]-tasksDone)+' more hiker task(s) (yellow ❕) for the next tier.</span>',3600);
     }
+    /* task givers: bobbing ❕ marks + offering work */
+    hwHikers.forEach(function(h){
+      if(h.dead||!h.giver) return;
+      if(h.mark) h.mark.position.y=2.6+Math.sin(GTIME*3+h.walkT)*0.15;
+      if(!task&&taskCd<=0&&!P.dead
+         &&h.ref.group.position.distanceTo(P.pos)<2.4) startTask(h);
+    });
     xpHud();
     /* coronation trigger */
     if(lvl>=XP_LVLS.length-1&&hwGod&&!hwGod.dead
@@ -4655,7 +4841,20 @@ function updateHW(dt){
           sndPunch(true);
         }
       }
+    } else if(h.flee){
+      /* runaway task target sprints away from you every frame */
+      var fdx=g.position.x-P.pos.x, fdz=g.position.z-P.pos.z, fl9=Math.hypot(fdx,fdz)||1;
+      g.position.x=clamp(g.position.x+fdx/fl9*5.4*dt,HW.x-HW.r+3,HW.x+HW.r-3);
+      g.position.z=clamp(g.position.z+fdz/fl9*5.4*dt,HW.z-HW.r+3,HW.z+HW.r-3);
+      g.rotation.y=Math.atan2(fdx,fdz);
+      h.walkT+=dt*9;
+      h.ref.legL.rotation.x=Math.sin(h.walkT)*0.9;
+      h.ref.legR.rotation.x=-Math.sin(h.walkT)*0.9;
     } else {
+      if(h.giver){ /* task givers stand at their post so you can find them */
+        g.rotation.y=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+        return;
+      }
       /* peaceful wander; only a slice moves per frame to keep 110 cheap */
       if((idx+hwFrame)%3!==0) return;
       h.retargetT-=dt*3;
@@ -4747,9 +4946,10 @@ function applyAct3Skip(sv){
     hwUnlocked=true;
     buildHW();
     cabinPortal=makePortal(CABIN.x,CABIN.z+5);
-    xp=sv.xp||0;
-    for(var l9=XP_LVLS.length-1;l9>=0;l9--){ if(xp>=XP_LVLS[l9]){ lvl=l9; break; } }
-    spawnHwHikers(110); spawnHwGod();
+    xp=sv.xp||0; tasksDone=sv.tk||0;
+    for(var l9=XP_LVLS.length-1;l9>=0;l9--){
+      if(xp>=XP_LVLS[l9]&&tasksDone>=TASK_NEED[l9]){ lvl=l9; break; } }
+    spawnHwHikers(110); spawnHwGod(); markTaskGivers();
     hwState='peace';
   }
   if(sv.god){
@@ -4869,6 +5069,16 @@ window.__dbg={
     god:hwGod?{hp:hwGod.hp,op:hwGod.op,dead:hwGod.dead}:null,
     xp:Math.round(xp),lvl:lvl,battleLeft:battleLeft,sb:studBux,isGod:isGod}; },
   setXp:function(n){ xp=n; },
+  setTasks:function(n){ tasksDone=n; xpHud(); },
+  taskInfo:function(){ return task?{type:task.type,have:task.have,need:task.need,
+    timeLeft:Math.round(task.timeLeft),done:tasksDone}:{type:null,done:tasksDone}; },
+  startTaskNear:function(){ var g2=null,bd=1e9;
+    hwHikers.forEach(function(h){ if(!h.dead&&h.giver){
+      var d=h.ref.group.position.distanceTo(P.pos); if(d<bd){ g2=h; bd=d; } } });
+    if(g2){ __dbg.tp(g2.ref.group.position.x+1,g2.ref.group.position.z); } },
+  winTask:function(){ if(task){ task.have=task.need; completeTask(); } },
+  failTask:function(){ failTask(); },
+  givers:function(){ return hwHikers.filter(function(h){ return !h.dead&&h.giver; }).length; },
   wave:doWave,
   killHwHiker:function(){ for(var i=0;i<hwHikers.length;i++)
     if(!hwHikers[i].dead){ hurtHwHiker(hwHikers[i],9999,false); return; } },
