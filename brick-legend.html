@@ -3443,16 +3443,21 @@ function buildCity(){
   }
   var roadNS=box(9,0.12,100,0x3b3f45); at(roadNS,0,0.06,0);
   var roadEW=box(100,0.12,9,0x3b3f45); at(roadEW,0,0.06,0);
+  markChunk('The crossing roads',0.2);
   for(var i=0;i<10;i++){
     if(Math.abs(i*9-40)>6){ at(box(0.35,0.14,2.6,0xfff4c9),0,0.13,-40+i*9); at(box(2.6,0.14,0.35,0xfff4c9),-40+i*9,0.13,0); }
   }
   for(var cw=0;cw<5;cw++){ at(box(0.9,0.14,6.5,0xffffff),-2.2+cw*1.1,0.135,7.6);
     at(box(6.5,0.14,0.9,0xffffff),7.6,0.135,-2.2+cw*1.1); }
-  markChunk('Roads & crosswalks',0.2);
-  [[-27,-27],[27,-27],[-27,27],[27,27]].forEach(function(q){
+  markChunk('Lane markings & crosswalks',0.2);
+  [[-27,-27],[27,-27]].forEach(function(q){
     var sw=studdedBox(44,0.22,44,0x9aa5ad,0x8b969e); sw.position.set(CX+q[0],0.11,CZ+q[1]); cityGroup.add(sw);
   });
-  markChunk('Sidewalks',0.8);
+  markChunk('Sidewalks — north side',0.4);
+  [[-27,27],[27,27]].forEach(function(q){
+    var sw=studdedBox(44,0.22,44,0x9aa5ad,0x8b969e); sw.position.set(CX+q[0],0.11,CZ+q[1]); cityGroup.add(sw);
+  });
+  markChunk('Sidewalks — south side',1.2);
   /* buildings: two per quadrant, windowed and roofed */
   var BLD=[
     {x:-24,z:-24,w:14,d:12,h:14,c:0xc62b21,shop:'BRICK\nBURGERS'},
@@ -3473,6 +3478,7 @@ function buildCity(){
     door.position.set(CX+b.x,1.3,CZ+faceZ+dir*0.15); cityGroup.add(door);
     var knob=box(0.14,0.14,0.14,0xffd83d);
     knob.position.set(CX+b.x+0.6,1.2,CZ+faceZ+dir*0.32); cityGroup.add(knob);
+    markChunk((b.shop?b.shop.replace('\n',' '):'Apartment block')+' — walls & door',Math.atan2(b.x,b.z));
     var floors=Math.min(4,((b.h-3)/2.6)|0), cols=Math.min(4,(b.w/3)|0);
     for(var f=0;f<floors;f++) for(var c2=0;c2<cols;c2++){
       var wx=b.x-((cols-1)/2)*2.6+c2*2.6, wy=3.4+f*2.6;
@@ -3501,7 +3507,7 @@ function buildCity(){
       if(dir<0) sign.rotation.y=Math.PI;
       cityGroup.add(sign);
     }
-    markChunk(b.shop?b.shop.replace('\n',' '):'Apartment block',Math.atan2(b.x,b.z));
+    markChunk((b.shop?b.shop.replace('\n',' '):'Apartment block')+' — windows & roof',Math.atan2(b.x,b.z));
   });
   /* street props */
   for(var sl=0;sl<6;sl++){
@@ -3511,6 +3517,7 @@ function buildCity(){
     var lamp=new THREE.Mesh(boxGeo(0.5,0.3,0.5),new THREE.MeshBasicMaterial({color:0xfff0b8}));
     lamp.position.set(CX+lx+(sl%2?-1.5:1.5),4.8,CZ+lz); cityGroup.add(lamp);
   }
+  markChunk('Streetlights',-0.5);
   [[6.4,6.4],[-6.4,-6.4]].forEach(function(tl){
     var p=box(0.24,3.6,0.24,0x2f3540); p.position.set(CX+tl[0],1.8,CZ+tl[1]); cityGroup.add(p);
     var hd=box(0.7,1.8,0.5,0x1c2026); hd.position.set(CX+tl[0],4.2,CZ+tl[1]); cityGroup.add(hd);
@@ -3519,12 +3526,13 @@ function buildCity(){
       l2.position.set(CX+tl[0],li[1],CZ+tl[1]+0.3); cityGroup.add(l2);
     });
   });
-  markChunk('Streetlights & signals',-0.5);
+  markChunk('Traffic lights',-0.3);
   [[-9,-14],[9,16]].forEach(function(hp){
     var hy=box(0.5,0.8,0.5,0xc62b21); hy.position.set(CX+hp[0],0.6,CZ+hp[1]); cityGroup.add(hy);
     var hc=box(0.7,0.24,0.7,0xc62b21); hc.position.set(CX+hp[0],1.1,CZ+hp[1]); cityGroup.add(hc);
     var hn=box(0.24,0.24,0.7,0xffd83d); hn.position.set(CX+hp[0],0.7,CZ+hp[1]); cityGroup.add(hn);
   });
+  markChunk('Fire hydrants',2.8);
   for(var bn=0;bn<4;bn++){
     var bx2=(bn%2?12:-12), bz2=(bn<2?-9:9);
     var seat=studdedBox(2.6,0.2,0.8,0x8a5a2a,0x6f4820); seat.position.set(CX+bx2,0.6,CZ+bz2); cityGroup.add(seat);
@@ -3532,20 +3540,22 @@ function buildCity(){
     [[-1,0],[1,0]].forEach(function(lg2){ var leg=box(0.2,0.6,0.7,0x2f3540);
       leg.position.set(CX+bx2+lg2[0],0.3,CZ+bz2); cityGroup.add(leg); });
   }
+  markChunk('Park benches',2.4);
   [[14,-9],[-14,10],[10,12]].forEach(function(tc){
     var can=box(0.7,1,0.7,0x4a4f57); can.position.set(CX+tc[0],0.7,CZ+tc[1]); cityGroup.add(can);
     var lid=studdedBox(0.85,0.16,0.85,0x3a3f45,0x30343a); lid.position.set(CX+tc[0],1.28,CZ+tc[1]); cityGroup.add(lid);
   });
   var mb=box(0.8,1.1,0.6,0x2a6fd6); mb.position.set(CX-12,0.85,CZ+13); cityGroup.add(mb);
   var mbTop=box(0.8,0.4,0.6,0x2258aa); mbTop.position.set(CX-12,1.55,CZ+13); cityGroup.add(mbTop);
-  markChunk('Hydrants, benches & mail',2.6);
+  markChunk('Trash cans & the mailbox',2.6);
   for(var tr2=0;tr2<8;tr2++){
+    if(tr2===4) markChunk('City trees — first four',-2.0);
     var t3=makeTree(tr2%3===2?2:0);
     var tx2=(tr2%2?1:-1)*rand(12,40), tz2=(tr2<4?1:-1)*rand(12,40);
     if(Math.abs(tx2)<8||Math.abs(tz2)<8) tz2+=12;
     t3.position.set(CX+tx2,0,CZ+tz2); cityGroup.add(t3);
   }
-  markChunk('City trees',-2.2);
+  markChunk('City trees — the rest',-2.4);
   /* fountain plaza */
   var basin=studdedBox(5,0.8,5,0x9aa5ad,0x8b969e); basin.position.set(CX+18,0.4,CZ-16); cityGroup.add(basin);
   var wat=new THREE.Mesh(new THREE.CircleGeometry(2,16),
@@ -3574,8 +3584,9 @@ function buildCity(){
     car.position.set(CX+px2,0,CZ+pz2);
     cityGroup.add(car);
     collide(px2,pz2,1.2,2);
+    markChunk(['A red car','A yellow car','A blue car','A green car','A white car'][cr],
+      Math.atan2(px2,pz2));
   }
-  markChunk('Parked brick cars',1.1);
   /* billboard */
   var bp1=box(0.4,7,0.4,0x2f3540); bp1.position.set(CX-3,3.5,CZ-42); cityGroup.add(bp1);
   var bp2=box(0.4,7,0.4,0x2f3540); bp2.position.set(CX+3,3.5,CZ-42); cityGroup.add(bp2);
@@ -3595,9 +3606,6 @@ function buildCity(){
     sign.position.set(CX+x,3.4,CZ+z-1.9); cityGroup.add(sign);
     cityPads.push({x:CX+x,z:CZ+z,mode:mode,pad:pad});
   }
-  cityPad('START\nSTORY',0x35e0ff,-16,-13,'story');
-  var sv0=loadSave();
-  if(sv0&&sv0.gun) cityPad(sv0.rich?'CONTINUE\nTYCOON':'SKIP TO\nJUNGLE',0xffd83d,16,-13,'skip');
   /* construction props by the story pad */
   for(var cn=0;cn<4;cn++){
     var cone=box(0.4,0.8,0.4,0xff8a00); cone.position.set(CX-20+cn*1.6,0.5,CZ-9.5); cityGroup.add(cone);
@@ -3608,7 +3616,11 @@ function buildCity(){
   var craneArm=box(7,0.4,0.5,0xffb300); craneArm.position.set(CX-18,8,CZ-17); cityGroup.add(craneArm);
   var hook=box(0.16,2.4,0.16,0x333333); hook.position.set(CX-15,6.6,CZ-17); cityGroup.add(hook);
   var crate2=studdedBox(1.4,1.4,1.4,0xc62b21,0xa02318); crate2.position.set(CX-15,4.9,CZ-17); cityGroup.add(crate2);
-  markChunk('Construction site + the START pads!',-2.3);
+  markChunk('Construction site & crane',-2.3);
+  cityPad('START\nSTORY',0x35e0ff,-16,-13,'story');
+  var sv0=loadSave();
+  if(sv0&&sv0.gun) cityPad(sv0.rich?'CONTINUE\nTYCOON':'SKIP TO\nJUNGLE',0xffd83d,16,-13,'skip');
+  markChunk('The glowing START pads!',-2.0);
   /* count every mesh so we can brag about it */
   cityPartCount=0;
   cityGroup.traverse(function(m){ if(m.isMesh) cityPartCount++; });
