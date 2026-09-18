@@ -1173,6 +1173,7 @@ function progScore(s){
   return (s.gun?1:0)+(s.torn?1:0)+(s.rich?2:0)+(s.city?1:0)+(s.jg?4:0)+(s.hw?8:0)
     +(s.god?16:0)+(s.oc?32:0)+(s.spat?64:0)+(s.cw?128:0)+(s.fr?256:0)
     +(s.sz?512:0)+(s.win?1024:0)+(s.sx?2048:0)+(s.rpg||0)*300
+    +(s.by1?4096:0)+(s.by2?8192:0)+(s.ult?16384:0)
     +(s.cl||0)*0.5+(s.fl||0)*0.5+(s.tk||0)*0.1+Math.min(s.xp||0,4000)*0.001;
 }
 function save(){
@@ -1181,7 +1182,8 @@ function save(){
      jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone,
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
-     sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,v:2};
+     sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,
+     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,v:2};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1247,7 +1249,7 @@ function spawnPlayer(kind){
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
-    ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'
+    ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'
     ||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5')?'none':'block';
   var inBoss=PH==='boss';
   $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
@@ -1314,6 +1316,7 @@ addEventListener('pointerup',function(e){
   if(PH==='ocbuild'){ tryPlaceOc(e); return; }
   if(PH==='catbuild'){ tryPlaceCb(e); return; }
   if(PH==='szbuild'){ if(sxActive()) tryPlaceSx(e); else tryPlaceSz(e); return; }
+  if(PH==='bybuild'){ tryPlaceBy(e); return; }
   if(PH==='cut4'){ if(cutSkipOk) cut4T=99; return; }
   if(PH==='cut5'){ if(cutSkipOk) cut5T=99; return; }
   if(PH==='castle'){
@@ -1329,7 +1332,7 @@ addEventListener('pointerup',function(e){
   if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
   if(PH==='metro'){ if(tryChop(e)) return; if(gunEquipped) shoot(); else tryPunch(); return; }
   if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
-     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'||PH==='rpg'){
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'||PH==='rpg'||PH==='by'){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -1495,6 +1498,13 @@ function combatTargets(){
     if(rpgBoss&&!rpgBoss.dead)
       list.push({pos:rpgBoss.mesh.position,y:rpgBoss.kind==='dragon'?6:2,big:true,
         hurt:function(dm){ hurtRpgBoss(dm,false); }});
+  }
+  if(PH==='by'&&ultState==='fight'){
+    ultMinions.forEach(function(m2){ if(!m2.dead)
+      list.push({pos:m2.mesh.position,y:1,hurt:function(dm,t){ hurtUltMinion(m2,dm,t); }}); });
+    if(ultBoss)
+      list.push({pos:ultBoss.mesh.position,y:4,big:true,
+        hurt:function(dm){ hurtUltBoss(dm,false); }});
   }
   return list;
 }
@@ -2226,6 +2236,11 @@ function hurtPlayer(dmg,why){
   burst(P.pos.clone().setY(1.2),0xff5340,6,{speed:3,life:0.5});
   if(P.hp<=0){
     if(PH==='boss') killPlayer('SMASHED!',why+' Bosses reset when you fall — go again?');
+    else if(PH==='by'&&ultState==='fight'){
+      killPlayer('ERASED!','ULTIMATE CASOH and his everything were too much. Again?',function(){
+        startUltBattle();
+      });
+    }
     else if(PH==='rpg'){
       killPlayer('FELLED!','The RPG shows no mercy. Your quest progress is safe — try again from town.',function(){
         if(rpgBoss&&!rpgBoss.dead){ world.remove(rpgBoss.mesh); rpgBoss=null;
@@ -2362,7 +2377,7 @@ function collideHouseWalls(){
 function playerControlAllowed(){
   return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'&&PH!=='cut4'&&PH!=='cut5'
     &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild'
-    &&PH!=='catbuild'&&PH!=='szbuild';
+    &&PH!=='catbuild'&&PH!=='szbuild'&&PH!=='bybuild';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
@@ -2443,6 +2458,9 @@ function updatePlayer(dt){
   } else if(PH==='sz'||PH==='rpg'){
     P.pos.x=clamp(P.pos.x,SP.x-SP.r+1,SP.x+SP.r-1);
     P.pos.z=clamp(P.pos.z,SP.z-SP.r+1,SP.z+SP.r-1);
+  } else if(PH==='by'){
+    P.pos.x=clamp(P.pos.x,BY.x-BY.r+1,BY.x+BY.r-1);
+    P.pos.z=clamp(P.pos.z,BY.z-BY.r+1,BY.z+BY.r-1);
   } else if(PH==='city'||PH==='metro'){
     if(PH==='city'){
       P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
@@ -2520,7 +2538,7 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20*buildZoom,11*buildZoom*buildTilt,Math.cos(camOrbit.a)*20*buildZoom);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'){
+  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'){
     camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
     camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
     var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
@@ -2566,7 +2584,7 @@ function updateAmbient(dt){
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'){
+  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2600,6 +2618,7 @@ function animate(){
     updateAct5(dt);
     updateAct6(dt);
     updateAct7(dt);
+    updateAct8(dt);
     /* autosave every 20s — the regression guard makes this always safe */
     autosaveT+=dt;
     if(autosaveT>=20){ autosaveT=0; if(PH!=='menu') save(); }
@@ -2644,7 +2663,14 @@ function startSkip(sv){
     applyAct5Skip(sv);
     applyAct6Skip(sv);
     applyAct7Skip(sv);
-    if(sv.sz){
+    applyAct8Skip(sv);
+    if(sv.by1||sv.by2){
+      var kk3=curForm==='worker'?false:curForm==='biz'?true:curForm;
+      spawnPlayer(kk3);
+      sbuxHud(); catHud();
+      enterBY();
+      if(sv.ult){ obj('👑 THE ABSOLUTE CHAMPION. Every act, every world, every casoh.'); }
+    } else if(sv.sz){
       ensureCityExtraPads();
       var kk2=curForm==='worker'?false:curForm==='biz'?true:curForm;
       spawnPlayer(kk2);
@@ -6769,7 +6795,7 @@ function catNadeBoom(pos){
 var autoBuild=false,autoT=0;
 function inBuildPhase(){
   return PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'
-    ||PH==='szbuild'||PH==='build'||PH==='buildwalk'||furnMode;
+    ||PH==='szbuild'||PH==='bybuild'||PH==='build'||PH==='buildwalk'||furnMode;
 }
 function autoPlaceOne(){
   if(PH==='citybuild') placeCityChunk();
@@ -6777,6 +6803,7 @@ function autoPlaceOne(){
   else if(PH==='ocbuild') placeOcChunk();
   else if(PH==='catbuild') placeCbChunk();
   else if(PH==='szbuild'){ if(sxActive()) placeSxChunk(); else placeSzChunk(); }
+  else if(PH==='bybuild') placeByChunk();
   else placeStep();
 }
 function setAutoBuild(on){
@@ -7586,6 +7613,7 @@ function genSpaceX(){
 /* v2: 4,200 CLICKS — each piece is its own click; way more detail */
 var _bmats={};
 function bmat(c){ if(!_bmats[c]) _bmats[c]=new THREE.MeshBasicMaterial({color:c}); return _bmats[c]; }
+function bx(w,h,dd,c){ return new THREE.Mesh(boxGeo(w,h,dd),bmat(c)); } /* glowing box, cached material */
 function genSpaceX2(){
   var defs=[];
   function d(label,parts,key,make){ defs.push({label:label,parts:parts,key:key,make:make}); }
@@ -8415,6 +8443,752 @@ function applyAct7Skip(sv){
   }
 }
 
+/* ================================================================
+   ACT 8 — THE BEYOND
+   Through the gate past the RPG: build 10 themed zones (4,000
+   clicks), then the ULTIMATE ARENA (12,000 clicks) — statues of
+   everything ever, 200 casohs, hundreds of weird things — then the
+   ULTIMATE BATTLE against ULTIMATE CASOH and his minions of every
+   act. Filler clicks extend giant star-clouds (drawRange), so 16,000
+   clicks stay fast.
+   ================================================================ */
+var BY={x:-300,z:-1150,r:148};
+var byGroup=null,byChunks=[],byIdx=0,byStage=0,byDone1=false,byDone2=false;
+var byParts=0,byPartsTotal=0,byGate=null,byBtn1=null,byBtn2=null,byBtn3=null,byGhostMk=null;
+var ultBoss=null,ultMinions=[],ultState='none',ultWon=false,byCd=0;
+function makeBigButton(label,color){
+  var g=new THREE.Group();
+  var base=studdedBox(2.6,0.5,2.6,0x4a4f57,0x3a3f45); base.position.y=0.25; g.add(base);
+  var rim=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.2,0.3,16),mat(0x9aa5ad));
+  rim.position.y=0.65; g.add(rim);
+  var dome=new THREE.Mesh(new THREE.SphereGeometry(0.9,16,10,0,6.29,0,1.5),bmat(color));
+  dome.position.y=0.7; g.add(dome);
+  g.userData.dome=dome;
+  var post=box(0.16,3,0.16,0x2f3540); post.position.set(0,1.5,-1.6); g.add(post);
+  var s=neon(label,4.6,2.1,color);
+  s.position.set(0,3.6,-1.6); g.add(s);
+  return g;
+}
+function pressButton(btn){
+  if(btn&&btn.userData.dome){
+    btn.userData.dome.scale.y=0.4;
+    (function(dm){ tween(0.3,function(k){ dm.scale.y=0.4+0.6*k; }); })(btn.userData.dome);
+    knock(500,0.6,0.08,0); sndUi();
+  }
+}
+/* one giant Points cloud whose drawRange grows click by click */
+function addCloudChunks(defs,nSeg,cx,cz,rr,yLo,yHi,label,key){
+  var max=nSeg*30, pos=new Float32Array(max*3), col=new Float32Array(max*3), cents=[];
+  for(var s2=0;s2<nSeg;s2++){
+    var a=rand(0,6.28), r2=rand(4,rr);
+    var scx=cx+Math.cos(a)*r2, scz=cz+Math.sin(a)*r2, scy=rand(yLo,yHi);
+    cents.push({x:scx,y:scy,z:scz});
+    for(var i=0;i<30;i++){
+      var k=(s2*30+i)*3;
+      pos[k]=scx+rand(-4,4); pos[k+1]=scy+rand(-2,2); pos[k+2]=scz+rand(-4,4);
+      var c=new THREE.Color().setHSL(rand(0,1),0.5,rand(0.7,1));
+      col[k]=c.r; col[k+1]=c.g; col[k+2]=c.b;
+    }
+  }
+  var geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  geo.setDrawRange(0,0);
+  var cloud=new THREE.Points(geo,new THREE.PointsMaterial({size:0.6,vertexColors:true}));
+  byGroup.add(cloud);
+  for(var s3=0;s3<nSeg;s3++)
+    defs.push({label:label,parts:30,key:key+0.5,cloud:cloud,seg:s3,cent:cents[s3]});
+}
+var BYZONES=[
+  {n:'CANDY LAND',g:0xffd0e0,piece:function(i,zx,zz){
+    var v=i%6;
+    if(v===0){ var g=new THREE.Group(); var st=box(0.3,rand(2,4),0.3,0xf4f4f4);
+      st.position.y=st.geometry.parameters.height/2; g.add(st);
+      var pop=new THREE.Mesh(new THREE.SphereGeometry(rand(0.8,1.4),12,8),bmat(RAINBOW[i%7]));
+      pop.position.y=st.geometry.parameters.height+0.8; g.add(pop);
+      g.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return g; }
+    if(v===1){ var cane=new THREE.Group();
+      for(var c2=0;c2<4;c2++){ var seg=box(0.5,1,0.5,c2%2?0xc62b21:0xf4f4f4);
+        seg.position.y=0.5+c2; cane.add(seg); }
+      var hook=box(0.5,0.5,1.2,0xc62b21); hook.position.set(0.35,4.2,0); cane.add(hook);
+      cane.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return cane; }
+    if(v===2){ var gd2=new THREE.Mesh(new THREE.SphereGeometry(rand(0.5,1),10,8),bmat(RAINBOW[(i*3)%7]));
+      gd2.position.set(zx+rand(-16,16),0.6,zz+rand(-16,16)); gd2.scale.y=0.7; return gd2; }
+    if(v===3){ var bar=studdedBox(1.6,0.5,0.9,0x6f4820,0x8a5a2a);
+      bar.position.set(zx+rand(-16,16),0.25,zz+rand(-16,16)); bar.rotation.y=rand(0,3); return bar; }
+    if(v===4){ var mint=new THREE.Mesh(new THREE.TorusGeometry(0.8,0.3,8,18),bmat(0xff8ac2));
+      mint.position.set(zx+rand(-16,16),0.9,zz+rand(-16,16)); mint.rotation.x=rand(0,1.5); return mint; }
+    var cc=box(0.8,0.8,0.8,0xffe97a); cc.position.set(zx+rand(-16,16),0.4,zz+rand(-16,16)); return cc; }},
+  {n:'LAVA FIELDS',g:0x3a1206,piece:function(i,zx,zz){
+    var v=i%5;
+    if(v===0){ var vol=new THREE.Group();
+      for(var l2=0;l2<3;l2++){ var ring=studdedBox(3-l2,1,3-l2,0x4a2a1a,0x3a1e12);
+        ring.position.y=0.5+l2; vol.add(ring); }
+      var lava=bx(1,0.4,1,0xff5340); lava.position.y=3.2; vol.add(lava);
+      vol.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return vol; }
+    if(v===1){ var pool=new THREE.Mesh(new THREE.CircleGeometry(rand(1.5,3),14),bmat(0xff8a00));
+      pool.rotation.x=-Math.PI/2; pool.position.set(zx+rand(-16,16),0.08,zz+rand(-16,16)); return pool; }
+    if(v===2){ var ob=box(rand(0.4,0.8),rand(2,4.5),rand(0.4,0.8),0x1a1420);
+      ob.position.set(zx+rand(-16,16),1.5,zz+rand(-16,16)); ob.rotation.z=rand(-0.3,0.3); return ob; }
+    if(v===3){ var ember=bx(0.4,0.4,0.4,0xffb84d);
+      ember.position.set(zx+rand(-16,16),rand(1,5),zz+rand(-16,16)); return ember; }
+    var rock=studdedBox(rand(1,2),rand(0.6,1.2),rand(1,2),0x3a1e12,0x2a160e);
+    rock.position.set(zx+rand(-16,16),0.4,zz+rand(-16,16)); return rock; }},
+  {n:'FROZEN WASTES',g:0xd8f6ff,piece:function(i,zx,zz){
+    var v=i%5;
+    if(v===0){ var berg=box(rand(1.5,3),rand(2,5),rand(1.5,3),0x9ae8f5);
+      berg.position.set(zx+rand(-16,16),1.5,zz+rand(-16,16)); berg.rotation.y=rand(0,1); return berg; }
+    if(v===1){ var ig=new THREE.Group();
+      var dome2=new THREE.Mesh(new THREE.SphereGeometry(1.4,12,8,0,6.29,0,1.5),mat(0xf4f8ff));
+      ig.add(dome2);
+      var door=box(0.8,0.8,0.6,0xd8e8f0); door.position.set(0,0.4,1.3); ig.add(door);
+      ig.position.set(zx+rand(-15,15),0,zz+rand(-15,15)); return ig; }
+    if(v===2){ var sm=new THREE.Group();
+      var b1=new THREE.Mesh(new THREE.SphereGeometry(0.7,10,8),mat(0xffffff)); b1.position.y=0.7; sm.add(b1);
+      var b2=new THREE.Mesh(new THREE.SphereGeometry(0.5,10,8),mat(0xffffff)); b2.position.y=1.6; sm.add(b2);
+      var nose=box(0.1,0.1,0.4,0xff8a00); nose.position.set(0,1.6,0.6); sm.add(nose);
+      sm.position.set(zx+rand(-15,15),0,zz+rand(-15,15)); return sm; }
+    if(v===3){ var tree=new THREE.Group();
+      var tk=box(0.3,1.5,0.3,0x8a5a2a); tk.position.y=0.75; tree.add(tk);
+      var fr2=box(1.4,1.6,1.4,0xd8f6ff); fr2.position.y=2.2; tree.add(fr2);
+      tree.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return tree; }
+    var ice=bx(0.5,rand(1,2.5),0.5,0x9ae8f5);
+    ice.position.set(zx+rand(-16,16),0.8,zz+rand(-16,16)); ice.rotation.z=rand(-0.4,0.4); return ice; }},
+  {n:'DUNE SEA',g:0xe8d5a8,piece:function(i,zx,zz){
+    var v=i%5;
+    if(v===0){ var py=new THREE.Group();
+      for(var p2=0;p2<4;p2++){ var lvl=studdedBox(3-p2*0.7,0.7,3-p2*0.7,0xd8b880,0xc8a870);
+        lvl.position.y=0.35+p2*0.7; py.add(lvl); }
+      py.position.set(zx+rand(-14,14),0,zz+rand(-14,14)); return py; }
+    if(v===1){ var cac=new THREE.Group();
+      var m2=box(0.5,rand(1.5,2.5),0.5,0x2e8b2e); m2.position.y=m2.geometry.parameters.height/2; cac.add(m2);
+      var arm=box(0.4,1,0.4,0x2e8b2e); arm.position.set(0.6,m2.geometry.parameters.height*0.6,0); cac.add(arm);
+      cac.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return cac; }
+    if(v===2){ var dune=new THREE.Mesh(new THREE.SphereGeometry(rand(2,3.5),10,8),mat(0xe0c898));
+      dune.position.set(zx+rand(-16,16),-1,zz+rand(-16,16)); dune.scale.y=0.5; return dune; }
+    if(v===3){ var skull2=box(0.7,0.5,0.9,0xf4f0e0);
+      skull2.position.set(zx+rand(-16,16),0.25,zz+rand(-16,16)); return skull2; }
+    var palm=new THREE.Group();
+    var tk2=box(0.35,2.5,0.35,0x8a5a2a); tk2.position.y=1.25; palm.add(tk2);
+    for(var lf2=0;lf2<4;lf2++){ var leaf=box(1.8,0.1,0.5,0x2fae4a);
+      leaf.position.set(Math.cos(lf2*1.57)*0.9,2.6,Math.sin(lf2*1.57)*0.9);
+      leaf.rotation.y=lf2*1.57; leaf.rotation.z=0.3; palm.add(leaf); }
+    palm.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return palm; }},
+  {n:'SHROOM GROVE',g:0x4a3a5a,piece:function(i,zx,zz){
+    var v=i%4;
+    if(v===0){ var sh=new THREE.Group();
+      var st2=box(0.6,rand(1.5,3.5),0.6,0xf4e9d8); st2.position.y=st2.geometry.parameters.height/2; sh.add(st2);
+      var cap=new THREE.Mesh(new THREE.SphereGeometry(rand(1,2),12,8,0,6.29,0,1.5),
+        mat([0xc62b21,0x9b5cff,0x66d9ef][i%3]));
+      cap.position.y=st2.geometry.parameters.height; sh.add(cap);
+      sh.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return sh; }
+    if(v===1){ var spore=bx(0.3,0.3,0.3,0xc9a8ff);
+      spore.position.set(zx+rand(-16,16),rand(1,6),zz+rand(-16,16)); return spore; }
+    if(v===2){ var glow=bx(0.5,0.4,0.5,0x7dffa0);
+      glow.position.set(zx+rand(-16,16),0.2,zz+rand(-16,16)); return glow; }
+    var mini=new THREE.Group();
+    var s5=box(0.2,0.6,0.2,0xf4e9d8); s5.position.y=0.3; mini.add(s5);
+    var c5=box(0.6,0.3,0.6,0xff8ac2); c5.position.y=0.7; mini.add(c5);
+    mini.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return mini; }},
+  {n:'CYBER CORE',g:0x0a1420,piece:function(i,zx,zz){
+    var v=i%5;
+    if(v===0){ var srv=new THREE.Group();
+      var rack=box(1.2,rand(2,3.5),0.9,0x1c2333); rack.position.y=rack.geometry.parameters.height/2; srv.add(rack);
+      for(var l3=0;l3<3;l3++){ var led=bx(0.15,0.15,0.05,[0x7dffa0,0xff5340,0x66d9ef][l3]);
+        led.position.set(0.3,0.5+l3*0.7,0.48); srv.add(led); }
+      srv.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return srv; }
+    if(v===1){ var wire=box(0.12,0.12,rand(2,5),0x66d9ef);
+      wire.position.set(zx+rand(-16,16),0.1,zz+rand(-16,16)); wire.rotation.y=rand(0,3); return wire; }
+    if(v===2){ var holo=neon(['01101','ERR','SYS','A.I.'][i%4],1.6,1,0x7dffa0);
+      holo.position.set(zx+rand(-16,16),rand(2,5),zz+rand(-16,16)); holo.rotation.y=rand(0,6.28); return holo; }
+    if(v===3){ var pil=box(0.6,rand(3,6),0.6,0x2a3a5a);
+      pil.position.set(zx+rand(-16,16),2,zz+rand(-16,16)); return pil; }
+    var chip=studdedBox(1.2,0.2,1.2,0x1c3323,0x7dffa0);
+    chip.position.set(zx+rand(-16,16),0.1,zz+rand(-16,16)); return chip; }},
+  {n:'GHOST YARD',g:0x2a2a3a,piece:function(i,zx,zz){
+    var v=i%5;
+    if(v===0){ var crypt=new THREE.Group();
+      var bd=studdedBox(2.4,2,1.8,0x4a4f57,0x3a3f45); bd.position.y=1; crypt.add(bd);
+      var rf=box(2.8,0.5,2.2,0x3a3f45); rf.position.y=2.2; crypt.add(rf);
+      crypt.position.set(zx+rand(-15,15),0,zz+rand(-15,15)); return crypt; }
+    if(v===1){ var gh=new THREE.Group();
+      var body3=new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8),
+        new THREE.MeshBasicMaterial({color:0xf4f4f4,transparent:true,opacity:0.5}));
+      body3.position.y=rand(1.5,3); gh.add(body3);
+      [-1,1].forEach(function(s){ var e2=bx(0.12,0.16,0.06,0x111111);
+        e2.position.set(s*0.2,body3.position.y+0.1,0.5); gh.add(e2); });
+      gh.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return gh; }
+    if(v===2){ var fence=box(1.8,1,0.1,0x2f3540);
+      fence.position.set(zx+rand(-16,16),0.5,zz+rand(-16,16)); fence.rotation.y=rand(0,3); return fence; }
+    if(v===3){ var gs=box(0.8,rand(0.9,1.3),0.25,0x5d656e);
+      gs.position.set(zx+rand(-16,16),0.5,zz+rand(-16,16)); gs.rotation.z=rand(-0.2,0.2); return gs; }
+    var lant=bx(0.4,0.5,0.4,0x9b5cff);
+    lant.position.set(zx+rand(-16,16),rand(1,3),zz+rand(-16,16)); return lant; }},
+  {n:'CLOUD KINGDOM',g:0xf4f8ff,piece:function(i,zx,zz){
+    var v=i%4;
+    if(v===0){ var cl=new THREE.Group();
+      for(var p3=0;p3<3;p3++){ var puff=box(rand(1.5,2.5),rand(0.8,1.2),rand(1.5,2),0xffffff);
+        puff.position.set(p3*1.4-1.4,rand(-0.2,0.2),rand(-0.5,0.5)); cl.add(puff); }
+      cl.position.set(zx+rand(-16,16),rand(3,10),zz+rand(-16,16)); return cl; }
+    if(v===1){ var bal=new THREE.Group();
+      var env=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),bmat(RAINBOW[i%7])); env.position.y=2; bal.add(env);
+      var bask=studdedBox(0.8,0.6,0.8,0x8a5a2a,0x6f4820); bask.position.y=0.3; bal.add(bask);
+      bal.position.set(zx+rand(-16,16),rand(4,12),zz+rand(-16,16)); return bal; }
+    if(v===2){ var fall=box(0.8,rand(4,8),0.8,0x9ae8f5);
+      fall.position.set(zx+rand(-16,16),rand(4,8),zz+rand(-16,16)); return fall; }
+    var sun2=bx(1,1,0.3,0xffe97a);
+    sun2.position.set(zx+rand(-16,16),rand(6,12),zz+rand(-16,16)); return sun2; }},
+  {n:'TOY BOX',g:0xffe97a,piece:function(i,zx,zz){
+    var v=i%5;
+    if(v===0){ var blk=studdedBox(1.4,1.4,1.4,RAINBOW[i%7],new THREE.Color(RAINBOW[i%7]).offsetHSL(0,0,-0.1).getHex());
+      blk.position.set(zx+rand(-16,16),0.7,zz+rand(-16,16)); blk.rotation.y=rand(0,1); return blk; }
+    if(v===1){ var dom=box(0.9,1.8,0.3,0xf4f4f4);
+      dom.position.set(zx+rand(-16,16),0.9,zz+rand(-16,16));
+      dom.rotation.y=rand(0,3); dom.rotation.x=rand(-0.4,0.4); return dom; }
+    if(v===2){ var sold=new THREE.Group();
+      var b4=box(0.5,1,0.4,0x2e8b2e); b4.position.y=0.9; sold.add(b4);
+      var h2=box(0.4,0.4,0.4,0x2e8b2e); h2.position.y=1.6; sold.add(h2);
+      var base3=box(0.8,0.2,0.5,0x256428); base3.position.y=0.1; sold.add(base3);
+      sold.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return sold; }
+    if(v===3){ var trn=new THREE.Group();
+      var car2=box(1.4,0.8,0.8,[0xc62b21,0x2a6fd6][i%2]); car2.position.y=0.7; trn.add(car2);
+      [[-0.4],[0.4]].forEach(function(o){ var wh2=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.25,0.15,10),mat(0x1c2026));
+        wh2.rotation.x=Math.PI/2; wh2.position.set(o[0],0.25,0.45); trn.add(wh2); });
+      trn.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return trn; }
+    var top2=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.2,10),mat(RAINBOW[(i*2)%7]));
+    top2.position.set(zx+rand(-16,16),0.6,zz+rand(-16,16)); top2.rotation.x=Math.PI; return top2; }},
+  {n:'THE WEIRD',g:0x3a5a4a,piece:function(i,zx,zz){
+    var v=i%6;
+    if(v===0){ var duck=new THREE.Group();
+      var b5=new THREE.Mesh(new THREE.SphereGeometry(1,10,8),bmat(0xffe14d)); b5.position.y=1; b5.scale.set(1.2,1,1.4); duck.add(b5);
+      var h3=new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8),bmat(0xffe14d)); h3.position.set(0,2,0.9); duck.add(h3);
+      var bk2=box(0.4,0.25,0.5,0xff8a00); bk2.position.set(0,1.9,1.5); duck.add(bk2);
+      duck.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); duck.rotation.y=rand(0,6.28); return duck; }
+    if(v===1){ var door2=new THREE.Group();
+      var fr3=box(1.4,2.6,0.2,0x8a5a2a); fr3.position.y=1.3; door2.add(fr3);
+      var kn=bx(0.12,0.12,0.12,0xffd83d); kn.position.set(0.45,1.2,0.15); door2.add(kn);
+      door2.position.set(zx+rand(-16,16),rand(1,5),zz+rand(-16,16));
+      door2.rotation.z=rand(-0.5,0.5); return door2; }
+    if(v===2){ var utree=new THREE.Group();
+      var fol2=studdedBox(1.8,1,1.8,0x2e8b2e,0x256e25); fol2.position.y=0.5; utree.add(fol2);
+      var tk3=box(0.4,2,0.4,0x7a4a1e); tk3.position.y=2; utree.add(tk3);
+      utree.position.set(zx+rand(-16,16),rand(2,6),zz+rand(-16,16)); return utree; }
+    if(v===3){ var cheese=new THREE.Group();
+      var w4=box(1.6,0.9,1.2,0xffe97a); w4.position.y=0.45; cheese.add(w4);
+      for(var hh=0;hh<3;hh++){ var hole=bx(0.25,0.25,0.1,0xd8b850);
+        hole.position.set(rand(-0.5,0.5),rand(0.2,0.7),0.61); cheese.add(hole); }
+      cheese.position.set(zx+rand(-16,16),0,zz+rand(-16,16)); return cheese; }
+    if(v===4){ var tp=new THREE.Group();
+      var pot=box(1,0.8,1,0xf4f4f4); pot.position.y=0.6; tp.add(pot);
+      var spout2=box(0.2,0.2,0.8,0xf4f4f4); spout2.position.set(0,0.8,0.8); spout2.rotation.x=-0.4; tp.add(spout2);
+      var lid2=bx(0.3,0.2,0.3,0xc62b21); lid2.position.y=1.1; tp.add(lid2);
+      tp.position.set(zx+rand(-16,16),rand(0,4),zz+rand(-16,16)); tp.rotation.z=rand(-0.6,0.6); return tp; }
+    var q=neon('?',1,1,RAINBOW[i%7]);
+    q.position.set(zx+rand(-16,16),rand(1,7),zz+rand(-16,16));
+    q.rotation.y=rand(0,6.28); return q; }}
+];
+function genBeyondZones(){
+  var defs=[];
+  BYZONES.forEach(function(zn,zi){
+    var a=zi/10*Math.PI*2;
+    var zx=BY.x+Math.cos(a)*100, zz=BY.z+Math.sin(a)*100;
+    defs.push({label:zn.n+' — the ground',parts:2,key:zi*10,make:(function(zn2,zx2,zz2){ return function(){
+      var g=new THREE.Group();
+      var fl=new THREE.Mesh(new THREE.CircleGeometry(20,24),mat(zn2.g));
+      fl.rotation.x=-Math.PI/2; fl.position.set(zx2,0.03,zz2); g.add(fl);
+      var sn=neon(zn2.n,6,1.8,RAINBOW[zi%7]);
+      sn.position.set(zx2,8,zz2); g.add(sn);
+      return g; }; })(zn,zx,zz)});
+    for(var i=0;i<119;i++)(function(i){
+      defs.push({label:zn.n+' — piece '+(i+1),parts:1,key:zi*10,
+        make:function(){ return zn.piece(i,zx,zz); }});
+    })(i);
+    addCloudChunks(defs,280,zx,zz,19,2,14,zn.n+' — zone sparkles ×30',zi*10);
+  });
+  defs.length=4000;
+  defs.sort(function(a,b){ return a.key-b.key; });
+  return defs;
+}
+function genUltArena(){
+  var defs=[];
+  function d(label,parts,key,make){ defs.push({label:label,parts:parts,key:key,make:make}); }
+  var AX=BY.x, AZ=BY.z;
+  d('ULTIMATE ARENA — the ground',2,0,function(){
+    var g=new THREE.Group();
+    var fl=new THREE.Mesh(new THREE.CircleGeometry(42,36),mat(0x3a3f4a));
+    fl.rotation.x=-Math.PI/2; fl.position.set(AX,0.04,AZ); g.add(fl);
+    var sn=neon('⚔️ THE ULTIMATE ARENA ⚔️',10,2.6,0xffd83d);
+    sn.position.set(AX,16,AZ+40); g.add(sn);
+    return g; });
+  /* colosseum: 3 tiers × 80 blocks + 80 arches + 60 banners + 40 flames */
+  for(var t2=0;t2<3;t2++)(function(t2){
+    for(var w2=0;w2<80;w2++)(function(w2){
+      d('Colosseum tier '+(t2+1)+' block',1,1,function(){
+        var a=w2/80*Math.PI*2;
+        var blk=studdedBox(3,2.4,2,0xd8c5a8,0xc8b598);
+        blk.position.set(AX+Math.cos(a)*(38+t2*2.5),1.2+t2*2.4,AZ+Math.sin(a)*(38+t2*2.5));
+        blk.rotation.y=-a; return blk; });
+    })(w2);
+  })(t2);
+  for(var ar=0;ar<80;ar++)(function(ar){
+    d('Colosseum arch',2,2,function(){
+      var g=new THREE.Group();
+      var a=ar/80*Math.PI*2;
+      var p1=box(0.6,2,0.6,0xc8b598); p1.position.set(AX+Math.cos(a)*36.5,8.2,AZ+Math.sin(a)*36.5); g.add(p1);
+      var p2=box(1.6,0.5,0.8,0xd8c5a8); p2.position.set(p1.position.x,9.4,p1.position.z);
+      p2.rotation.y=-a; g.add(p2);
+      return g; });
+  })(ar);
+  for(var bn=0;bn<60;bn++)(function(bn){
+    d('Arena banner',1,3,function(){
+      var a=bn/60*Math.PI*2;
+      var fl2=box(1.2,2.2,0.08,RAINBOW[bn%7]);
+      fl2.position.set(AX+Math.cos(a)*35.5,10.8,AZ+Math.sin(a)*35.5);
+      fl2.rotation.y=-a; return fl2; });
+  })(bn);
+  for(var fm=0;fm<40;fm++)(function(fm){
+    d('Arena flame pillar',2,4,function(){
+      var g=new THREE.Group();
+      var a=fm/40*Math.PI*2;
+      var pil=box(0.8,5,0.8,0x4a4f57); pil.position.set(AX+Math.cos(a)*30,2.5,AZ+Math.sin(a)*30); g.add(pil);
+      var fl3=bx(0.6,0.8,0.6,fm%2?0xff5340:0xff8a00);
+      fl3.position.set(pil.position.x,5.5,pil.position.z); g.add(fl3);
+      return g; });
+  })(fm);
+  /* STATUES OF EVERYTHING EVER — 14 legends × ~12 pieces */
+  var LEGENDS=['T-REX','MEGA T-REX','WATER NINJA','LAVA NINJA','EARTH NINJA','GOLDEN GOLEM',
+    'GATOR','HIKER GOD','FISH ZOMBIE','DOG CASOH','VOID SLIME','NEON KNIGHT','RAINBOW DRAGON','THE TERROR'];
+  var LEGCOL=[0x2f7d32,0x23252b,0x1e88e5,0xef5350,0x795548,0xd4af37,
+    0x2e7d32,0xffd83d,0x3d6b3d,0x5a8a3a,0x2e8b2e,0xc0c8d0,0x9b5cff,0x0a0a12];
+  LEGENDS.forEach(function(lg,li){
+    var a=li/14*Math.PI*2+0.2;
+    var sx=AX+Math.cos(a)*24, sz=AZ+Math.sin(a)*24;
+    for(var pc=0;pc<12;pc++)(function(pc){
+      d('Statue of '+lg+' — piece '+(pc+1),1,5,function(){
+        if(pc===0){ var ped=studdedBox(2.6,1,2.6,0x7d8791,0x6d7680); ped.position.set(sx,0.5,sz); return ped; }
+        if(pc===1){ var body=box(1.6,2.4,1,LEGCOL[li]); body.position.set(sx,2.4,sz); return body; }
+        if(pc===2){ var head=studdedBox(1,1,1,LEGCOL[li],new THREE.Color(LEGCOL[li]).offsetHSL(0,0,-0.1).getHex());
+          head.position.set(sx,4.1,sz); return head; }
+        if(pc<5){ var arm=box(0.4,1.6,0.4,LEGCOL[li]);
+          arm.position.set(sx+(pc===3?-1.1:1.1),2.8,sz); arm.rotation.z=(pc===3?0.4:-0.4); return arm; }
+        if(pc<7){ var leg=box(0.5,1.2,0.5,new THREE.Color(LEGCOL[li]).offsetHSL(0,0,-0.12).getHex());
+          leg.position.set(sx+(pc===5?-0.4:0.4),0.6+1,sz); return leg; }
+        if(pc===7){ var plq=neon(lg,2.6,0.9,RAINBOW[li%7]); plq.position.set(sx,5.4,sz+0.6);
+          plq.rotation.y=Math.atan2(AX-sx,AZ-sz); return plq; }
+        if(pc===8){ var eye=bx(0.2,0.2,0.12,0xff2211); eye.position.set(sx-0.25,4.2,sz+0.55); return eye; }
+        if(pc===9){ var eye2=bx(0.2,0.2,0.12,0xff2211); eye2.position.set(sx+0.25,4.2,sz+0.55); return eye2; }
+        if(pc===10){ var det=box(0.6,0.6,0.6,new THREE.Color(LEGCOL[li]).offsetHSL(0.1,0,0.1).getHex());
+          det.position.set(sx,3.4,sz+0.7); return det; }
+        var glow2=bx(0.4,0.4,0.4,RAINBOW[li%7]); glow2.position.set(sx,6.2,sz); return glow2;
+      });
+    })(pc);
+  });
+  /* 200 CASOHS */
+  for(var cs=0;cs<200;cs++)(function(cs){
+    d('casoh #'+(cs+1),2,6,function(){
+      var g=new THREE.Group();
+      var a=rand(0,6.28), rr=rand(6,40);
+      var post=box(0.16,rand(2,5),0.16,0x2f3540);
+      post.position.set(AX+Math.cos(a)*rr,post.geometry.parameters.height/2,AZ+Math.sin(a)*rr);
+      g.add(post);
+      var spr=makeCasohSprite();
+      var sc=rand(0.6,1.6);
+      spr.scale.set(2.7*sc,4*sc,1);
+      spr.position.set(post.position.x,post.geometry.parameters.height+1.8*sc,post.position.z);
+      g.add(spr);
+      return g; });
+  })(cs);
+  /* 400 WEIRD THINGS (reuse THE WEIRD zone's factory + extras) */
+  for(var wd=0;wd<400;wd++)(function(wd){
+    d('Weird thing #'+(wd+1),1,7,function(){
+      var a=rand(0,6.28), rr=rand(5,42);
+      var o=BYZONES[9].piece(wd,AX+Math.cos(a)*rr-0,AZ+Math.sin(a)*rr-0);
+      /* pieces position themselves around given center via rand(-16,16); re-center tighter */
+      var bb=new THREE.Box3().setFromObject(o);
+      var c=bb.getCenter(new THREE.Vector3());
+      o.position.x+=AX+Math.cos(a)*rr-c.x;
+      o.position.z+=AZ+Math.sin(a)*rr-c.z;
+      return o; });
+  })(wd);
+  /* the ULTIMATE THRONE */
+  for(var th=0;th<12;th++)(function(th){
+    d('The Ultimate Throne — piece '+(th+1),1,8,function(){
+      var tx=AX, tz=AZ-34;
+      if(th<4){ var step2=studdedBox(6-th,0.6,4-th*0.6,0xd4af37,0xb8912b);
+        step2.position.set(tx,0.3+th*0.6,tz); return step2; }
+      if(th===4){ var seat=box(2.4,0.6,2,0xd4af37); seat.position.set(tx,3,tz); return seat; }
+      if(th===5){ var back=studdedBox(2.6,4,0.6,0xd4af37,0xb8912b); back.position.set(tx,5,tz-1); return back; }
+      if(th<8){ var arm2=box(0.5,1,2,0xb8912b); arm2.position.set(tx+(th===6?-1.4:1.4),3.6,tz); return arm2; }
+      if(th<10){ var orb2=bx(0.5,0.5,0.5,RAINBOW[th%7]); orb2.position.set(tx+(th===8?-1.4:1.4),4.4,tz); return orb2; }
+      if(th===10){ var crown=neon('👑 THE ULTIMATE 👑',5,1.4,0xffd83d); crown.position.set(tx,8.4,tz-1.2); return crown; }
+      var carpet=box(2.4,0.08,26,0xc62b21); carpet.position.set(tx,0.08,tz+15); return carpet;
+    });
+  })(th);
+  /* cosmic confetti fills to exactly 12,000 clicks */
+  var fill=12000-defs.length;
+  addCloudChunks(defs,fill,AX,AZ,44,2,30,'Cosmic confetti ×30',9);
+  defs.length=12000;
+  defs.sort(function(a,b){ return a.key-b.key; });
+  return defs;
+}
+function startByBuild(stage){
+  byStage=stage;
+  if(!byGroup){ byGroup=new THREE.Group(); world.add(byGroup);
+    var fl=new THREE.Mesh(new THREE.PlaneGeometry(BY.r*2+40,BY.r*2+40),mat(0x0c0a16));
+    fl.rotation.x=-Math.PI/2; fl.position.set(BY.x,0.02,BY.z); byGroup.add(fl);
+  }
+  var defs=stage===2?genUltArena():genBeyondZones();
+  byChunks.length=0; byIdx=0; byParts=0; byPartsTotal=0;
+  defs.forEach(function(dd){
+    byPartsTotal+=dd.parts;
+    if(dd.make){
+      var o=dd.make();
+      byGroup.add(o);
+      o.traverse(function(m){ if((m.isMesh||m.isPoints||m.isSprite)&&!m.userData.om) m.userData.om=m.material; });
+      o.visible=false;
+      byChunks.push({label:dd.label,obj:o,parts:dd.parts});
+    } else byChunks.push(dd); /* cloud segment */
+  });
+  if(!byGhostMk){
+    byGhostMk=new THREE.Mesh(boxGeo(3,3,3),ghostMat);
+    world.add(byGhostMk);
+  }
+  PH='bybuild';
+  setMood('space');
+  camOrbit.a=0.4; camOrbit.target=0.4;
+  showByGhost();
+  msg(stage===2?'⚔️ THE ULTIMATE ARENA!<br><span style="font-size:55%"><b>12,000 CLICKS</b>: a colosseum, statues of EVERYTHING ever, 200 casohs, 400 weird things, the Ultimate Throne… then the ULTIMATE BATTLE.</span>'
+    :'🌌 THE BEYOND!<br><span style="font-size:55%"><b>4,000 CLICKS</b> across 10 zones: Candy Land, Lava Fields, Frozen Wastes, Dune Sea, Shroom Grove, Cyber Core, Ghost Yard, Cloud Kingdom, Toy Box… and THE WEIRD.</span>',8000);
+  updateMobileUI();
+}
+function showByGhost(){
+  var ch=byChunks[byIdx];
+  if(!ch) return;
+  byGhostMk.visible=false;
+  if(ch.obj){
+    ch.obj.visible=true;
+    ch.obj.traverse(function(m){
+      if(m.isMesh) m.material=ghostMat;
+      else if(m.isPoints) m.material=ghostPtsMat;
+    });
+    var bb=new THREE.Box3().setFromObject(ch.obj);
+    var c=bb.getCenter(new THREE.Vector3()), s2=bb.getSize(new THREE.Vector3());
+    cityCam.x=c.x; cityCam.y=Math.max(3,c.y); cityCam.z=c.z;
+    cityCam.r=clamp(Math.max(s2.x,s2.z)*0.9+9,12,60);
+    cityCam.h=clamp(c.y+s2.y*0.8+5,10,55);
+  } else {
+    byGhostMk.visible=true;
+    byGhostMk.position.set(ch.cent.x,ch.cent.y,ch.cent.z);
+    cityCam.x=ch.cent.x; cityCam.y=ch.cent.y; cityCam.z=ch.cent.z;
+    cityCam.r=18; cityCam.h=ch.cent.y+8;
+  }
+  obj((byStage===2?'⚔️ ':'🌌 ')+ch.label+' &nbsp;<span style="color:#7df3ff">click '+(byIdx+1).toLocaleString()+'/'+byChunks.length.toLocaleString()
+    +' · parts '+byParts.toLocaleString()+'/'+byPartsTotal.toLocaleString()+'</span>');
+  hint('Click the cyan piece! ⚡ AUTO-BUILD is basically required · drag + wheel to fly');
+}
+function placeByChunk(silent){
+  var ch=byChunks[byIdx];
+  if(!ch) return;
+  if(ch.obj){
+    ch.obj.visible=true;
+    ch.obj.traverse(function(m){ if((m.isMesh||m.isPoints||m.isSprite)&&m.userData.om) m.material=m.userData.om; });
+    if(!silent){
+      ch.obj.scale.set(1.2,1.2,1.2);
+      (function(oo){ tween(0.12,function(k){ var s=1.2-0.2*k; oo.scale.set(s,s,s); }); })(ch.obj);
+    }
+  } else {
+    ch.cloud.geometry.setDrawRange(0,(ch.seg+1)*30);
+  }
+  byParts+=ch.parts;
+  if(!silent) sndBrickClick();
+  byIdx++;
+  if(byIdx>=byChunks.length) finishByBuild();
+  else showByGhost();
+}
+function tryPlaceBy(e){
+  var ch=byChunks[byIdx];
+  if(!ch) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb;
+  if(ch.obj){ bb=new THREE.Box3().setFromObject(ch.obj); bb.expandByScalar(3); }
+  else { bb=new THREE.Box3().setFromCenterAndSize(
+    new THREE.Vector3(ch.cent.x,ch.cent.y,ch.cent.z),new THREE.Vector3(9,6,9)); }
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan piece</b>!'); return; }
+  placeByChunk();
+}
+function finishByBuild(){
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  if(byGhostMk) byGhostMk.visible=false;
+  if(byStage===1){
+    byDone1=true; save();
+    sndFanfare(); setTimeout(sndFanfare,600);
+    enterBY();
+    msg('🌌 TEN ZONES BUILT!<br><span style="font-size:55%">Now the center calls: the ULTIMATE ARENA button — <b>12,000 clicks</b>.</span>',7000);
+    obj('⚔️ Press the gold ULTIMATE ARENA button at the center of The Beyond.');
+  } else {
+    byDone2=true; save();
+    sndFanfare(); setTimeout(sndFanfare,600); setTimeout(sndFanfare,1200);
+    enterBY();
+    msg('⚔️ THE ULTIMATE ARENA STANDS!<br><span style="font-size:55%">'+byPartsTotal.toLocaleString()+' parts. One thing remains… the red BATTLE button. Bring everything.</span>',8000);
+    obj('👁️ Press the red ULTIMATE BATTLE button in the arena. This is it.');
+  }
+}
+var byExit=null;
+function enterBY(){
+  if(!byGroup){ byGroup=new THREE.Group(); world.add(byGroup);
+    var fl=new THREE.Mesh(new THREE.PlaneGeometry(BY.r*2+40,BY.r*2+40),mat(0x0c0a16));
+    fl.rotation.x=-Math.PI/2; fl.position.set(BY.x,0.02,BY.z); byGroup.add(fl);
+  }
+  if(!byExit){
+    byExit=makePortal(BY.x-5,BY.z+BY.r-10);
+    var s=neon('BACK TO\nSPACE',2.8,1.6,0x66d9ef);
+    s.position.set(BY.x-5,4.6,BY.z+BY.r-11.8);
+    world.add(s);
+  }
+  PH='by';
+  setMood('space');
+  P.pos.set(BY.x,0,BY.z+BY.r-10); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  sndPortal(); sndWhoosh(false);
+  if(!byBtn1&&!byDone1){
+    byBtn1=makeBigButton('🌌 BUILD 10 ZONES\n4,000 CLICKS',0x9b5cff);
+    byBtn1.position.set(BY.x+5,0,BY.z+BY.r-10);
+    world.add(byBtn1);
+  }
+  if(byDone1&&!byBtn2&&!byDone2){
+    byBtn2=makeBigButton('⚔️ ULTIMATE ARENA\n12,000 CLICKS',0xffd83d);
+    byBtn2.position.set(BY.x,0,BY.z+8);
+    world.add(byBtn2);
+  }
+  if(byDone2&&!byBtn3&&!ultWon){
+    byBtn3=makeBigButton('👁️ ULTIMATE BATTLE\nEVERYTHING. EVER.',0xff2211);
+    byBtn3.position.set(BY.x,0,BY.z+8);
+    world.add(byBtn3);
+  }
+  if(!ultWon) obj(byDone2?'👁️ The red button. Press it.':byDone1?'⚔️ The gold ARENA button waits at the center.':'🌌 THE BEYOND — press the purple button to raise 10 zones.');
+  else obj('👑 THE ABSOLUTE CHAMPION. Every act, every world, every casoh.');
+  updateMobileUI();
+}
+/* ---- THE ULTIMATE BATTLE ---- */
+function startUltBattle(){
+  ultState='fight';
+  ultMinions.forEach(function(m2){ if(m2.mesh.parent) world.remove(m2.mesh); });
+  ultMinions.length=0;
+  if(ultBoss&&ultBoss.mesh.parent) world.remove(ultBoss.mesh);
+  var ref=makeMinifig({torso:0x7ba03a,legs:0x55702a,arms:0x7ba03a,face:'angry',hat:'tophat'});
+  ref.group.scale.set(4,4,4);
+  var spr=makeCasohSprite();
+  spr.scale.set(6,9,1); spr.position.y=3.4;
+  ref.group.add(spr);
+  ref.group.position.set(BY.x,0,BY.z-20);
+  world.add(ref.group);
+  ultBoss={mesh:ref.group,ref:ref,hp:6000,maxHp:6000,atkCd:3,t:0,phase:0,stunT:0,touchCd:0};
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(BY.x,0,BY.z+30); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='👁️ ULTIMATE CASOH 👁️';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); setMood('boss');
+  sndRoar(true); sndRoar(true); doFlash('#7ba03a'); camShake=1.4;
+  msg('👁️ ULTIMATE CASOH 👁️<br><span style="font-size:55%">"erm what then FINAL blob man?" — 6,000 HP. He summons EVERYTHING you\'ve ever fought.</span>',6000);
+  obj('👁️ THE ULTIMATE BATTLE — everything you own, everything he has. GO.');
+  updateMobileUI();
+}
+function spawnUltMinion(){
+  var kinds=['hiker','fishz','dog','slime'];
+  var k=kinds[(Math.random()*4)|0], mesh;
+  if(k==='hiker') mesh=makeMinifig({torso:HIKER_COLORS[(Math.random()*5)|0],legs:0x4e5a3a,arms:0x8d6e63,face:'angry',backpack:0x9e3b2f}).group;
+  else if(k==='fishz') mesh=makeMinifig({torso:0x3d6b3d,legs:0x2a4a2a,arms:0x3d6b3d,face:'angry',fishy:true}).group;
+  else if(k==='dog') mesh=makeDogFig(1,0x8a5a2a);
+  else { mesh=new THREE.Group();
+    var b2=box(1.1,0.8,1.1,0x2e8b2e); b2.position.y=0.4; mesh.add(b2); }
+  var a=rand(0,6.28);
+  mesh.position.set(BY.x+Math.cos(a)*26,0,BY.z-10+Math.sin(a)*26);
+  world.add(mesh);
+  ultMinions.push({mesh:mesh,hp:60,dead:false,atkCd:0,stunT:0});
+}
+function hurtUltMinion(m2,dmg,fromTorn){
+  if(m2.dead) return;
+  m2.hp-=dmg;
+  if(fromTorn&&Math.random()<0.2&&m2.stunT<=0){ m2.stunT=2.2; sndStun(); }
+  if(m2.hp<=0){
+    m2.dead=true;
+    world.remove(m2.mesh);
+    sndWoodFall();
+    burst(m2.mesh.position.clone().setY(1),0x9ccc65,10,{speed:4,life:0.8});
+  }
+}
+function hurtUltBoss(dmg,fromTorn){
+  if(!ultBoss||ultState!=='fight') return;
+  ultBoss.hp-=dmg;
+  $('bossBar').firstElementChild.style.width=clamp(ultBoss.hp/ultBoss.maxHp*100,0,100)+'%';
+  burst(ultBoss.mesh.position.clone().setY(4),0x7ba03a,6,{speed:5,life:0.6});
+  doFlash('#7ba03a');
+  if(ultBoss.hp<=0){
+    ultState='won'; ultWon=true; save();
+    world.remove(ultBoss.mesh); ultBoss=null;
+    ultMinions.forEach(function(m2){ if(!m2.dead) world.remove(m2.mesh); });
+    ultMinions.length=0;
+    $('bossWrap').style.display='none';
+    battleMusic(false); setMood('space');
+    sndRoar(true); sndFanfare(); setTimeout(sndFanfare,700); setTimeout(sndFanfare,1400);
+    doFlash('#ffffff');
+    var fw=0;
+    var iv=setInterval(function(){
+      fw++;
+      burst(new THREE.Vector3(BY.x+rand(-40,40),rand(10,45),BY.z+rand(-40,40)),
+        RAINBOW[fw%7],24,{speed:8,life:1.6,grav:3});
+      blip(400+fw*60,'sine',0.32,0.4,0,1700);
+      if(fw>24) clearInterval(iv);
+    },300);
+    msg('👑🏆 ULTIMATE CASOH FALLS 🏆👑<br><span style="font-size:60%">Every act. Every world. Every build. Every casoh.<br><b>YOU ARE THE ABSOLUTE CHAMPION OF BRICK LEGEND.</b></span>',15000);
+    obj('👑 THE ABSOLUTE CHAMPION. There is nothing left to conquer. (for now?)');
+  }
+}
+function updateBY(dt){
+  if(byCd>0) byCd-=dt;
+  [byBtn1,byBtn2,byBtn3].forEach(function(btn){
+    if(btn&&btn.userData.dome) btn.userData.dome.position.y=0.7+Math.sin(GTIME*3)*0.06;
+  });
+  if(PH!=='by'||P.dead) return;
+  if(byBtn1&&!byDone1&&byCd<=0
+     &&Math.hypot(P.pos.x-byBtn1.position.x,P.pos.z-byBtn1.position.z)<2.1){
+    byCd=2; pressButton(byBtn1);
+    startByBuild(1);
+  }
+  if(byBtn2&&byDone1&&!byDone2&&byCd<=0
+     &&Math.hypot(P.pos.x-byBtn2.position.x,P.pos.z-byBtn2.position.z)<2.1){
+    byCd=2; pressButton(byBtn2);
+    world.remove(byBtn2); byBtn2=null;
+    startByBuild(2);
+  }
+  if(byBtn3&&byDone2&&!ultWon&&ultState!=='fight'&&byCd<=0
+     &&Math.hypot(P.pos.x-byBtn3.position.x,P.pos.z-byBtn3.position.z)<2.1){
+    byCd=2; pressButton(byBtn3);
+    startUltBattle();
+  }
+}
+function updateUlt(dt){
+  if(ultState!=='fight'||!ultBoss) return;
+  var g=ultBoss.mesh, dd=g.position.distanceTo(P.pos);
+  ultBoss.t+=dt;
+  var ang=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+  var dAng=ang-g.rotation.y;
+  while(dAng>Math.PI) dAng-=Math.PI*2;
+  while(dAng<-Math.PI) dAng+=Math.PI*2;
+  g.rotation.y+=dAng*(1-Math.pow(0.02,dt));
+  if(dd>6){
+    g.position.x+=Math.sin(g.rotation.y)*2.4*dt;
+    g.position.z+=Math.cos(g.rotation.y)*2.4*dt;
+    if(Math.random()<dt*1.5){ knock(120,0.6,0.16,0); camShake=Math.min(camShake+0.12,0.4); }
+  }
+  if(ultBoss.touchCd>0) ultBoss.touchCd-=dt;
+  if(dd<6.5&&ultBoss.touchCd<=0&&!P.dead){
+    ultBoss.touchCd=1.2;
+    hurtPlayer(25,'ULTIMATE CASOH stomps!');
+    sndPunch(true); camShake=0.8;
+  }
+  ultBoss.atkCd-=dt;
+  if(ultBoss.atkCd<=0){
+    ultBoss.atkCd=2.6;
+    var mv=(Math.random()*3)|0;
+    if(mv===0){ /* triple shockwave */
+      sndRoar(false); doFlash('#7ba03a');
+      for(var s2=0;s2<3;s2++)(function(s2){
+        setTimeout(function(){
+          if(ultState!=='fight') return;
+          var sw=new THREE.Mesh(new THREE.TorusGeometry(1,0.35,8,28),bmat(0x7dffa0));
+          sw.rotation.x=Math.PI/2; sw.position.set(g.position.x,0.3,g.position.z);
+          world.add(sw);
+          shockwaves.push({mesh:sw,r:1,hit:false,speed:13,dmg:16});
+          sndWoodFall();
+        },s2*450);
+      })(s2);
+    } else if(mv===1){ /* radial orb burst */
+      sndTazer(); doFlash('#ffd83d');
+      for(var o2=0;o2<10;o2++){
+        var m3=new THREE.Mesh(boxGeo(0.6,0.6,0.6),bmat(RAINBOW[o2%7]));
+        m3.position.copy(g.position).setY(5);
+        var a2=o2/10*Math.PI*2;
+        spawnEproj(m3,new THREE.Vector3(Math.cos(a2)*10,2,Math.sin(a2)*10),6,14,'rock');
+      }
+    } else { /* summon EVERYTHING */
+      sndRoar(true); doFlash('#ff2211');
+      msg('👁️ "RISE, MY EVERYTHING!"',1600);
+      while(ultMinions.filter(function(m2){ return !m2.dead; }).length<4) spawnUltMinion();
+    }
+  }
+  ultMinions.forEach(function(m2){
+    if(m2.dead) return;
+    var mg=m2.mesh, md=mg.position.distanceTo(P.pos);
+    if(m2.stunT>0){ m2.stunT-=dt; return; }
+    if(md>1.4){
+      var dx=P.pos.x-mg.position.x, dz=P.pos.z-mg.position.z, l=Math.hypot(dx,dz)||1;
+      mg.position.x+=dx/l*4.2*dt; mg.position.z+=dz/l*4.2*dt;
+      mg.rotation.y=Math.atan2(dx,dz);
+    } else {
+      m2.atkCd-=dt;
+      if(m2.atkCd<=0&&!P.dead){ m2.atkCd=1.2; hurtPlayer(10,'Minion of everything!'); sndPunch(true); }
+    }
+  });
+}
+function updateAct8(dt){
+  /* THE BEYOND gate appears in space once the RPG is complete */
+  if(rpgDone&&!byGate&&(PH==='sz'||PH==='rpg')){
+    byGate=makePortal(SP.x-4.5,SP.z+SP.r-4);
+    byGate.userData.ring.material=bmat(0x9b5cff);
+    var s=neon('🌌 THE BEYOND',3.2,1.5,0x9b5cff);
+    s.position.set(SP.x-4.5,4.8,SP.z+SP.r-5.8);
+    world.add(s);
+  }
+  if(byGate){
+    byGate.userData.ring.rotation.z+=dt*2;
+    byGate.userData.disc.rotation.z-=dt*3;
+    if(PH==='sz'&&!P.dead&&byCd<=0&&P.pos.distanceTo(byGate.position)<2.2){
+      byCd=2; enterBY();
+      if(!byDone1) msg('🌌 THE BEYOND.<br><span style="font-size:55%">Ten zones and the Ultimate Arena sleep here, unbuilt. Find the purple button.</span>',5200);
+    }
+  }
+  if(byExit){
+    byExit.userData.ring.rotation.z+=dt*2;
+    byExit.userData.disc.rotation.z-=dt*3;
+    if(PH==='by'&&!P.dead&&ultState!=='fight'&&byCd<=0
+       &&P.pos.distanceTo(byExit.position)<2.2){
+      byCd=2; enterSZ();
+    }
+  }
+  updateBY(dt);
+  if(PH==='by') updateUlt(dt);
+}
+function applyAct8Skip(sv){
+  if(sv.by1||sv.by2){
+    if(!byGroup){ byGroup=new THREE.Group(); world.add(byGroup);
+      var fl=new THREE.Mesh(new THREE.PlaneGeometry(BY.r*2+40,BY.r*2+40),mat(0x0c0a16));
+      fl.rotation.x=-Math.PI/2; fl.position.set(BY.x,0.02,BY.z); byGroup.add(fl);
+    }
+    genBeyondZones().forEach(function(dd){
+      if(dd.make){ byGroup.add(dd.make()); }
+      else dd.cloud.geometry.setDrawRange(0,1e9);
+    });
+    byDone1=true;
+    if(sv.by2){
+      genUltArena().forEach(function(dd){
+        if(dd.make){ byGroup.add(dd.make()); }
+        else dd.cloud.geometry.setDrawRange(0,1e9);
+      });
+      byDone2=true;
+    }
+    ultWon=!!sv.ult;
+  }
+}
+
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
 window.__dbg={
   phase:function(){ return PH; },
@@ -8622,6 +9396,20 @@ window.__dbg={
       if(crystals.length===0&&rpgStage<2){ rpgStage=2; save(); } } rpgHud(); },
   hitRpgBoss:function(n){ hurtRpgBoss(n||9999,false); },
   setRpgStage:function(n){ rpgStage=n; rpgHud(); },
+  /* ---- Act 8: THE BEYOND ---- */
+  by:function(){ return {stage:byStage,idx:byIdx,total:byChunks.length,
+    parts:byParts,partsTotal:byPartsTotal,done1:byDone1,done2:byDone2,
+    ult:ultState,ultWon:ultWon,gate:!!byGate,
+    boss:ultBoss?{hp:ultBoss.hp}:null,
+    minions:ultMinions.filter(function(m2){ return !m2.dead; }).length}; },
+  gotoBY:function(){ rpgDone=true; enterBY(); },
+  startZones:function(){ startByBuild(1); },
+  startArena:function(){ byDone1=true; startByBuild(2); },
+  placeBy:function(n){ for(var i=0;i<(n||1);i++){
+      if(byIdx>=byChunks.length) break;
+      placeByChunk(byIdx<byChunks.length-1); } },
+  startUlt:function(){ byDone1=true; byDone2=true; startUltBattle(); },
+  hitUlt:function(n){ hurtUltBoss(n||9999,false); },
   forceSave:function(){ save(); return loadSave(); },
   score:function(){ return {stored:progScore(loadSave())}; }
 };
