@@ -8332,16 +8332,31 @@ function updateRPG(dt){
 function updateAct7(dt){
   /* the EXPANSION pad appears in the won void — 500 STUD BUX to start */
   if(gameWon&&!sxDone&&(PH==='sz'||PH==='rpg')&&!sxPad){
-    sxPad=studdedBox(3,0.3,3,0xff5b8d,0xdd3b6d);
-    sxPad.position.set(SP.x+9,0.15,SP.z+SP.r-6);
+    /* a big pressable BUTTON right next to the portal */
+    sxPad=new THREE.Group();
+    var base4=studdedBox(2.6,0.5,2.6,0x4a4f57,0x3a3f45); base4.position.y=0.25; sxPad.add(base4);
+    var rim=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.2,0.3,16),mat(0x9aa5ad));
+    rim.position.y=0.65; sxPad.add(rim);
+    var dome=new THREE.Mesh(new THREE.SphereGeometry(0.9,16,10,0,6.29,0,1.5),
+      new THREE.MeshBasicMaterial({color:0xff5b8d}));
+    dome.position.y=0.7; sxPad.add(dome);
+    sxPad.userData.dome=dome;
+    var post=box(0.16,3,0.16,0x2f3540); post.position.set(0,1.5,-1.6); sxPad.add(post);
+    var s=neon('🌈 START EXPANDING\n500 STUD BUX',4.4,2.1,0xff5b8d);
+    s.position.set(0,3.6,-1.6); sxPad.add(s);
+    sxPad.position.set(SP.x+4.5,0,SP.z+SP.r-4); /* right beside the portal */
     world.add(sxPad);
-    var s=neon('🌈 EXPANSION\n500 STUD BUX',4,2.1,0xff5b8d);
-    s.position.set(SP.x+9,3.8,SP.z+SP.r-8);
-    world.add(s);
   }
+  if(sxPad&&!sxDone&&sxPad.userData.dome)
+    sxPad.userData.dome.position.y=0.7+Math.sin(GTIME*3)*0.06;
   if(sxPad&&!sxDone&&PH==='sz'&&!P.dead&&padCd<=0
      &&Math.hypot(P.pos.x-sxPad.position.x,P.pos.z-sxPad.position.z)<2.1){
     padCd=1.5;
+    if(sxPad.userData.dome){ /* press the button down */
+      sxPad.userData.dome.scale.y=0.4;
+      (function(dm){ tween(0.3,function(k){ dm.scale.y=0.4+0.6*k; }); })(sxPad.userData.dome);
+      knock(500,0.6,0.08,0); sndUi();
+    }
     if(sxActive()){ startExpansion(); } /* resume an unfinished expansion */
     else if(studBux<500){
       msg('🔒 The EXPANSION costs 🪵 500 STUD BUX.<br><span style="font-size:55%">Beat DOG CASOH and place the fragment to earn them!</span>',3200);
