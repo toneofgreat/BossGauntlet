@@ -6167,7 +6167,7 @@ var catUnlocked=false,isCat=false,cut5T=-1,catLvl=0,cafeFloors=0,fragPlaced=fals
 var cwGroup=null,cwBuilt=false,cafeCore=null,cafeHp=200,CAFE_MAX=200;
 var cbChunks=[],cbIdx=0,cbStage=0,cbGroup=null;
 var dogs=[],dogCasoh=null,wave=null,scratchDogsDone=0,waveBeacon=null,waveBreakT=0,breakMsgCd=0;
-var catPortalObj=null,catCats=[];
+var catPortalObj=null,catCats=[],cwExitPortal=null;
 var catGren=0,grenT=0,grenUnlocked=false,slamCd=0,slamPending=false,wasGround=true;
 var CAT_TIERS=['ALLEY CAT','TABBY','TUXEDO CAT','MAINE COON','SHADOW CAT',
   'NINJA CAT','ROYAL CAT','LASER CAT','COSMIC CAT','ETERNAL CAT'];
@@ -6226,6 +6226,12 @@ function enterCW(){
   buildCW();
   PH='cw';
   setMood('day');
+  if(!cwExitPortal){
+    cwExitPortal=makePortal(CW.x-9,CW.z+CW.r-6);
+    var xs2=textBoard('BACK TO\nTHE CITY',2.8,1.6,'#0a1a3a','#7fd8ff',26);
+    xs2.position.set(CW.x-9,4.6,CW.z+CW.r-7.8);
+    world.add(xs2);
+  }
   P.pos.set(CW.x,0,CW.z+CW.r-8); P.vy=0;
   if(player) player.group.position.copy(P.pos);
   camYaw=Math.PI; P.yaw=Math.PI;
@@ -6561,8 +6567,8 @@ function endWave(win2){
       obj('🏗️ Step on the café lot to build the SECOND FLOOR — then levels 4-6 (the FAT dogs).');
     } else if(catLvl>=6){
       sndFanfare();
-      msg('🏆 ALL 6 CAFÉ LEVELS CLEARED! 🏆<br><span style="font-size:55%">The dogs have given up forever. The café is safe.</span>',6000);
-      obj('🏆 CAFÉ DEFENSE COMPLETE — enjoy the peace (and the fragment shrine, if you haven\'t).');
+      msg('🏆 ALL 6 CAFÉ LEVELS CLEARED! 🏆<br><span style="font-size:55%">The dogs have given up forever. The BACK-TO-THE-CITY portal awaits at the south edge.</span>',6000);
+      obj('🏆 CAFÉ DEFENSE COMPLETE — fragment shrine north, city teleport south.');
     }
     else {
       msg('⬆️ WAVE '+catLvl+' CLEARED — you evolved into <b>'+CAT_TIERS[catTierIdx()]+'</b>!<br><span style="font-size:55%">🔧 Café repaired to full HP.</span>',3800);
@@ -6751,6 +6757,23 @@ function updateAutoBuild(dt){
 /* ---- act 5 per-frame ---- */
 function updateCW(dt){
   if(slamCd>0) slamCd-=dt;
+  /* exit teleport to the city (blocked mid-wave and mid-boss) */
+  if(cwExitPortal){
+    cwExitPortal.userData.ring.rotation.z+=dt*2;
+    cwExitPortal.userData.disc.rotation.z-=dt*3;
+    if(!P.dead&&!wave&&!(dogCasoh&&!dogCasoh.dead)
+       &&P.pos.distanceTo(cwExitPortal.position)<2.2){
+      PH='metro'; padCd=1.5;
+      spatula=spatula||catUnlocked; ensureCityExtraPads();
+      P.pos.set(CITY.x+6,0,CITY.z-32); P.vy=0;
+      if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI; P.yaw=Math.PI;
+      setMood('day'); sndPortal(); sndWhoosh(false);
+      obj(catLvl>=6?'🏆 Cat World conquered. The city is yours to roam.':'🏙️ Back in the city — the pink portal returns to Cat World.');
+      updateMobileUI();
+      return;
+    }
+  }
   if(grenUnlocked&&catGren<3){ grenT+=dt; if(grenT>=45){ grenT=0; catGren++; catHud(); } }
   if(breakMsgCd>0) breakMsgCd-=dt;
   if(waveBreakT>0&&!wave){
