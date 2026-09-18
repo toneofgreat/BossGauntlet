@@ -112,6 +112,16 @@
     box-shadow:0 3px 0 #10151f}
   #forms button:active{transform:translateY(2px)}
   #forms button.on{background:linear-gradient(180deg,#ffd83d,#ff9500);color:#4a2500}
+  #coins{position:absolute;top:122px;right:16px;color:#ffd83d;font-weight:900;font-size:15px;
+    text-shadow:0 2px 4px #000;display:none}
+  #black{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:38;
+    display:flex;align-items:center;justify-content:center}
+  #blackTxt{color:#fff;font-weight:900;font-size:clamp(24px,6vw,54px);letter-spacing:6px;
+    opacity:0;transition:opacity .6s;text-shadow:0 0 30px #ffffff88}
+  #glitch{position:fixed;inset:0;pointer-events:none;z-index:36;display:none;mix-blend-mode:screen;
+    background:repeating-linear-gradient(0deg,#ff004c33 0 3px,#00ffe033 3px 6px,transparent 6px 15px)}
+  #glitch.on{display:block;animation:gl .09s steps(2) infinite}
+  @keyframes gl{0%{transform:translate(-8px,3px)}50%{transform:translate(7px,-4px) scaleY(1.04)}100%{transform:translate(-3px,5px)}}
   #warn{display:none;background:#1a0505f2}
   #warn h1{background:linear-gradient(180deg,#ffe14d,#ff3b3b);-webkit-background-clip:text;background-clip:text}
 </style>
@@ -131,9 +141,12 @@
   <div id="bux"></div>
   <div id="wood"></div>
   <div id="sbux"></div>
+  <div id="coins"></div>
   <div id="xpWrap"><div class="bar"><i></i></div><b></b></div>
 </div>
 <div id="flash"></div>
+<div id="black"><span id="blackTxt"></span></div>
+<div id="glitch"></div>
 <div id="mc">
   <div id="stick"><div id="knob"></div></div>
   <div class="mbtn" id="bJump">JUMP</div>
@@ -1173,7 +1186,7 @@ function progScore(s){
   return (s.gun?1:0)+(s.torn?1:0)+(s.rich?2:0)+(s.city?1:0)+(s.jg?4:0)+(s.hw?8:0)
     +(s.god?16:0)+(s.oc?32:0)+(s.spat?64:0)+(s.cw?128:0)+(s.fr?256:0)
     +(s.sz?512:0)+(s.win?1024:0)+(s.sx?2048:0)+(s.rpg||0)*300
-    +(s.by1?4096:0)+(s.by2?8192:0)+(s.ult?16384:0)
+    +(s.by1?4096:0)+(s.by2?8192:0)+(s.ult?16384:0)+(s.fin?32768:0)+(s.bq?65536:0)+(s.bh||0)*131072
     +(s.cl||0)*0.5+(s.fl||0)*0.5+(s.tk||0)*0.1+Math.min(s.xp||0,4000)*0.001;
 }
 function save(){
@@ -1183,7 +1196,8 @@ function save(){
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
      sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,
-     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,fin:finWon?1:0,v:3};
+     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,fin:finWon?1:0,
+     cn:coins,bq:blobsDone?1:0,bh:bhStage,v:3};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1252,8 +1266,8 @@ function spawnPlayer(kind){
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
-    ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'
-    ||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5')?'none':'block';
+    ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'
+    ||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5'||PH==='cut6')?'none':'block';
   var inBoss=PH==='boss';
   $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
   $('bForm').style.display=spatula?'flex':'none';
@@ -1320,6 +1334,13 @@ addEventListener('pointerup',function(e){
   if(PH==='catbuild'){ tryPlaceCb(e); return; }
   if(PH==='szbuild'){ if(sxActive()) tryPlaceSx(e); else tryPlaceSz(e); return; }
   if(PH==='bybuild'){ tryPlaceBy(e); return; }
+  if(PH==='bhbuild'){ tryPlaceBh(e); return; }
+  if(PH==='cut6'){ if(cutSkipOk) endCut6(); return; }
+  if(PH==='haven'){
+    if(cf&&cf.state==='contest'){ cfContestClick(); return; }
+    if(gunEquipped) shoot(); else tryPunch();
+    return;
+  }
   if(PH==='cut4'){ if(cutSkipOk) cut4T=99; return; }
   if(PH==='cut5'){ if(cutSkipOk) cut5T=99; return; }
   if(PH==='castle'){
@@ -1510,6 +1531,7 @@ function combatTargets(){
         hurt:function(dm){ hurtUltBoss(dm,false); }});
   }
   combatTargetsFinale(list);
+  combatTargetsAct10(list);
   return list;
 }
 function shoot(){
@@ -2248,7 +2270,12 @@ function hurtPlayer(dmg,why){
     else if(PH==='fin'){
       if(finState==='boss') killPlayer('DECONSTRUCTED!','The Architect rebuilt you into rubble. Again?',startFinaleBoss);
       else if(finState==='stars') killPlayer('STARFALL!','The stars overwhelmed you. Retry the star fight.',startStarFight);
+      else if(finState==='blobs') killPlayer('SLIMED!','The blobs absorbed you. The invasion resets — again?',startBlobQuest);
+      else if(finState==='after'||finState==='done'){ P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%'; }
       else killPlayer('FELL!','The obby is unforgiving. Back to the boss.',startFinaleBoss);
+    }
+    else if(PH==='haven'){
+      killPlayer('ROLLED FLAT!','casoh got you. He resets to full HP — go again?',startCasohFight);
     }
     else if(PH==='rpg'){
       killPlayer('FELLED!','The RPG shows no mercy. Your quest progress is safe — try again from town.',function(){
@@ -2508,6 +2535,9 @@ function updatePlayer(dt){
     if(finState!=='obby'){ var df=new THREE.Vector3(P.pos.x-FIN.x,0,P.pos.z-FIN.z);
       if(df.length()>29){ df.setLength(29); P.pos.x=FIN.x+df.x; P.pos.z=FIN.z+df.z; } }
     else { P.pos.x=clamp(P.pos.x,FIN.x-40,FIN.x+40); P.pos.z=clamp(P.pos.z,FIN.z-40,FIN.z+40); }
+  } else if(PH==='haven'){
+    var dh=new THREE.Vector3(P.pos.x-BH.x,0,P.pos.z-BH.z);
+    if(dh.length()>BH.r-2){ dh.setLength(BH.r-2); P.pos.x=BH.x+dh.x; P.pos.z=BH.z+dh.z; }
   } else if(PH==='city'||PH==='metro'){
     if(PH==='city'){
       P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
@@ -2585,7 +2615,7 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20*buildZoom,11*buildZoom*buildTilt,Math.cos(camOrbit.a)*20*buildZoom);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'){
+  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'){
     camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
     camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
     var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
@@ -2631,7 +2661,7 @@ function updateAmbient(dt){
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'){
+  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2652,6 +2682,7 @@ function animate(){
   else if(PH==='cut3') updateCut3(dt);
   else if(PH==='cut4') updateCut4(dt);
   else if(PH==='cut5') updateCut5(dt);
+  else if(PH==='cut6') updateCut6(dt);
   else {
     updatePlayer(dt);
     if(PH==='jungle'||PH==='home') updateHikers(dt);
@@ -2667,6 +2698,7 @@ function animate(){
     updateAct7(dt);
     updateAct8(dt);
     updateFinale(dt);
+    updateAct10(dt);
     /* autosave every 20s — the regression guard makes this always safe */
     autosaveT+=dt;
     if(autosaveT>=20){ autosaveT=0; if(PH!=='menu') save(); }
@@ -2712,12 +2744,30 @@ function startSkip(sv){
     applyAct6Skip(sv);
     applyAct7Skip(sv);
     applyAct8Skip(sv);
-    if(sv.by1||sv.by2){
+    applyAct10Skip(sv);
+    if(sv.bh>=7){ /* casoh beaten in Builder's Haven: back in the city with the stud bux */
+      ensureCityExtraPads();
+      var kk6=curForm==='worker'?false:curForm==='biz'?true:curForm;
+      spawnPlayer(kk6);
+      PH='metro';
+      P.pos.set(CITY.x+30,0,CITY.z-6); if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI/2; P.yaw=Math.PI/2;
+      sbuxHud(); coinsHud(); catHud(); setMood('day');
+      obj('👑 casoh is beaten, 🪵 '+studBux.toLocaleString()+' STUD BUX are yours… and someone is looking for you. (to be continued)');
+      hint('The white FINALE gate in The Beyond → Builder\'s Haven, any time');
+    } else if(sv.bh>=1){ /* mid-haven: straight back to the current build stage / the fight */
+      var kk5=curForm==='worker'?false:curForm==='biz'?true:curForm;
+      spawnPlayer(kk5);
+      sbuxHud(); coinsHud(); catHud();
+      enterHaven();
+    } else if(sv.by1||sv.by2){
       var kk3=curForm==='worker'?false:curForm==='biz'?true:curForm;
       spawnPlayer(kk3);
       sbuxHud(); catHud();
       enterBY();
       if(sv.ult){ obj('👑 THE ABSOLUTE CHAMPION. Every act, every world, every casoh.'); }
+      if(finWon&&!blobsDone) obj('🟢 QUEST: something green stirs in the trophy arena — the white FINALE gate.');
+      else if(finWon&&blobsDone) obj('🏗️ BUILDER\'S HAVEN waits past the white FINALE gate'+(bhStage?'':' (100 🪙)')+'.');
     } else if(sv.sz){
       ensureCityExtraPads();
       var kk2=curForm==='worker'?false:curForm==='biz'?true:curForm;
@@ -2725,7 +2775,7 @@ function startSkip(sv){
       sbuxHud(); catHud();
       enterSZ();
       if(gameWon){
-        obj('🏆 YOU WIN (for now) — the whole brick universe is yours.');
+        obj('🏆 YOU WIN (for now) — but the void tears open: THE BEYOND gate waits in space.');
         hint('P = become anyone · the portal returns to the city');
       }
     } else if(sv.cw){
@@ -6843,7 +6893,7 @@ function catNadeBoom(pos){
 var autoBuild=false,autoT=0;
 function inBuildPhase(){
   return PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'
-    ||PH==='szbuild'||PH==='bybuild'||PH==='build'||PH==='buildwalk'||furnMode;
+    ||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'||PH==='build'||PH==='buildwalk'||furnMode;
 }
 function autoPlaceOne(){
   if(PH==='citybuild') placeCityChunk();
@@ -6852,6 +6902,7 @@ function autoPlaceOne(){
   else if(PH==='catbuild') placeCbChunk();
   else if(PH==='szbuild'){ if(sxActive()) placeSxChunk(); else placeSzChunk(); }
   else if(PH==='bybuild') placeByChunk();
+  else if(PH==='bhbuild') placeBhChunk();
   else placeStep();
 }
 function setAutoBuild(on){
@@ -9263,17 +9314,10 @@ var FIN={x:-620,z:-1150};
 var finGate=null,finGroup=null,finState='none',finWon=false,finCd=0;
 var finBoss=null,finStars=[],finStarsLeft=0,obbyPads=[],obbyTop=null,finTrophy=null;
 function enterFinale(){
+  if(finWon){ enterFinaleDone(); return; } /* trophy already won: the arena is the blob / haven hub now */
   PH='fin'; finState='boss';
   setMood('boss');
-  if(!finGroup){
-    finGroup=new THREE.Group(); world.add(finGroup);
-    var fl=new THREE.Mesh(new THREE.CircleGeometry(30,36),mat(0x14121e));
-    fl.rotation.x=-Math.PI/2; fl.position.set(FIN.x,0.04,FIN.z); finGroup.add(fl);
-    for(var i=0;i<40;i++){ var a=i/40*6.28;
-      var pil=box(1,rand(4,9),1,0x2a2740);
-      pil.position.set(FIN.x+Math.cos(a)*29,pil.geometry.parameters.height/2,FIN.z+Math.sin(a)*29);
-      finGroup.add(pil); }
-  }
+  ensureFinArena();
   P.pos.set(FIN.x,0,FIN.z+22); P.vy=0;
   if(player) player.group.position.copy(P.pos);
   camYaw=0; P.yaw=0;
@@ -9398,6 +9442,11 @@ function finaleWin(){
   },280);
   msg('🏆🌟 THE TROPHY IS YOURS 🌟🏆<br><span style="font-size:60%">The Architect. The stars. The impossible climb.<br><b>YOU HAVE TRULY FINISHED BRICK LEGEND. THE END. (or is it?)</b></span>',20000);
   obj('🏆 THE END. You did everything. Every act, every world, every star. Legend.');
+  if(!blobsDone){
+    bhTimer=setTimeout(function(){ bhTimer=null; if(PH==='fin'&&finState==='done') startBlobQuest(); },9000);
+  } else {
+    bhTimer=setTimeout(function(){ bhTimer=null; if(PH==='fin'&&finState==='done') enterFinaleDone(); },6000);
+  }
 }
 function updateFinale(dt){
   if(finCd>0) finCd-=dt;
@@ -9447,6 +9496,1057 @@ function combatTargetsFinale(list){
   if(finState==='boss'&&finBoss) list.push({pos:finBoss.mesh.position,y:4,big:true,hurt:function(d){ hurtFinBoss(d); }});
   if(finState==='stars') finStars.forEach(function(st){ if(!st.dead)
     list.push({pos:st.mesh.position,y:0,hurt:function(){ hurtStar(st); }}); });
+}
+
+/* ================================================================
+   ACT 10 — BUILDER'S HAVEN (the cursed build)
+   After the trophy: a BLOB INVASION in the finale arena (kill all 20
+   → 100 coins), a gold gate that costs 100 coins → BUILDER'S HAVEN.
+   Build an 18,000-piece house in 700 clicks… it glitches out at the
+   end. Rebuild in 600 (half cursed). Again in 1,000 (black floor,
+   all cursed). "STOP BUILDING NOW" — 500 pieces of cursed matter,
+   the game begs you to stop, a METEOR flattens it and casoh is
+   inside. Rebuild in 600 and casoh rolls at you: win his games
+   (summons / rolling / eating contest) to chip his HP — you regen,
+   he doesn't. Kill him → 75,000 STUD BUX, the CASOH GOD ("cya next
+   time"), then BEHIND THE SCENES: the god rides a city elevator into
+   FOOD WORLD and demon casoh dabs. Back to the city.
+   ================================================================ */
+var BH={x:-620,z:-1420,r:70}, BTS={x:-900,z:-1700};
+var RED='color:#ff2222;text-shadow:0 0 18px #ff0000,0 2px 4px #000';
+var coins=0,blobsDone=false,blobs=[],blobsAlive=0,BLOB_TOTAL=20,havenGate=null,finReturn=null;
+var bhStage=0,bhGroup=null,bhGround=null,bhInst=null,bhBricks=[],bhSegs=[],bhMeshItems=[],bhChunks=[];
+var bhIdx=0,bhParts=0,bhPartsTotal=0,bhGhostMk=null,bhCine=false,bhGlitchT=0,bhNextStage=0;
+var BH_CLICKS=[0,700,600,1000,500,600];
+var bhMet=null,bhMetT=-1,bhCrater=null,bhReturn=null,bhCd=0,bhTimer=null,bhSign=null;
+var curseMat=new THREE.MeshLambertMaterial({color:0x2a1040});
+var doomMat=new THREE.MeshLambertMaterial({color:0x14000a});
+var cf=null,cfTimers=[],casohGod=null;
+var cut6T=-1,btsGroup=null,bts=null;
+MOODS.curse={sky:0x150a20,fog:[40,190],amb:0.35,hemi:0.2,sun:0.4,sunC:0xb070ff};
+MOODS.doom={sky:0x1a0003,fog:[30,150],amb:0.3,hemi:0.15,sun:0.5,sunC:0xff3030};
+MOODS.casoh={sky:0x2b161a,fog:[70,260],amb:0.34,hemi:0.22,sun:0.5,sunC:0xff7a55}; /* blood dusk, but you can SEE him coming */
+function coinsHud(){ var e=$('coins');
+  e.style.display=(coins>0||blobsDone)?'block':'none';
+  e.textContent='🪙 '+coins+' COINS'; }
+function sndGlitch(){ if(!actx()) return;
+  for(var i=0;i<6;i++) blip(rand(60,2200),'square',0.22,0.06,i*0.05,rand(60,2200));
+  knock(3000,0.5,0.12,0.1); }
+function sndCrack(){ if(!actx()) return; knock(1400,0.7,0.08,0); knock(900,0.6,0.1,0.12); knock(2200,0.5,0.06,0.22); }
+function sndDab(){ if(!actx()) return; knock(220,0.9,0.14,0); blip(90,'sine',0.7,0.45,0,38); blip(1800,'square',0.18,0.05,0.05); }
+function sndDing(){ if(!actx()) return; blip(1320,'sine',0.35,0.6); blip(1760,'sine',0.25,0.7,0.12); }
+function sndRumble(){ if(!actx()) return; knock(90,0.5,0.25,0); blip(40,'sine',0.5,0.3,0,30); }
+
+/* ---- the finale arena, after the trophy: blobs, then the gold gate ---- */
+function ensureFinArena(){
+  if(finGroup) return;
+  finGroup=new THREE.Group(); world.add(finGroup);
+  var fl=new THREE.Mesh(new THREE.CircleGeometry(30,36),mat(0x14121e));
+  fl.rotation.x=-Math.PI/2; fl.position.set(FIN.x,0.04,FIN.z); finGroup.add(fl);
+  for(var i=0;i<40;i++){ var a=i/40*6.28;
+    var pil=box(1,rand(4,9),1,0x2a2740);
+    pil.position.set(FIN.x+Math.cos(a)*29,pil.geometry.parameters.height/2,FIN.z+Math.sin(a)*29);
+    finGroup.add(pil); }
+}
+function ensureFinAfter(){
+  if(!finReturn){
+    finReturn=makePortal(FIN.x-12,FIN.z+18);
+    var s=neon('BACK TO\nTHE BEYOND',2.8,1.6,0x9b5cff);
+    s.position.set(FIN.x-12,4.8,FIN.z+16.2); world.add(s);
+  }
+  if(blobsDone&&!havenGate){
+    havenGate=makePortal(FIN.x+10,FIN.z+18);
+    havenGate.userData.ring.material=bmat(0xffd83d);
+    havenGate.userData.disc.material=new THREE.MeshBasicMaterial({color:0xffb300,transparent:true,opacity:0.75,side:THREE.DoubleSide});
+    var s2=neon('🏗️ BUILDER\'S HAVEN\n100 🪙',3.6,1.9,0xffd83d);
+    s2.position.set(FIN.x+10,5,FIN.z+16.2); world.add(s2);
+  }
+}
+function enterFinaleDone(){
+  ensureFinArena();
+  PH='fin'; finState='after';
+  setMood('space'); clearBlockColliders();
+  P.pos.set(FIN.x,0,FIN.z+22); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  ensureFinAfter();
+  if(!blobsDone){ obj('🟢 The trophy arena… something is moving.'); bhTimer=setTimeout(function(){ bhTimer=null; if(PH==='fin'&&finState==='after') startBlobQuest(); },1200); }
+  else obj(bhStage>=7?'🏗️ The gold gate → Builder\'s Haven (casoh is beaten there). Purple = The Beyond.':'🏗️ The gold gate → BUILDER\'S HAVEN'+(bhStage?'':' (100 🪙)')+'. Purple = back to The Beyond.');
+  updateMobileUI();
+}
+function clearBlobs(){ blobs.forEach(function(b){ if(b.mesh.parent) world.remove(b.mesh); }); blobs.length=0; }
+function spawnBlob(a,r){
+  var g=new THREE.Group();
+  var body=new THREE.Mesh(new THREE.SphereGeometry(0.9,12,9),mat(0x5ad24a));
+  body.position.y=0.8; body.scale.y=0.75; g.add(body);
+  [-1,1].forEach(function(s){ var e=bx(0.2,0.24,0.1,0x111111); e.position.set(s*0.3,1,0.8); g.add(e); });
+  var mouth=bx(0.4,0.08,0.1,0x1a4a12); mouth.position.set(0,0.62,0.86); g.add(mouth);
+  g.position.set(FIN.x+Math.cos(a)*r,0,FIN.z+Math.sin(a)*r);
+  world.add(g);
+  blobs.push({mesh:g,body:body,hp:45,dead:false,atkCd:0,hop:rand(0,3),sp:rand(3,4.4)});
+  blobsAlive++;
+}
+function startBlobQuest(){
+  ensureFinArena(); clearBlobs(); clearHazards();
+  PH='fin'; finState='blobs'; blobsAlive=0;
+  battleMusic(true); setMood('boss');
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(FIN.x,0,FIN.z+12); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  for(var i=0;i<BLOB_TOTAL;i++) spawnBlob(i/BLOB_TOTAL*Math.PI*2,rand(20,26));
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='🟢 BLOB INVASION 🟢';
+  $('bossBar').firstElementChild.style.width='100%';
+  hasGun=true;
+  sndRoar(false); doFlash('#5ad24a'); camShake=0.5;
+  msg('🟢 BLOB INVASION! 🟢<br><span style="font-size:55%">QUEST: kill ALL '+BLOB_TOTAL+' blobs → <b>100 🪙 COINS</b>. (1 = gun · F = punch)</span>',5200);
+  obj('🟢 QUEST: kill all blobs — '+BLOB_TOTAL+'/'+BLOB_TOTAL+' left · reward 100 🪙');
+  hint('1 = equip gun · click / SHOOT · R = reload · F = punch');
+  updateMobileUI();
+}
+function hurtBlob(b,dmg){
+  if(b.dead) return;
+  b.hp-=dmg;
+  b.body.scale.set(1.25,0.55,1.25);
+  (function(bb){ tween(0.18,function(k){ bb.body.scale.set(1.25-0.25*k,0.55+0.2*k,1.25-0.25*k); }); })(b);
+  burst(b.mesh.position.clone().setY(0.9),0x5ad24a,4,{speed:3,life:0.5});
+  if(b.hp<=0){
+    b.dead=true; world.remove(b.mesh); blobsAlive--;
+    sndWoodFall(); burst(b.mesh.position.clone().setY(0.8),0x7dffa0,14,{speed:5,life:0.8});
+    $('bossBar').firstElementChild.style.width=clamp(blobsAlive/BLOB_TOTAL*100,0,100)+'%';
+    obj('🟢 QUEST: kill all blobs — '+blobsAlive+'/'+BLOB_TOTAL+' left · reward 100 🪙');
+    if(blobsAlive<=0) blobsWon();
+  }
+}
+function updateBlobs(dt){
+  blobs.forEach(function(b){
+    if(b.dead) return;
+    var g=b.mesh; b.hop+=dt*6;
+    g.position.y=Math.abs(Math.sin(b.hop))*0.7;
+    var dx=P.pos.x-g.position.x, dz=P.pos.z-g.position.z, l=Math.hypot(dx,dz)||1;
+    if(l>1.5){ g.position.x+=dx/l*b.sp*dt; g.position.z+=dz/l*b.sp*dt; g.rotation.y=Math.atan2(dx,dz); }
+    else { b.atkCd-=dt;
+      if(b.atkCd<=0&&!P.dead){ b.atkCd=1.2; hurtPlayer(8,'Blob slap!'); sndPunch(true); } }
+  });
+}
+function blobsWon(){
+  blobsDone=true; coins+=100; coinsHud(); save();
+  finState='after'; battleMusic(false); setMood('space');
+  $('bossWrap').style.display='none';
+  sndFanfare(); setTimeout(sndFanfare,500); doFlash('#ffd83d');
+  for(var i=0;i<6;i++) burst(P.pos.clone().add(new THREE.Vector3(rand(-4,4),rand(1,5),rand(-4,4))),0xffd83d,12,{speed:5,life:1.1});
+  ensureFinAfter();
+  msg('💰 QUEST COMPLETE: +100 🪙 COINS! 💰<br><span style="font-size:55%">All blobs are goo. A GOLD gate hums behind you: <b>BUILDER\'S HAVEN — 100 🪙</b>.</span>',6000);
+  obj('🏗️ Walk into the GOLD gate → BUILDER\'S HAVEN (costs 100 🪙).');
+  hint('Purple gate = back to The Beyond');
+}
+function tryEnterHaven(){
+  if(bhStage===0){
+    if(coins<100){ msg('🪙 You need 100 COINS — you have '+coins+'.',2200); sndUi(); return; }
+    coins-=100; coinsHud();
+    msg('🪙 −100 COINS. Welcome to BUILDER\'S HAVEN.',2400);
+  }
+  sndPortal(); sndWhoosh(true);
+  enterHaven();
+}
+
+/* ---- BUILDER'S HAVEN: the 18,000-piece house (one InstancedMesh + ~170 detail chunks) ---- */
+function bhWindow(x,y,z,ry){
+  var g=new THREE.Group();
+  var fr=box(2.2,2.2,0.34,0xf4f4f4); g.add(fr);
+  var gl=new THREE.Mesh(boxGeo(1.8,1.8,0.4),glassMat); g.add(gl);
+  var sill=box(2.6,0.2,0.7,0xd8c5a8); sill.position.y=-1.15; g.add(sill);
+  g.position.set(x,y,z); g.rotation.y=ry; return g;
+}
+function bhHouseGen(){
+  var hx=BH.x, hz=BH.z-10, HW2=22, HD2=16, FH=4.5, ROWS=18, BW=0.5, BHT=0.25;
+  var FCOL=[0xc62b21,0xf4e9d8,0x2a6fd6];
+  bhBricks.length=0; bhSegs.length=0; bhMeshItems.length=0;
+  var XW=[-19,-14.5,-9.5,-4.5,4.5,9.5,14.5,19], ZW=[-14,-9,-4,4,9,14];
+  function xWin(u){ for(var i=0;i<8;i++) if(Math.abs(u-XW[i])<1) return true; return false; }
+  function zWin(u){ for(var i=0;i<6;i++) if(Math.abs(u-ZW[i])<1) return true; return false; }
+  var tmpC=new THREE.Color();
+  function addBrick(x,y,z,rx,sx,sy,sz,col){
+    tmpC.setHex(col); tmpC.offsetHSL(0,0,rand(-0.05,0.05));
+    bhBricks.push({x:x,y:y,z:z,rx:rx,sx:sx,sy:sy,sz:sz,c:tmpC.getHex()});
+  }
+  var f,r,i,u,y,off,win,seg0;
+  for(f=0;f<3;f++){
+    seg0=bhBricks.length;
+    for(r=0;r<ROWS;r++){
+      y=0.5+f*FH+r*BHT+BHT/2;
+      off=(r%2)?BW/2:0; win=(r>=6&&r<14);
+      for(i=0;i<88;i++){ u=-HW2+BW/2+i*BW+off; if(u>HW2) break;
+        if(win&&xWin(u)) continue;
+        if(f===0&&r<14&&Math.abs(u)<1.3) continue; /* the door */
+        addBrick(hx+u,y,hz+HD2,0,1,1,1,FCOL[f]); }
+      for(i=0;i<64;i++){ u=HD2-BW/2-i*BW-off; if(u<-HD2) break;
+        if(win&&zWin(u)) continue; addBrick(hx+HW2,y,hz+u,0,1,1,1,FCOL[f]); }
+      for(i=0;i<88;i++){ u=HW2-BW/2-i*BW-off; if(u<-HW2) break;
+        if(win&&xWin(u)) continue; addBrick(hx+u,y,hz-HD2,0,1,1,1,FCOL[f]); }
+      for(i=0;i<64;i++){ u=-HD2+BW/2+i*BW+off; if(u>HD2) break;
+        if(win&&zWin(u)) continue; addBrick(hx-HW2,y,hz+u,0,1,1,1,FCOL[f]); }
+    }
+    bhSegs.push({i0:seg0,i1:bhBricks.length,after:f,label:'Wall bricks — floor '+(f+1)});
+  }
+  /* the roof: two tiled slopes up to a ridge */
+  seg0=bhBricks.length;
+  var EY=0.5+3*FH, RH=8, RD=HD2+1, L=Math.sqrt(RD*RD+RH*RH), nS=Math.round(L/0.6), nX=Math.round((HW2*2+2)/0.6), ang=Math.atan2(RH,RD);
+  for(var s=0;s<nS;s++){ var k=(s+0.5)/nS, zz=RD*(1-k), yy=EY+RH*k;
+    for(var side=-1;side<=1;side+=2)
+      for(i=0;i<nX;i++){ var xx=-(HW2+1)+0.3+i*0.6;
+        addBrick(hx+xx,yy,hz+side*zz,side*ang,1.2,0.6,1.2,(s%2)?0x7a3a28:0x6a3020); } }
+  bhSegs.push({i0:seg0,i1:bhBricks.length,after:3,label:'Roof tiles'});
+  /* detail chunks (real meshes), in build order: after=-1 first, 0..2 after each floor, 3 after roof, 4 last */
+  function M(label,parts,after,make){ bhMeshItems.push({label:label,parts:parts,after:after,make:make}); }
+  M('Foundation plate',1,-1,function(){ var p=studdedBox(46,0.5,34,0x9aa5ad,0x8a959d); p.position.set(hx,0.25,hz); return p; });
+  for(f=0;f<3;f++)(function(f){
+    var wy=0.5+f*FH+2.5;
+    XW.forEach(function(u){ [1,-1].forEach(function(sd){
+      M('Window — floor '+(f+1),3,f,function(){ return bhWindow(hx+u,wy,hz+sd*HD2,0); }); }); });
+    ZW.forEach(function(u){ [1,-1].forEach(function(sd){
+      M('Window — floor '+(f+1),3,f,function(){ return bhWindow(hx+sd*HW2,wy,hz+u,Math.PI/2); }); }); });
+  })(f);
+  M('Front door',3,0,function(){ var g=new THREE.Group();
+    var d=box(2.4,3.5,0.34,0x8a5a2a); d.position.set(hx,2.25,hz+HD2); g.add(d);
+    var kn=bx(0.16,0.16,0.12,0xffd83d); kn.position.set(hx+0.8,2.1,hz+HD2+0.22); g.add(kn);
+    var st=studdedBox(3.2,0.3,1.4,0x9aa5ad,0x8a959d); st.position.set(hx,0.65,hz+HD2+1); g.add(st); return g; });
+  M('Balcony',7,2,function(){ var g=new THREE.Group();
+    var fl=box(8,0.3,3,0xf4f4f4); fl.position.set(hx,0.5+2*FH,hz+HD2+1.5); g.add(fl);
+    for(var p=0;p<5;p++){ var po=box(0.2,1,0.2,0xf4f4f4); po.position.set(hx-3.6+p*1.8,0.5+2*FH+0.6,hz+HD2+2.9); g.add(po); }
+    var rail=box(8,0.15,0.15,0xf4f4f4); rail.position.set(hx,0.5+2*FH+1.1,hz+HD2+2.9); g.add(rail); return g; });
+  [1,-1].forEach(function(sd){
+    M('Gable end',8,3,function(){ var g=new THREE.Group();
+      for(var j=0;j<8;j++){ var w=2*RD*(1-(j+0.5)/8); var b=box(0.5,1,w,FCOL[2]); b.position.set(hx+sd*HW2,EY+j+0.5,hz); g.add(b); }
+      return g; });
+  });
+  M('Ridge beam',1,3,function(){ var b=box(HW2*2+2.5,0.5,0.8,0x3a2a20); b.position.set(hx,EY+RH+0.2,hz); return b; });
+  M('Chimney',2,3,function(){ var g=new THREE.Group();
+    var c=studdedBox(2,5,2,0x8a3a2a,0x7a3020); c.position.set(hx+12,EY+RH-2,hz-6); g.add(c);
+    var sm=bx(0.8,0.8,0.8,0xaaaaaa); sm.position.set(hx+12,EY+RH+1.2,hz-6); g.add(sm); return g; });
+  /* the garden */
+  var FX=28, FZ=23, per=2*(2*FX+2*FZ);
+  for(i=0;i<40;i++)(function(i){
+    M('Fence post',2,4,function(){
+      function pt(t){ var d=t*per;
+        if(d<2*FX) return [ -FX+d, FZ ];
+        d-=2*FX; if(d<2*FZ) return [ FX, FZ-d ];
+        d-=2*FZ; if(d<2*FX) return [ FX-d, -FZ ];
+        d-=2*FX; return [ -FX, -FZ+d ]; }
+      var a=pt(i/40), b=pt(((i+1)%40)/40);
+      var g=new THREE.Group();
+      var po=box(0.3,1.2,0.3,0xf4f4f4); po.position.set(hx+a[0],0.6,hz+a[1]); g.add(po);
+      var len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+      if(!(Math.abs(a[0])<3&&a[1]>0)){ /* leave the path gap on the south side */
+        var rl=box(len,0.15,0.15,0xf4f4f4); rl.position.set(hx+(a[0]+b[0])/2,0.9,hz+(a[1]+b[1])/2);
+        rl.rotation.y=-Math.atan2(b[1]-a[1],b[0]-a[0]); g.add(rl); }
+      return g; });
+  })(i);
+  for(i=0;i<10;i++)(function(i){
+    M('Path tile',1,4,function(){ var t=studdedBox(1.8,0.2,1.3,0xd8c5a8,0xc8b598); t.position.set(hx,0.1+(i===0?0.5:0),hz+HD2+2.2+i*1.5); return t; });
+  })(i);
+  [[-25,20],[25,20],[-25,-20],[25,-20],[-25,0],[25,0]].forEach(function(tp){
+    M('Garden tree',2,4,function(){ var g=new THREE.Group();
+      var tk=box(0.5,2.5,0.5,0x8a5a2a); tk.position.set(hx+tp[0],1.25,hz+tp[1]); g.add(tk);
+      var fo=studdedBox(2.4,2,2.4,0x2e8b2e,0x256e25); fo.position.set(hx+tp[0],3.4,hz+tp[1]); g.add(fo); return g; });
+  });
+  for(i=0;i<20;i++)(function(i){
+    var a=i/20*Math.PI*2, fx=Math.cos(a)*rand(25,27), fz=Math.sin(a)*rand(19,21);
+    M('Flower',2,4,function(){ var g=new THREE.Group();
+      var st=box(0.08,0.5,0.08,0x2e8b2e); st.position.set(hx+fx,0.25,hz+fz); g.add(st);
+      var fl=bx(0.3,0.3,0.3,RAINBOW[i%7]); fl.position.set(hx+fx,0.6,hz+fz); g.add(fl); return g; });
+  })(i);
+  [[-27,22],[27,22],[-27,-22],[27,-22]].forEach(function(lp){
+    M('Lamp post',2,4,function(){ var g=new THREE.Group();
+      var po=box(0.25,3,0.25,0x2f3540); po.position.set(hx+lp[0],1.5,hz+lp[1]); g.add(po);
+      var la=bx(0.6,0.6,0.6,0xffe97a); la.position.set(hx+lp[0],3.2,hz+lp[1]); g.add(la); return g; });
+  });
+  M('Mailbox',2,4,function(){ var g=new THREE.Group();
+    var po=box(0.2,1.2,0.2,0x5d656e); po.position.set(hx+3,0.6,hz+HD2+8); g.add(po);
+    var bo=box(0.7,0.5,1,0x2a6fd6); bo.position.set(hx+3,1.4,hz+HD2+8); g.add(bo); return g; });
+  M('BUILDER\'S HAVEN sign',2,4,function(){ var g=new THREE.Group();
+    var po=box(0.2,4,0.2,0x2f3540); po.position.set(hx-8,2,hz+HD2+9); g.add(po);
+    var sn=neon('🏗️ BUILDER\'S HAVEN',7,2,0xffd83d); sn.position.set(hx-8,4.6,hz+HD2+9); g.add(sn); return g; });
+}
+function bhEnsure(){
+  if(bhGroup) return;
+  bhGroup=new THREE.Group(); world.add(bhGroup);
+  bhGround=new THREE.Mesh(new THREE.CircleGeometry(BH.r,48),mat(0x4f9c3f));
+  bhGround.rotation.x=-Math.PI/2; bhGround.position.set(BH.x,0.02,BH.z); bhGroup.add(bhGround);
+  bhSign=neon('🏗️ BUILDER\'S HAVEN',14,3.6,0xffd83d);
+  bhSign.position.set(BH.x,26,BH.z-BH.r); bhGroup.add(bhSign);
+  bhHouseGen();
+  bhInst=new THREE.InstancedMesh(boxGeo(0.5,0.25,0.5),new THREE.MeshLambertMaterial({color:0xffffff}),bhBricks.length);
+  var m4=new THREE.Matrix4(), q=new THREE.Quaternion(), pos=new THREE.Vector3(), scl=new THREE.Vector3(), e=new THREE.Euler(), tc=new THREE.Color();
+  bhBricks.forEach(function(b,i){
+    e.set(b.rx,0,0); q.setFromEuler(e); pos.set(b.x,b.y,b.z); scl.set(b.sx,b.sy,b.sz);
+    m4.compose(pos,q,scl); bhInst.setMatrixAt(i,m4); bhInst.setColorAt(i,tc.setHex(b.c));
+  });
+  bhInst.instanceMatrix.needsUpdate=true; bhInst.instanceColor.needsUpdate=true;
+  bhInst.frustumCulled=false; bhInst.count=0;
+  bhGroup.add(bhInst);
+  bhMeshItems.forEach(function(mi){
+    var o=mi.make(); o.visible=false;
+    o.traverse(function(m){ if(m.isMesh&&!m.userData.om) m.userData.om=m.material; });
+    var bb=new THREE.Box3().setFromObject(o); mi.cx=bb.getCenter(new THREE.Vector3()).x;
+    mi.obj=o; bhGroup.add(o);
+  });
+  bhGhostMk=new THREE.Mesh(boxGeo(1,1,1),ghostMat); bhGhostMk.visible=false; world.add(bhGhostMk);
+}
+function bhMeshMode(mi,mode){
+  mi.obj.traverse(function(m){ if(m.isMesh&&m.userData.om)
+    m.material=mode==='doom'?doomMat:mode==='curse'?curseMat:m.userData.om; });
+}
+function bhModeFor(mi,stage){
+  if(stage===4) return 'doom';
+  if(stage===3) return 'curse';
+  if(stage===2&&mi.cx>BH.x) return 'curse';
+  return 'normal';
+}
+function bhApplyCurse(stage){
+  var tc=new THREE.Color();
+  for(var i=0;i<bhBricks.length;i++){
+    var b=bhBricks[i];
+    if(stage===4) tc.setHSL(0.96,0.7,Math.random()<0.12?0.28:rand(0.02,0.07));
+    else if(stage===3||(stage===2&&b.x>BH.x)) tc.setHSL(0.78,0.6,rand(0.1,0.24));
+    else tc.setHex(b.c);
+    bhInst.setColorAt(i,tc);
+  }
+  bhInst.instanceColor.needsUpdate=true;
+  bhMeshItems.forEach(function(mi){ mi.mode=bhModeFor(mi,stage); });
+  bhGround.material=mat(stage>=3&&stage<=4?0x050505:0x4f9c3f);
+  setMood(stage===4?'doom':stage>=2&&stage<=3?'curse':'day');
+}
+function bhResetHouse(){
+  bhInst.count=0;
+  bhMeshItems.forEach(function(mi){ mi.obj.visible=false; });
+  if(bhGhostMk) bhGhostMk.visible=false;
+}
+function bhShowFullHouse(){
+  bhEnsure();
+  bhInst.count=bhBricks.length;
+  bhApplyCurse(5);
+  bhMeshItems.forEach(function(mi){ mi.obj.visible=true; bhMeshMode(mi,'normal'); });
+  if(bhGhostMk) bhGhostMk.visible=false;
+  if(bhCrater){ bhGroup.remove(bhCrater); bhCrater=null; }
+}
+function bhRangeBox(i0,i1){
+  var mn=[1e9,1e9,1e9], mx=[-1e9,-1e9,-1e9];
+  for(var i=i0;i<i1;i++){ var b=bhBricks[i];
+    if(b.x<mn[0]) mn[0]=b.x; if(b.x>mx[0]) mx[0]=b.x;
+    if(b.y<mn[1]) mn[1]=b.y; if(b.y>mx[1]) mx[1]=b.y;
+    if(b.z<mn[2]) mn[2]=b.z; if(b.z>mx[2]) mx[2]=b.z; }
+  return {c:{x:(mn[0]+mx[0])/2,y:(mn[1]+mx[1])/2,z:(mn[2]+mx[2])/2},
+    s:{x:Math.max(1,mx[0]-mn[0]+0.6),y:Math.max(1,mx[1]-mn[1]+0.6),z:Math.max(1,mx[2]-mn[2]+0.6)}};
+}
+function bhBuildChunks(stage){
+  var clicks=BH_CLICKS[stage], nInst=clicks-bhMeshItems.length;
+  var per=Math.ceil(bhBricks.length/(nInst-bhSegs.length));
+  var list=[];
+  function pushMeshes(after){ bhMeshItems.forEach(function(mi){ if(mi.after===after) list.push({label:mi.label,parts:mi.parts,mi:mi}); }); }
+  pushMeshes(-1);
+  bhSegs.forEach(function(sg,si){
+    for(var i=sg.i0;i<sg.i1;i+=per){ var i1=Math.min(sg.i1,i+per); list.push({label:sg.label,parts:i1-i,i0:i,i1:i1}); }
+    pushMeshes(si);
+  });
+  pushMeshes(4);
+  while(list.length<clicks){ /* split the biggest brick chunk until the click count is exact */
+    var bi=-1,bs=1;
+    for(var k=0;k<list.length;k++){ var c=list[k]; if(c.i1!=null&&c.i1-c.i0>bs){ bs=c.i1-c.i0; bi=k; } }
+    if(bi<0) break;
+    var c2=list[bi], mid=c2.i0+((c2.i1-c2.i0)>>1);
+    list.splice(bi,1,{label:c2.label,parts:mid-c2.i0,i0:c2.i0,i1:mid},{label:c2.label,parts:c2.i1-mid,i0:mid,i1:c2.i1});
+  }
+  list.forEach(function(c){ if(c.i1!=null){ var bb=bhRangeBox(c.i0,c.i1); c.cent=bb.c; c.size=bb.s; } });
+  return list;
+}
+function bhStageLabel(){ return ['','🏗️','🟣','⚫','☠️','🔁'][bhStage]||'🏗️'; }
+function bhStartStage(n){
+  bhEnsure();
+  bhStage=n; save();
+  if(bhTimer){ clearTimeout(bhTimer); bhTimer=null; }
+  bhResetHouse();
+  if(bhCrater){ bhGroup.remove(bhCrater); bhCrater=null; }
+  bhApplyCurse(n);
+  bhChunks=bhBuildChunks(n); bhIdx=0; bhParts=0; bhPartsTotal=0;
+  bhChunks.forEach(function(c){ bhPartsTotal+=c.parts; });
+  bhCine=false; bhGlitchT=0; bhMetT=-1;
+  PH='bhbuild';
+  camOrbit.a=0.4; camOrbit.target=0.4;
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  showBhGhost();
+  var intro=[
+    '',
+    '🏗️ BUILDER\'S HAVEN<br><span style="font-size:55%">QUEST: build a HOUSE — <b>700 clicks</b>, '+bhPartsTotal.toLocaleString()+' pieces. ⚡ AUTO-BUILD is your friend.</span>',
+    '<span style="'+RED+'">⚠️ RESTART BUILDING ⚠️</span><br><span style="font-size:55%"><b>600 clicks</b> this time… and HALF the house is <b style="color:#c9a8ff">CURSED</b>.</span>',
+    '<span style="'+RED+'">⚠️ RESTART BUILDING ⚠️</span><br><span style="font-size:55%"><b>1,000 clicks</b>. The floor is BLACK. EVERY piece is cursed.</span>',
+    '<span style="'+RED+';font-size:130%">STOP BUILDING NOW</span><br><span style="font-size:55%">500 pieces of cursed matter.</span>',
+    '🔁 REBUILD.<br><span style="font-size:55%"><b>600 pieces.</b> The meteor is gone. The curse is gone. Build.</span>'
+  ][n];
+  msg(intro,n===4?6000:6500);
+  updateMobileUI();
+}
+function showBhGhost(){
+  var ch=bhChunks[bhIdx];
+  if(!ch) return;
+  bhGhostMk.visible=false;
+  if(ch.mi){
+    ch.mi.obj.visible=true;
+    ch.mi.obj.traverse(function(m){ if(m.isMesh) m.material=ghostMat; });
+    var bb=new THREE.Box3().setFromObject(ch.mi.obj);
+    var c=bb.getCenter(new THREE.Vector3()), s2=bb.getSize(new THREE.Vector3());
+    cityCam.x=c.x; cityCam.y=Math.max(3,c.y); cityCam.z=c.z;
+    cityCam.r=clamp(Math.max(s2.x,s2.z)*0.9+9,12,60);
+    cityCam.h=clamp(c.y+s2.y*0.8+5,10,55);
+  } else {
+    bhGhostMk.visible=true;
+    bhGhostMk.position.set(ch.cent.x,ch.cent.y,ch.cent.z);
+    bhGhostMk.scale.set(ch.size.x,ch.size.y,ch.size.z);
+    cityCam.x=ch.cent.x; cityCam.y=ch.cent.y; cityCam.z=ch.cent.z;
+    cityCam.r=clamp(Math.max(ch.size.x,ch.size.z)*0.8+14,16,60);
+    cityCam.h=clamp(ch.cent.y+10,12,50);
+  }
+  var lbl=bhStage===4?'cursed matter':ch.label;
+  obj(bhStageLabel()+' '+lbl+' &nbsp;<span style="color:#7df3ff">click '+(bhIdx+1).toLocaleString()+'/'+bhChunks.length.toLocaleString()
+    +' · pieces '+bhParts.toLocaleString()+'/'+bhPartsTotal.toLocaleString()+'</span>');
+  hint(bhStage===4?'<span style="color:#ff6a6a">…you were told to stop.</span> ⚡ AUTO-BUILD · drag + wheel to fly':'Click the cyan piece! ⚡ AUTO-BUILD recommended · drag + wheel to fly');
+}
+function placeBhChunk(silent){
+  if(bhCine) return;
+  var ch=bhChunks[bhIdx];
+  if(!ch) return;
+  if(ch.mi){
+    ch.mi.obj.visible=true; bhMeshMode(ch.mi,ch.mi.mode);
+    if(!silent){ ch.mi.obj.scale.set(1.15,1.15,1.15);
+      (function(oo){ tween(0.12,function(k){ var s=1.15-0.15*k; oo.scale.set(s,s,s); }); })(ch.mi.obj); }
+  } else bhInst.count=ch.i1;
+  bhParts+=ch.parts;
+  if(!silent) sndBrickClick();
+  bhIdx++;
+  bhAfterClick();
+  if(bhCine) return;
+  if(bhIdx>=bhChunks.length) bhStageComplete();
+  else showBhGhost();
+}
+function tryPlaceBh(e){
+  var ch=bhChunks[bhIdx];
+  if(!ch||bhCine) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb;
+  if(ch.mi){ bb=new THREE.Box3().setFromObject(ch.mi.obj); bb.expandByScalar(3); }
+  else bb=new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(ch.cent.x,ch.cent.y,ch.cent.z),
+    new THREE.Vector3(ch.size.x+6,ch.size.y+6,ch.size.z+6));
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan piece</b>!'); return; }
+  placeBhChunk();
+}
+function bhAfterClick(){
+  var n=bhIdx;
+  if(bhStage===1&&n===690) bhGlitch(2);
+  else if(bhStage===2&&n===590) bhGlitch(3);
+  else if(bhStage===3&&n===990) bhGlitch(4);
+  else if(bhStage===4){
+    if(n===100) msg('<span style="'+RED+'">(stop unless you wanna be doomed)</span>',4200);
+    else if(n===400) msg('<span style="'+RED+'">ok you asked for it</span>',3600);
+    else if(n===450) msg('<span style="'+RED+'">here it comes lol</span>',3600);
+  } else if(bhStage===5&&n===300) msg('( wow you won\'t give up )',3600);
+}
+function bhStageComplete(){
+  if(bhStage===4) bhLaunchMeteor();
+  else if(bhStage===5) bhBuildComplete();
+  else bhGlitch(bhStage+1);
+}
+/* ---- the glitch-out: the screen tears, the house flickers, then it's gone ---- */
+function bhGlitch(next){
+  bhCine=true; bhGlitchT=1.7; bhNextStage=next;
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  bhGhostMk.visible=false;
+  $('glitch').classList.add('on'); sndGlitch();
+  obj('<span style="'+RED+'">⚠️ ERR0R ERR0R ERR0R ⚠️</span>'); hint('');
+}
+function updateGlitch(dt){
+  bhGlitchT-=dt;
+  var cv=renderer.domElement;
+  cv.style.transform='translate('+rand(-14,14)+'px,'+rand(-8,8)+'px)'+(Math.random()<0.2?' scaleX(-1)':'');
+  bhGroup.position.set(rand(-1.5,1.5),rand(-0.5,0.5),rand(-1.5,1.5));
+  bhInst.visible=Math.random()>0.25;
+  if(Math.random()<dt*7) sndGlitch();
+  if(bhGlitchT<=0){
+    cv.style.transform=''; $('glitch').classList.remove('on');
+    bhGroup.position.set(0,0,0); bhInst.visible=true;
+    bhWipe();
+    sndBoom(); camShake=1.2; doFlash('#ff2222');
+    if(bhNextStage===4) msg('<span style="'+RED+';font-size:140%">STOP BUILDING NOW</span>',4200);
+    else msg('<span style="'+RED+'">⚠️ BUILD CORRUPTED ⚠️</span><br><span style="font-size:55%">The house glitched out. You have to restart building.</span>',3400);
+    var nx=bhNextStage;
+    bhTimer=setTimeout(function(){ bhTimer=null; if(PH==='bhbuild') bhStartStage(nx); },2800);
+  }
+}
+function bhWipe(){
+  var hx=BH.x, hz=BH.z-10;
+  for(var i=0;i<14;i++)
+    burst(new THREE.Vector3(hx+rand(-24,24),rand(1,22),hz+rand(-18,18)),
+      [0x9b5cff,0x111111,0xff2222,0x7df3ff][i%4],16,{speed:7,life:1.2,grav:4});
+  bhResetHouse();
+}
+/* ---- THE METEOR: it crashes on the house, cracks open… casoh. ---- */
+function bhLaunchMeteor(){
+  bhCine=true; bhMetT=0;
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  bhGhostMk.visible=false;
+  var hx=BH.x, hz=BH.z-10;
+  cityCam.x=hx; cityCam.y=8; cityCam.z=hz; cityCam.r=80; cityCam.h=40;
+  var g=new THREE.Group();
+  var hL=new THREE.Mesh(new THREE.SphereGeometry(5,16,12,0,Math.PI),mat(0x5a3a2a));
+  var hR=new THREE.Mesh(new THREE.SphereGeometry(5,16,12,Math.PI,Math.PI),mat(0x4a2e22));
+  g.add(hL); g.add(hR);
+  for(var i=0;i<12;i++){ var f=bx(rand(0.8,1.6),rand(0.8,1.6),rand(0.8,1.6),i%2?0xff5340:0xff8a00);
+    var a=rand(0,6.28), b=rand(-1,1); f.position.set(Math.cos(a)*4.6,b*4,Math.sin(a)*4.6); g.add(f); }
+  var spr=makeCasohSprite(); spr.scale.set(4.5,6.6,1); spr.position.y=0.4; spr.visible=false; g.add(spr);
+  var glow=bx(2.6,2.6,2.6,0x7dffa0); glow.visible=false; g.add(glow);
+  g.position.set(hx+130,110,hz+80);
+  world.add(g);
+  bhMet={mesh:g,hL:hL,hR:hR,spr:spr,glow:glow,from:new THREE.Vector3(hx+130,110,hz+80),to:new THREE.Vector3(hx,3.5,hz),phase:0,rumT:0};
+  obj('<span style="'+RED+'">☄️</span>'); hint('');
+  sndWhoosh(true); sndRumble();
+}
+function updateMeteor(dt){
+  var m=bhMet; if(!m) return;
+  bhMetT+=dt;
+  var t=bhMetT;
+  if(m.phase===0){
+    var k=clamp(t/2.4,0,1); k=k*k;
+    m.mesh.position.lerpVectors(m.from,m.to,k);
+    m.mesh.rotation.x+=dt*3; m.mesh.rotation.z+=dt*2;
+    burst(m.mesh.position.clone(),Math.random()<0.5?0xff8a00:0xff5340,3,{speed:4,life:0.6,grav:-1,size:1.2});
+    m.rumT-=dt; if(m.rumT<=0){ m.rumT=0.18; sndRumble(); }
+    camShake=Math.min(1.2,0.2+k);
+    if(t>=2.4){
+      m.phase=1; m.mesh.position.copy(m.to); m.mesh.rotation.set(0,0,0);
+      sndBoom(); setTimeout(sndBoom,120); camShake=2.6; doFlash('#ff8a00');
+      for(var i=0;i<16;i++)
+        burst(new THREE.Vector3(BH.x+rand(-26,26),rand(1,24),BH.z-10+rand(-20,20)),
+          [0xff8a00,0xff5340,0xc62b21,0xf4e9d8,0x2a6fd6][i%5],22,{speed:10,life:1.6,grav:5});
+      bhResetHouse();
+      cityCam.x=BH.x; cityCam.y=4; cityCam.z=BH.z-10; cityCam.r=30; cityCam.h=15; /* close-up on the crater */
+      bhCrater=new THREE.Mesh(new THREE.CircleGeometry(15,28),mat(0x1a0a08));
+      bhCrater.rotation.x=-Math.PI/2; bhCrater.position.set(BH.x,0.06,BH.z-10); bhGroup.add(bhCrater);
+      msg('☄️💥',1800);
+    }
+  } else if(m.phase===1&&t>=3.9){
+    m.phase=2;
+    for(var c=0;c<7;c++){ var ck=bx(0.18,rand(3,6),0.18,0x000000);
+      var a=rand(0,6.28), b=rand(-0.8,0.8);
+      ck.position.set(Math.cos(a)*4.9,b*3,Math.sin(a)*4.9); ck.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+      ck.userData.crack=true; m.mesh.add(ck); }
+    sndCrack(); setTimeout(sndCrack,300); camShake=0.5;
+  } else if(m.phase===2&&t>=5.4){
+    m.phase=3;
+    m.spr.visible=true; m.glow.visible=true;
+    tween(1.2,function(k){ m.hL.position.x=-4.6*k; m.hL.rotation.z=0.9*k; m.hR.position.x=4.6*k; m.hR.rotation.z=-0.9*k; });
+    m.mesh.children.forEach(function(ch){ if(ch.userData.crack) ch.visible=false; });
+    sndRoar(true); doFlash('#7ba03a'); camShake=0.8;
+    msg('👁️ …it\'s <b>casoh</b>?!<br><span style="font-size:55%">"erm what then house man?"</span>',4000);
+  } else if(m.phase===3&&t>=8.6){
+    m.phase=4;
+    var spr=m.spr, gl=m.glow, hx=BH.x, hz=BH.z-10;
+    var p0=spr.position.clone();
+    tween(1.6,function(k){ spr.position.set(p0.x+140*k,p0.y+30*k,p0.z+40*k); var s=1-0.85*k; spr.scale.set(4.5*s,6.6*s,1); gl.position.copy(spr.position); });
+    tween(1.6,function(k){ m.hL.position.y=-11*k; m.hR.position.y=-11*k; });
+    sndWhoosh(true);
+    msg('casoh rolls off into the distance…',2600);
+  } else if(m.phase===4&&t>=10.6){
+    m.phase=5;
+    world.remove(m.mesh); bhMet=null; bhMetT=-1;
+    bhStartStage(5);
+  }
+}
+/* ---- the house stands: your character again, and casoh in the distance ---- */
+function bhBuildComplete(){
+  bhStage=6; save();
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  bhGhostMk.visible=false; bhCine=false;
+  sndFanfare(); setTimeout(sndFanfare,600);
+  enterHavenRoam();
+  msg('🏠 THE HOUSE STANDS. 🏠<br><span style="font-size:55%">'+bhPartsTotal.toLocaleString()+' pieces. You\'re back on your feet… and something is rolling this way.</span>',4200);
+  obj('👁️ Look east. Something\'s coming.');
+  bhTimer=setTimeout(function(){ bhTimer=null; if(PH==='haven'&&!cf) startCasohFight(); },2800);
+}
+function enterHavenRoam(){
+  bhEnsure();
+  PH='haven'; setMood('day');
+  if(!player){ var kk=curForm==='worker'?false:curForm==='biz'?true:curForm; spawnPlayer(kk); }
+  P.pos.set(BH.x,0,BH.z+30); P.vy=0;
+  player.group.position.copy(P.pos);
+  camYaw=Math.PI/2; P.yaw=Math.PI/2;
+  if(!bhReturn){
+    bhReturn=makePortal(BH.x-24,BH.z+44);
+    var s=neon('BACK TO\nTHE BEYOND',2.8,1.6,0x9b5cff);
+    s.position.set(BH.x-24,4.6,BH.z+42.2); world.add(s);
+  }
+  coinsHud(); sbuxHud();
+  updateMobileUI();
+}
+function enterHaven(){
+  bhEnsure();
+  if(bhStage===0) bhStage=1;
+  if(bhStage<=5){ bhStartStage(bhStage); return; }
+  bhShowFullHouse(); enterHavenRoam();
+  if(bhStage===6){
+    clearCasohFight();
+    msg('🏠 The house stands.<br><span style="font-size:55%">And he\'s coming.</span>',3000);
+    obj('👁️ Look east.');
+    bhTimer=setTimeout(function(){ bhTimer=null; if(PH==='haven'&&!cf) startCasohFight(); },2600);
+  } else obj('🏠 BUILDER\'S HAVEN — casoh was beaten here. The purple portal returns to The Beyond.');
+}
+/* ---- CASOH: win his games to chip his HP. You regen. He doesn't. ---- */
+function clearCasohFight(){
+  cfTimers.forEach(clearTimeout); cfTimers.length=0;
+  if(cf){
+    if(cf.mesh.parent) world.remove(cf.mesh);
+    cf.minis.forEach(function(m){ if(m.mesh.parent) world.remove(m.mesh); });
+    if(cf.food) world.remove(cf.food);
+  }
+  if(casohGod){ world.remove(casohGod); casohGod=null; }
+  cf=null;
+  $('bossWrap').style.display='none';
+}
+function startCasohFight(){
+  clearCasohFight(); clearHazards();
+  var g=new THREE.Group(), ball=new THREE.Group();
+  var hL=new THREE.Mesh(new THREE.SphereGeometry(2.8,18,14,0,Math.PI),mat(0x7ba03a));
+  var hR=new THREE.Mesh(new THREE.SphereGeometry(2.8,18,14,Math.PI,Math.PI),mat(0x6a9030));
+  ball.add(hL); ball.add(hR);
+  for(var i=0;i<10;i++){ var sp=box(0.7,0.7,0.7,0x48631c); var a=rand(0,6.28), b=rand(-1,1);
+    sp.position.set(Math.cos(a)*2.6*Math.sqrt(1-b*b),b*2.6,Math.sin(a)*2.6*Math.sqrt(1-b*b)); ball.add(sp); }
+  ball.position.y=2.8; g.add(ball);
+  var spr=makeCasohSprite(); spr.scale.set(4.5,6.6,1); spr.position.y=8.6; g.add(spr);
+  g.position.set(BH.x+70,0,BH.z+30);
+  world.add(g);
+  cf={state:'rollin',hp:800,maxHp:800,t:0,round:0,minis:[],mesh:g,ball:ball,hL:hL,hR:hR,spr:spr,
+    rollN:0,rollPhase:'',rollT:0,rollHit:false,chargeHit:false,dir:new THREE.Vector3(1,0,0),ct:null,food:null,pickT:0,touchCd:0};
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(BH.x,0,BH.z+30); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI/2; P.yaw=Math.PI/2;
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='👁️ casoh 👁️';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); setMood('casoh');
+  sndRoar(true); doFlash('#7ba03a'); camShake=0.6;
+  msg('👁️ <b>casoh.</b><br><span style="font-size:55%">He\'s rolling straight at you.</span>',3200);
+  obj('👁️ casoh rolls in. You CAN\'T hurt him directly — WIN his games.');
+  hint('Kill his summons · dodge his rolls · out-eat him · you regen, he doesn\'t');
+  updateMobileUI();
+}
+function cfRoll(v,dt){ /* roll the ball along its motion */
+  var l=v.length(); if(l<1e-4) return;
+  var axis=new THREE.Vector3(v.z,0,-v.x).normalize();
+  cf.ball.rotateOnWorldAxis(axis,l*dt/2.8);
+}
+function cfFace(){
+  var g=cf.mesh; g.rotation.y=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+}
+function cfMoveToward(target,speed,dt){
+  var g=cf.mesh, v=target.clone().sub(g.position).setY(0);
+  var l=v.length(); if(l<0.01) return 0;
+  v.multiplyScalar(speed/l);
+  g.position.addScaledVector(v,dt);
+  cfRoll(v,dt);
+  return l;
+}
+function cfClampArena(){
+  var g=cf.mesh, dx=g.position.x-BH.x, dz=g.position.z-BH.z, l=Math.hypot(dx,dz);
+  if(l>BH.r-4){ g.position.x=BH.x+dx/l*(BH.r-4); g.position.z=BH.z+dz/l*(BH.r-4); }
+}
+function spawnMiniCasoh(){
+  var g=new THREE.Group();
+  var b=new THREE.Mesh(new THREE.SphereGeometry(0.8,10,8),mat(0x7ba03a)); b.position.y=0.8; g.add(b);
+  var s=makeCasohSprite(); s.scale.set(1.6,2.4,1); s.position.y=2.6; g.add(s);
+  var a=rand(0,6.28);
+  g.position.set(cf.mesh.position.x+Math.cos(a)*6,0,cf.mesh.position.z+Math.sin(a)*6);
+  world.add(g);
+  cf.minis.push({mesh:g,body:b,hp:40,dead:false,atkCd:0,hop:rand(0,3)});
+  burst(g.position.clone().setY(1),0x7dffa0,10,{speed:4,life:0.7});
+}
+function hurtMini(m,dmg){
+  if(m.dead) return;
+  m.hp-=dmg;
+  burst(m.mesh.position.clone().setY(1),0x7ba03a,4,{speed:3,life:0.5});
+  if(m.hp<=0){
+    m.dead=true; world.remove(m.mesh); sndWoodFall();
+    burst(m.mesh.position.clone().setY(1),0x7dffa0,14,{speed:5,life:0.8});
+    var left=cf.minis.filter(function(x){ return !x.dead; }).length;
+    obj('🟢 Summoned casohs left: '+left);
+    if(left<=0&&cf.state==='summon') cfRoundWon();
+  }
+}
+function cfStartRound(){
+  var kind=['summon','roll','contest'][cf.round%3]; cf.round++;
+  cfFace();
+  if(kind==='summon'){
+    cf.state='summon';
+    cf.minis.forEach(function(m){ if(!m.dead) world.remove(m.mesh); }); cf.minis.length=0;
+    for(var i=0;i<4;i++) spawnMiniCasoh();
+    sndRoar(false); doFlash('#7ba03a');
+    msg('👁️ casoh: "RISE, MY CASOHS!"<br><span style="font-size:55%">Kill all 4 summoned casohs.</span>',3200);
+    obj('🟢 Summoned casohs left: 4');
+  } else if(kind==='roll'){
+    cf.state='roll'; cf.rollN=0; cf.rollHit=false; cf.rollPhase='wind'; cf.rollT=1.0;
+    msg('🌀 casoh is going to ROLL.<br><span style="font-size:55%">Dodge ALL 3 charges — sidestep when he launches!</span>',3200);
+    obj('🌀 DODGE 3 rolls! Charge 1/3 winding up…');
+  } else {
+    cf.state='contest'; cf.ct={mine:0,his:0,clicks:0,hisT:2.6};
+    cfFoodMesh();
+    sndFanfare();
+    msg('🍽️ EATING CONTEST vs casoh!<br><span style="font-size:55%">TAP / CLICK FAST — 6 bites per food, 5 foods. He eats one every 2.6s.</span>',3600);
+    obj('🍽️ EAT! You 0/5 · casoh 0/5 — TAP FAST!');
+  }
+}
+function cfFoodMesh(){
+  if(cf.food) world.remove(cf.food);
+  var tier=Math.min(cf.ct.mine,4);
+  var m=box(0.9+tier*0.1,0.45+tier*0.06,0.9+tier*0.1,[0xd8a35c,0xffd83d,0xc9762a,0xff6f61,0xffe97a][tier]);
+  m.position.set(P.pos.x,P.pos.y+2.9,P.pos.z);
+  world.add(m); cf.food=m;
+}
+function cfContestClick(){
+  if(!cf||cf.state!=='contest') return;
+  var ct=cf.ct; ct.clicks++;
+  knock(700+Math.random()*500,0.35,0.04,0);
+  if(cf.food){ cf.food.scale.multiplyScalar(0.85); burst(cf.food.position,0xffd83d,2,{speed:2,life:0.4,size:0.7}); }
+  if(ct.clicks>=6){
+    ct.clicks=0; ct.mine++; sndPickup();
+    if(ct.mine>=5){ if(cf.food){ world.remove(cf.food); cf.food=null; } cfRoundWon('You OUT-ATE casoh!'); return; }
+    cfFoodMesh();
+    obj('🍽️ EAT! You '+ct.mine+'/5 · casoh '+ct.his+'/5 — TAP FAST!');
+  }
+}
+function cfRoundWon(why){
+  cf.hp-=100;
+  $('bossBar').firstElementChild.style.width=clamp(cf.hp/cf.maxHp*100,0,100)+'%';
+  burst(cf.mesh.position.clone().setY(3),0x7ba03a,16,{speed:6,life:0.8}); doFlash('#ffd83d'); sndPickup();
+  cf.minis.forEach(function(m){ if(!m.dead){ m.dead=true; world.remove(m.mesh); } });
+  if(cf.food){ world.remove(cf.food); cf.food=null; }
+  if(cf.hp<=0){ casohDefeated(); return; }
+  msg('✅ ROUND WON!'+(why?' '+why:'')+'<br><span style="font-size:55%">casoh loses a little HP. He does NOT regen. You do.</span>',3000);
+  cf.state='pick'; cf.pickT=2.4;
+  obj('👁️ casoh: '+cf.hp+'/'+cf.maxHp+' HP · next game incoming…');
+}
+function cfRoundLost(why){
+  if(cf.food){ world.remove(cf.food); cf.food=null; }
+  msg('❌ '+why,3000);
+  cf.state='pick'; cf.pickT=2.4;
+  obj('👁️ casoh: '+cf.hp+'/'+cf.maxHp+' HP · he keeps his HP this round.');
+}
+function updateCasohFight(dt){
+  var g=cf.mesh; cf.t+=dt;
+  cf.spr.position.y=8.6+Math.sin(GTIME*2)*0.3;
+  if(cf.state!=='won'&&!P.dead&&P.hp<P.maxHp){ /* YOU regen. He doesn't. */
+    P.hp=Math.min(P.maxHp,P.hp+3*dt);
+    $('hpBar').firstElementChild.style.width=clamp(P.hp/P.maxHp*100,0,100)+'%';
+    if(Math.random()<dt*2) burst(P.pos.clone().add(new THREE.Vector3(rand(-0.6,0.6),rand(0.5,2.2),rand(-0.6,0.6))),0x7dffa0,1,{speed:0.6,life:0.6,grav:-2,size:0.6});
+  }
+  var dd=g.position.distanceTo(P.pos);
+  if(cf.touchCd>0) cf.touchCd-=dt;
+  if(cf.state==='rollin'){
+    cfMoveToward(P.pos,11,dt);
+    if(Math.random()<dt*2){ knock(120,0.5,0.16,0); camShake=Math.min(camShake+0.1,0.4); }
+    if(dd<14){ cf.state='pick'; cf.pickT=1.8;
+      msg('👁️ casoh: "erm what then <b>builder</b> man?"',2600); obj('👁️ casoh: 800/800 HP · his first game is coming…'); }
+  } else if(cf.state==='pick'){
+    cfFace(); cf.pickT-=dt;
+    if(cf.pickT<=0) cfStartRound();
+  } else if(cf.state==='summon'){
+    cfFace();
+    cf.minis.forEach(function(m){
+      if(m.dead) return;
+      var mg=m.mesh; m.hop+=dt*7; mg.position.y=Math.abs(Math.sin(m.hop))*0.6;
+      var dx=P.pos.x-mg.position.x, dz=P.pos.z-mg.position.z, l=Math.hypot(dx,dz)||1;
+      if(l>1.4){ mg.position.x+=dx/l*4.6*dt; mg.position.z+=dz/l*4.6*dt; m.body.rotation.x+=dt*6; }
+      else { m.atkCd-=dt; if(m.atkCd<=0&&!P.dead){ m.atkCd=1.2; hurtPlayer(8,'Mini casoh!'); sndPunch(true); } }
+    });
+  } else if(cf.state==='roll'){
+    cf.rollT-=dt;
+    if(cf.rollPhase==='wind'){
+      cfFace();
+      cf.ball.position.x=rand(-0.25,0.25); cf.ball.position.z=rand(-0.25,0.25);
+      if(Math.random()<dt*6) knock(200,0.4,0.08,0);
+      if(cf.rollT<=0){
+        cf.rollPhase='go'; cf.rollT=2.0; cf.chargeHit=false;
+        cf.ball.position.set(0,2.8,0);
+        cf.dir.copy(P.pos).sub(g.position).setY(0).normalize();
+        sndWhoosh(true); sndRoar(false); doFlash('#7dffa0');
+        obj('🌀 CHARGE '+(cf.rollN+1)+'/3 — DODGE!');
+      }
+    } else if(cf.rollPhase==='go'){
+      var v=cf.dir.clone().multiplyScalar(27);
+      g.position.addScaledVector(v,dt); cfRoll(v,dt); cfClampArena();
+      if(Math.random()<dt*8) burst(g.position.clone().setY(0.3),0x7ba03a,2,{speed:2,life:0.4,size:0.8});
+      if(!cf.chargeHit&&!P.dead&&dd<3.7){
+        cf.chargeHit=true; cf.rollHit=true;
+        hurtPlayer(22,'casoh rolled right over you!'); sndPunch(true); camShake=1;
+        P.vy=7; P.pos.addScaledVector(cf.dir,3);
+      }
+      if(cf.rollT<=0){ cf.rollPhase='stop'; cf.rollT=0.8; cf.rollN++;
+        if(cf.rollN<3) obj('🌀 Charge '+(cf.rollN+1)+'/3 winding up…'); }
+    } else if(cf.rollPhase==='stop'){
+      if(cf.rollT<=0){
+        if(cf.rollN>=3){
+          if(!cf.rollHit) cfRoundWon('You dodged every roll!');
+          else cfRoundLost('He got you on a roll. "erm what then flat man?"');
+        } else { cf.rollPhase='wind'; cf.rollT=1.0; }
+      }
+    }
+  } else if(cf.state==='contest'){
+    cfFace();
+    var ct=cf.ct; ct.hisT-=dt;
+    if(cf.food){ cf.food.rotation.y+=dt*2; cf.food.position.set(P.pos.x,P.pos.y+2.9+Math.sin(GTIME*3)*0.12,P.pos.z); }
+    if(ct.hisT<=0){
+      ct.hisT=2.6; ct.his++;
+      knock(500,0.5,0.08,0);
+      cf.spr.scale.set(5.2,6,1); tween(0.25,function(k){ if(cf) cf.spr.scale.set(5.2-0.7*k,6+0.6*k,1); });
+      obj('🍽️ EAT! You '+ct.mine+'/5 · casoh '+ct.his+'/5 — TAP FAST!');
+      if(ct.his>=5){ hurtPlayer(20,'casoh out-ate you!'); cfRoundLost('casoh out-ate you. "erm what then hungry man?"'); }
+    }
+  }
+  /* bumping into him hurts (not during the charge — that's handled above) */
+  if((cf.state==='pick'||cf.state==='summon'||cf.state==='contest'||cf.state==='rollin')&&dd<4.2&&cf.touchCd<=0&&!P.dead){
+    cf.touchCd=1.2; hurtPlayer(10,'casoh bumped you!'); sndPunch(true);
+    var away=P.pos.clone().sub(g.position).setY(0).normalize(); P.pos.addScaledVector(away,2);
+  }
+}
+function casohDefeated(){
+  cf.state='won'; bhStage=7;
+  studBux+=75000; sbuxHud(); save();
+  cf.minis.forEach(function(m){ if(!m.dead){ m.dead=true; world.remove(m.mesh); } });
+  if(cf.food){ world.remove(cf.food); cf.food=null; }
+  battleMusic(false); clearHazards();
+  $('bossWrap').style.display='none';
+  sndRoar(true); sndFanfare(); setTimeout(sndFanfare,600); setTimeout(sndFanfare,1200);
+  doFlash('#ffffff'); camShake=1;
+  var fw=0;
+  var iv=setInterval(function(){ fw++;
+    burst(new THREE.Vector3(BH.x+rand(-30,30),rand(8,36),BH.z+rand(-30,30)),RAINBOW[fw%7],22,{speed:8,life:1.6,grav:3});
+    blip(400+fw*55,'sine',0.3,0.4,0,1800);
+    if(fw>18) clearInterval(iv);
+  },300);
+  msg('🪵 +75,000 STUD BUX! 🪵<br><span style="font-size:55%">casoh is beaten… and he\'s CRACKING OPEN.</span>',4200);
+  obj('🪵 '+studBux.toLocaleString()+' STUD BUX. Watch him.');
+  hint('');
+  var g=cf.mesh;
+  cfTimers.push(setTimeout(function(){
+    if(!cf||cf.state!=='won') return;
+    for(var c=0;c<8;c++){ var ck=bx(0.14,rand(2,4),0.14,0x000000);
+      var a=rand(0,6.28), b=rand(-0.8,0.8);
+      ck.position.set(Math.cos(a)*2.75,b*2,Math.sin(a)*2.75); ck.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+      ck.userData.crack=true; cf.ball.add(ck); }
+    sndCrack(); setTimeout(sndCrack,260); camShake=0.5;
+  },1300));
+  cfTimers.push(setTimeout(function(){
+    if(!cf||cf.state!=='won') return;
+    cf.ball.children.forEach(function(ch){ if(ch.userData.crack) ch.visible=false; });
+    cf.spr.visible=false;
+    tween(1.2,function(k){ cf.hL.position.x=-3.4*k; cf.hL.rotation.z=0.8*k; cf.hR.position.x=3.4*k; cf.hR.rotation.z=-0.8*k; });
+    casohGod=new THREE.Group();
+    var gs=makeCasohSprite(); gs.material.color.setHex(0xffd83d); gs.scale.set(5,7.4,1); gs.position.y=4; casohGod.add(gs);
+    var halo=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.18,8,24),bmat(0xffe97a)); halo.rotation.x=Math.PI/2; halo.position.y=8.4; casohGod.add(halo);
+    var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.4,2.6,40,12,1,true),
+      new THREE.MeshBasicMaterial({color:0xffe97a,transparent:true,opacity:0.18,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    beam.position.y=20; casohGod.add(beam);
+    var tag=neon('✨ CASOH GOD ✨',4,1.2,0xffd83d); tag.position.y=9.6; casohGod.add(tag);
+    casohGod.position.copy(g.position); world.add(casohGod);
+    (function(cg){ tween(1.4,function(k){ cg.position.y=3*k; }); })(casohGod);
+    sndSparkle(); sndFanfare(); doFlash('#ffe97a');
+    msg('✨ <b>CASOH GOD</b> ✨<br><span style="font-size:60%">"cya next time"</span>',4400);
+    obj('✨ THE CASOH GOD. "cya next time."');
+  },2700));
+  cfTimers.push(setTimeout(function(){ if(!cf||cf.state!=='won') return;
+    var bk=$('black'); bk.style.transition='opacity .9s'; bk.style.opacity=1; $('blackTxt').style.opacity=0; },7000));
+  cfTimers.push(setTimeout(function(){ if(!cf||cf.state!=='won') return;
+    $('blackTxt').textContent='BEHIND THE SCENES'; $('blackTxt').style.opacity=1; sndUi(); },8200));
+  cfTimers.push(setTimeout(function(){ if(!cf||cf.state!=='won') return; startCut6(); },11000));
+}
+/* ---- BEHIND THE SCENES: the god casoh rides a city elevator into FOOD WORLD ---- */
+function buildBTS(){
+  if(btsGroup) return;
+  btsGroup=new THREE.Group(); world.add(btsGroup);
+  var X=BTS.x, Z=BTS.z;
+  var gr=new THREE.Mesh(new THREE.PlaneGeometry(240,240),mat(0x0a0a12)); gr.rotation.x=-Math.PI/2; gr.position.set(X,0.02,Z); btsGroup.add(gr);
+  for(var t=0;t<10;t++){ var a=t/10*6.28+0.3, rr=rand(34,60), w=rand(6,11), h=rand(18,46);
+    var tw=box(w,h,w,0x141a26); tw.position.set(X+Math.cos(a)*rr,h/2,Z+Math.sin(a)*rr); btsGroup.add(tw);
+    for(var wn=0;wn<12;wn++){ var li=bx(0.7,0.9,0.1,Math.random()<0.7?0xffe97a:0x66d9ef);
+      li.position.set(tw.position.x+rand(-w/2+0.6,w/2-0.6),rand(2,h-2),tw.position.z+w/2+0.06); btsGroup.add(li); } }
+  var main=box(10,40,10,0x1c2333); main.position.set(X,20,Z); btsGroup.add(main);
+  for(var ww=0;ww<40;ww++){ var l2=bx(0.8,1,0.1,0xffe97a); l2.position.set(X+rand(-4.2,4.2),rand(2,38),Z-5.06); btsGroup.add(l2); }
+  [-1.9,1.9].forEach(function(o){ var rail=box(0.2,40,0.2,0x9aa5ad); rail.position.set(X+o,20,Z+5.2); btsGroup.add(rail); });
+  var car=new THREE.Group();
+  var cfl=box(3.2,0.2,3.2,0x9aa5ad); car.add(cfl);
+  var croof=box(3.2,0.2,3.2,0x9aa5ad); croof.position.y=3.2; car.add(croof);
+  var back=new THREE.Mesh(boxGeo(3.2,3.2,0.1),glassMat); back.position.set(0,1.6,-1.55); car.add(back);
+  [-1,1].forEach(function(s){ var sd=new THREE.Mesh(boxGeo(0.1,3.2,3.2),glassMat); sd.position.set(s*1.55,1.6,0); car.add(sd); });
+  var front=new THREE.Mesh(boxGeo(3.2,3.2,0.1),glassMat); front.position.set(0,1.6,1.55); car.add(front);
+  var lamp=bx(0.6,0.15,0.6,0xffe97a); lamp.position.y=3.05; car.add(lamp);
+  car.position.set(X,1.5,Z+7); btsGroup.add(car);
+  var god=new THREE.Group();
+  var gs=makeCasohSprite(); gs.material.color.setHex(0xffd83d); gs.scale.set(2.2,3.3,1); gs.position.y=1.9; god.add(gs);
+  var halo=new THREE.Mesh(new THREE.TorusGeometry(0.7,0.09,8,20),bmat(0xffe97a)); halo.rotation.x=Math.PI/2; halo.position.y=3.85; god.add(halo);
+  god.position.set(X,1.7,Z+7); btsGroup.add(god);
+  var plat=box(14,0.4,8,0x3a3f4a); plat.position.set(X-4,30,Z+8); btsGroup.add(plat);
+  var frame=box(3.2,4,0.6,0x9aa5ad); frame.position.set(X-8,32.2,Z+8); btsGroup.add(frame);
+  var doorG=new THREE.Group(); doorG.position.set(X-9.2,30.2,Z+8);
+  var door=box(2.4,3.5,0.25,0x5a1a1a); door.position.set(1.2,1.75,0); doorG.add(door);
+  var kn=bx(0.16,0.16,0.14,0xffd83d); kn.position.set(2.1,1.7,0.2); doorG.add(kn);
+  btsGroup.add(doorG);
+  var sign=neon('🍔 FOOD WORLD 🍕',4.4,1.4,0xff8ac2); sign.position.set(X-8,35,Z+8.2); btsGroup.add(sign);
+  var rfl=box(18,0.4,16,0x3a2a20); rfl.position.set(X-18,30,Z+8); btsGroup.add(rfl);
+  var wb=box(0.4,7,16,0x5a3a3a); wb.position.set(X-27,33.5,Z+8); btsGroup.add(wb);
+  var wl=box(18,7,0.4,0x5a3a3a); wl.position.set(X-18,33.5,Z); btsGroup.add(wl);
+  var wr=box(18,7,0.4,0x5a3a3a); wr.position.set(X-18,33.5,Z+16); btsGroup.add(wr);
+  var wf=box(0.4,7,5,0x5a3a3a); wf.position.set(X-9,33.5,Z+3); btsGroup.add(wf);
+  var wf2=box(0.4,7,5,0x5a3a3a); wf2.position.set(X-9,33.5,Z+13); btsGroup.add(wf2);
+  var sign2=neon('FOOD WORLD',6,1.8,0xff8ac2); sign2.position.set(X-26.7,35,Z+8); sign2.rotation.y=Math.PI/2; btsGroup.add(sign2);
+  var tbl=box(7,0.3,2.4,0x8a5a2a); tbl.position.set(X-18,31.3,Z+8); btsGroup.add(tbl);
+  [[-3,-1],[3,-1],[-3,1],[3,1]].forEach(function(o){ var lg=box(0.25,1,0.25,0x6f4820); lg.position.set(X-18+o[0],30.7,Z+8+o[1]); btsGroup.add(lg); });
+  for(var fd=0;fd<9;fd++){ var fb=bx(rand(0.4,0.8),rand(0.3,0.6),rand(0.4,0.8),[0xffd83d,0xc9762a,0xff6f61,0xf4f4f4,0xff8ac2][fd%5]);
+    fb.position.set(X-21+fd*0.75,31.7,Z+8+rand(-0.7,0.7)); btsGroup.add(fb); }
+  for(var lp=0;lp<3;lp++){ var la=bx(0.8,0.3,0.8,0xffe97a); la.position.set(X-13-lp*5,36.6,Z+8); btsGroup.add(la); }
+  var demon=makeMinifig({torso:0x6a1414,legs:0x2a0808,arms:0x9a2424,face:'angry'});
+  demon.group.scale.set(2.1,2.1,2.1);
+  demon.group.position.set(X-22,30.2,Z+8); demon.group.rotation.y=Math.PI/2;
+  [-1,1].forEach(function(s){ var horn=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.42,8),bmat(0x8a0000));
+    horn.position.set(s*0.22,0.5,0); horn.rotation.z=-s*0.35; demon.head.add(horn); });
+  var ds=makeCasohSprite(); ds.material.color.setHex(0xff4040); ds.scale.set(1.5,2.2,1); ds.position.y=1.5; demon.head.add(ds);
+  var dtag=neon('😈 DEMON CASOH',2.8,0.8,0xff2211); dtag.position.set(X-22,35.2,Z+8); dtag.rotation.y=Math.PI/2; btsGroup.add(dtag);
+  btsGroup.add(demon.group);
+  var gtag=neon('✨ GOD CASOH',2.6,0.8,0xffd83d); gtag.position.y=4.6; god.add(gtag);
+  bts={car:car,front:front,god:god,doorG:doorG,demon:demon,dtag:dtag,ev:{}};
+}
+function startCut6(){
+  clearCasohFight();
+  buildBTS(); btsGroup.visible=true;
+  PH='cut6'; cut6T=0; cutSkipOk=false;
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  setMood('space');
+  bts.car.position.set(BTS.x,1.5,BTS.z+7); bts.front.visible=true;
+  bts.god.position.set(BTS.x,1.7,BTS.z+7);
+  bts.doorG.rotation.y=0; bts.ev={};
+  var d=bts.demon; d.armL.rotation.set(0,0,0); d.armR.rotation.set(0,0,0); d.head.rotation.set(0,0,0);
+  d.group.rotation.set(0,Math.PI/2,0); d.group.position.set(BTS.x-22,30.2,BTS.z+8);
+  var bk=$('black'); bk.style.transition='none'; bk.style.opacity=1; $('blackTxt').style.opacity=0;
+  msg('',10);
+}
+function cutSub(name,text,color){
+  msg('<span style="font-size:50%;color:'+color+';letter-spacing:2px">'+name+'</span><br><span style="font-size:72%">"'+text+'"</span>',3200);
+}
+function ease(k){ k=clamp(k,0,1); return k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2; }
+function updateCut6(dt){
+  cut6T+=dt; var t=cut6T, X=BTS.x, Z=BTS.z, ev=bts.ev;
+  if(t>1.2) cutSkipOk=true;
+  var bk=$('black');
+  if(t<1){ bk.style.opacity=1-t; }
+  else if(t<24.2&&bk.style.opacity!=='0'){ bk.style.opacity=0; }
+  /* the elevator ride */
+  var carY=1.5+30*ease((t-0.5)/6);
+  bts.car.position.y=carY;
+  if(t<7){ bts.god.position.set(X,carY+0.2+Math.sin(t*3)*0.08,Z+7);
+    camera.position.set(X+12,carY+4,Z+22); camera.lookAt(X,carY+1.8,Z+7);
+    if(!ev.hum||t-ev.hum>0.45){ ev.hum=t; knock(140,0.22,0.3,0); }
+    if(t>1&&!ev.title){ ev.title=1; msg('<span style="font-size:60%">📹 BEHIND THE SCENES</span>',2400); }
+    if(t>6.5&&!ev.ding){ ev.ding=1; sndDing(); bts.front.visible=false; }
+  } else if(t<11.5){
+    var k=ease((t-7)/2);
+    bts.god.position.set(X-8*k,31.9+Math.sin(t*3)*0.08,Z+7+2.6*k);
+    if(t>=9){ bts.doorG.rotation.y=-1.5*ease((t-9)/1); if(!ev.door){ ev.door=1; knock(600,0.5,0.15,0); } }
+    if(t>=10){ var k2=ease((t-10)/1.5); bts.god.position.set(X-8-6*k2,31.9,Z+9.6-1.6*k2); }
+    camera.position.set(X-2,34.8,Z+17); camera.lookAt(X-6,32,Z+8);
+  } else {
+    if(!ev.inside){ ev.inside=1; setMood('lib'); }
+    var k3=ease((t-11.5)/1.3);
+    bts.god.position.set(X-14-1.5*k3,31.9+Math.sin(t*3)*0.08,Z+8);
+    camera.position.set(X-11,34.6,Z+15); camera.lookAt(X-19,32.2,Z+8);
+    if(t>=13&&!ev.l1){ ev.l1=1; cutSub('GOD CASOH','it didn\'t work','#ffd83d'); }
+    if(t>=16.2&&!ev.l2){ ev.l2=1; cutSub('DEMON CASOH','find him NOW… or else I will KILL you','#ff3b3b');
+      sndRoar(false); doFlash('#ff2211'); camShake=0.5;
+      var dg=bts.demon.group; tween(0.3,function(k){ dg.position.x=X-22+Math.sin(k*Math.PI)*1.2; }); }
+    if(t>=19.8&&!ev.l3){ ev.l3=1; cutSub('GOD CASOH','ok… fine','#ffd83d'); }
+    if(t>=22&&!ev.dab){ ev.dab=1; demonDab(); }
+    if(t>=24.2&&!ev.fade){ ev.fade=1; bk.style.transition='opacity .7s'; bk.style.opacity=1; }
+    if(t>=25.2) endCut6();
+  }
+}
+function demonDab(){
+  var d=bts.demon;
+  tween(0.14,function(k){
+    d.armR.rotation.z=-2.1*k; d.armR.rotation.x=-0.5*k;
+    d.armL.rotation.z=-2.5*k; d.armL.rotation.x=-0.2*k;
+    d.head.rotation.z=0.5*k; d.head.rotation.x=0.35*k;
+    d.group.rotation.z=0.12*k;
+    d.group.position.y=30.2+Math.sin(k*Math.PI)*0.5;
+  });
+  sndDab(); sndSparkle();
+  burst(d.group.position.clone().setY(32.5),0xff3b3b,22,{speed:5,life:0.9});
+  burst(d.group.position.clone().setY(32.5),0xffd83d,12,{speed:4,life:0.8});
+  msg('<span style="font-size:60%;color:#ff8ac2">😎 demon casoh dabs. very well.</span>',2200);
+}
+function endCut6(){
+  if(PH!=='cut6') return;
+  cut6T=-1; cutSkipOk=false;
+  if(btsGroup) btsGroup.visible=false;
+  msg('',10);
+  ensureCityExtraPads();
+  PH='metro'; setMood('day');
+  if(!player){ var kk=curForm==='worker'?false:curForm==='biz'?true:curForm; spawnPlayer(kk); }
+  P.pos.set(CITY.x+30,0,CITY.z-6); P.vy=0;
+  player.group.position.copy(P.pos);
+  camYaw=Math.PI/2; P.yaw=Math.PI/2;
+  sbuxHud(); coinsHud(); catHud(); save();
+  var bk=$('black'); bk.style.transition='opacity .8s'; bk.style.opacity=0; $('blackTxt').style.opacity=0;
+  sndWhoosh(false);
+  msg('🏙️ BACK IN THE CITY<br><span style="font-size:55%">🪵 '+studBux.toLocaleString()+' STUD BUX. casoh is beaten. But someone is looking for you…</span>',5200);
+  obj('🪵 '+studBux.toLocaleString()+' STUD BUX · casoh beaten · "find him now" — to be continued.');
+  hint('The white FINALE gate in The Beyond → Builder\'s Haven, any time');
+  updateMobileUI();
+}
+function bhLeave(){
+  if(bhTimer){ clearTimeout(bhTimer); bhTimer=null; }
+  enterBY();
+}
+function updateAct10(dt){
+  if(bhCd>0) bhCd-=dt;
+  if(havenGate){
+    havenGate.userData.ring.rotation.z+=dt*2; havenGate.userData.disc.rotation.z-=dt*3;
+    if(PH==='fin'&&finState==='after'&&!P.dead&&bhCd<=0&&P.pos.distanceTo(havenGate.position)<2.2){ bhCd=2; tryEnterHaven(); }
+  }
+  if(finReturn){
+    finReturn.userData.ring.rotation.z+=dt*2; finReturn.userData.disc.rotation.z-=dt*3;
+    if(PH==='fin'&&finState==='after'&&!P.dead&&bhCd<=0&&P.pos.distanceTo(finReturn.position)<2.2){ bhCd=2; if(bhTimer){ clearTimeout(bhTimer); bhTimer=null; } enterBY(); }
+  }
+  if(bhReturn){
+    bhReturn.userData.ring.rotation.z+=dt*2; bhReturn.userData.disc.rotation.z-=dt*3;
+    if(PH==='haven'&&!cf&&!P.dead&&bhCd<=0&&P.pos.distanceTo(bhReturn.position)<2.2){ bhCd=2; bhLeave(); }
+  }
+  if(bhSign) bhSign.position.y=26+Math.sin(GTIME*0.8)*0.6;
+  if(PH==='fin'&&finState==='blobs') updateBlobs(dt);
+  if(bhGlitchT>0&&PH==='bhbuild') updateGlitch(dt);
+  if(bhMetT>=0&&PH==='bhbuild') updateMeteor(dt);
+  if(PH==='haven'&&cf) updateCasohFight(dt);
+}
+function combatTargetsAct10(list){
+  if(PH==='fin'&&finState==='blobs')
+    blobs.forEach(function(b){ if(!b.dead) list.push({pos:b.mesh.position,y:0.8,hurt:function(d){ hurtBlob(b,d); }}); });
+  if(PH==='haven'&&cf)
+    cf.minis.forEach(function(m){ if(!m.dead) list.push({pos:m.mesh.position,y:0.8,hurt:function(d){ hurtMini(m,d); }}); });
+}
+function applyAct10Skip(sv){
+  coins=sv.cn||0; blobsDone=!!sv.bq; bhStage=sv.bh||0;
+  if(bhStage>=1) blobsDone=true;
+  if(blobsDone) finWon=true;
+  coinsHud();
 }
 
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
@@ -9681,6 +10781,28 @@ window.__dbg={
     while(finStarsLeft>0){ spawnStar(); hurtStar(finStars[finStars.length-1]); } },
   obbyPads:function(){ return obbyPads.map(function(p){ return {x:p.x,y:p.y,z:p.z}; }); },
   finTop:function(){ if(obbyTop){ __dbg.tpY(obbyTop.x,obbyTop.y,obbyTop.z); } },
+  /* ---- Act 10: Builder's Haven ---- */
+  a10:function(){ return {coins:coins,blobsDone:blobsDone,fin:finState,
+    blobs:blobs.filter(function(b){ return !b.dead; }).length,
+    stage:bhStage,idx:bhIdx,total:bhChunks.length,parts:bhParts,partsTotal:bhPartsTotal,
+    bricks:bhBricks.length,instCount:bhInst?bhInst.count:0,cine:bhCine,glitch:bhGlitchT,met:bhMetT,metPhase:bhMet?bhMet.phase:-1,
+    gate:!!havenGate,ret:!!bhReturn,sb:studBux,cut6:cut6T,
+    cf:cf?{state:cf.state,hp:cf.hp,round:cf.round,phase:cf.rollPhase,rollN:cf.rollN,rollHit:cf.rollHit,
+      minis:cf.minis.filter(function(m){ return !m.dead; }).length,ct:cf.ct}:null}; },
+  startBlobs:function(){ if(!player) spawnPlayer('rich'); finWon=true; hasGun=true; startBlobQuest(); },
+  killBlobs:function(){ blobs.forEach(function(b){ if(!b.dead) hurtBlob(b,9999); }); },
+  killBlob:function(){ for(var i=0;i<blobs.length;i++) if(!blobs[i].dead){ hurtBlob(blobs[i],9999); return; } },
+  giveCoins:function(n){ coins=n==null?100:n; coinsHud(); },
+  gateFinDone:function(){ if(!player) spawnPlayer('rich'); finWon=true; enterFinaleDone(); },
+  havenGatePos:function(){ return havenGate?{x:havenGate.position.x,z:havenGate.position.z}:null; },
+  gotoHaven:function(stage){ if(!player) spawnPlayer('rich'); finWon=true; blobsDone=true; bhStage=stage||1; enterHaven(); },
+  placeBh:function(n){ for(var i=0;i<(n||1);i++){ if(bhCine||bhIdx>=bhChunks.length) break; placeBhChunk(true); } },
+  startCasoh:function(){ if(PH!=='haven') __dbg.gotoHaven(6); if(bhTimer){ clearTimeout(bhTimer); bhTimer=null; } startCasohFight(); },
+  cfWinRound:function(){ if(cf&&cf.state!=='won') cfRoundWon(); },
+  cfClickN:function(n){ for(var i=0;i<(n||1);i++) cfContestClick(); },
+  killMinis:function(){ if(cf) cf.minis.forEach(function(m){ if(!m.dead) hurtMini(m,9999); }); },
+  casohPos:function(){ return cf?{x:cf.mesh.position.x,z:cf.mesh.position.z}:null; },
+  skipCut6:function(){ endCut6(); },
   forceSave:function(){ save(); return loadSave(); },
   score:function(){ return {stored:progScore(loadSave())}; }
 };
