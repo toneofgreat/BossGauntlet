@@ -1181,14 +1181,28 @@ function save(){
      jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone,
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
-     sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0};
+     sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,v:2};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
   }catch(e){}
 }
+var spaceWasReset=false;
 function loadSave(){
-  try{ return JSON.parse(localStorage.getItem('brickLegendSave')||'null'); }catch(e){ return null; }
+  try{
+    var s=JSON.parse(localStorage.getItem('brickLegendSave')||'null');
+    if(s&&(!s.v||s.v<2)&&(s.sz||s.win||s.sx||s.rpg)){
+      /* THE GREAT SPACE RESET: everyone rebuilds the space zone from scratch.
+         Expansion buyers get their 500 STUD BUX back. */
+      if(s.sx) s.sb=(s.sb||0)+500;
+      s.sz=0; s.win=0; s.sx=0; s.rpg=0; s.rg=0; s.sw=0; s.v=2;
+      localStorage.setItem('brickLegendSave',JSON.stringify(s)); // direct write: migration bypasses the guard
+      spaceWasReset=true;
+    } else if(s&&(!s.v||s.v<2)){ s.v=2;
+      try{ localStorage.setItem('brickLegendSave',JSON.stringify(s)); }catch(e2){}
+    }
+    return s;
+  }catch(e){ return null; }
 }
 function tween(dur,fn,done){ tweens.push({t:0,d:dur,fn:fn,done:done}); }
 function updateTweens(dt){
@@ -2710,6 +2724,12 @@ function startSkip(sv){
     obj('🌴 Back to the jungle! Kill all 10 hikers to open the portal.');
     hint('1 = equip gun · click/SHOOT = pew pew · R = reload · F = punch'+(tornadoOwned?' · Q = tornado':''));
     $('kills').style.display='block'; updateKillHud();
+  }
+  if(spaceWasReset){
+    spaceWasReset=false;
+    setTimeout(function(){
+      msg('🚀 THE GREAT SPACE RESET!<br><span style="font-size:55%">The void collapsed — EVERYONE rebuilds the space zone from scratch. (Expansion buyers: your 500 STUD BUX were refunded.) The rocket awaits!</span>',9000);
+    },1500);
   }
   updateMobileUI();
 }
