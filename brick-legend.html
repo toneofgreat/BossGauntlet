@@ -6798,7 +6798,7 @@ function updateCW(dt){
     tEl.style.color=cafeHp<60?'#ff5340':'#ffd83d';
     wave.spawnT-=dt;
     var st3=waveDogStats(wave.lvl);
-    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<5){
+    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<3){
       wave.spawnT=st3.interval;
       spawnDog(1,st3.fur,st3.hp,st3.dmg,st3.spd,st3.fat);
     }
@@ -6819,12 +6819,7 @@ function updateCW(dt){
         sndBark(); sndRoar(false); camShake=0.6;
       }
     }
-    wave.spawnT-=dt;
-    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<3){
-      wave.spawnT=9;
-      var st4=waveDogStats(4);
-      spawnDog(1,st4.fur,st4.hp,st4.dmg,st4.spd,true);
-    }
+    /* boss waves are BOSS ONLY — no backup dogs */
   }
   /* converted cats wander + meow */
   catCats.forEach(function(c){
