@@ -6554,8 +6554,9 @@ function endWave(win2){
   }
 }
 function startDogCasoh(){
-  wave={lvl:27,t:9999,spawnT:3,boss:true};
+  wave={lvl:3,t:9999,spawnT:3,boss:true};
   cafeHp=CAFE_MAX;
+  dogs.forEach(function(d){ if(!d.dead) world.remove(d.mesh); }); dogs.length=0; // boss-ONLY
   battleMusic(true); setMood('boss');
   var mesh=makeDogFig(2.6,0x5a8a3a);
   mesh.position.set(CW.x,0,CW.z-30);
