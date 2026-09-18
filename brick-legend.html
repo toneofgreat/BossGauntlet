@@ -906,6 +906,7 @@ var MOODS={
   bridge:{sky:0x16231d,fog:[26,110],amb:0.3,hemi:0.22,sun:0.5,sunC:0xa9d8b4},  // swamp gloom
   golem: {sky:0x201808,fog:[26,120],amb:0.32,hemi:0.2,sun:0.5,sunC:0xffc966},  // molten gold dark
   lib:   {sky:0x221a12,fog:[22,85],amb:0.5,hemi:0.28,sun:0.32,sunC:0xffd9a3},  // candlelight
+  space: {sky:0x030309,fog:[120,500],amb:0.4,hemi:0.25,sun:0.55,sunC:0xdfe8ff}, // the void
 };
 function setMood(k){
   var m=MOODS[k]||MOODS.day;
@@ -1171,6 +1172,7 @@ function progScore(s){
   if(!s) return -1;
   return (s.gun?1:0)+(s.torn?1:0)+(s.rich?2:0)+(s.city?1:0)+(s.jg?4:0)+(s.hw?8:0)
     +(s.god?16:0)+(s.oc?32:0)+(s.spat?64:0)+(s.cw?128:0)+(s.fr?256:0)
+    +(s.sz?512:0)+(s.win?1024:0)
     +(s.cl||0)*0.5+(s.fl||0)*0.5+(s.tk||0)*0.1+Math.min(s.xp||0,4000)*0.001;
 }
 function save(){
@@ -1178,7 +1180,8 @@ function save(){
     var cur={gun:hasGun?1:0,torn:tornadoOwned?1:0,rich:rich?1:0,bux:bux,city:cityDone?1:0,
      jg:jgDone?1:0,hw:hwUnlocked?1:0,xp:Math.round(xp),god:godWon?1:0,sb:studBux,wd:wood,tk:tasksDone,
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
-     cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0};
+     cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
+     sz:szDone?1:0,win:gameWon?1:0};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1230,7 +1233,8 @@ function spawnPlayer(kind){
 function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
-    ||PH==='ocbuild'||PH==='catbuild'||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5')?'none':'block';
+    ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'
+    ||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5')?'none':'block';
   var inBoss=PH==='boss';
   $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
   $('bForm').style.display=spatula?'flex':'none';
@@ -1295,6 +1299,7 @@ addEventListener('pointerup',function(e){
   if(PH==='jgbuild'){ tryPlaceJg(e); return; }
   if(PH==='ocbuild'){ tryPlaceOc(e); return; }
   if(PH==='catbuild'){ tryPlaceCb(e); return; }
+  if(PH==='szbuild'){ tryPlaceSz(e); return; }
   if(PH==='cut4'){ if(cutSkipOk) cut4T=99; return; }
   if(PH==='cut5'){ if(cutSkipOk) cut5T=99; return; }
   if(PH==='castle'){
@@ -1310,7 +1315,7 @@ addEventListener('pointerup',function(e){
   if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
   if(PH==='metro'){ if(tryChop(e)) return; if(gunEquipped) shoot(); else tryPunch(); return; }
   if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
-     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'){
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -2325,7 +2330,8 @@ function collideHouseWalls(){
 }
 function playerControlAllowed(){
   return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'&&PH!=='cut4'&&PH!=='cut5'
-    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild'&&PH!=='catbuild';
+    &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild'
+    &&PH!=='catbuild'&&PH!=='szbuild';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
@@ -2403,6 +2409,9 @@ function updatePlayer(dt){
   } else if(PH==='cw'){
     P.pos.x=clamp(P.pos.x,CW.x-CW.r+1,CW.x+CW.r-1);
     P.pos.z=clamp(P.pos.z,CW.z-CW.r+1,CW.z+CW.r-1);
+  } else if(PH==='sz'){
+    P.pos.x=clamp(P.pos.x,SP.x-SP.r+1,SP.x+SP.r-1);
+    P.pos.z=clamp(P.pos.z,SP.z-SP.r+1,SP.z+SP.r-1);
   } else if(PH==='city'||PH==='metro'){
     if(PH==='city'){
       P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
@@ -2480,7 +2489,7 @@ function updateCamera(dt){
     camera.position.set(Math.sin(camOrbit.a)*20*buildZoom,11*buildZoom*buildTilt,Math.cos(camOrbit.a)*20*buildZoom);
     camera.lookAt(0,3,2);
   }
-  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'){
+  else if(PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'){
     camOrbit.a+=(camOrbit.target-camOrbit.a)*(1-Math.pow(0.03,dt))+dt*0.05;
     camOrbit.target+=dt*0.05; // slow drift around the piece, like the house build
     var cc=cityCam.cur,k=1-Math.pow(0.08,dt);
@@ -2526,7 +2535,7 @@ function updateAmbient(dt){
     if(chirpT<=0){ chirpT=rand(2.5,7); sndChirp(); }
   }
   rayGroup.rotation.y+=dt*0.02;
-  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'){
+  if(ghost||PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'){
     ghostPulse+=dt*5;
     ghostMat.opacity=0.3+0.18*Math.sin(ghostPulse);
   }
@@ -2558,6 +2567,7 @@ function animate(){
     updateAct3(dt);
     updateAct4(dt);
     updateAct5(dt);
+    updateAct6(dt);
     /* autosave every 20s — the regression guard makes this always safe */
     autosaveT+=dt;
     if(autosaveT>=20){ autosaveT=0; if(PH!=='menu') save(); }
@@ -2600,7 +2610,18 @@ function startSkip(sv){
     applyAct3Skip(sv);
     applyAct4Skip(sv);
     applyAct5Skip(sv);
-    if(sv.cw){
+    applyAct6Skip(sv);
+    if(sv.sz){
+      ensureCityExtraPads();
+      var kk2=curForm==='worker'?false:curForm==='biz'?true:curForm;
+      spawnPlayer(kk2);
+      sbuxHud(); catHud();
+      enterSZ();
+      if(gameWon){
+        obj('🏆 YOU WIN (for now) — the whole brick universe is yours.');
+        hint('P = become anyone · the portal returns to the city');
+      }
+    } else if(sv.cw){
       ensureCityExtraPads();
       var kk=fragPlaced&&(sv.fm==='dog'||sv.fm==='catcasoh')?sv.fm:'cat';
       curForm=kk; setFormFlags(kk); spawnPlayer(kk);
@@ -4752,6 +4773,7 @@ function ensureCityExtraPads(){
     cityPads.push({x:CITY.x+44,z:CITY.z-10,mode:'ocean',pad:padO});
   }
   ensureCatPortal();
+  ensureRocket();
   if(!cityPads.some(function(p){ return p.mode==='gohome'; })){
     var pad2=studdedBox(3,0.3,3,0xc62b21,0xa02318);
     pad2.position.set(CITY.x+44,0.15,CITY.z+24); world.add(pad2);
@@ -6702,13 +6724,14 @@ function catNadeBoom(pos){
 var autoBuild=false,autoT=0;
 function inBuildPhase(){
   return PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'
-    ||PH==='build'||PH==='buildwalk'||furnMode;
+    ||PH==='szbuild'||PH==='build'||PH==='buildwalk'||furnMode;
 }
 function autoPlaceOne(){
   if(PH==='citybuild') placeCityChunk();
   else if(PH==='jgbuild') placeJgChunk();
   else if(PH==='ocbuild') placeOcChunk();
   else if(PH==='catbuild') placeCbChunk();
+  else if(PH==='szbuild') placeSzChunk();
   else placeStep();
 }
 function setAutoBuild(on){
@@ -6923,6 +6946,370 @@ function applyAct5Skip(sv){
   }
 }
 
+/* ================================================================
+   ACT 6 — SPACE: the grand finale build. A rocket in the city (after
+   the casoh fragment) flies you to the void, where you build a space
+   zone of 15,000+ parts — star clusters, planets with rings and
+   moons, asteroid belts, nebulas, a sun, a black hole, a station.
+   Finish it and YOU WIN (for now).
+   ================================================================ */
+var SP={x:-300,z:-720,r:92};
+var szChunks=[],szIdx=0,szDone=false,szGroup=null,szUnlocked=false,gameWon=false;
+var szParts=0,szPartsTotal=0,rocketObj=null,szReturn=null,rocketCd=0;
+var ghostPtsMat=new THREE.PointsMaterial({color:0x35e0ff,size:0.7,transparent:true,opacity:0.5});
+function starCluster(n,cx,cy,cz,spread){
+  var g=new THREE.BufferGeometry(), pos=new Float32Array(n*3), col=new Float32Array(n*3);
+  for(var i=0;i<n;i++){
+    pos[i*3]=cx+rand(-spread,spread);
+    pos[i*3+1]=cy+rand(-spread*0.5,spread*0.5);
+    pos[i*3+2]=cz+rand(-spread,spread);
+    var c=new THREE.Color().setHSL(rand(0,1),0.4,rand(0.7,1));
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));
+  return new THREE.Points(g,new THREE.PointsMaterial({size:0.55,vertexColors:true}));
+}
+function genSpace(){
+  var defs=[];
+  function d(label,parts,px,pz,make){ defs.push({label:label,parts:parts,key:Math.hypot(px,pz),make:make}); }
+  /* THE SUN — first pieces, center */
+  d('THE SUN — core',1,0,0,function(){
+    var s=new THREE.Mesh(new THREE.SphereGeometry(7,20,16),
+      new THREE.MeshBasicMaterial({color:0xffd83d}));
+    s.position.set(SP.x,26,SP.z); return s; });
+  for(var f2=0;f2<4;f2++)(function(f2){
+    d('Sun flare',3,1,1,function(){
+      var g=new THREE.Group();
+      for(var i=0;i<3;i++){
+        var fl=new THREE.Mesh(boxGeo(0.8,rand(3,6),0.8),
+          new THREE.MeshBasicMaterial({color:0xff8a00}));
+        var a=f2*1.57+i*0.5;
+        fl.position.set(SP.x+Math.cos(a)*8.5,26+rand(-3,3),SP.z+Math.sin(a)*8.5);
+        fl.rotation.z=a; g.add(fl);
+      }
+      return g; });
+  })(f2);
+  /* 12 PLANETS, each built in stages */
+  var PLANETS=[
+    {n:'Brickzar',c:0xc62b21,r2:4.5,ring:true,moons:2},
+    {n:'Studwin',c:0x2a6fd6,r2:5.5,ring:false,moons:1},
+    {n:'Meowtron',c:0xff8ac2,r2:3.5,ring:true,moons:3},
+    {n:'Hikeria',c:0x4e6b2f,r2:5,ring:false,moons:2},
+    {n:'Oceanus Brick',c:0x66d9ef,r2:6,ring:true,moons:1},
+    {n:'Goldor',c:0xd4af37,r2:4,ring:false,moons:2},
+    {n:'Casoh Prime',c:0x7ba03a,r2:5,ring:true,moons:1},
+    {n:'Fishopolis',c:0xff8a3d,r2:3.5,ring:false,moons:2},
+    {n:'Cursedia',c:0x4a4f57,r2:4.5,ring:true,moons:0},
+    {n:'Tycoonia',c:0x23252e,r2:5,ring:false,moons:3},
+    {n:'Puppax',c:0xb0784a,r2:3.8,ring:false,moons:1},
+    {n:'Zombfish IX',c:0x3d6b3d,r2:4.2,ring:true,moons:2}
+  ];
+  PLANETS.forEach(function(pl,i){
+    var a=i/12*Math.PI*2, rr=30+((i%3))*22;
+    var px=Math.cos(a)*rr, pz=Math.sin(a)*rr, py=12+(i%4)*7;
+    d(pl.n+' — the planet',1,px,pz,function(){
+      var s=new THREE.Mesh(new THREE.SphereGeometry(pl.r2,18,14),mat(pl.c));
+      s.position.set(SP.x+px,py,SP.z+pz); return s; });
+    d(pl.n+' — surface bands',3,px,pz,function(){
+      var g=new THREE.Group();
+      for(var b2=0;b2<3;b2++){
+        var band=new THREE.Mesh(new THREE.TorusGeometry(pl.r2*Math.cos(-0.5+b2*0.5)+0.05,0.18,6,24),
+          mat(new THREE.Color(pl.c).offsetHSL(0,0,b2%2?0.12:-0.12).getHex()));
+        band.position.set(SP.x+px,py+pl.r2*Math.sin(-0.5+b2*0.5),SP.z+pz);
+        band.rotation.x=Math.PI/2; g.add(band);
+      }
+      return g; });
+    d(pl.n+' — craters',4,px,pz,function(){
+      var g=new THREE.Group();
+      for(var c2=0;c2<4;c2++){
+        var cr=new THREE.Mesh(new THREE.SphereGeometry(rand(0.4,0.8),8,6),
+          mat(new THREE.Color(pl.c).offsetHSL(0,0,-0.2).getHex()));
+        var th=rand(0,6.28), ph=rand(-1,1);
+        cr.position.set(SP.x+px+Math.cos(th)*pl.r2*Math.cos(ph),
+          py+pl.r2*Math.sin(ph),SP.z+pz+Math.sin(th)*pl.r2*Math.cos(ph));
+        g.add(cr);
+      }
+      return g; });
+    if(pl.ring) d(pl.n+' — the ring',1,px,pz,function(){
+      var rg=new THREE.Mesh(new THREE.TorusGeometry(pl.r2+2,0.5,6,32),
+        mat(new THREE.Color(pl.c).offsetHSL(0.1,0,0.15).getHex()));
+      rg.position.set(SP.x+px,py,SP.z+pz);
+      rg.rotation.x=Math.PI/2.4; return rg; });
+    for(var m2=0;m2<pl.moons;m2++)(function(m2){
+      d(pl.n+' — moon '+(m2+1),1,px,pz,function(){
+        var mn=new THREE.Mesh(new THREE.SphereGeometry(rand(0.7,1.2),10,8),mat(0x9aa5ad));
+        var ma=rand(0,6.28);
+        mn.position.set(SP.x+px+Math.cos(ma)*(pl.r2+3.5+m2*1.5),py+rand(-2,2),
+          SP.z+pz+Math.sin(ma)*(pl.r2+3.5+m2*1.5));
+        return mn; });
+    })(m2);
+  });
+  /* asteroid belt — 150 clicks of 3 rocks */
+  for(var ab=0;ab<150;ab++)(function(ab){
+    var a=ab/150*Math.PI*2, rr=70+rand(-4,4);
+    var px=Math.cos(a)*rr, pz=Math.sin(a)*rr;
+    d('Asteroid trio',3,px,pz,function(){
+      var g=new THREE.Group();
+      for(var i=0;i<3;i++){
+        var rk=box(rand(0.5,1.4),rand(0.5,1.2),rand(0.5,1.4),0x7d8791);
+        rk.position.set(SP.x+px+rand(-3,3),rand(8,24),SP.z+pz+rand(-3,3));
+        rk.rotation.set(rand(0,3),rand(0,3),rand(0,3)); g.add(rk);
+      }
+      return g; });
+  })(ab);
+  /* comets, satellites, station, black hole, nebulas, flags */
+  for(var cm=0;cm<20;cm++)(function(cm){
+    var px=rand(-80,80), pz=rand(-80,80);
+    d('Comet',4,px,pz,function(){
+      var g=new THREE.Group();
+      var hd=new THREE.Mesh(new THREE.SphereGeometry(0.7,8,6),
+        new THREE.MeshBasicMaterial({color:0xd8f6ff}));
+      hd.position.set(SP.x+px,rand(14,30),SP.z+pz); g.add(hd);
+      for(var t2=1;t2<=3;t2++){
+        var tl=box(0.4/t2+0.1,0.4/t2+0.1,1.2,0x9ae8f5);
+        tl.position.set(hd.position.x+t2*1.1,hd.position.y+t2*0.4,hd.position.z+t2*0.6);
+        g.add(tl);
+      }
+      return g; });
+  })(cm);
+  for(var st5=0;st5<15;st5++)(function(st5){
+    var px=rand(-70,70), pz=rand(-70,70);
+    d('Satellite',5,px,pz,function(){
+      var g=new THREE.Group();
+      var bd=box(1,1,1.6,0xc0c8d0); g.add(bd);
+      [-1,1].forEach(function(s){ var pan=box(2.6,0.08,1.2,0x2a6fd6);
+        pan.position.x=s*2; g.add(pan); });
+      var dish=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6,0,6.28,0,1.2),mat(0xf4f4f4));
+      dish.position.y=0.8; g.add(dish);
+      var ant2=box(0.06,1,0.06,0x333333); ant2.position.y=1.2; g.add(ant2);
+      g.position.set(SP.x+px,rand(10,28),SP.z+pz);
+      g.rotation.y=rand(0,6.28);
+      return g; });
+  })(st5);
+  for(var ss=0;ss<12;ss++)(function(ss){
+    d('Space station module',6,40,-40,function(){
+      var g=new THREE.Group();
+      var mod=box(3,2,2,0xc0c8d0); g.add(mod);
+      var win2=box(2.4,0.6,2.1,0x66d9ef); g.add(win2);
+      var tube=box(1,1,1.4,0x9aa5ad); tube.position.z=1.6; g.add(tube);
+      g.position.set(SP.x+34+((ss%4))*3.4,20+((ss/4)|0)*2.6,SP.z-44);
+      return g; });
+  })(ss);
+  for(var bh=0;bh<5;bh++)(function(bh){
+    d(bh===0?'BLACK HOLE — the void':'Black hole ring',bh===0?1:1,-55,45,function(){
+      if(bh===0){
+        var h=new THREE.Mesh(new THREE.SphereGeometry(3.5,16,12),
+          new THREE.MeshBasicMaterial({color:0x000000}));
+        h.position.set(SP.x-55,20,SP.z+45); return h;
+      }
+      var r3=new THREE.Mesh(new THREE.TorusGeometry(3.5+bh*1.2,0.25,6,28),
+        new THREE.MeshBasicMaterial({color:[0x9b5cff,0xff8ac2,0x66d9ef,0xffd83d][bh-1]}));
+      r3.position.set(SP.x-55,20,SP.z+45);
+      r3.rotation.x=Math.PI/2.2; return r3; });
+  })(bh);
+  for(var nb=0;nb<30;nb++)(function(nb){
+    var px=rand(-85,85), pz=rand(-85,85);
+    d('Nebula wisp',1,px,pz,function(){
+      var n2=new THREE.Mesh(new THREE.PlaneGeometry(rand(8,18),rand(5,10)),
+        new THREE.MeshBasicMaterial({color:[0x9b5cff,0xff5b8d,0x66d9ef][nb%3],
+          transparent:true,opacity:0.12,depthWrite:false,
+          blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+      n2.position.set(SP.x+px,rand(15,35),SP.z+pz);
+      n2.rotation.set(rand(-0.5,0.5),rand(0,3.14),0);
+      return n2; });
+  })(nb);
+  for(var fg=0;fg<12;fg++)(function(fg){
+    var px=rand(-60,60), pz=rand(-60,60);
+    d('Brick flag',3,px,pz,function(){
+      var g=new THREE.Group();
+      var pole=box(0.14,3,0.14,0xe8e0c8); pole.position.y=1.5; g.add(pole);
+      var fl=box(1.6,1,0.08,[0xc62b21,0xffd83d,0x2a6fd6,0xff8ac2][fg%4]);
+      fl.position.set(0.9,2.5,0); g.add(fl);
+      var base=studdedBox(1,0.4,1,0x7d8791,0x6d7680); base.position.y=0.2; g.add(base);
+      g.position.set(SP.x+px,0,SP.z+pz);
+      return g; });
+  })(fg);
+  /* star clusters fill the count to 15,000+ parts */
+  var partsSoFar=0;
+  defs.forEach(function(dd){ partsSoFar+=dd.parts; });
+  var need=15000-partsSoFar;
+  var clusters=Math.ceil(need/30);
+  for(var sc2=0;sc2<clusters;sc2++)(function(sc2){
+    var px=rand(-88,88), pz=rand(-88,88);
+    d('Star cluster ×30',30,px,pz,function(){
+      return starCluster(30,SP.x+px,rand(20,48),SP.z+pz,6);
+    });
+  })(sc2);
+  /* build outward from the sun */
+  defs.sort(function(a,b){ return a.key-b.key; });
+  return defs;
+}
+function buildSpace(instant){
+  if(szGroup) return;
+  szGroup=new THREE.Group(); world.add(szGroup);
+  var fl=new THREE.Mesh(new THREE.PlaneGeometry(SP.r*2+30,SP.r*2+30),mat(0x0a0a14));
+  fl.rotation.x=-Math.PI/2; fl.position.set(SP.x,0.02,SP.z); szGroup.add(fl);
+  for(var gl2=0;gl2<12;gl2++){ /* faint grid lines on the void floor */
+    var l1=box(SP.r*2,0.06,0.12,0x1a1a2e); l1.position.set(SP.x,0.05,SP.z-SP.r+gl2*16); szGroup.add(l1);
+    var l2=box(0.12,0.06,SP.r*2,0x1a1a2e); l2.position.set(SP.x-SP.r+gl2*16,0.05,SP.z); szGroup.add(l2);
+  }
+  var defs=genSpace();
+  szChunks.length=0; szParts=0; szPartsTotal=0;
+  defs.forEach(function(dd){
+    var o=dd.make();
+    szGroup.add(o);
+    szPartsTotal+=dd.parts;
+    if(!instant){
+      o.traverse(function(m){ if((m.isMesh||m.isPoints)&&!m.userData.om) m.userData.om=m.material; });
+      o.visible=false;
+    }
+    szChunks.push({label:dd.label,obj:o,parts:dd.parts});
+  });
+  if(instant){ szIdx=szChunks.length; szParts=szPartsTotal; }
+}
+function showSzGhost(){
+  var ch=szChunks[szIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){
+    if(m.isMesh) m.material=ghostMat;
+    else if(m.isPoints) m.material=ghostPtsMat;
+  });
+  var bb=new THREE.Box3().setFromObject(ch.obj);
+  var c=bb.getCenter(new THREE.Vector3()), sz2=bb.getSize(new THREE.Vector3());
+  cityCam.x=c.x; cityCam.y=Math.max(4,c.y); cityCam.z=c.z;
+  cityCam.r=clamp(Math.max(sz2.x,sz2.z)*0.9+10,14,60);
+  cityCam.h=clamp(c.y+sz2.y*0.8+6,12,55);
+  obj('🚀 '+ch.label+' &nbsp;<span style="color:#7df3ff">piece '+(szIdx+1)+'/'+szChunks.length
+    +' · parts '+szParts.toLocaleString()+'/'+szPartsTotal.toLocaleString()+'</span>');
+  hint('Click the cyan piece! ⚡ AUTO-BUILD strongly recommended · drag + wheel to fly around');
+}
+function placeSzChunk(silent){
+  var ch=szChunks[szIdx];
+  if(!ch) return;
+  ch.obj.visible=true;
+  ch.obj.traverse(function(m){ if((m.isMesh||m.isPoints)&&m.userData.om) m.material=m.userData.om; });
+  szParts+=ch.parts;
+  if(!silent){
+    sndBrickClick();
+    ch.obj.scale.set(1.2,1.2,1.2);
+    (function(oo){ tween(0.12,function(k){ var s=1.2-0.2*k; oo.scale.set(s,s,s); }); })(ch.obj);
+  }
+  szIdx++;
+  if(szIdx>=szChunks.length) finishSpaceBuild();
+  else showSzGhost();
+}
+function tryPlaceSz(e){
+  var ch=szChunks[szIdx];
+  if(!ch) return;
+  var r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  ray.setFromCamera(pointer,camera);
+  var bb=new THREE.Box3().setFromObject(ch.obj); bb.expandByScalar(3);
+  if(!ray.ray.intersectsBox(bb)){ hint('Click the <b style="color:#7df3ff">glowing cyan piece</b>!'); return; }
+  placeSzChunk();
+}
+function finishSpaceBuild(){
+  szDone=true; gameWon=true;
+  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  save();
+  enterSZ();
+  /* THE WIN */
+  sndFanfare(); setTimeout(sndFanfare,700); setTimeout(sndFanfare,1400);
+  doFlash('#ffffff');
+  var fw=0;
+  var fwIv=setInterval(function(){
+    fw++;
+    burst(new THREE.Vector3(SP.x+rand(-40,40),rand(15,40),SP.z+rand(-40,40)),
+      [0xffd83d,0xff5b8d,0x66d9ef,0x9b5cff,0x7dffa0][fw%5],20,{speed:7,life:1.5,grav:3});
+    blip(400+fw*80,'sine',0.3,0.4,0,1600);
+    if(fw>14) clearInterval(fwIv);
+  },350);
+  msg('🏆🚀 YOU BUILT THE UNIVERSE 🚀🏆<br><span style="font-size:60%">'+szPartsTotal.toLocaleString()+' parts. Every act. Every world.<br><b>YOU WIN.</b> (for now…)</span>',12000);
+  obj('🏆 YOU WIN (for now) — '+szPartsTotal.toLocaleString()+' space parts built. The whole brick universe is yours.');
+  hint('P = become anyone · every world is open · thanks for playing BRICK LEGEND (so far)');
+}
+function enterSZ(){
+  PH='sz';
+  setMood('space');
+  P.pos.set(SP.x,0,SP.z+SP.r-8); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  windLoop.set(0);
+  sndPortal(); sndWhoosh(false);
+  if(!szReturn){
+    szReturn=makePortal(SP.x,SP.z+SP.r-4);
+    var s=textBoard('BACK TO\nTHE CITY',2.8,1.6,'#0a1a3a','#7fd8ff',26);
+    s.position.set(SP.x,4.6,SP.z+SP.r-5.8);
+    world.add(s);
+  }
+  if(!gameWon) obj('🚀 THE VOID — walk the grid, build the cosmos.');
+  updateMobileUI();
+}
+function ensureRocket(){
+  if(rocketObj||!fragPlaced) return;
+  rocketObj=new THREE.Group();
+  var body2=box(2,6,2,0xf4f4f4); body2.position.y=4; rocketObj.add(body2);
+  var nose=box(1.4,1.6,1.4,0xc62b21); nose.position.y=7.8; rocketObj.add(nose);
+  var tip=box(0.6,1,0.6,0xc62b21); tip.position.y=9; rocketObj.add(tip);
+  var win3=new THREE.Mesh(boxGeo(1,1,2.2),glassMat); win3.position.y=5; rocketObj.add(win3);
+  [[-1.2,0],[1.2,0],[0,-1.2],[0,1.2]].forEach(function(o){
+    var fin=box(o[0]?0.3:1.4,2.2,o[1]?0.3:1.4,0xc62b21);
+    fin.position.set(o[0],1.4,o[1]); rocketObj.add(fin);
+  });
+  var flame=new THREE.Mesh(boxGeo(1.2,1,1.2),new THREE.MeshBasicMaterial({color:0xff8a00}));
+  flame.position.y=0.4; rocketObj.add(flame);
+  var sign=textBoard('🚀 TO SPACE\nbuild the cosmos!',3.6,1.9,'#05070d','#9ae8f5',24);
+  sign.position.set(0,10.6,0); rocketObj.add(sign);
+  rocketObj.position.set(CITY.x-14,0,CITY.z-40);
+  world.add(rocketObj);
+}
+function updateAct6(dt){
+  if(rocketCd>0) rocketCd-=dt;
+  if(rocketObj){
+    rocketObj.position.y=Math.sin(GTIME*1.4)*0.3;
+    if((PH==='metro'||PH==='city')&&!P.dead&&rocketCd<=0
+       &&Math.hypot(P.pos.x-rocketObj.position.x,P.pos.z-rocketObj.position.z)<3){
+      rocketCd=2;
+      sndBoom(); sndWhoosh(true); doFlash('#dfe8ff');
+      if(!szUnlocked){
+        szUnlocked=true; save();
+        buildSpace(false);
+        szIdx=0;
+        PH='szbuild';
+        setMood('space');
+        camOrbit.a=0.4; camOrbit.target=0.4;
+        showSzGhost();
+        msg('🚀 WELCOME TO THE VOID.<br><span style="font-size:55%">Build the cosmos: '+szChunks.length+' pieces, '+szPartsTotal.toLocaleString()+' parts. ⚡AUTO-BUILD is your best friend.</span>',5600);
+        updateMobileUI();
+      } else if(szDone){ enterSZ(); }
+      else { /* resume an unfinished build */
+        PH='szbuild'; setMood('space'); showSzGhost(); updateMobileUI();
+      }
+    }
+  }
+  if(szReturn){
+    szReturn.userData.ring.rotation.z+=dt*2;
+    szReturn.userData.disc.rotation.z-=dt*3;
+    if(PH==='sz'&&!P.dead&&P.pos.distanceTo(szReturn.position)<2.2){
+      PH='metro'; setMood('day');
+      P.pos.set(CITY.x-14,0,CITY.z-36); P.vy=0;
+      if(player) player.group.position.copy(P.pos);
+      camYaw=Math.PI; P.yaw=Math.PI;
+      sndPortal(); sndWhoosh(false);
+      obj(gameWon?'🏆 Champion of everything. The rocket flies back whenever you like.':'🏙️ Back in the city.');
+      updateMobileUI();
+    }
+  }
+}
+function applyAct6Skip(sv){
+  if(sv.sz){
+    szUnlocked=true; buildSpace(true); szDone=true; gameWon=!!sv.win;
+  }
+}
+
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
 window.__dbg={
   phase:function(){ return PH; },
@@ -7099,6 +7486,16 @@ window.__dbg={
   catNade:throwCatGrenade,
   autoBuildOn:function(on){ setAutoBuild(on!==false); },
   autoState:function(){ return {on:autoBuild,inBuild:inBuildPhase()}; },
+  /* ---- Act 6: SPACE ---- */
+  sz:function(){ return {unlocked:szUnlocked,idx:szIdx,total:szChunks.length,
+    parts:szParts,partsTotal:szPartsTotal,done:szDone,won:gameWon,
+    rocket:rocketObj?{x:rocketObj.position.x,z:rocketObj.position.z}:null}; },
+  gotoSpace:function(){ fragPlaced=true; ensureRocket(); szUnlocked=true;
+    if(!szGroup){ buildSpace(false); szIdx=0; }
+    PH='szbuild'; setMood('space'); showSzGhost(); updateMobileUI(); },
+  placeSz:function(n){ for(var i=0;i<(n||1);i++){
+      if(szIdx>=szChunks.length) break;
+      placeSzChunk(szIdx<szChunks.length-1); } },
   forceSave:function(){ save(); return loadSave(); },
   score:function(){ return {stored:progScore(loadSave())}; }
 };
