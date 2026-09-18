@@ -1183,7 +1183,7 @@ function save(){
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
      sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,
-     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,v:3};
+     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,fin:finWon?1:0,v:3};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1335,7 +1335,7 @@ addEventListener('pointerup',function(e){
   if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
   if(PH==='metro'){ if(tryChop(e)) return; if(gunEquipped) shoot(); else tryPunch(); return; }
   if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
-     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'||PH==='rpg'||PH==='by'){
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'||PH==='rpg'||PH==='by'||PH==='fin'){
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -1509,6 +1509,7 @@ function combatTargets(){
       list.push({pos:ultBoss.mesh.position,y:4,big:true,
         hurt:function(dm){ hurtUltBoss(dm,false); }});
   }
+  combatTargetsFinale(list);
   return list;
 }
 function shoot(){
@@ -2244,6 +2245,11 @@ function hurtPlayer(dmg,why){
         startUltBattle();
       });
     }
+    else if(PH==='fin'){
+      if(finState==='boss') killPlayer('DECONSTRUCTED!','The Architect rebuilt you into rubble. Again?',startFinaleBoss);
+      else if(finState==='stars') killPlayer('STARFALL!','The stars overwhelmed you. Retry the star fight.',startStarFight);
+      else killPlayer('FELL!','The obby is unforgiving. Back to the boss.',startFinaleBoss);
+    }
     else if(PH==='rpg'){
       killPlayer('FELLED!','The RPG shows no mercy. Your quest progress is safe — try again from town.',function(){
         if(rpgBoss&&!rpgBoss.dead){ world.remove(rpgBoss.mesh); rpgBoss=null;
@@ -2342,7 +2348,39 @@ $('btnQuit').addEventListener('click',function(){
 
 /* ---------------- PLAYER UPDATE ---------------- */
 var houseBuilt=false;
+/* ---- solid block colliders: land on top with your feet, head+torso push out ---- */
+var blockCols=[], PW=0.42, PH_HT=1.9; // player half-width, standing height
+function addBlockCollider(x,y,z,hw,hh,hd){ blockCols.push({x:x,y:y,z:z,hw:hw,hh:hh,hd:hd}); }
+function clearBlockColliders(){ blockCols.length=0; }
+/* pure: the highest block-top the feet can rest on right now (or null) */
+function blockStandY(){
+  if(!blockCols.length) return null;
+  var stand=null;
+  for(var i=0;i<blockCols.length;i++){
+    var b=blockCols[i], top=b.y+b.hh;
+    if(Math.abs(P.pos.x-b.x)>b.hw+PW||Math.abs(P.pos.z-b.z)>b.hd+PW) continue;
+    if(P.vy<=0&&P.pos.y>=top-0.55&&P.pos.y<=top+0.35&&(stand===null||top>stand)) stand=top;
+  }
+  return stand;
+}
+/* head + torso collision: push the body out of any block its column overlaps */
+function resolveBlockWalls(){
+  var feet=P.pos.y, head=P.pos.y+PH_HT;
+  for(var i=0;i<blockCols.length;i++){
+    var b=blockCols[i], top=b.y+b.hh, bot=b.y-b.hh;
+    var ox=(b.hw+PW)-Math.abs(P.pos.x-b.x), oz=(b.hd+PW)-Math.abs(P.pos.z-b.z);
+    if(ox<=0||oz<=0) continue;
+    if(feet>=top-0.34) continue;                 // standing on / stepping onto it, not a wall
+    if(head<=bot||feet>=top) continue;           // no vertical overlap
+    if(P.vy>0&&head>bot&&head<bot+0.7){ P.pos.y=bot-PH_HT; P.vy=0; continue; } // head bonk
+    if(ox<oz) P.pos.x+=(P.pos.x>b.x?ox:-ox);     // push out on the shallower axis
+    else P.pos.z+=(P.pos.z>b.z?oz:-oz);
+  }
+}
 function groundYAt(){
+  var s=blockStandY();
+  if(s!==null) return s;
+  {
   if(PH==='bridge'){
     if(P.pos.z<BR.z0+0.4||P.pos.z>BR.z1-0.4) return BR.y; // stone ledges
     for(var i=0;i<planks.length;i++){
@@ -2365,6 +2403,7 @@ function groundYAt(){
      &&P.pos.z>WALL.z0-0.8&&P.pos.z<WALL.z1+0.8&&P.pos.y>4.4) return 5.55;
   if(PH==='castle') return 0.3; // castle floor
   return 0;
+  }
 }
 function collideHouseWalls(){
   /* thin wall colliders so the inside of the house is walkable through the door */
@@ -2420,6 +2459,7 @@ function updatePlayer(dt){
   /* jump + gravity */
   if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; sndWhoosh(true); }
   if(!onLadder){
+    if(blockCols.length) resolveBlockWalls(); // head + torso collide with solid parts
     P.vy-=30*dt; P.pos.y+=P.vy*dt;
     var gy=groundYAt();
     if(P.pos.y<=gy&&P.vy<=0){ P.pos.y=gy; if(!P.onGround){ sndStep(); } P.onGround=true; P.vy=0; }
@@ -2464,6 +2504,10 @@ function updatePlayer(dt){
   } else if(PH==='by'){
     P.pos.x=clamp(P.pos.x,BY.x-BY.r+1,BY.x+BY.r-1);
     P.pos.z=clamp(P.pos.z,BY.z-BY.r+1,BY.z+BY.r-1);
+  } else if(PH==='fin'){
+    if(finState!=='obby'){ var df=new THREE.Vector3(P.pos.x-FIN.x,0,P.pos.z-FIN.z);
+      if(df.length()>29){ df.setLength(29); P.pos.x=FIN.x+df.x; P.pos.z=FIN.z+df.z; } }
+    else { P.pos.x=clamp(P.pos.x,FIN.x-40,FIN.x+40); P.pos.z=clamp(P.pos.z,FIN.z-40,FIN.z+40); }
   } else if(PH==='city'||PH==='metro'){
     if(PH==='city'){
       P.pos.x=clamp(P.pos.x,CITY.x-48,CITY.x+48);
@@ -2622,6 +2666,7 @@ function animate(){
     updateAct6(dt);
     updateAct7(dt);
     updateAct8(dt);
+    updateFinale(dt);
     /* autosave every 20s — the regression guard makes this always safe */
     autosaveT+=dt;
     if(autosaveT>=20){ autosaveT=0; if(PH!=='menu') save(); }
@@ -7319,9 +7364,10 @@ function finishSpaceBuild(){
     blip(400+fw*80,'sine',0.3,0.4,0,1600);
     if(fw>14) clearInterval(fwIv);
   },350);
-  msg('🏆🚀 YOU BUILT THE UNIVERSE 🚀🏆<br><span style="font-size:60%">'+szPartsTotal.toLocaleString()+' parts. Every act. Every world.<br><b>YOU WIN.</b> (for now…)</span>',12000);
-  obj('🏆 YOU WIN (for now) — '+szPartsTotal.toLocaleString()+' space parts built. The whole brick universe is yours.');
-  hint('P = become anyone · every world is open · thanks for playing BRICK LEGEND (so far)');
+  msg('🏆🚀 YOU BUILT THE SPACE ZONE! 🚀🏆<br><span style="font-size:55%">'+szPartsTotal.toLocaleString()+' parts. And the void keeps expanding — the build continues!</span>',6000);
+  obj('🌈 The EXPANSION rises next — keep building!');
+  /* CHAIN: flow straight into the expansion build (no button hunt) */
+  a2Timer=setTimeout(function(){ a2Timer=null; if(PH==='sz'){ startExpansion(); } },3200);
 }
 function enterSZ(){
   PH='sz';
@@ -8066,8 +8112,10 @@ function finishExpansion(){
   spawnRpgTown();
   enterSZ();
   sndFanfare(); setTimeout(sndFanfare,600); doFlash('#ffffff');
-  msg('🌈 THE EXPANSION IS BUILT!<br><span style="font-size:55%">And now… the golden portal in town. <b>THE RPG BEGINS.</b></span>',6000);
-  obj('🎲 Enter the GOLDEN portal in the RPG town — your adventure awaits.');
+  msg('🌈 THE EXPANSION IS BUILT!<br><span style="font-size:55%">The building is DONE. Now… <b>THE RPG ADVENTURE BEGINS.</b></span>',5000);
+  obj('🎲 Your RPG adventure begins…');
+  /* CHAIN: the building is finished — start the RPG automatically */
+  a2Timer=setTimeout(function(){ a2Timer=null; if(PH==='sz') enterRPG(); },3000);
 }
 /* ---- THE RPG ---- */
 function spawnRpgTown(){
@@ -9051,8 +9099,14 @@ function hurtUltBoss(dmg,fromTorn){
       blip(400+fw*60,'sine',0.32,0.4,0,1700);
       if(fw>24) clearInterval(iv);
     },300);
-    msg('👑🏆 ULTIMATE CASOH FALLS 🏆👑<br><span style="font-size:60%">Every act. Every world. Every build. Every casoh.<br><b>YOU ARE THE ABSOLUTE CHAMPION OF BRICK LEGEND.</b></span>',15000);
-    obj('👑 THE ABSOLUTE CHAMPION. There is nothing left to conquer. (for now?)');
+    msg('👑 ULTIMATE CASOH FALLS 👑<br><span style="font-size:55%">…but the void tears open. THE FINALE begins. A gate glows behind the throne.</span>',6000);
+    obj('🌟 THE FINALE — step into the white gate behind the throne.');
+    if(!finGate){
+      finGate=makePortal(BY.x,BY.z-40);
+      finGate.userData.ring.material=bmat(0xffffff);
+      var s=neon('🌟 THE FINALE',3.2,1.5,0xffffff);
+      s.position.set(BY.x,4.8,BY.z-41.8); world.add(s);
+    }
   }
 }
 function updateBY(dt){
@@ -9189,7 +9243,210 @@ function applyAct8Skip(sv){
       byDone2=true;
     }
     ultWon=!!sv.ult;
+    finWon=!!sv.fin;
+    if(ultWon&&!finGate){
+      finGate=makePortal(BY.x,BY.z-40);
+      finGate.userData.ring.material=bmat(0xffffff);
+      var s=neon('🌟 THE FINALE',3.2,1.5,0xffffff);
+      s.position.set(BY.x,4.8,BY.z-41.8); world.add(s);
+    }
   }
+}
+
+/* ================================================================
+   ACT 9 — THE FINALE
+   After the madness (Ultimate Casoh): a finale BOSS (THE ARCHITECT),
+   then FIGHT THE STARS (shoot falling stars), then an INSANE OBBY
+   (solid blocks with real feet/head collision) up to the true trophy.
+   ================================================================ */
+var FIN={x:-620,z:-1150};
+var finGate=null,finGroup=null,finState='none',finWon=false,finCd=0;
+var finBoss=null,finStars=[],finStarsLeft=0,obbyPads=[],obbyTop=null,finTrophy=null;
+function enterFinale(){
+  PH='fin'; finState='boss';
+  setMood('boss');
+  if(!finGroup){
+    finGroup=new THREE.Group(); world.add(finGroup);
+    var fl=new THREE.Mesh(new THREE.CircleGeometry(30,36),mat(0x14121e));
+    fl.rotation.x=-Math.PI/2; fl.position.set(FIN.x,0.04,FIN.z); finGroup.add(fl);
+    for(var i=0;i<40;i++){ var a=i/40*6.28;
+      var pil=box(1,rand(4,9),1,0x2a2740);
+      pil.position.set(FIN.x+Math.cos(a)*29,pil.geometry.parameters.height/2,FIN.z+Math.sin(a)*29);
+      finGroup.add(pil); }
+  }
+  P.pos.set(FIN.x,0,FIN.z+22); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  startFinaleBoss();
+}
+function startFinaleBoss(){
+  finState='boss';
+  if(finBoss&&finBoss.mesh.parent) world.remove(finBoss.mesh);
+  var g=new THREE.Group();
+  var core=studdedBox(4,5,4,0x4a4f57,0x3a3f45); core.position.y=3; g.add(core);
+  var eye=new THREE.Mesh(new THREE.SphereGeometry(1.2,14,10),bmat(0x66d9ef)); eye.position.set(0,4,2.1); g.add(eye);
+  var pu=new THREE.Mesh(new THREE.SphereGeometry(0.5,10,8),bmat(0x111111)); pu.position.set(0,4,3.1); g.add(pu);
+  for(var i=0;i<4;i++){ var a=i/4*6.28+0.8;
+    var arm=box(0.7,0.7,3.5,0x2f3540); arm.position.set(Math.cos(a)*3,4,Math.sin(a)*3);
+    arm.rotation.y=-a; g.add(arm);
+    var fist=studdedBox(1.2,1.2,1.2,0x4a4f57,0x3a3f45); fist.position.set(Math.cos(a)*5.4,4,Math.sin(a)*5.4); g.add(fist); }
+  var crown=neon('🏗️ THE ARCHITECT',5,1.3,0x66d9ef); crown.position.set(0,8,0); g.add(crown);
+  g.position.set(FIN.x,0,FIN.z-14);
+  world.add(g);
+  finBoss={mesh:g,hp:4000,maxHp:4000,atkCd:2,t:0,touchCd:0};
+  P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='🏗️ THE ARCHITECT 🏗️';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); sndRoar(true); doFlash('#66d9ef'); camShake=1;
+  msg('🏗️ THE ARCHITECT 🏗️<br><span style="font-size:55%">The builder of the void fights back. 4,000 HP.</span>',4200);
+  obj('🏗️ Defeat THE ARCHITECT — then the stars fall.');
+  updateMobileUI();
+}
+function hurtFinBoss(dmg){
+  if(!finBoss||finState!=='boss') return;
+  finBoss.hp-=dmg;
+  $('bossBar').firstElementChild.style.width=clamp(finBoss.hp/finBoss.maxHp*100,0,100)+'%';
+  burst(finBoss.mesh.position.clone().setY(4),0x66d9ef,6,{speed:4,life:0.5}); doFlash('#66d9ef');
+  if(finBoss.hp<=0){
+    world.remove(finBoss.mesh); finBoss=null;
+    sndRoar(true); doFlash('#ffffff'); camShake=1.2;
+    startStarFight();
+  }
+}
+function startStarFight(){
+  finState='stars'; finStarsLeft=20;
+  $('bossName').textContent='🌟 FIGHT THE STARS 🌟';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); setMood('space');
+  msg('🌟 FIGHT THE STARS! 🌟<br><span style="font-size:55%">Shoot down 20 falling stars (equip the gun — 1). Let 8 hit the ground and it\'s over.</span>',5200);
+  obj('🌟 Shoot 20 stars! Equip gun (1). Don\'t let 8 land.');
+  finStars.length=0; finStars.missed=0;
+  updateMobileUI();
+}
+function spawnStar(){
+  var g=new THREE.Group();
+  var c=new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8),bmat(RAINBOW[(Math.random()*7)|0]));
+  g.add(c);
+  for(var i=0;i<4;i++){ var sp=box(0.2,1.2,0.2,0xffe97a); sp.rotation.z=i*0.785; g.add(sp); }
+  g.position.set(FIN.x+rand(-22,22),26,FIN.z+rand(-22,22));
+  world.add(g);
+  finStars.push({mesh:g,vy:-rand(4,7),spin:rand(2,5),dead:false});
+}
+function hurtStar(st){
+  if(st.dead) return; st.dead=true;
+  world.remove(st.mesh); sndPew(); doFlash('#ffe97a');
+  burst(st.mesh.position.clone(),0xffe97a,12,{speed:5,life:0.8});
+  finStarsLeft--;
+  $('bossBar').firstElementChild.style.width=clamp(finStarsLeft/20*100,0,100)+'%';
+  obj('🌟 Stars left: '+finStarsLeft+' · missed: '+(finStars.missed||0)+'/8');
+  if(finStarsLeft<=0) startFinaleObby();
+}
+function startFinaleObby(){
+  finState='obby';
+  battleMusic(false); setMood('space');
+  $('bossWrap').style.display='none';
+  finStars.forEach(function(s){ if(!s.dead) world.remove(s.mesh); }); finStars.length=0;
+  /* build a tall spiral of SOLID blocks — real feet/head collision */
+  clearBlockColliders();
+  obbyPads.length=0;
+  var ox=FIN.x, oz=FIN.z+6, ang=0, y=1;
+  for(var i=0;i<26;i++){
+    ang+=rand(0.7,1.2); y+=rand(0.9,1.5);
+    var r2=6+i*0.15;
+    var px=ox+Math.cos(ang)*r2, pz=oz+Math.sin(ang)*r2;
+    var hw=rand(1,1.7), hd=rand(1,1.7), col=RAINBOW[i%7];
+    var m=box(hw*2,1,hd*2,col);
+    m.position.set(px,y,pz);
+    finGroup.add(m);
+    addBlockCollider(px,y,pz,hw,0.5,hd);
+    obbyPads.push({x:px,y:y+0.5,z:pz});
+    /* a couple of spinning hazard blocks between pads */
+    if(i%3===2){ var haz=box(0.6,0.6,0.6,0x111111); haz.position.set(px,y+2,pz); finGroup.add(haz); }
+  }
+  var last=obbyPads[obbyPads.length-1];
+  finTrophy=new THREE.Group();
+  var cup=box(1,1.2,1,0xffd83d); cup.position.y=0.6; finTrophy.add(cup);
+  var stem=box(0.4,0.5,0.4,0xd4af37); stem.position.y=-0.1; finTrophy.add(stem);
+  var base3=studdedBox(1.2,0.3,1.2,0xd4af37,0xb8912b); base3.position.y=-0.5; finTrophy.add(base3);
+  var beam=new THREE.Mesh(new THREE.CylinderGeometry(0.3,1.4,30,10,1,true),
+    new THREE.MeshBasicMaterial({color:0xffe97a,transparent:true,opacity:0.2,
+      depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  beam.position.y=14; finTrophy.add(beam);
+  finTrophy.position.set(last.x,last.y+1.2,last.z);
+  finGroup.add(finTrophy);
+  obbyTop=last;
+  P.pos.set(FIN.x,0,FIN.z+6); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  msg('🧗 THE INSANE OBBY!<br><span style="font-size:55%">Climb the floating blocks to the golden trophy. Blocks are SOLID now — land on them, don\'t fall. Fall = back to the bottom.</span>',6000);
+  obj('🧗 Climb to the golden trophy! Fall and you restart at the bottom.');
+  updateMobileUI();
+}
+function finaleWin(){
+  finState='done'; finWon=true; save();
+  clearBlockColliders();
+  setMood('space');
+  sndFanfare(); setTimeout(sndFanfare,600); setTimeout(sndFanfare,1200); setTimeout(sndFanfare,1800);
+  doFlash('#ffffff');
+  var fw=0;
+  var iv=setInterval(function(){ fw++;
+    burst(new THREE.Vector3(FIN.x+rand(-30,30),rand(10,40),FIN.z+rand(-30,30)),
+      RAINBOW[fw%7],26,{speed:8,life:1.8,grav:3});
+    blip(400+fw*55,'sine',0.32,0.45,0,1900);
+    if(fw>28) clearInterval(iv);
+  },280);
+  msg('🏆🌟 THE TROPHY IS YOURS 🌟🏆<br><span style="font-size:60%">The Architect. The stars. The impossible climb.<br><b>YOU HAVE TRULY FINISHED BRICK LEGEND. THE END. (or is it?)</b></span>',20000);
+  obj('🏆 THE END. You did everything. Every act, every world, every star. Legend.');
+}
+function updateFinale(dt){
+  if(finCd>0) finCd-=dt;
+  if(finGate){
+    finGate.userData.ring.rotation.z+=dt*2;
+    finGate.userData.disc.rotation.z-=dt*3;
+    if(PH==='by'&&!P.dead&&finCd<=0&&P.pos.distanceTo(finGate.position)<2.2){ finCd=2; enterFinale(); }
+  }
+  if(PH!=='fin') return;
+  if(finState==='boss'&&finBoss){
+    var g=finBoss.mesh, dd=g.position.distanceTo(P.pos);
+    finBoss.t+=dt; g.rotation.y+=dt*0.6;
+    if(finBoss.touchCd>0) finBoss.touchCd-=dt;
+    if(dd<7&&finBoss.touchCd<=0&&!P.dead){ finBoss.touchCd=1.2; hurtPlayer(22,'The Architect swings!'); sndPunch(true); camShake=0.6; }
+    finBoss.atkCd-=dt;
+    if(finBoss.atkCd<=0&&!P.dead){
+      finBoss.atkCd=2.4; sndTazer(); doFlash('#66d9ef');
+      for(var o=0;o<8;o++){ var m3=new THREE.Mesh(boxGeo(0.5,0.5,0.5),bmat(0x66d9ef));
+        m3.position.copy(g.position).setY(4); var a=o/8*6.28;
+        spawnEproj(m3,new THREE.Vector3(Math.cos(a)*11,2,Math.sin(a)*11),6,14,'rock'); }
+    }
+  } else if(finState==='stars'){
+    if(Math.random()<dt*1.2&&finStars.filter(function(s){ return !s.dead; }).length<6) spawnStar();
+    finStars.forEach(function(st){
+      if(st.dead) return;
+      st.mesh.position.y+=st.vy*dt; st.mesh.rotation.y+=st.spin*dt;
+      if(st.mesh.position.y<=0.6){ st.dead=true; world.remove(st.mesh);
+        sndBoom(); camShake=0.3; finStars.missed=(finStars.missed||0)+1;
+        obj('🌟 Stars left: '+finStarsLeft+' · missed: '+finStars.missed+'/8');
+        if(finStars.missed>=8&&!P.dead)
+          killPlayer('STARFALL!','Too many stars hit the void. The star fight resets.',startStarFight);
+      }
+    });
+  } else if(finState==='obby'){
+    finGroup.children.forEach(function(c){ if(c.geometry&&c.geometry.type==='BoxGeometry'&&c.material&&c.material.color&&c.material.color.getHex()===0x111111) c.rotation.y+=dt*3; });
+    if(finTrophy) finTrophy.rotation.y+=dt;
+    if(P.pos.y<-3&&!P.dead){ /* fell off — back to the bottom, no death */
+      P.pos.set(FIN.x,0,FIN.z+6); P.vy=0;
+      if(player) player.group.position.copy(P.pos);
+      sndHurt(); msg('💫 Fell! Back to the bottom.',1600);
+    }
+    if(obbyTop&&Math.hypot(P.pos.x-obbyTop.x,P.pos.z-obbyTop.z)<2&&P.pos.y>obbyTop.y-1) finaleWin();
+  }
+}
+function combatTargetsFinale(list){
+  if(PH!=='fin') return;
+  if(finState==='boss'&&finBoss) list.push({pos:finBoss.mesh.position,y:4,big:true,hurt:function(d){ hurtFinBoss(d); }});
+  if(finState==='stars') finStars.forEach(function(st){ if(!st.dead)
+    list.push({pos:st.mesh.position,y:0,hurt:function(){ hurtStar(st); }}); });
 }
 
 /* ---------------- DEBUG API (for automated playtests) ---------------- */
@@ -9413,6 +9670,17 @@ window.__dbg={
       placeByChunk(byIdx<byChunks.length-1); } },
   startUlt:function(){ byDone1=true; byDone2=true; startUltBattle(); },
   hitUlt:function(n){ hurtUltBoss(n||9999,false); },
+  /* ---- Act 9: THE FINALE ---- */
+  fin:function(){ return {state:finState,won:finWon,
+    boss:finBoss?finBoss.hp:null,starsLeft:finStarsLeft,
+    missed:finStars.missed||0,pads:obbyPads.length,blockCols:blockCols.length,
+    top:obbyTop?{x:obbyTop.x,y:obbyTop.y,z:obbyTop.z}:null}; },
+  gotoFinale:function(){ if(!player) spawnPlayer('rich'); enterFinale(); },
+  hitFin:function(n){ hurtFinBoss(n||9999); },
+  killStars:function(){ finStars.forEach(function(s){ if(!s.dead) hurtStar(s); });
+    while(finStarsLeft>0){ spawnStar(); hurtStar(finStars[finStars.length-1]); } },
+  obbyPads:function(){ return obbyPads.map(function(p){ return {x:p.x,y:p.y,z:p.z}; }); },
+  finTop:function(){ if(obbyTop){ __dbg.tpY(obbyTop.x,obbyTop.y,obbyTop.z); } },
   forceSave:function(){ save(); return loadSave(); },
   score:function(){ return {stored:progScore(loadSave())}; }
 };
