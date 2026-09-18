@@ -6798,7 +6798,7 @@ function updateCW(dt){
     tEl.style.color=cafeHp<60?'#ff5340':'#ffd83d';
     wave.spawnT-=dt;
     var st3=waveDogStats(wave.lvl);
-    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<6){
+    if(wave.spawnT<=0&&dogs.filter(function(d){ return !d.dead; }).length<5){
       wave.spawnT=st3.interval;
       spawnDog(1,st3.fur,st3.hp,st3.dmg,st3.spd,st3.fat);
     }
