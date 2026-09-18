@@ -1183,7 +1183,7 @@ function save(){
      oc:ocDone?1:0,fl:fishLvl,fc:fishCash,spat:spatula?1:0,fm:curForm,
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
      sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,
-     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,v:2};
+     by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,v:3};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1193,14 +1193,17 @@ var spaceWasReset=false;
 function loadSave(){
   try{
     var s=JSON.parse(localStorage.getItem('brickLegendSave')||'null');
-    if(s&&(!s.v||s.v<2)&&(s.sz||s.win||s.sx||s.rpg)){
-      /* THE GREAT SPACE RESET: everyone rebuilds the space zone from scratch.
-         Expansion buyers get their 500 STUD BUX back. */
+    if(s&&(!s.v||s.v<3)&&(s.sz||s.win||s.sx||s.rpg||s.by1||s.by2||s.ult)){
+      /* THE GREAT SPACE RESET (again): only the SPACE-AREA BUILD progress is
+         wiped — the space zone, the expansion, the Beyond zones and arena, and
+         everything downstream — so everyone rebuilds it from scratch. All
+         progress up through the cat saga is untouched. Expansion buyers get
+         their 500 STUD BUX back. */
       if(s.sx) s.sb=(s.sb||0)+500;
-      s.sz=0; s.win=0; s.sx=0; s.rpg=0; s.rg=0; s.sw=0; s.v=2;
+      s.sz=0; s.win=0; s.sx=0; s.rpg=0; s.rg=0; s.sw=0; s.by1=0; s.by2=0; s.ult=0; s.v=3;
       localStorage.setItem('brickLegendSave',JSON.stringify(s)); // direct write: migration bypasses the guard
       spaceWasReset=true;
-    } else if(s&&(!s.v||s.v<2)){ s.v=2;
+    } else if(s&&(!s.v||s.v<3)){ s.v=3;
       try{ localStorage.setItem('brickLegendSave',JSON.stringify(s)); }catch(e2){}
     }
     return s;
@@ -2754,7 +2757,7 @@ function startSkip(sv){
   if(spaceWasReset){
     spaceWasReset=false;
     setTimeout(function(){
-      msg('🚀 THE GREAT SPACE RESET!<br><span style="font-size:55%">The void collapsed — EVERYONE rebuilds the space zone from scratch. (Expansion buyers: your 500 STUD BUX were refunded.) The rocket awaits!</span>',9000);
+      msg('🚀 THE SPACE REBUILD!<br><span style="font-size:55%">Only the space-area BUILDS were reset — EVERYONE rebuilds the space zone (and the expansion + Beyond) from scratch. Everything up to the cat saga is safe. (Expansion buyers: 500 STUD BUX refunded.) The rocket awaits!</span>',9000);
     },1500);
   }
   updateMobileUI();
