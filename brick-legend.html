@@ -6933,6 +6933,7 @@ function autoPlaceOne(silent){
   else placeStep(silent);
 }
 function setAutoRate(i,quiet){ /* 0 = you click · 1..5 = the speeds */
+  if(PH==='mcbuild'||PH==='mc') i=0; /* THE MEGA CITY has NO auto clicker, ever */
   autoIdx=clamp(i|0,0,AUTO_RATES.length-1);
   autoBuild=autoIdx>0; autoT=0; autoSndT=0;
   if(autoBuild) autoLast=autoIdx;
@@ -11014,6 +11015,7 @@ function mcStart(){
   $('bMenu').style.display='block';
   if(mcDone){ mcEnterCity(); return; }
   PH='mcbuild';
+  setAutoRate(0,true); $('bAuto').style.display='none'; /* no auto clicker in here */
   mcShowGhost();
   msg('🏙️ THE MEGA CITY 🏙️<br><span style="font-size:55%"><b>50,000 clicks. 1,250,000 parts.</b> No auto-build here — every single piece is YOUR click. '+(mcIdx?'Resuming at click '+mcIdx.toLocaleString()+'.':'Roads, shops, towers, players, cars, a statue, a festival…')+'</span>',7000);
   updateMobileUI();
