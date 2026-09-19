@@ -98,10 +98,19 @@
   #bForm{left:34px;bottom:250px;display:none;background:#66d9ef33;border-color:#9ae8f588}
   #bSlam{right:100px;bottom:170px;display:none;background:#9b5cff33;border-color:#c9a8ff88}
   #bGren{right:176px;bottom:170px;display:none;background:#ff8ac233;border-color:#ffc9e088}
-  #bAuto{position:fixed;right:16px;bottom:16px;z-index:22;font-family:inherit;font-weight:900;
-    font-size:14px;padding:12px 18px;border-radius:12px;border:2px solid #7df3ff;cursor:pointer;
-    background:#0a2a3add;color:#7df3ff;display:none;letter-spacing:1px}
-  #bAuto.on{background:#7df3ff;color:#06222e}
+  #bAuto{position:fixed;right:16px;bottom:16px;z-index:22;display:none;gap:4px;align-items:center;
+    flex-wrap:wrap;justify-content:flex-end;max-width:min(96vw,600px);padding:6px 8px;
+    border-radius:12px;border:2px solid #7df3ff;background:#0a2a3add}
+  #bAuto b{color:#7df3ff;font-size:12px;letter-spacing:1px;margin-right:2px;white-space:nowrap}
+  #bAuto button{font-family:inherit;font-weight:900;font-size:12px;padding:9px 9px;border-radius:8px;
+    border:1px solid #7df3ff88;background:#06222e;color:#7df3ff;cursor:pointer;white-space:nowrap}
+  #bAuto button.on{background:#7df3ff;color:#06222e}
+  @media (max-width:600px){ /* phones: a full-width strip along the bottom, hint lifted above it while building */
+    #bAuto{left:8px;right:8px;bottom:8px;max-width:none;justify-content:center;padding:4px 6px}
+    #bAuto b{flex-basis:100%;text-align:center;margin:0 0 2px}
+    #bAuto button{font-size:11px;padding:8px 6px}
+    body.building #hint{bottom:92px} }
+  @media (min-width:601px) and (max-width:1000px){ body.building #hint{bottom:72px} }
   #forms{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:45;
     background:#0a0d16f2;border:2px solid #66d9ef;border-radius:16px;padding:18px 22px;
     display:none;text-align:center;max-width:90vw}
@@ -161,7 +170,7 @@
   <div class="mbtn" id="bSlam">SLAM</div>
   <div class="mbtn" id="bGren">CAT NADE</div>
 </div>
-<button id="bAuto">⚡ AUTO-BUILD: OFF</button>
+<div id="bAuto"><b>⚡ AUTO-BUILD</b><button data-r="0" class="on">🖱️ CLICK</button><button data-r="1">1 / s</button><button data-r="2">1 / 0.5s</button><button data-r="3">1 / 0.1s</button><button data-r="4">1 / 0.01s</button><button data-r="5">1 / 1ms</button></div>
 <div id="forms">
   <h3>🔁 BECOME ANYONE YOU'VE BEEN</h3>
   <div id="formBtns"></div>
@@ -1294,7 +1303,7 @@ addEventListener('keydown',function(e){
   if(e.code==='KeyP') toggleForms($('forms').style.display!=='block');
   if(e.code==='Digit4') throwCatGrenade();
   if(e.code==='KeyV') trySlam();
-  if(e.code==='KeyB'&&inBuildPhase()) setAutoBuild(!autoBuild);
+  if(e.code==='KeyB'&&inBuildPhase()) setAutoRate((autoIdx+1)%AUTO_RATES.length);
 });
 addEventListener('keyup',function(e){ keys[e.code]=false; });
 var pointer=new THREE.Vector2(),ray=new THREE.Raycaster();
@@ -6665,7 +6674,7 @@ function tryPlaceCb(e){
 }
 function finishCafeBuild(){
   cafeFloors=cbStage;
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   if(cbStage===1){
     cafeCore=cbGroup; cafeHp=CAFE_MAX;
   }
@@ -6889,35 +6898,49 @@ function catNadeBoom(pos){
     spawnCatProp(dogCasoh.mesh.position.clone(),2.4); hurtDogCasoh(99999,false); converted++; }
   if(converted) msg('🧨 '+converted+' enem'+(converted>1?'ies':'y')+' turned into CAT'+(converted>1?'S':'')+'! 🐱',2200);
 }
-/* ---- AUTO-BUILD: 1 piece / 0.1s ---- */
-var autoBuild=false,autoT=0;
+/* ---- AUTO-BUILD: click yourself, or 1 piece per 1s / 0.5s / 0.1s / 0.01s / 1ms ---- */
+var AUTO_RATES=[0,1,0.5,0.1,0.01,0.001];
+var autoBuild=false,autoT=0,autoIdx=0,autoLast=3,autoSndT=0;
 function inBuildPhase(){
   return PH==='citybuild'||PH==='jgbuild'||PH==='ocbuild'||PH==='catbuild'
     ||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'||PH==='build'||PH==='buildwalk'||furnMode;
 }
-function autoPlaceOne(){
-  if(PH==='citybuild') placeCityChunk();
-  else if(PH==='jgbuild') placeJgChunk();
-  else if(PH==='ocbuild') placeOcChunk();
-  else if(PH==='catbuild') placeCbChunk();
-  else if(PH==='szbuild'){ if(sxActive()) placeSxChunk(); else placeSzChunk(); }
-  else if(PH==='bybuild') placeByChunk();
-  else if(PH==='bhbuild') placeBhChunk();
-  else placeStep();
+function autoPlaceOne(silent){
+  if(PH==='citybuild') placeCityChunk(silent);
+  else if(PH==='jgbuild') placeJgChunk(silent);
+  else if(PH==='ocbuild') placeOcChunk(silent);
+  else if(PH==='catbuild') placeCbChunk(silent);
+  else if(PH==='szbuild'){ if(sxActive()) placeSxChunk(silent); else placeSzChunk(silent); }
+  else if(PH==='bybuild') placeByChunk(silent);
+  else if(PH==='bhbuild') placeBhChunk(silent);
+  else placeStep(silent);
 }
-function setAutoBuild(on){
-  autoBuild=on; autoT=0;
-  $('bAuto').classList.toggle('on',on);
-  $('bAuto').textContent='⚡ AUTO-BUILD: '+(on?'ON':'OFF');
-  sndUi();
+function setAutoRate(i,quiet){ /* 0 = you click · 1..5 = the speeds */
+  autoIdx=clamp(i|0,0,AUTO_RATES.length-1);
+  autoBuild=autoIdx>0; autoT=0; autoSndT=0;
+  if(autoBuild) autoLast=autoIdx;
+  var bs=$('bAuto').querySelectorAll('button');
+  for(var k=0;k<bs.length;k++) bs[k].classList.toggle('on',(bs[k].getAttribute('data-r')|0)===autoIdx);
+  if(!quiet) sndUi();
 }
-$('bAuto').addEventListener('click',function(){ audioInit(); actx(); setAutoBuild(!autoBuild); });
+function setAutoBuild(on){ setAutoRate(on?autoLast:0); } /* old on/off API: ON = your last speed */
+$('bAuto').addEventListener('click',function(e){
+  var b=e.target.closest('button'); if(!b) return;
+  audioInit(); actx(); setAutoRate(b.getAttribute('data-r')|0);
+});
 function updateAutoBuild(dt){
-  $('bAuto').style.display=inBuildPhase()?'block':'none';
+  var inB=inBuildPhase();
+  $('bAuto').style.display=inB?'flex':'none';
+  document.body.classList.toggle('building',inB);
   if(!autoBuild) return;
-  if(!inBuildPhase()){ setAutoBuild(false); return; }
-  autoT+=dt;
-  while(autoT>=0.1&&inBuildPhase()){ autoT-=0.1; autoPlaceOne(); }
+  if(!inBuildPhase()){ setAutoRate(0,true); return; }
+  var rate=AUTO_RATES[autoIdx], fast=rate<0.1, n=0;
+  autoT+=dt; if(autoSndT>0) autoSndT-=dt;
+  /* fast rates place many pieces per frame (capped so a slow frame can't freeze the game),
+     silently — one brick click sound per ~0.08s so 1000/s doesn't become a buzz */
+  while(autoT>=rate&&inBuildPhase()&&n<60){ autoT-=rate; n++; autoPlaceOne(fast); }
+  if(n>=60||autoT>rate*60) autoT=0; /* drop any backlog instead of catching up */
+  if(fast&&n>0&&autoSndT<=0){ autoSndT=0.08; sndBrickClick(); }
 }
 /* ---- act 5 per-frame ---- */
 function updateCW(dt){
@@ -7401,7 +7424,7 @@ function tryPlaceSz(e){
 }
 function finishSpaceBuild(){
   szDone=true; gameWon=true;
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   save();
   enterSZ();
   /* THE WIN */
@@ -8158,7 +8181,7 @@ function tryPlaceSx(e){
 }
 function finishExpansion(){
   sxDone=true;
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   save();
   spawnRpgTown();
   enterSZ();
@@ -9022,7 +9045,7 @@ function tryPlaceBy(e){
   placeByChunk();
 }
 function finishByBuild(){
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   if(byGhostMk) byGhostMk.visible=false;
   if(byStage===1){
     byDone1=true; save();
@@ -9874,7 +9897,7 @@ function bhStartStage(n){
   bhCine=false; bhGlitchT=0; bhMetT=-1;
   PH='bhbuild';
   camOrbit.a=0.4; camOrbit.target=0.4;
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   showBhGhost();
   var intro=[
     '',
@@ -9962,7 +9985,7 @@ function bhStageComplete(){
 /* ---- the glitch-out: the screen tears, the house flickers, then it's gone ---- */
 function bhGlitch(next){
   bhCine=true; bhGlitchT=1.7; bhNextStage=next;
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   bhGhostMk.visible=false;
   $('glitch').classList.add('on'); sndGlitch();
   obj('<span style="'+RED+'">⚠️ ERR0R ERR0R ERR0R ⚠️</span>'); hint('');
@@ -9995,7 +10018,7 @@ function bhWipe(){
 /* ---- THE METEOR: it crashes on the house, cracks open… casoh. ---- */
 function bhLaunchMeteor(){
   bhCine=true; bhMetT=0;
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   bhGhostMk.visible=false;
   var hx=BH.x, hz=BH.z-10;
   cityCam.x=hx; cityCam.y=8; cityCam.z=hz; cityCam.r=80; cityCam.h=40;
@@ -10067,7 +10090,7 @@ function updateMeteor(dt){
 /* ---- the house stands: your character again, and casoh in the distance ---- */
 function bhBuildComplete(){
   bhStage=6; save();
-  autoBuild=false; $('bAuto').classList.remove('on'); $('bAuto').textContent='⚡ AUTO-BUILD: OFF';
+  setAutoRate(0,true);
   bhGhostMk.visible=false; bhCine=false;
   sndFanfare(); setTimeout(sndFanfare,600);
   enterHavenRoam();
@@ -10724,7 +10747,8 @@ window.__dbg={
   slam:trySlam,
   catNade:throwCatGrenade,
   autoBuildOn:function(on){ setAutoBuild(on!==false); },
-  autoState:function(){ return {on:autoBuild,inBuild:inBuildPhase()}; },
+  autoState:function(){ return {on:autoBuild,idx:autoIdx,rate:AUTO_RATES[autoIdx],inBuild:inBuildPhase()}; },
+  autoRate:function(i){ setAutoRate(i,true); },
   /* ---- Act 6: SPACE ---- */
   sz:function(){ return {unlocked:szUnlocked,idx:szIdx,total:szChunks.length,
     parts:szParts,partsTotal:szPartsTotal,done:szDone,won:gameWon,
