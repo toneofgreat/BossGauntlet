@@ -13,10 +13,13 @@
  *                                      harder to execute (crumbling ledges),
  *                                  (d) losing costs TIME, never progress -
  *                                      a checkpoint sits on every lip.
- *   II.  TYCOON   cols  56-115   RT.Tycoon. Earn 1500 while the arena
- *                                attacks: cannons, a saw, and a lava line
- *                                that climbs over the floor every 11 s.
- *                                100 / 300 / 500 / 900 / 1500.
+ *   II.  TYCOON   cols  56-115   RT.Tycoon, funded by an obby lap. THE
+ *                                CIRCUIT climbs six rungs east-to-west over
+ *                                the lava to a PAYOUT PLATE; each lap pays
+ *                                1.6x the last, capped at 900. The dropper is
+ *                                a trickle, not a plan. Ladder: 100 / 300 /
+ *                                500 / 900 / 1500, and a lava line that climbs
+ *                                over the floor every 11 s while you run it.
  *   III. TROLLS   cols 116-195   beat blocks over the void with one liar in
  *        + SKILL                 them, a thwomp corridor with pop-out spikes,
  *                                a crumble staircase, a laser maze with six
@@ -119,6 +122,7 @@
       spins: 0, gateOpen: 0,
       rigTries: 0, rigOpen: 0,
       tycoonOn: 0, lastDeaths: 0,
+      laps: 0, plateArmed: 1, lapBest: 0, lapT: 0,
       arcadeTries: 0, movement: 1
     };
     S = {};
@@ -628,9 +632,9 @@
   
 
   var ITEMS = [
-    { id: 'drop', name: 'THE DROPPER', price: 100, kind: 'dropper', cps: 16,
+    { id: 'drop', name: 'THE DROPPER', price: 100, kind: 'dropper', cps: 6,
       x: 59, y: 11, w: 3, h: 1, mx: 57, my: 12, icon: 'dropper', color: '#4ade80',
-      desc: 'Sixteen a second. It does not care about the lava.' },
+      desc: 'Six a second. It will not get you there. It stops you starving while you run.' },
 
     { id: 'shield', name: 'THE SHIELD', price: 300, kind: 'cosmetic', flag: 'shield',
       requires: 'drop', showLocked: true, x: 64, y: 11, w: 3, h: 1, color: '#67e8f9',
@@ -657,6 +661,42 @@
     RT.spawn({ type: 'lXlift', x: 108.5, y: 12, w: 3, bottom: 12, top: 8 });
   }
 
+  /* THE CIRCUIT --------------------------------------------------------
+   * The arena pays for laps, not for waiting. A lap is: up the six rungs
+   * east-to-west over the lava, stand on the PAYOUT PLATE at the top, drop
+   * back down to the pillars. Each lap pays 1.6x the last, capped, so the
+   * first one is a tutorial and the fifth one is real money. */
+  var PLATE = { x0: 57, x1: 61, y0: 2, y1: 4 };
+  function lapPay(n) { return Math.min(900, Math.round(150 * Math.pow(1.6, n))); }
+
+  function circuit(dt) {
+    if (!L.tycoonOn) return;
+    var p = P();
+    var onPlate = p.x + p.w > PLATE.x0 * T && p.x < PLATE.x1 * T &&
+                  p.y + p.h > PLATE.y0 * T && p.y < PLATE.y1 * T;
+    var home = p.y + p.h > 11.6 * T && pcx() > 56 * T && pcx() < 80 * T;
+
+    if (L.plateArmed && onPlate) {
+      var pay = lapPay(L.laps);
+      L.laps++;
+      L.plateArmed = 0;
+      if (RT.Tycoon && RT.Tycoon.add) RT.Tycoon.add(pay);
+      sfx('cash'); sfx('checkpoint');
+      RT.flash('#ffe9a8', 0.12);
+      RT.cam.shake(3, 0.2);
+      boom(pcx(), pcy(), ['#ffd23f', '#fff6c4', '#ffffff'], 26, 220, { life: 0.8 });
+      RT.particles.text ? RT.particles.text(pcx(), pcy() - 14, '+' + pay, '#ffd23f', 1.1)
+                        : RT.toast('+' + pay, 1.2);
+      RT.toast('LAP ' + L.laps + '  -  +' + pay + '.  Next lap pays ' + lapPay(L.laps) + '.', 2.2);
+      L.lapT = 0;
+    } else if (!L.plateArmed && home) {
+      L.plateArmed = 1;
+      sfx('tick');
+    }
+    if (L.plateArmed && !onPlate) L.lapT += dt;
+    RT.hud.set('lap', 'LAP ' + (L.laps + 1) + '  +' + lapPay(L.laps));
+  }
+
   function startTycoon() {
     if (L.tycoonOn || !RT.Tycoon || !RT.Tycoon.start) return;
     L.tycoonOn = 1;
@@ -669,7 +709,7 @@
         if (item.id === 'lift') RT.toast('the elevator is up at 105. movement three is at the top of it.', 3);
       }
     });
-    RT.toast('EARN 1500. The lava does not wait for you.', 3);
+    RT.toast('THE CIRCUIT pays for the ladder. The lava does not wait for you.', 3);
   }
 
   /* ==================================================================== */
@@ -721,14 +761,14 @@
       '............................................................................................................................................................................................................................',
       '..........................................................................................................................................................................................................C.................',
       '......................................................................................................................................................................................................######################',
-      '......................................................................................................................................................................................................######################',
-      '............................................................................................................................................................................................................................',
-      '..............KKK.KKK.......................................................................................................................................................................................................',
-      '........................................................................................................................C.....................................C.............................................................',
-      '............K...................................................................................................##########......#################KKKKKKKKKK#########............##...##....#########........................',
-      '..................#.......................K.#K..................................................................##########......#################..........##################...##...##....#########........................',
+      '.........................................................####.........................................................................................................................................######################',
+      '..............................................................###...........................................................................................................................................................',
+      '..............KKK.KKK.............................................###.......................................................................................................................................................',
+      '......................................................................KKK...............................................C.....................................C.............................................................',
+      '............K.............................................................###...................................##########......#################KKKKKKKKKK#########............##...##....#########........................',
+      '..................#.......................K.#K...............................###................................##########......#################..........##################...##...##....#########........................',
       '..........K.......#.........................#.......................................................................................................................#########...............................................',
-      '..................#......................K..#...............................................................................................................................................................................',
+      '..................#......................K..#.................................###...........................................................................................................................................',
       '..P...............#..C............C.........#.......C...C..###..###..###..###...............................C...............................................................................................................',
       '#######################..........###############################################LLLLLLLLLLLLLLLL####################........................................................................................................',
       '#######################..........###############################################LLLLLLLLLLLLLLLL####################........................................................................................................',
@@ -781,12 +821,19 @@
       { type: 'text', x: 57, y: 6.4, w: 10, text: 'II. MONEY', size: 1.3, color: '#ffffff', alpha: 0.24 },
       { type: 'sign', x: 58, y: 12, w: 11, range: 2.6,
         text: 'Earn 1500 and buy the elevator. The lava comes up every eleven seconds. Stand on a pillar.' },
+      { type: 'sign', x: 77, y: 12, w: 11, range: 2.6,
+        text: 'THE CIRCUIT. Six rungs up to the plate at the top, then drop and do it again. Each lap pays more than the last.' },
+      { type: 'text', x: 77.4, y: 12.2, w: 5, text: 'START', size: 0.42, color: '#ffd23f', alpha: 0.8 },
+      { type: 'text', x: 69.6, y: 6.1, w: 6, text: 'it crumbles', size: 0.36, color: '#ff9a6a', alpha: 0.75 },
+      { type: 'text', x: 57, y: 1.4, w: 8, text: 'PAYOUT PLATE', size: 0.5, color: '#ffd23f', alpha: 0.85 },
+      { type: 'deco', kind: 'lamp', x: 61, y: 3.2 },
       { type: 'lXlava', x: 58, y: 14, x0: 57, x1: 76.9, low: 15.4, high: 12.0, period: 11, up: 3.6 },
 
-      { type: 'cannon', x: 62.5, y: 5, dir: 'down', every: 2.9, speed: 5, kind: 'fire' },
-      { type: 'cannon', x: 67.5, y: 5, dir: 'down', every: 2.4, speed: 5, phase: 0.6, kind: 'fire' },
-      { type: 'cannon', x: 72.5, y: 5, dir: 'down', every: 3.3, speed: 5, phase: 1.5, kind: 'fire' },
-      { type: 'saw', x: 67.2, y: 8, r: 0.8, path: [[67.2, 8], [75.2, 8]], speed: 3 },
+      { type: 'cannon', x: 69, y: 5, dir: 'down', every: 2.9, speed: 5, phase: 1.7, kind: 'fire', life: 0.6 },
+      { type: 'cannon', x: 65, y: 3, dir: 'down', every: 2.4, speed: 5, phase: 0.6, kind: 'fire', life: 0.6 },
+      { type: 'cannon', x: 61, y: 2, dir: 'down', every: 3.4, speed: 5, phase: 2.2, kind: 'fire', life: 0.6 },
+      
+      { type: 'cannon', x: 73, y: 6, dir: 'down', every: 3.1, speed: 5, phase: 0.9, kind: 'fire', life: 0.6 },
       { type: 'deco', kind: 'girder', x: 64, y: 10.2 },
       { type: 'deco', kind: 'torch', x: 80.4, y: 11.4 },
       { type: 'deco', kind: 'torch', x: 95.2, y: 11.4 },
@@ -889,6 +936,7 @@
        * or no checkpoint - a route must never be able to walk past it */
       if (!L.tycoonOn && tx > 56.5) startTycoon();
       if (tx > 96) ensureLift();
+      if (tx > 56 && tx < 96) circuit(dt);
 
       /* a bought SHIELD is renewed once per life, never mid-life */
       if (RT.deaths !== L.lastDeaths) {
@@ -914,6 +962,7 @@
 
     onWin: function (RT) {
       RT.hud.clear('movement');
+      RT.hud.clear('lap');
       if (RT.Tycoon && RT.Tycoon.stop) RT.Tycoon.stop();
       RT.particles.burst(RT.player.x + 10, RT.player.y + 14, {
         n: 60, colors: ['#3df0ff', '#ff3ea5', '#ffd23f', '#5bff9b', '#ffffff'],
@@ -932,6 +981,7 @@
         drawDebris(g, x0, x1, t);
         return;
       }
+      drawPayoutPlate(g, x0, x1, t);
       drawMovementBanners(g, x0, x1, t);
       drawReversedStripe(g, x0, x1, t);
       drawVoidHaze(g, x0, x1, t);
@@ -981,6 +1031,31 @@
       g.restore();
     }
     g.restore();
+  }
+
+  /* the plate: gold and humming while it owes you, dark once it has paid */
+  function drawPayoutPlate(g, x0, x1, t) {
+    if (x1 < 55 * T || x0 > 63 * T) return;
+    var px = PLATE.x0 * T, pw = (PLATE.x1 - PLATE.x0) * T, py = PLATE.y1 * T;
+    var live = !!L.plateArmed;
+    g.save();
+    g.globalAlpha = live ? 0.30 + 0.14 * Math.sin(t * 4) : 0.08;
+    g.fillStyle = '#ffd23f';
+    g.fillRect(px, py - 44, pw, 44);
+    g.restore();
+    g.fillStyle = live ? '#ffd23f' : '#6b5a2a';
+    g.fillRect(px, py - 4, pw, 4);
+    if (live) {
+      g.fillStyle = 'rgba(255,246,196,0.9)';
+      for (var i = 0; i < 4; i++) {
+        var bx = px + 6 + i * (pw - 12) / 4;
+        var bh = 5 + Math.abs(Math.sin(t * 3 + i)) * 9;
+        g.fillRect(bx, py - 6 - bh, 4, bh);
+      }
+      RT.drawText(g, '+' + lapPay(L.laps || 0), px + pw / 2, py - 56 + Math.sin(t * 3) * 2, {
+        size: 13, color: '#ffe9a8', stroke: 'rgba(40,20,0,0.85)', strokeWidth: 3
+      });
+    }
   }
 
   function drawMovementBanners(g, x0, x1, t) {

@@ -40,7 +40,7 @@ async function main() {
   page.on('requestfailed', r => failedReqs.push(r.url() + ' ' + (r.failure() || {}).errorText));
 
   const results = [];
-  const levels = which === 'all' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : (which === 'tetris' ? [] : [Number(which)]);
+  const levels = which === 'all' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : (which === 'tetris' ? [] : [Number(which)]);
 
   // ---- boot check -------------------------------------------------------
   await page.goto(`http://localhost:${PORT}/rage-trials/index.html?unlock`, { waitUntil: 'networkidle0', timeout: 30000 });

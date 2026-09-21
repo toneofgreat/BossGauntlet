@@ -507,3 +507,29 @@ sfx or music name changed meaning.
   game ships with.
 - **`window.__L10`** — level 10 exposes its own state object for tests only, like
   `window.__RT_ENTITY_TYPES`. Nothing on `RT` depends on it.
+
+### 2026-09-21 (later) — an eleventh level, and level 10's obby economy
+
+- **`LEVEL_COUNT` is 11.** Section 5 said "Levels are 1..10"; it is now 1..11. Everything that
+  reads the count already did so through `LEVEL_COUNT` — the level-select grid, the unlock
+  ladder, `showTheEnd()`, the results screen's FINAL TRIAL CLEAR and the save clamp all followed
+  without change. `levels/level11.js` is loaded after `level10.js` in index.html.
+- **Level 11 defines 5 more level-local entity types** (`lEgate lEbeat lEcrate lEchase lEwheel`),
+  under the same rules as the `l9`/`lX` families: prefixed so they cannot shadow entities.js,
+  registered at script-eval time, and switching solidity by collapsing `w`/`h` rather than by
+  moving (see the 2026-09-21 amendment).
+- **`lEbeat` takes a `phase`** (0..1, a fraction of the period) on top of `lXbeat`'s `wake`. The
+  three spans in THE METRONOME are phase-staggered so that an unbroken run from the first rest
+  meets every span lit — the rhythm rewards commitment instead of asking the player to read a
+  clock they cannot see the start of.
+- **Reversed controls should be keyed to something that cannot chatter.** Level 11's trench keys
+  `controlsReversed` to the player's DEPTH (`p.y + p.h > 15.2 * T`) rather than to an x-range.
+  An x-threshold oscillates: holding right inside it pushes you back out, which releases it,
+  which pushes you back in, forever. Level 9's and level 10's x-ranges are latched with
+  hysteresis for the same reason; depth needs no latch at all.
+- **Level 10's arena is now funded by an obby lap, not by idling.** THE CIRCUIT is six staggered
+  rungs over the lava to a PAYOUT PLATE, paying `min(900, 150 * 1.6^laps)` per lap and re-arming
+  when you drop back to the pillars. The rungs sit in the only windows the pillar-hop arcs leave
+  free, so the gaps between them are one tile — too narrow for a blade, which is why each gap is
+  guarded by a short-fused `cannon` (`life: 0.6`) instead. The DROPPER survives at 6/s.
+- **`window.__L11`** — level 11's state object, for tests only, like `window.__L10`.

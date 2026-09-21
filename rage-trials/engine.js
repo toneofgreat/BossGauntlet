@@ -25,7 +25,7 @@ var DT = 1 / 60;
 var CHUNK = 16;                     // tiles per cached chunk (16x16 => 512px)
 var MAX_STEPS = 5;                  // simulation steps per rendered frame
 var MAX_PARTICLES = 600;
-var LEVEL_COUNT = 10;
+var LEVEL_COUNT = 11;
 var SAVE_KEY = 'rageTrialsSave';
 var TILES_ON_SHORT_AXIS = 11;       // zoom rule
 var VIEW_SHORT_PX = TILES_ON_SHORT_AXIS * TILE;   // 352

@@ -1,6 +1,7 @@
 # RAGE TRIALS — Level Design Spec
 
-Ten levels, a difficulty curve from "anyone can do this" to "you will not beat this today".
+Eleven levels, a difficulty curve from "anyone can do this" to "you will not beat this today",
+and then one more after that.
 Read CONTRACT.md first — it is binding. This file says WHAT each level is; the contract says HOW.
 
 Global rules for every level:
@@ -163,10 +164,15 @@ in the parallax. Four movements, each with a checkpoint at its start:
    randomise each attempt but always have a solvable path, a slot-machine gate that opens on a
    match and gives you a free re-spin after two failures. Luck costs **time**, never progress —
    research rule. Skill can bypass: a hard precision route skips the whole RNG for the bold.
-2. **TYCOON** — `RT.Tycoon` again with a brutal price ladder: you must earn 1500 while the arena
-   actively attacks (cannons, saws, a rising lava line that resets each cycle). Purchases:
+2. **TYCOON** — `RT.Tycoon` again with a brutal price ladder, funded by an **obby lap** rather
+   than by idling. **THE CIRCUIT** climbs six staggered rungs east-to-west over the lava pool to
+   a PAYOUT PLATE at the top, then you drop back to the pillars and do it again; each lap pays
+   1.6x the last, capped at 900, so lap one is a tutorial and lap five is real money. Four
+   cannons drip fire into the one-tile gaps between rungs and one rung crumbles. The Dropper is
+   still there but pays 6/s — a trickle that stops you starving, never a way to win. Purchases:
    Dropper (100), Shield (300, one free hit), Double Jump (500), Bridge (900), The Elevator
-   (1500) which lifts you to movement 3.
+   (1500) which lifts you to movement 3. The lava line still climbs over the floor every 11 s,
+   so the pillars are the only safe ground and the lap is the only income.
 3. **TROLLS + SKILL** — the hardest platforming in the game, with trolls layered on: beat-blocks
    over the void where one block per beat is fake, a thwomp corridor with pop-out spikes, a
    crumble staircase that trolls the rhythm, a laser maze with reversed controls for 6 tiles, and
@@ -186,3 +192,40 @@ input script that reaches the goal, used by the automated playtest. `tap` presse
 For levels 8 and 10 the route may call `"cash": n` to grant cash (testing the tycoon separately)
 but must otherwise be legal. For level 10 the route may end at the arcade; Tetris is tested
 separately through `__dbg.tetrisInput`.
+
+---
+
+## Level 11 — ONE MORE (themes `meadow` → OVERTIME → DEEPCUT → LASTLIGHT, music `apocalypse`)
+*"There was not supposed to be an eleventh."*
+
+The longest level in the game at **335 tiles** — forty per cent longer than SIX CROWNS — and the
+only one that asks you to be lucky as well as good. Every gamble in it is bounded by the four
+techniques in `docs/research-troll.md` §4.3: **the odds are painted on the object**, the third
+or fifth attempt is **guaranteed**, every gamble has a **deterministic bypass that is harder to
+execute**, and losing costs **time**, never progress. Ten sections, a checkpoint at each:
+
+1. **THE APOLOGY** (0–27) — a meadow, a sign apologising for the level's existence, and
+   seventeen friendly tiles. Then pop-out spikes, a floor that is not one, and a crumbling run.
+2. **THE DICE** (28–62) — five gates. Three platforms at each, one of them missing, reshuffled
+   every attempt from a fixed table so an attempt is deterministic the moment it starts. `2/3`
+   painted on. Two falls and the seams show (green real, pink fake). Skill bypass: a spring three
+   tiles up leads to a laser catwalk with three-tile holes and no gambling at all.
+3. **THE METRONOME** (63–104) — three lit spans with solid rests between them, phase-staggered so
+   an unbroken run meets every span lit and hesitating costs a whole cycle. Then a thwomp
+   corridor with pop-out spikes and a laser.
+4. **THE BARRELS** (105–140) — four launchers over the void; three bolted down, the fourth
+   sweeping 46°–84°, and you fire that one yourself.
+5. **THE INVERSION** (141–178) — twelve tiles of ceiling walk over a hole (gravity flipped, no
+   jumping), then a trench where left is right. The reversal is keyed to **depth**, not to an
+   x-line, so you can never chatter on its edge; a four-tile ramp at the east end is where your
+   controls come back.
+6. **THE MARKET** (179–218) — a five-rung obby lap pays 90 × 1.7ⁿ (capped 420), a MYSTERY CRATE
+   pays 40/160/420 at 50/35/15 with its odds on the lid and never SCRAP twice running, and 600
+   buys the only hole in the wall. THE GRIP (150) and THE LAMP (250) come first.
+7. **THE CHASE** (219–254) — a six-bladed grinder wakes when you pass the sign and advances at
+   4.6 tiles/s forever. Two stretches of the floor crumble. It parks short of the needle's ledge.
+8. **THE NEEDLE** (255–287) — seven two-tile perches, two tiles apart, over nothing. No trick.
+   Just the jump, seven times, with a pop-out spike on two of them.
+9. **THE WHEEL** (297–320) — four reels; any two matching opens the gate. 42% a spin, spins are
+   free, the fifth always pays. Skill bypass: a three-rung crumbling climb straight over the gate.
+10. **THE DOOR** (321–334) — real. No fakes, no reels, no second door behind it.
