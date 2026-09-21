@@ -1,0 +1,19 @@
+[
+  {"hold": {"right": true}, "steps": 55},
+  {"hold": {"right": true, "jump": true}, "steps": 24},
+  {"hold": {"right": true}, "steps": 24},
+  {"hold": {"right": true}, "steps": 24},
+  {"hold": {"right": true, "jump": true}, "steps": 24},
+  {"hold": {"right": true}, "steps": 16},
+  {"hold": {"right": true, "jump": true}, "steps": 24},
+  {"hold": {"right": true}, "steps": 20},
+  {"hold": {"right": true, "jump": true}, "steps": 24},
+  {"hold": {"right": true}, "steps": 20},
+  {"hold": {"right": true, "jump": true}, "steps": 20},
+  {"hold": {"right": true}, "steps": 20},
+  {"hold": {"right": true}, "steps": 12},
+  {"hold": {"right": true, "jump": true}, "steps": 24},
+  {"hold": {"right": true}, "steps": 20},
+  {"hold": {"right": true, "jump": true}, "steps": 10},
+  {"hold": {"right": true}, "steps": 34}
+]

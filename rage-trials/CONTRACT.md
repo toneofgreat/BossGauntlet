@@ -1,0 +1,509 @@
+# RAGE TRIALS — Architecture Contract (BINDING)
+
+A 10-level, mobile-first 2D platformer for www.platyfy.com. Plain HTML/JS/CSS, 2D canvas,
+no frameworks, no build step, no external assets (all art procedural, all audio synthesised).
+It is a subdirectory game: `rage-trials/index.html` is opened directly from GitHub Pages, so
+**every path is relative, and no `fetch()` of local files** (scripts load via `<script src>` only).
+
+Every agent that writes code MUST follow this file exactly. If you must extend the API, extend it
+in a backwards-compatible way and note it at the bottom under "Amendments".
+
+## 1. Files
+
+```
+rage-trials/
+  index.html          shell: CSS, DOM (canvas, HUD, touch pads, menus/overlays), loads scripts IN ORDER,
+                      then calls RT.boot()
+  engine.js           creates window.RT; loop, input, player physics, tiles, collision, camera,
+                      themes/background, particles, HUD, level flow, save, menus, __dbg
+  entities.js         the entity library (RT.defineEntity for every type in §6)
+  audio.js            RT.Audio: synthesised SFX + music (WebAudio, no files)
+  modes/tetris.js     RT.Tetris: authentic NES-Tetris minigame (uses RT.setMode)
+  modes/tycoon.js     RT.Tycoon: cash / droppers / buy-buttons used by levels 8 and 10
+  levels/level01.js … levels/level10.js   one RT.registerLevel(n, {...}) each
+  docs/               research + DESIGN.md (not shipped to players, harmless)
+  CONTRACT.md         this file
+```
+
+Script order in index.html: engine.js, audio.js, entities.js, modes/tetris.js, modes/tycoon.js,
+levels/level01.js … level10.js, then inline `<script>RT.boot()</script>`.
+`engine.js` is the ONLY file allowed to create `window.RT`; every other file does
+`(function(){ var RT = window.RT; ... })();` and attaches to it. No ES modules, no `import`.
+
+## 2. Coordinates, units, simulation
+
+- World unit = pixel. **TILE = 32 px.** `y` grows downward. Tile (tx,ty) covers
+  `[tx*32, tx*32+32) x [ty*32, ty*32+32)`. Level row 0 is the TOP of the level.
+- Fixed-step simulation: **60 Hz, dt = 1/60 s**, accumulator in the rAF loop, max 5 steps/frame.
+  Speeds are px/s, accelerations px/s^2, timers in seconds.
+- `RT.frame` (step counter), `RT.time` (seconds in level, pauses on menus), `RT.dt` (= 1/60).
+- Rendering is separate from simulation. NOTHING gameplay-relevant may depend on rAF timing
+  (headless browsers throttle rAF). `__dbg.step(n)` advances n fixed steps synchronously.
+
+## 3. Viewport, camera, mobile layout
+
+- Canvas fills the window; `devicePixelRatio` honoured up to a cap of 2.
+- Zoom rule: the **shorter** screen axis always shows exactly **11 tiles** (352 world px).
+  Landscape ⇒ ~11 tiles tall x 19–22 wide; portrait ⇒ ~11 wide x 22–24 tall.
+  Designers: assume the player sees **at least 5 tiles ahead horizontally and 5 above/below**.
+- `RT.cam = {x, y, zoom, shake(power, dur)}`, (x,y) = world point at screen centre. Horizontal
+  look-ahead ~2 tiles toward facing, vertical dead-zone, damping, clamped to level bounds.
+  A level may set `cameraLockY: true`.
+- `RT.view = {w, h}` = visible world size in px (changes on resize/rotate).
+- `RT.screenToWorld(sx,sy)`, `RT.worldToScreen(wx,wy)`.
+- Touch controls (DOM in index.html, wired by engine.js): LEFT/RIGHT bottom-left, JUMP (big) and
+  ACTION bottom-right; min 64 px, 16 px from edges, `touch-action:none`, pointer events with
+  per-pointerId tracking, no tap highlight, no double-tap zoom, `overscroll-behavior:none`.
+  Keyboard: A/D or arrows move, Space/W/Up/Z/K jump, E/X/J/Enter action, R retry, Esc/P pause.
+  Body gets class `touch` on first touch.
+
+## 4. Player physics (engine.js implements exactly; designers rely on these)
+
+| thing | value |
+|---|---|
+| hitbox | 20 x 28 px, origin `p.x,p.y` = top-left |
+| max run speed | 210 px/s (6.6 tiles/s) |
+| ground accel / decel | max in 0.10 s / stop in 0.07 s |
+| air accel | max in 0.18 s |
+| jump velocity | -560 px/s |
+| gravity rising | 1550 px/s^2 |
+| gravity falling | 2200 px/s^2 |
+| apex hang | while rising and abs(vy) < 45, gravity x 0.55 |
+| jump cut | release jump while rising ⇒ vy *= 0.45 (once) |
+| terminal velocity | 900 px/s |
+| coyote time | 6 frames |
+| jump buffer | 8 frames |
+| corner correction | up to 6 px nudge when the head clips a corner |
+| hazard test | player box inset 3 px each side |
+| spike hitbox | the spike tile inset 6 px on non-pointing sides |
+
+Consequences designers MUST honour: **a jump clears 3 tiles of height** (3-tile wall climbable,
+4 is not); **max gap at full run ~4.5 tiles ⇒ 4 is the hard limit, 3 comfortable, 2 easy**; a
+standing jump crosses 2 tiles. A 1-tile pit is fallable (player is 20 px wide). Springs launch at
+-900 px/s (~7.5 tiles). `RT.player.abilities = {doubleJump:false, dash:false}` (levels/tycoon may
+enable). `RT.player.controlsReversed`, `RT.player.gravityFlip` exist for troll levels.
+Falling below `level.height*32 + 64` kills ("the void"). Level left/right edges are solid; no
+ceiling kill.
+
+Death: `RT.killPlayer(cause)` → 0.55 s death FX → respawn at checkpoint (or spawn) with a 0.25 s
+shimmer. `RT.deaths` and `RT.save.totalDeaths` increment. Entities get `onPlayerDeath`, level gets
+`onDeath`. Everything one-shot (crumbled platforms, popped traps) resets on respawn unless
+`e.persistent = true`.
+
+## 5. Level definition (levels/levelNN.js)
+
+```js
+(function(){ var RT = window.RT;
+RT.registerLevel(4, {
+  name: 'TRUST ISSUES', subtitle: 'Fake and real platforms',
+  theme: 'ruins',                                   // key of RT.THEMES or a theme object
+  themeZones: [{x0:0, x1:40, theme:'meadow'}],      // optional, tile units, by player x
+  music: 'ruins',                                   // RT.Audio track name
+  tiles: [                                          // rows top→bottom, ALL same length
+    '..............................',
+    'P.....^.......................',
+    '###########..#####....F..FF###'
+  ],
+  entities: [ {type:'mover', x:12.5, y:6, w:3, path:[[12.5,6],[18,6]], speed:2.5} ], // TILES
+  intro: ['Some platforms are FAKE.', 'Look closely.'],
+  onLoad(RT){}, onUpdate(RT, dt){}, onDraw(RT, g, layer){}, // layer 'back' | 'front'
+  onDeath(RT, cause){}, onWin(RT){}, onCheckpoint(RT, cp){},
+  tileHook(ch, tx, ty){ return {type:'trapspike', x:tx, y:ty, dir:'up'} } // digits / unknown letters
+});
+})();
+```
+
+`RT.registerLevel(n, def)` stores `RT.LEVELS[n]`. Levels are 1..10. Level size is
+`tiles[0].length*32 x tiles.length*32`; at least 24x11 tiles, at most 400x60.
+
+### Tile legend (engine-owned; digits and unknown letters go to `tileHook`)
+
+| char | meaning |
+|---|---|
+| `.` / space | empty |
+| `#` | solid block (theme-textured, auto-bevelled) |
+| `-` | one-way platform (solid from above) |
+| `^` `v` `<` `>` | spike pointing up / down / left / right (kills) |
+| `F` | FAKE platform: looks like `#` with a subtle tell (darker top, no rim highlight, faint 2.5 s flicker); no collision |
+| `K` | crumble platform: falls 0.35 s after being stood on, returns 2.5 s later |
+| `S` | spring |
+| `C` | checkpoint flag |
+| `G` | goal (exit door) — wins the level |
+| `P` | player spawn (exactly one) |
+| `o` | coin (level score AND tycoon cash when a tycoon is active) |
+| `L` | lava (animated, kills) |
+| `X` | kill block (solid-looking void block, kills) |
+| `I` | invisible block: solid, drawn only after a bonk |
+| `M` / `N` | ON/OFF blocks: `M` solid while ON, `N` solid while OFF (ghosted when off) |
+| `!` | ON/OFF switch (0.4 s cooldown) |
+| `B` | breakable block (hit from below or dash) |
+| `~` | decorative water surface (no physics) |
+| `0`-`9`, other letters | passed to `level.tileHook(ch,tx,ty)`; descriptor spawned, tile becomes empty |
+
+## 6. Entity API
+
+```js
+RT.defineEntity('mover', {
+  layer: 'main',            // 'back' | 'main' | 'front'
+  solid: true,              // false | true | 'oneway' — collides like tiles and CARRIES the player
+  init(e, def){}, update(e, dt){}, draw(e, g){},
+  onPlayerTouch(e, p, side){},  // 'top'|'bottom'|'left'|'right'|'overlap'
+  onPlayerDeath(e){}, onReset(e){}, onRemove(e){}
+});
+```
+
+Instance fields guaranteed: `e.type, e.x, e.y` (px, top-left), `e.w, e.h` (px), `e.vx, e.vy,
+e.def, e.id, e.dead, e.persistent, e.state, e.t`. Level descriptors give `x,y,w,h` in TILES
+(default w=1,h=1); the engine converts at spawn. Solid entities move via `e.vx/e.vy` or by setting
+`e.x/e.y` in `update` (engine carries a player standing on top).
+
+Engine services:
+
+```
+RT.spawn(def) → e        RT.remove(e)         RT.entities            RT.find(type) → []
+RT.player {x,y,w,h,vx,vy,onGround,facing,dead,abilities,controlsReversed,gravityFlip,jumpsLeft}
+RT.killPlayer(cause)     RT.winLevel()        RT.setCheckpoint(px,py) RT.respawn()
+RT.getTile(tx,ty)        RT.setTile(tx,ty,ch) RT.solidAtPx(x,y)      RT.rectHitsSolid(rect)
+RT.overlaps(a,b)         RT.onOff             RT.toggleOnOff()       RT.groups  RT.keys
+RT.particles.burst(x,y,opts)   RT.particles.emit(x,y,kind)
+RT.cam.shake(power,dur)  RT.flash(color,dur)  RT.hitstop(frames)     RT.slowmo(factor,dur)
+RT.toast(t,dur)  RT.speech(x,y,t,dur)  RT.banner(lines,dur)  RT.hud.set(k,t)  RT.hud.clear(k)
+RT.Audio.sfx(name)  RT.Audio.music(name)  RT.Audio.stopMusic()
+RT.input {left,right,jump,jumpPressed,jumpReleased,action,actionPressed,pointer:{x,y,down,justDown,justUp}}
+RT.random()  RT.seed(n)  RT.lerp  RT.clamp  RT.rectsOverlap
+RT.drawText(g,text,x,y,opts)  RT.roundRect(g,x,y,w,h,r)
+RT.setMode(mode) / RT.clearMode()   // mode = {update(dt), draw(g,screenW,screenH), onKey?(e)}
+RT.level  RT.levelIndex  RT.deaths  RT.coins  RT.save  RT.saveNow()
+RT.overlay.show(html, {onClose})  RT.overlay.hide()   // DOM overlay for shops/dialogs
+RT.emit(evt, ...)  RT.on(evt, fn)
+```
+
+### Built-in entity types (entities.js implements all; params in tiles unless noted)
+
+| type | params | behaviour |
+|---|---|---|
+| `mover` | `w,h,path,speed,loop,pause` | solid moving platform, carries the player |
+| `faller` | `w` | falls 0.4 s after being stood on; resets on respawn |
+| `spring` | `dir,power` | bounces the player (default 900) |
+| `walker` | `dir,speed,range` | patrols, turns at edges; stomp kills it (bounce -350), side touch kills player |
+| `flyer` | `path,speed` | flying enemy; stompable from above |
+| `thwomp` | `h,triggerW,fallSpeed,riseSpeed` | shakes 0.3 s, slams, rests 0.6 s, rises |
+| `cannon` | `dir,every,speed,phase,aim` | fires `ball` projectiles |
+| `saw` | `path,speed,r` | spinning blade, kills |
+| `laser` | `w|h,on,off,phase` | kills while on; 0.3 s charge warning |
+| `beatblock` | `w,h,group('A'/'B'),period` | alternating solid blocks, 0.25 s warning flash |
+| `switch` | `group,once` | toggles `RT.groups[group]`, emits `switch` |
+| `toggleblock` | `w,h,group,invert` | solid when its group is on |
+| `door` | `h,key|group` | solid until unlocked |
+| `key` | `key` | collectable, sets `RT.keys[key]` |
+| `portal` | `to:[x,y],color` | teleports with FX |
+| `wind` | `w,h,fx,fy` | push zone |
+| `conveyor` | `w,speed` | solid moving surface |
+| `trapspike` | `dir,trigger('near'/'stand'),delay` | hidden spikes that pop out |
+| `fallingceiling` | `w,h,triggerW` | drops when the player passes below |
+| `fakegoal` | | looks like `G`; trolls the player back 6 tiles |
+| `sign` | `text,w` | speech bubble within 2 tiles |
+| `text` | `text,size,color` | world-space decorative text |
+| `deco` | `kind` | tree/bush/rock/torch/skull/crystal/pipe/flag/grave/cloud/girder/lamp |
+| `launcher` | `angle,power,auto,rotate` | FLINGING MACHINE: holds the player, ACTION fires along `angle`; sweeps when `rotate`; dotted trajectory preview |
+| `coin` | `value` | coin at fractional coords |
+| `checkpoint` | | same as `C` |
+| `ball` | `vx,vy` (px/s) | cannon projectile |
+| `balloon` | `dur` | P-balloon: gravity 0.15x, jump = flap, for `dur` s |
+| `mushroom` | `poison` | real = one-hit shield; poison = kills |
+| `lavaball` | `every,power` | podoboo |
+
+## 7. Themes (engine.js)
+
+`RT.THEMES[name] = {sky:[[stop,color],…], parallax:[{kind,color,y,speed,scale}], ambient:
+'dust'|'embers'|'snow'|'fireflies'|'ash'|'bubbles'|'none', fog:{color,alpha}, tile:{top,side,dark,
+rim,accent}, spike:{base,tip}, vignette}`. Parallax kinds: mountains, hills, city, ruins, volcano,
+clouds, stars, nebula, pipes, factory, castle.
+Required names: `meadow, sunset, void, ruins, volcano, factory, tycoon, troll, apocalypse, smb1,
+smw, smb3, galaxy, sm3dw, odyssey`. Tiles auto-bevel (rim highlight, side shading, dark bottom,
+cached noise on an offscreen canvas per theme — never per frame).
+
+## 8. Flow, save, HUD
+
+- Menu → level select (10 cards, locked until the previous is beaten; `?unlock` unlocks all,
+  `?level=N` starts level N).
+- HUD (DOM): level name top-left, deaths + timer top-right, coins/cash when used, pause button.
+  Pause menu: resume, restart, level select, sound, controls (pads on/off, left-handed).
+- Win: results card (time, deaths, coins) → NEXT LEVEL. After 10 → THE END with a rage rating.
+- Save: localStorage `rageTrialsSave` = `{v:1, unlocked, best:{[n]:{time,deaths}}, totalDeaths,
+  totalTime, settings:{sound,pads,lefty}}`. Saved on win, every 10th death, on pause.
+- `window.__dbg` (ALWAYS present; tests depend on it):
+  `level(n)` · `state()` → `{level,x,y,vx,vy,onGround,dead,deaths,time,checkpoint,won,mode,coins,cash}` ·
+  `tp(tx,ty)` · `hold({left,right,jump,action})` · `tap(name)` · `step(n)` (synchronous fixed steps) ·
+  `win()` · `kill()` · `god(b)` · `noclip(b)` · `entities()` · `tile(tx,ty)` · `setTile(tx,ty,ch)` ·
+  `giveCash(n)` · `tetris(level)` · `tetrisState()` · `tetrisInput(name)` · `unlockAll()` · `errors`.
+  While stepping, the rAF loop must not double-advance (`RT.manual = true` until `__dbg.resume()`).
+
+## 9. Audio (audio.js)
+
+`RT.Audio = {unlock(), sfx(name), music(name), stopMusic(), setEnabled(b), enabled}`. Unlock on
+first pointerdown/keydown. SFX: `jump, doublejump, land, step, coin, cash, buy, death, spike,
+spring, checkpoint, win, switch, door, key, portal, launch, charge, laser, thwomp, crumble, fake,
+troll, pop, bonk, stomp, hurt, balloon, powerup, poison, ui, tick, tetrisMove, tetrisRotate,
+tetrisLock, tetrisClear, tetrisTetris, tetrisOver, tetrisLevel`.
+Music (looping, lookahead-scheduled, <= 3 voices, chiptune): `meadow, sunset, void, ruins, volcano,
+mario1, mario2, mario3, factory, tycoon, troll, apocalypse, menu, korobeiniki`.
+
+## 10. Tetris mode (modes/tetris.js)
+
+`RT.Tetris.start({level:28, linesToWin:10, onWin, onLose, onQuit})` calls `RT.setMode` and owns the
+canvas. Authentic NES rules: 10x20 board, gravity by level (18 = 3 frames/cell, 19–28 = 2, 29+ = 1),
+NES randomizer (re-roll once on repeat), NES spawn orientation, NO hold, NO ghost, soft drop,
+line-clear animation, ARE entry delay, score 40/100/300/1200 x (level+1), level +1 per 10 lines,
+next-piece preview, the level-8 palette (28 mod 10) for level 28.
+Controls: keyboard left/right (DAS 10 initial / 2 repeat — a deliberate concession), down soft
+drop, Z/X or Up rotate, Space hard drop (concession). Touch: tap left/right of the board = move,
+hold = DAS, tap centre or swipe up = rotate, swipe down = hard drop, drag = soft drop, plus big
+on-screen buttons. Top out → TOP OUT → retry. Own HUD (LEVEL, LINES x/10, SCORE, NEXT) and a CRT
+bezel. `__dbg.tetrisState()` exposes board/piece/lines/over.
+
+## 11. Tycoon (modes/tycoon.js)
+
+`RT.Tycoon.start({cash, items:[{id,name,price,x,y,w,h,kind:'dropper'|'platform'|'ability'|'cosmetic',
+cps,tiles:[[tx,ty,ch]],onBuy,requires}], hudKey})`. Creates a BUY BUTTON entity per item: shows
+name+price, greyed until affordable, touch to buy (sfx, particles). `dropper` produces `cps`
+cash/second with visible falling cubes; `platform` paints `tiles` into the level with a build-in
+animation; `ability` toggles `RT.player.abilities`. `RT.Tycoon.cash`, `.add(n)`, `.stop()`.
+Coins add to cash while active. Cash persists across deaths inside the level.
+
+## 12. Visual bar
+
+Layered parallax with depth fog, animated sky per theme, soft shadow under player/enemies, squash
+& stretch, dust puffs on land/turn, death explosion (>= 40 particles + shockwave + shake + 4-frame
+hit-stop), spike gleam, lava bob, spinning sparkling coins, waving checkpoint flag, goal light
+beam, vignette, intro banner. 60 fps on a mid phone: cache static tiles to an offscreen canvas per
+chunk (re-render only on tile change), cap particles at 600, never `shadowBlur` in per-frame loops.
+
+## 13. Testing
+
+Headless: node + puppeteer at `C:/Users/krist/Desktop/BossGauntlet/node_modules/puppeteer`
+(require by absolute path). Serve the repo root (`npx http-server -p 8099`) and open
+`http://localhost:8099/rage-trials/index.html?level=N`. Drive with `__dbg` (`hold`, `tap`, `step`)
+— never rely on rAF for progress. Every level ships a scripted route in
+`docs/routes/levelNN.json` (array of `{hold:{...}, steps:n}`) that reaches G with legal inputs,
+proving it is beatable.
+
+## Amendments
+
+(append here, dated, if an agent had to extend the API)
+
+### 2026-09-20 — entities.js (entity library)
+
+Everything below is additive and backwards-compatible; nothing in sections 1–13 was renamed or changed.
+
+- **`RT.player.held` / `RT.player.frozen` (advisory, written by `launcher`).** While a launcher holds the
+  player it sets `held` to that entity and `frozen = true`, and clears both on fire / death / reset. The
+  hold does **not** depend on the engine honouring them: entities.js writes `player.x/y`, zeroes `vx/vy`,
+  sets `onGround = false` and `jumpsLeft = 0` every fixed step and consumes ACTION/JUMP itself. An engine
+  may skip player physics while `frozen`; it does not have to.
+- **`launcher` angle convention.** `angle` is in DEGREES, maths convention: `0` = right, `90` = straight
+  up, `-45` = down-right. `power` is px/s (like `spring`). `rotate` may be `true`, a number (deg/s) or
+  `[minAngle, maxAngle]`; `sweep`, `rotateSpeed`, `minAngle`, `maxAngle` and `autoDelay` refine it. The
+  dotted preview is integrated with the real section-4 constants (1550 / 2200 / apex hang / 900 cap). For the
+  16 steps after a shot the launcher holds `player.jumpsLeft` at 0 and suppresses `RT.input.jumpReleased`
+  while the player is rising, because a jump-cut or a buffered double jump would contradict that preview.
+- **`RT.player.shield` (`mushroom`).** Eating a real mushroom sets `RT.player.shield = true`, which
+  engine.js's `killPlayer` already honours (it eats one hit and returns). entities.js adds only what a
+  bare flag cannot express: 0.9 s of invulnerability afterwards, a knock-back, and a bail-out to the last
+  ground the player actually stood on, so the spike that broke the shield does not kill on the next step.
+  No engine function is wrapped, patched or replaced.
+- **`balloon` floatiness is emulated locally.** Gravity lives in engine.js, so the balloon damps the
+  *observed* per-step change in `player.vy` to 0.15x and caps the fall at 200 px/s. No new engine field.
+- **Speed/power params.** A speed, acceleration or power number below 60 is read as TILES per second (the
+  section-6 default), 60 and above as px/s — so `speed: 2.5` and `power: 900` both mean what they look like.
+- **Dynamic solidity** (`beatblock`, `toggleblock`, `door`, `faller`): these set `e.solid` per instance AND
+  collapse `e.w/e.h` to `0` while non-solid (draw code keeps the real size), so a non-solid state cannot be
+  collided with whichever way the engine tests solidity.
+- **Optional extra descriptor params**, all defaulting to the documented behaviour: `mover/saw/flyer`
+  `loop:'loop'|'once'` (default ping-pong), `pause`, `ghost:false`, `pal`; `faller` `delay`, `respawn`;
+  `walker/flyer` `color`, `chase`, `amp`, `freq`; `thwomp` `drop`, `rest`, `shake`; `cannon` `kind:
+  'fire'|'rock'|'energy'`, `r`; `laser` `dir`, `thick`, `color`; `beatblock` `phase`; `switch` `onoff:true`
+  (also calls `RT.toggleOnOff()`); `trapspike` `near`, `retract`; `fallingceiling` `chain:false`;
+  `fakegoal` `back`; `sign` `range`; `text` `align`, `rot`, `wave`, `alpha`, `outline:false`; `deco`
+  `scale`, `flip`, `alpha`; `portal` `keepMomentum:false`; `wind` `gust`; `ball` `kind`, `gravity`, `life`;
+  `lavaball` `gravity`, `phase`, `r`; `balloon`/`checkpoint`/`key`/`launcher` `color`.
+- **`window.__RT_ENTITY_TYPES`** — diagnostic array naming every entity type entities.js defined, and
+  `window.__entityErrors` — any entity callback that threw (both for tests only; neither is on `RT`).
+
+### 2026-09-20 — audio.js (RT.Audio)
+
+Everything below is additive; `unlock / sfx / music / stopMusic / setEnabled / enabled` keep exactly
+the section-9 signatures and semantics, and every one is safe to call before unlock (they no-op).
+
+- **No AudioContext exists until the first gesture.** `RT.Audio.sfx()` before unlock returns `false`
+  and plays nothing; `RT.Audio.music(name)` before unlock returns `false` but *remembers* the track
+  and starts it the moment the context resumes. Engine/level code may therefore call `music()` during
+  `onLoad` without waiting for input. Both take an optional 2nd argument (`sfx(name, atTime)`,
+  `music(name, {restart:true, fade:s})`); omitting it is the documented behaviour. `music(name)` on
+  the track already playing is a no-op, so a respawn or level restart never restarts the music.
+- **`setEnabled(b)`** writes `RT.save.settings.sound` and calls `RT.saveNow()` when they exist, and
+  reads that preference back (falling back to the raw `rageTrialsSave` blob, since audio.js is
+  evaluated before `RT.boot()` builds `RT.save`). Muting stops the scheduler and remembers the track;
+  unmuting resumes it.
+- **Extra methods, all read-only or mixing-only, none required by any other file:**
+  `RT.Audio.unlocked` (bool), `RT.Audio.status()` → `{ctx,enabled,unlocked,broken,music,wanted,step,
+  loops,len,tracks,sfx}`, `RT.Audio.sfxNames()`, `RT.Audio.musicNames()`, `RT.Audio.trackInfo(name)`
+  (compiled bpm / loop length / per-voice lengths — lets a headless test validate the note data with
+  no audio device), `RT.Audio.setMusicVolume(v)`, `RT.Audio.setSfxVolume(v)`.
+- **Extra sfx names** beyond the section-9 list, safe to fire from levels: `mushroom`, plus the
+  aliases `spikes`→spike, `flag`→checkpoint, `goal`→win, `select`/`click`→ui. Any unknown name is a
+  silent `false`, never a throw.
+- **Music is scheduled on `setInterval` (25 ms tick, 100 ms lookahead), never rAF**, per section 2; the
+  window widens automatically when a background tab clamps the interval. Rapid-fire sfx are rate
+  limited per name (e.g. `step` 60 ms) with a global burst cap, so a death pile-up cannot blow up the mix.
+
+### 2026-09-20 — engine.js (backwards-compatible)
+
+Engine rulings the other files can rely on:
+
+- **`S` (spring) is a SOLID tile.** You stand on it and it launches you at -900 px/s. A spring
+  that was not solid would just be scenery, because you would land on whatever is beneath it.
+- **`X` (kill block) kills on contact from every side**, landing on top included (it is tested
+  with a 1 px skin around the player, not the 3 px-inset hazard box).
+- **`o` coins stay collected for the whole run of a level**, they do not come back on respawn.
+  Everything else one-shot (`K` crumble, `B` breakable, `I` revealed, popped traps, non-persistent
+  entities) does reset, as §4 says.
+- **`RT.setTile` is permanent**: it writes through to the authored grid and survives respawns,
+  so `RT.Tycoon` platform purchases stay bought after a death.
+- Gravity integrates leapfrog (half a kick before the move, half after), so the jump arc is the
+  exact parabola: apex **102 px (3.18 tiles)**, full-run gap **4.48 tiles**, spring **7.8 tiles**.
+  A 3-tile wall is climbable, a 4-tile wall is not - both verified headlessly.
+
+API additions (all optional, nothing existing changed):
+
+- `RT.spawn({px:true, ...})` — treat `x,y,w,h` as PIXELS instead of tiles (for runtime spawns
+  such as cannon projectiles). Without it they are tiles, exactly as §6 says. `e.spawnDef` keeps
+  the original descriptor; `RT.t2p(v)` / `RT.p2t(v)` convert.
+- `RT.input.pointer` = `{x, y, wx, wy, down, justDown, justUp, id}` — `x,y` are CSS screen
+  pixels, `wx,wy` the same point in world pixels.
+- `RT.setMode(mode)`: `mode.draw(g, w, h)` gets a context already scaled by devicePixelRatio and
+  `w,h` in CSS pixels, so `(0,0)-(w,h)` is the whole screen. Optional `mode.onKey(e)` and
+  `mode.onPointer(type, pointer)` with type `'down'|'move'|'up'`.
+- `__dbg.tap(name, steps)` — `steps` defaults to 1 (the route format). Note a 1-frame jump is a
+  real tap and gets jump-cut to a ~0.8 tile hop; a route that needs the full 3-tile jump must hold
+  jump for ~20 steps (`{"hold":{"jump":true},"steps":20}`) or pass a count here.
+- `__dbg.resume()` leaves the synchronous stepping mode that `__dbg.step` enters.
+  Also `__dbg.theme() .particles() .chunks() .save() .menu() .select() .clearErrors()`.
+- Convenience on RT, all guarded: `RT.sfx(name)`, `RT.groundShadow(g,cx,bottomY,w)`,
+  `RT.breakBlock(tx,ty)`, `RT.bounce(vy)`, `RT.playerJump(power)`, `RT.consumeAction()`
+  (suppresses the dash for this step), `RT.collectCoin(x,y,value)`, `RT.findOne(type)`,
+  `RT.startLevel(n)`, `RT.restartLevel()`, `RT.pause() / RT.resume()`, `RT.showTheEnd()`,
+  `RT.getMode()`, `RT.levelSize()`, `RT.getTheme()`, `RT.isTouch()`, `RT.particles.ring(...)`,
+  `RT.particles.text(...)`, `RT.random/randInt/pick`, `RT.mixColor/shade/rgba`.
+- An entity def with `shadow: true` gets the engine's soft ground shadow drawn for it.
+- `RT.player.shield = true` absorbs one lethal hit instead of killing (for `mushroom`/Tycoon).
+- A level index with no `RT.registerLevel` still loads: the engine substitutes a tiny walkable
+  placeholder so `__dbg.level(n)` and the harness never throw.
+
+### 2026-09-20 — modes/tycoon.js (RT.Tycoon)
+
+Everything below is additive; nothing in sections 1–13 was renamed or changed. `RT.Tycoon.start(cfg)`,
+`.cash`, `.add(n)`, `.stop()` and the four item kinds behave exactly as §11 specifies.
+
+- **Entity types defined here:** `buybutton`, `dropper`, `collector`, `cashpad`, plus an internal
+  `tycoonroot` (invisible, layer `front`) that draws the tycoon's particles/floating text and follows
+  the player so draw-culling can never hide them. All five set `e.persistent = true`, so a respawn keeps
+  purchases; painted tiles and granted abilities are re-applied on `onReset` as a safety net.
+- **Extra `RT.Tycoon` methods** (all optional for callers): `.spend(n)`, `.has(id)`, `.flag(name)`,
+  `.item(id)`, `.price(id)`, `.canAfford(id)`, `.buy(id,{free,force})`, `.rebirth(mult)`, `.setMult(m)`,
+  `.multiplier()`, `.state()`, `.update(dt)`, and the read-only `.income`, `.mult`, `.rebirths`,
+  `.active`. `.cash` is an accessor (still `typeof === 'number'`) so it can never go stale.
+- **Extra `cfg` fields:** `coinValue`, `coinScale`, `buyHold`, `mult`, `rebirthMult`, `rebirthCash`,
+  `rebirthResetAll`, `onCash`, `cashpad:{x,y,label}` (a CASH/INCOME plinth) and
+  `rebirth:{x,y,cost,mult,label}` (a PRESTIGE pad). Default rebirth rule: droppers/cosmetics reset,
+  platforms and abilities are kept (removing them could strand the player); `keepOnRebirth` per item
+  and `rebirthResetAll` override it.
+- **Extra item fields:** `desc`, `icon`, `color`, `showLocked` (draw a greyed LOCKED preview pad before
+  its prerequisite is bought — without it the pad simply appears on unlock, per §11), `mx`/`my`/`flip`
+  (where the dropper machine is built), `collector:{x,y}`, `keepOnRebirth`, per-item `onBuy(RT,item)`.
+- **Coins:** engine.js already calls `RT.Tycoon.add(value)` inside `collectCoin` and then emits `coin`.
+  The module detects that same-step hand-off and never double-counts; it falls back to the `coin` event,
+  and to diffing `RT.coins`, if an engine does neither. Its own cash FX are deferred one step so a coin
+  pickup keeps the engine's `+1` popup instead of stacking a second one.
+- **`window.__dbg` conveniences**, only installed if the engine has not defined them: `giveCash`,
+  `tycoonState`, `tycoonBuy`.
+
+### 2026-09-20 — modes/tetris.js (RT.Tetris)
+
+Section 10 is implemented exactly as written: `RT.Tetris.start({level, linesToWin, onWin, onLose,
+onQuit})`, `RT.setMode`, 10x20, the real NES gravity table (level 28 = 2 frames/cell), NES rotation
+with no kicks, NES spawn orientations, the one-re-roll randomizer, ARE 10–18 by lock height, a
+21-frame line-clear sweep, 40/100/300/1200 x (level+1), the level-8 (28 mod 10) blue/red palette,
+DAS 10/2 and the hard-drop concession. Everything below is additive.
+
+- **Extra `start` option: `seed`** (number). Omitted, the piece sequence is seeded from the clock.
+  `RT.Tetris.seed(n)` reseeds directly. Only tests need either.
+- **Extra methods on `RT.Tetris`**, none required by any other file: `stop()`, `restart()`,
+  `quit()` (fires `onQuit`), `pause()` (toggles, returns the new state), `press(name)` /
+  `release(name)` (held inputs, as opposed to the one-shot `input(name)`), `debugFill(rows)`,
+  `setLines(n)`, `gravityFrames(level)`, `palette(level)`, `layout()` (read-only geometry: the well
+  rect and every on-screen button rect, so a headless test can tap a real button), plus the fields
+  `active`, `mode`, `COLS`, `ROWS` and the raw `update` / `draw`.
+- **`state()` returns the section-10 fields plus** `phase` (`ready|falling|clearing|are|over|won`),
+  `paused`, `linesToWin`, `pieces`, `gravity` (frames/cell now), `are`, `tetrises`, `active`, `held`
+  and `piece.cells` (`[[row,col],…]`). `board` is a fresh 20x10 array of 0 (empty) or 1–7.
+- **`input(name)`** accepts `left,right,down,rotA,rotB,harddrop` plus the aliases
+  `rotate/up/cw → rotA`, `ccw → rotB`, `drop/hard → harddrop`, `soft/softdrop → down`; unknown names
+  return `false` and do nothing. Inputs arriving during ARE or a line clear stay queued until the
+  next piece exists, so `tetrisInput(x); step(n)` always lands.
+- **`debugFill(rows)`** replaces the board: a number fills that many bottom rows (rightmost column
+  left open), an array of 10-character strings (`.`/space = empty) is applied bottom-aligned, so the
+  last string is the bottom row. `setLines(n)` sets the cleared-line counter (and the level it
+  implies) without triggering a win.
+- **`mode.onPause()`** is implemented, so engine.js's Esc / P / pause-button routing pauses *inside*
+  Tetris (own PAUSED card, own pause button on the canvas); tetris.js deliberately does **not**
+  handle Esc or P itself, to avoid toggling twice.
+- **Key ownership.** While the mode is being driven, the keys it uses (arrows, WASD, Z/X/J/K, Space,
+  R, Enter, Q) get `preventDefault` **and** `stopPropagation`, so R cannot kill the player standing
+  in the level behind the arcade cabinet and Space cannot make him jump. `RT.Audio.unlock()` is
+  called from that handler because engine.js's own unlock no longer sees those events.
+- **Input is ignored unless `update()` ran in the last 400 ms**, so an `RT.clearMode()` from outside
+  can never leave tetris.js eating the keyboard.
+- **Screen ownership.** `start()` hides `#hud`, `#pads` and any visible `.screen`, and `stop()`
+  restores exactly what it hid unless the engine has since shown a different screen. engine.js does
+  the same for HUD/pads on its own; this is belt and braces (and covers `__dbg.tetris()` from the menu).
+- **Rows above the well.** A spawning or rotating piece may sit up to two rows above row 0 (this is
+  what lets the I piece rotate at spawn height, as on the NES); nothing is stored there and locking
+  any cell there is a top out.
+- **Two documented concessions beyond section 10:** the hard drop pays 1 point per cell (like NES
+  pushdown), and a fast downward flick on the glass is a hard drop while a slow drag is a soft drop.
+
+### 2026-09-21 — levels 9 and 10, and the level-10 pass condition
+
+Additive only. Nothing in sections 1–13 was renamed, and no existing level, entity, theme,
+sfx or music name changed meaning.
+
+- **Level files may call `RT.defineEntity`.** Section 1 says entities.js implements every type
+  in §6; it does not say it is the only file allowed to define one. `levels/level09.js` defines
+  14 types prefixed `l9` (`l9shy l9wall l9block l9boom l9drop l9cloud l9ride l9saw l9fruit
+  l9moon l9flag l9door l9goal l9pink`) and `levels/level10.js` defines 7 prefixed `lX`
+  (`lXdoor lXpad lXslot lXrig lXlava lXbeat lXlift lXarcade`). The prefixes mean a level can
+  never shadow a library type, and every one of them is registered at script-eval time, before
+  `RT.boot()`, so `RT.spawn` resolves them normally.
+- **A solid entity the player can stand on must never be switched off by moving it.**
+  engine.js carries whoever is riding a solid by that entity's per-step delta, so teleporting
+  a ridden platform to a parking coordinate teleports the player with it — a 31,000-tile
+  teleport, in practice. `lXbeat` and `lXpad` therefore collapse `w`/`h` to 0 and keep `x`/`y`
+  where they are (the entities.js "dynamic solidity" convention), and keep their drawn size in
+  `dw`/`dh`. Parking to a far coordinate is still fine for solids that are never ridden while
+  they switch (`l9wall`, `l9moon`, `lXrig`).
+- **Level 9 has no `G` tile.** Its goal is the `l9goal` entity, which runs away three times and
+  then calls `RT.winLevel()` on the fourth touch. `G` remains the normal way to end a level;
+  `RT.winLevel()` was already public API and the results screen, save and unlock all behave
+  identically.
+- **Level 10's route ends at the arcade cabinet**, exactly as §13 allows. `tools/playtest.js`
+  therefore treats level 10 as passing when the route leaves `RT.Tetris.active` true and a
+  separate finale step then wins for real: `RT.Tetris.setLines(9)`, `debugFill(['##########'])`,
+  one hard drop, and `__dbg.state().won` must come back true. That proves the whole chain —
+  cabinet → `RT.Tetris.start({level:28, linesToWin:10})` → `onWin` → `RT.winLevel()`.
+- **`tools/route.js`** (new) is a debugging front-end for the same route files: it prints the
+  player's tile position, velocity, ground flag and death count after every segment, plus the
+  death causes, `RT.keys`, `RT.groups` and `RT.Tycoon.state()`. It reads and writes nothing the
+  game ships with.
+- **`window.__L10`** — level 10 exposes its own state object for tests only, like
+  `window.__RT_ENTITY_TYPES`. Nothing on `RT` depends on it.

@@ -1,0 +1,226 @@
+[
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 55,
+    "note": "run right along the ruins ledge"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 10,
+    "note": "hop the broken step at x=10"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 59,
+    "note": "along the coin bridge to x=15.4"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 4,
+    "note": "small hop over the ghost tile at 16"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 24,
+    "note": "land on the real stone at 18"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 11,
+    "note": "clear the two ghost tiles at 19-20"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 62,
+    "note": "walk through CHECKPOINT 1 and press the wall at 27"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 22,
+    "note": "climb up onto the stepping stones (row 9)"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 24,
+    "note": "run the stones to x=31.5"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 9,
+    "note": "clear the gap at 32 and the ghost at 33"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 30,
+    "note": "land on 35, keep running"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 13,
+    "note": "clear the gap at 36 and the two ghosts at 37-38"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 66,
+    "note": "drop into THE LOW ROAD, run bent double to x=44.4"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 6,
+    "note": "tiny hop over the spike well at 45 (head bonks the real roof)"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 30,
+    "note": "stay low to x=48.3"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 6,
+    "note": "tiny hop over the spike well at 49"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 77,
+    "note": "walk through CHECKPOINT 2 onto the crumbles, to x=57.4"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 4,
+    "note": "hop the crumble gap at 58 (podoboo is down)"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 28,
+    "note": "land on the crumble at 60"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 4,
+    "note": "hop the crumble gap at 61"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 36,
+    "note": "onto the last solid ledge at 65"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 28,
+    "note": "THE LEAP OF FAITH: full jump - nothing here holds you"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 28,
+    "note": "land in the hidden tunnel, walk to the step at 72"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 26,
+    "note": "climb out of the tunnel onto the ledge at 73"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 52,
+    "note": "walk through CHECKPOINT 3, build speed for the thwomps"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 128,
+    "note": "DASH: never stop - all three thwomps slam behind you"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 4,
+    "note": "hop the gap at 93"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 22,
+    "note": "land on the crumbles at 94-95"
+  },
+  {
+    "hold": {
+      "right": true,
+      "jump": true
+    },
+    "steps": 4,
+    "note": "hop the last gap at 96"
+  },
+  {
+    "hold": {
+      "right": true
+    },
+    "steps": 48,
+    "note": "run into the door"
+  }
+]
