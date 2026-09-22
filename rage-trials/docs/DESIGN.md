@@ -229,3 +229,60 @@ execute**, and losing costs **time**, never progress. Ten sections, a checkpoint
 9. **THE WHEEL** (297–320) — four reels; any two matching opens the gate. 42% a spin, spins are
    free, the fifth always pays. Skill bypass: a three-rung crumbling climb straight over the gate.
 10. **THE DOOR** (321–334) — real. No fakes, no reels, no second door behind it.
+
+---
+
+## Level 12 — THE GAUNTLET (six custom themes, music `volcano` → `apocalypse` → `tycoon` → `troll`)
+*"Four bosses, one checkpoint, two lies."*
+
+400 x 56 — the contract maximum in both directions — built in BANDS rather than one corridor,
+because four arenas, a vertical shaft, a sixteen-item tycoon and a 119-tile troll obby do not
+fit in a single row of tiles. The tile grid is painted by code, not typed.
+
+1. **I. THE LAUNCH (cols 0-72)** — a rocket race over a hole in the world. Three sleds; each one
+   lights when you stand on it and waits for nobody afterwards. A flame front starts when the
+   first sled does and is deliberately slower than the sleds, so only stopping can lose to it.
+   Two burning hoops: you cross their plane at your own height, so riding through is safe and
+   jumping inside one is not. VULCAN-9 screams past in the parallax, taunting, three times.
+   Once a sled is lit you are RAILED to its deck — walking cannot take you off a moving sled,
+   only jumping can, because everybody holds right in a race and nobody should die of it.
+2. **II. VULCAN-9 (74-104)** — six hits, three phases. Missile rain you read off floor markers,
+   a flame sweep you answer by being on a tier, homing drones you stomp for height, a shrapnel
+   fan with one gap aimed away from you, and a RAM that ends with it face-first in a wall and
+   its back open for 2.8s (1.7s by phase three). The ram is the only way in.
+3. **III. THE MELT (106-134)** — a vertical shaft, thirteen staggered ledges (four crumble),
+   three springs, wall vents that breathe fire across the gap, and lava that starts 3.2s after
+   you enter and climbs half a tile a second for the whole 43-tile climb.
+4. **IV. GALE PRIME (136-176)** — a tornado that alternates FIRE and WATER and cannot be touched.
+   In WATER it leaves puddles where it stands, and it stands where you stand. In FIRE, crossing
+   one of its own puddles boils it: the funnel stalls, the EYE drops to jumping height and opens.
+   Fire spouts, wall-to-wall water jets, burning rain, lightning columns, a constant pull toward
+   the funnel, and an orbiting eyewall in phase three.
+5. **V. THE LONG COUNTER (178-250)** — sixteen purchases: 1, 2, 3, 5, 8, 12, 20, 30, 45, 70, 110,
+   180, 300, 900, 4,000 and THE GATE at 15,000, which is the only one that opens anything. Income
+   is coins, droppers (1/s up to 30/s) and THE CIRCUIT, a five-rung lap to a payout plate that
+   pays 1.72x more every lap, capped at 1,400.
+6. **VI. THE LAST CHECKPOINT (252)** — a shrine that says so. Everything after it respawns here.
+7. **VII. THE TROLL (254-372)** — 119 tiles, twenty-six tricks, each used once: two floor tiles
+   that are not floor, a five-tile pit that is an invisible bridge, a staircase with two painted
+   steps, a spring under a ceiling of spikes, a ceiling that comes down in front of you, an
+   eight-tile trench where left is right (latched to the trench, not to a line, so it cannot
+   chatter), a checkpoint that laughs, a coin that blinks, a platform with legs, a thwomp, two
+   blocks that hold your weight only while you stand on them, a fake goal on a pedestal, a laser,
+   a draught that only blows at the top of a jump, a crumbling step over five tiles of nothing,
+   and a conveyor that pushes back for the last five tiles.
+8. **VIII. THE JESTER (374-398)** — copies itself (the real one is the one with a shadow), reverses
+   you for four seconds, deletes four floor tiles, lobs confetti bombs, raises a shield you drop
+   by standing on a pad at the other end, and teleports after every hit. At zero it dies properly
+   — death animation, YOU WIN, the lot — and then gets back up with three more.
+9. **IX. ONE JUMP (360-398, row 22)** — three tiles, dressed as certain death. The landing platform
+   visibly runs away as you commit; the tiles under the picture never move.
+10. **X. THE AUTHOR, after the fake ending (254-320, rows 2-17)** — landing the jump fills the screen
+    with a real victory screen and a `yay!` button. Pressing it says JUST KIDDING and drops you into
+    THE AUTHOR: five hits, and every one is the same shape — it writes you a pad, counts four beats,
+    and opens its core for 0.62s down to 0.34s at the top of the jump you take on four. Between
+    windows: a sweeping laser grid, a spike rain with one dry column, a gravity flip, and a
+    typewriter. Then THE TICKET BOOTH: 26 tickets fall fast for different amounts, 1,000 points ends
+    it, and a bomb arrives at the end — click the bomb and all of trial 12 starts again. Click every
+    ticket and skip the bomb and you win outright; miss any and you get THE ONE SPIKE (330-366), one
+    spike, dressed as the hardest thing in the game, with a door eight tiles past it.

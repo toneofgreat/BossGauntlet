@@ -552,3 +552,56 @@ sfx or music name changed meaning.
 - **Copy that named level 28** (the cabinet marquee, the movement-IV sign, the level-10 taunt, the
   TOP OUT taunt list, DESIGN.md and the platyfy card) now names level 2. `docs/research-tetris.md`
   is left alone: it is the research record of how the NES behaves at 28, and is still accurate.
+
+### 2026-09-22 (later) — a twelfth level: four bosses, and how a boss is tested
+
+Additive only. Nothing in sections 1–13 was renamed, and no existing level, entity, theme,
+sfx or music name changed meaning.
+
+- **`LEVEL_COUNT` is 12.** Section 5 said "Levels are 1..10", the 2026-09-21 amendment made it
+  1..11; it is now 1..12. Everything that reads the count already went through `LEVEL_COUNT`.
+  `levels/level12.js` is loaded after `level11.js` in index.html.
+- **Level 12 is built in BANDS, not one corridor.** It is 400 x 56 — the section-5 maximum in
+  both directions — and the acts sit at different ROW ranges as well as different columns, so
+  the same columns carry the troll obby (rows 44-55) and THE AUTHOR's arena (rows 2-17). The
+  bands are linked by rocket sleds, a carved chute, a `portal` and two canvas modes. A boss
+  therefore has to check the player's ROW as well as their column before it wakes, or it wakes
+  while the player is two hundred tiles away on a different floor.
+- **`tiles` may be generated.** Section 5 requires rows of equal length at registration; it does
+  not require them to be typed. level12.js paints a 400x56 char grid with `row/col/box/slab`
+  helpers and joins it — 22,400 tiles is past the point where a literal is reviewable.
+- **A custom theme object needs `__ready: true`.** `resolveTheme()` returns the same object only
+  when that flag is set; without it every `themeForTileX()` call builds a new object, the zone
+  blend in `updateThemeZones()` never settles, and the level silently keeps its first theme.
+  Level 12's six themes set it. (Levels 9–11 pass raw objects and are affected; nothing was
+  changed there, this is only a note for the next agent.)
+- **Level 12 defines 27 entity types prefixed `lG`** (`lGshot lGmark lGflame lGdrone lGsled
+  lGring lGfront lGrival lGvulcan lGlava lGvent lGpool lGjet lGgale lGshrine lGmimic lGfakecp
+  lGrunaway lGghost lGnudge lGonejump lGpad lGclone lGjester lGwrit lGauthor lGspikedrama`),
+  under the same rules as the `l9`/`lX`/`lE` families.
+- **The boss framework.** All four bosses share one machine: `bossInit/bossWake/bossHit/bossDie`,
+  a per-phase pattern queue, and exactly one way to do damage — `coreStomp()`, which requires the
+  player to be FALLING onto an open core. Nothing else in this game damages anything, so nothing
+  else damages a boss. Every attack telegraphs on the floor (`lGmark`) or with a count-in, and the
+  core opens only after a specific attack (a ram into the wall, a boiled puddle, a laugh, or the
+  fourth beat). The health bar is drawn in world space anchored to the camera, 54 px below the
+  top edge so it clears the DOM HUD, and only for a boss within one screen width of the camera.
+- **`kill()` in level 12 honours `RT.god`.** The engine's `killPlayer` does not check it, so a
+  headless harness could not watch a whole boss fight. Level-local hazards route through one
+  `kill(cause)` that returns early under god mode; the causes are distinct (`fire lava spike
+  laser shot drone water wind hull ink troll crush void`) so a death log names the killer.
+- **Two canvas modes live in the level file**, not in `modes/`: the fake ending (a complete
+  victory screen with a `yay!` button that turns into JUST KIDDING and hands off to THE AUTHOR)
+  and THE TICKET BOOTH (26 falling tickets, 1,000 points, and a bomb that calls
+  `RT.restartLevel()`). Both use the public `RT.setMode` contract from section 6 including
+  `onPointer`; neither touches Tetris or Tycoon.
+- **`window.__L12`** — level 12's state object, for tests only, like `__L10`/`__L11`. It carries
+  `__L12.dbg`: `state() boss(key) hit(key,n) killBoss(key) cash(n) buyAll() tickets(perfect)
+  warp(tx,ty) skipTo(act)`, and `__L12.booth` while the booth is open. Nothing on `RT` depends
+  on either.
+- **Level 12's pass condition** follows the level-10 precedent. `docs/routes/level12.json` is a
+  legal input route that flies the whole rocket race and lands in VULCAN-9's arena with zero
+  deaths; `tools/playtest.js` then proves the other nine acts through `__L12.dbg` and, for the
+  troll obby, through a second real input route (`docs/routes/level12-troll.json`, 34 segments,
+  253 → 371 with zero deaths). It asserts fifteen named acts plus `won`, and both endings — the
+  one-spike ending and the every-ticket ending — must win.

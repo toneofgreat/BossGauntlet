@@ -40,7 +40,7 @@ async function main() {
   page.on('requestfailed', r => failedReqs.push(r.url() + ' ' + (r.failure() || {}).errorText));
 
   const results = [];
-  const levels = which === 'all' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : (which === 'tetris' ? [] : [Number(which)]);
+  const levels = which === 'all' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : (which === 'tetris' ? [] : [Number(which)]);
 
   // ---- boot check -------------------------------------------------------
   await page.goto(`http://localhost:${PORT}/rage-trials/index.html?unlock`, { waitUntil: 'networkidle0', timeout: 30000 });
@@ -102,6 +102,124 @@ async function main() {
       }).catch(e => ({ err: 'finale eval failed: ' + e.message }));
       if (r.finale && r.finale.won) r.won = true;
       console.log('L10 FINALE', JSON.stringify(r.finale));
+    }
+    // ---- level 12: the route proves the rocket race, this proves the rest --
+    // Four bosses, a rising shaft, a sixteen-item tycoon, a 119-tile troll
+    // obby, a fake ending and a ticket booth cannot be driven by a fixed input
+    // script, so - exactly as level 10 hands the finale to RT.Tetris - level 12
+    // hands it to __L12.dbg, which is the same API the level itself uses.
+    if (n === 12 && !r.won) {
+      const trollFile = path.join(ROOT, 'rage-trials/docs/routes', 'level12-troll.json');
+      let troll = [];
+      try { troll = JSON.parse(fs.readFileSync(trollFile, 'utf8')); } catch (e) { }
+      r.finale = await page.evaluate(async (troll) => {
+        const RT = window.RT, d = window.__dbg, o = { acts: {}, won: false, err: null, deaths: 0 };
+        const G = () => window.__L12;
+        const hold = (h, s) => { d.hold(h || {}); d.step(s || 1); };
+        try {
+          if (!G() || !G().dbg) { o.err = '__L12.dbg missing'; return o; }
+
+          /* II. VULCAN-9 - six hits, then the shaft door is carved open */
+          for (let i = 0; i < 6; i++) { G().dbg.hit('vulcan'); d.step(70); }
+          d.step(340);
+          o.acts.vulcan = G().done.vulcan === 1 && d.tile(105, 44) === '.';
+
+          /* III. THE MELT - it arms on entry and the lava actually climbs */
+          G().dbg.skipTo('melt'); d.step(20);
+          hold({ right: true }, 40); hold({}, 10);
+          const lava0 = G().lavaY;
+          d.god(true); d.step(360); d.god(false);
+          o.acts.melt = G().meltOn === 1 && G().lavaY < lava0 - 64;
+          G().dbg.warp(126, 4); d.step(30); hold({ right: true }, 30);
+          o.acts.meltTop = G().meltWon === 1;
+
+          /* IV. GALE PRIME - water fills a pool, fire boils it, the eye opens */
+          G().dbg.skipTo('gale'); d.step(20); d.god(true);
+          hold({ right: true }, 90); hold({}, 20);
+          let stall = 0, wet = 0;
+          for (let i = 0; i < 260; i++) {
+            d.step(10);
+            const b = G().dbg.boss('gale');
+            if (!b) break;
+            if (b.stalled > 0) stall++;
+            const ps = RT.find('lGpool');
+            for (let j = 0; j < ps.length; j++) wet = Math.max(wet, ps[j].wet);
+          }
+          o.acts.galeSteam = stall > 0 && wet > 0.3;
+          for (let i = 0; i < 6; i++) { G().dbg.hit('gale'); d.step(70); }
+          d.step(340);
+          o.acts.gale = G().done.gale === 1 && d.tile(174, 12) === '.';
+
+          /* V. THE LONG COUNTER - sixteen purchases open the wall at 249 */
+          G().dbg.skipTo('counter'); d.step(30);
+          hold({ right: true }, 40); hold({}, 10);
+          G().dbg.buyAll(); d.step(60);
+          o.acts.counter = G().gateOpen === 1 && d.tile(249, 40) === '.' &&
+                           RT.player.abilities.doubleJump === true;
+
+          /* VII. THE TROLL - a real input route, no god mode, no deaths */
+          d.god(false);
+          G().dbg.skipTo('troll'); d.step(20);
+          const d0 = d.state().deaths;
+          for (let i = 0; i < troll.length; i++) hold(troll[i].hold, troll[i].steps);
+          const s7 = d.state();
+          o.acts.troll = (s7.x / 32) > 370 && s7.deaths === d0;
+          o.trollX = +(s7.x / 32).toFixed(1);
+
+          /* VIII. THE JESTER - it dies once for show, then three more times */
+          d.god(true);
+          hold({ right: true }, 70); hold({}, 40);
+          for (let i = 0; i < 6; i++) { G().dbg.hit('jester'); d.step(50); }
+          d.step(420);
+          const jb = G().dbg.boss('jester');
+          o.acts.jesterFake = !!jb && jb.round === 2 && jb.hp === 3;
+          for (let i = 0; i < 3; i++) { G().dbg.hit('jester'); d.step(60); }
+          d.step(340);
+          o.acts.jester = G().done.jester === 1 && RT.find('portal').length > 0;
+
+          /* IX. ONE JUMP - and the screen that lies */
+          G().dbg.warp(362, 20); d.step(20);
+          hold({ right: true }, 52);
+          hold({ right: true, jump: true }, 22);
+          hold({ right: true }, 44);
+          o.acts.onejump = G().jumped === 1 && !!RT.getMode();
+          const m = RT.getMode();
+          if (m && m.onKey) m.onKey({ type: 'keydown', key: 'x' });
+          d.step(220);
+          o.acts.fakewin = !RT.getMode() && !!G().dbg.boss('author');
+
+          /* X. THE AUTHOR - five hits, then the booth opens by itself */
+          for (let i = 0; i < 5; i++) { G().dbg.hit('author'); d.step(60); }
+          d.step(420);
+          o.acts.author = G().done.author === 1 && !!RT.getMode();
+
+          /* the booth, three tickets missed: that is the one-spike ending */
+          G().dbg.tickets(false); d.step(30);
+          o.acts.tickets = G().spikeOn === 1;
+          d.god(false);
+          hold({ right: true }, 38);
+          hold({ right: true, jump: true }, 20);
+          hold({ right: true }, 90);
+          o.acts.spike = d.state().won === true;
+          o.won = d.state().won;
+          o.deaths = d.state().deaths;
+
+          /* and the other ending: every ticket, no bomb, straight to the door */
+          d.level(12); d.step(10);
+          G().dbg.skipTo('tickets');
+          G().dbg.tickets(true);
+          d.step(60);
+          o.acts.perfect = d.state().won === true;
+        } catch (e) { o.err = String(e && e.message || e); }
+        return o;
+      }, troll).catch(e => ({ err: 'finale eval failed: ' + e.message }));
+      const f = r.finale || {};
+      const acts = f.acts || {};
+      const allActs = ['vulcan', 'melt', 'meltTop', 'galeSteam', 'gale', 'counter', 'troll',
+                       'jesterFake', 'jester', 'onejump', 'fakewin', 'author', 'tickets', 'spike', 'perfect'];
+      f.failed = allActs.filter(k => !acts[k]);
+      if (f.won && !f.failed.length) r.won = true;
+      console.log('L12 FINALE', JSON.stringify(f));
     }
     r.newPageErrors = pageErrors.slice(before);
     r.hasRoute = !!route;
