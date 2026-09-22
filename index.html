@@ -44,9 +44,6 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Pig Hide card */
 .bg-pig{background:linear-gradient(135deg,#1a0a10,#2a1020,#1a0a1a)}
 .bg-pig canvas{width:100%;height:100%}
-/* Roblox clone card */
-.bg-rblx{background:linear-gradient(135deg,#1a0000,#2a0505,#0a0000)}
-.bg-rblx canvas{width:100%;height:100%}
 /* Superhero Tycoon card */
 .bg-hero{background:linear-gradient(135deg,#0a0a2a,#0a1a3a,#1a0a2a)}
 .bg-hero canvas{width:100%;height:100%}
@@ -219,14 +216,6 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>PIG HIDE</h2>
       <p>3D multiplayer hide-and-seek. One player is the pig — hunt down all the hiders before time runs out! Solve puzzles, earn coins, and unlock skins.</p>
       <span class="tag" style="background:#2a0a1a;color:#f4a">MULTIPLAYER</span>
-    </div>
-  </a>
-  <a href="roblox.html" class="card">
-    <div class="card-img bg-rblx"><canvas id="c7"></canvas></div>
-    <div class="card-body">
-      <h2>ROBLOX HUB</h2>
-      <p>Explore top Roblox-style games: Adopt Me, Blox Fruits, Jailbreak, and more. Browse the avatar shop, featured events, and popular picks.</p>
-      <span class="tag" style="background:#2a0000;color:#f66">GAME HUB</span>
     </div>
   </a>
   <a href="superhero-tycoon.html" class="card">
@@ -637,43 +626,6 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
     ctx.fillText('🐷 PIG HIDE',w/2,18);
     ctx.font='10px Courier New';ctx.fillStyle='#888';
     ctx.fillText('MULTIPLAYER 3D',w/2,32);
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-
-// ---- Roblox Hub preview: game thumbnails grid ----
-(function(){
-  const c=document.getElementById('c7'),ctx=c.getContext('2d');
-  let w,h,t=0;
-  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
-  resize();window.addEventListener('resize',resize);
-  const tiles=[
-    {icon:'🐾',label:'Adopt Me',hue:200},{icon:'⚔️',label:'Blox Fruits',hue:280},
-    {icon:'🚔',label:'Jailbreak',hue:40},{icon:'🏠',label:'Bloxburg',hue:80},
-    {icon:'🐷',label:'Piggy',hue:340},{icon:'🔫',label:'Arsenal',hue:60},
-  ];
-  function draw(){
-    t+=0.02;ctx.fillStyle='rgba(10,0,0,0.2)';ctx.fillRect(0,0,w,h);
-    ctx.fillStyle='#1a0000';ctx.fillRect(0,0,w,h*0.15);
-    // Roblox logo area
-    ctx.fillStyle='#e2231a';ctx.fillRect(8,5,28,28);
-    ctx.font='bold 20px serif';ctx.textAlign='left';ctx.fillStyle='#fff';ctx.fillText('R',14,26);
-    ctx.font='bold 14px Courier New';ctx.fillStyle='#fff';ctx.textAlign='left';ctx.fillText('Roblox',42,22);
-    // Grid of game tiles
-    const cols=3,tileW=w/cols-4,tileH=(h*0.82)/2-4;
-    tiles.forEach((tile,i)=>{
-      const col=i%cols,row=Math.floor(i/cols);
-      const tx=col*(tileW+4)+2,ty=h*0.17+row*(tileH+4);
-      const grd=ctx.createLinearGradient(tx,ty,tx+tileW,ty+tileH);
-      grd.addColorStop(0,`hsl(${tile.hue},30%,10%)`);
-      grd.addColorStop(1,`hsl(${tile.hue+30},25%,15%)`);
-      ctx.fillStyle=grd;ctx.fillRect(tx,ty,tileW,tileH);
-      ctx.font=`${Math.round(tileH*0.35)}px serif`;ctx.textAlign='center';
-      ctx.fillText(tile.icon,tx+tileW/2,ty+tileH*0.55+sin(t+i)*2);
-      ctx.font='8px Courier New';ctx.fillStyle='#999';
-      ctx.fillText(tile.label,tx+tileW/2,ty+tileH-4);
-    });
     requestAnimationFrame(draw);
   }
   draw();
