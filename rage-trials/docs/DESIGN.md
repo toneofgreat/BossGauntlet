@@ -154,7 +154,7 @@ final door opening with a sincere "ok, you earned it". ~120 tiles.
 
 ## Level 10 — THE LAST TRIAL (themes `apocalypse` → `tycoon` → `troll` → Tetris, music `apocalypse`)
 *"Luck and skill and tycoon in one, rage-inducing trolls, possible but insane, then beat Tetris
-level 28."*
+level 2."*
 
 The finale. A burning sky, floating debris, lightning, the ruins of every earlier world drifting
 in the parallax. Four movements, each with a checkpoint at its start:
@@ -178,8 +178,8 @@ in the parallax. Four movements, each with a checkpoint at its start:
    crumble staircase that trolls the rhythm, a laser maze with reversed controls for 6 tiles, and
    a final 12-tile precision run with a fake goal at the end (the real goal is one screen higher).
 4. **THE ARCADE** — an actual arcade cabinet stands at the end. Touch it, the screen fills, and
-   `RT.Tetris.start({level:28, linesToWin:10})` runs the authentic NES Tetris kill-screen-adjacent
-   level 28. Clear 10 lines to win the game. Top out → you restart Tetris only (the checkpoint is
+   `RT.Tetris.start({level:2, linesToWin:10})` runs the authentic NES Tetris at
+   level 2. Clear 10 lines to win the game. Top out → you restart Tetris only (the checkpoint is
    the cabinet, never the level), with a taunt line each time.
 Winning shows THE END: total deaths, total time, a rage rating, and the credits.
 

@@ -26,8 +26,8 @@
  *                                reversed tiles, a four-gap precision run,
  *                                and a fake goal at the end of it.
  *   IV.  ARCADE   cols 196-219   one screen higher. An actual cabinet.
- *                                RT.Tetris.start({level:28, linesToWin:10}).
- *                                Ten lines on NES level 28 wins the game.
+ *                                RT.Tetris.start({level:2, linesToWin:10}).
+ *                                Ten lines on NES level 2 wins the game.
  *
  * Grid: 220 x 20. Movements I-II walk on row 13 (slab rows 13-19);
  * movement III is a thin row-8 catwalk over the void; movement IV is a
@@ -587,7 +587,7 @@
         RT.drawText(g, RT.isTouch && RT.isTouch() ? 'TAP ACTION' : 'PRESS E', x + w / 2, y - 14, {
           size: 11, color: '#ffe9a8', stroke: 'rgba(20,10,30,0.9)', strokeWidth: 3, alpha: e.glow
         });
-        RT.drawText(g, 'LEVEL 28  -  10 LINES', x + w / 2, y - 28, {
+        RT.drawText(g, 'LEVEL 2  -  10 LINES', x + w / 2, y - 28, {
           size: 9, color: '#9ad4ff', stroke: 'rgba(20,10,30,0.9)', strokeWidth: 3, alpha: e.glow
         });
       }
@@ -595,7 +595,7 @@
   });
 
   var TAUNTS = [
-    'Level 28. Two frames per cell. Again.',
+    'Level 2. The machine is not even trying. Again.',
     'The blocks are not the problem. The blocks are never the problem.',
     'You have beaten nine trials to get shouted at by a 1989 arcade machine.',
     'Ten lines. That is all anyone is asking.',
@@ -606,7 +606,7 @@
     L.arcadeTries++;
     sfx('powerup');
     RT.Tetris.start({
-      level: 28,
+      level: 2,
       linesToWin: 10,
       onWin: function () {
         RT.clearMode && RT.clearMode();
@@ -885,7 +885,7 @@
       /* ===================== MOVEMENT IV - THE ARCADE ================== */
       { type: 'text', x: 199, y: 1, w: 10, text: 'IV. THE ARCADE', size: 0.9, color: '#ffffff', alpha: 0.3 },
       { type: 'sign', x: 205, y: 2, w: 11, range: 2.6,
-        text: 'NES Tetris, level 28. Ten lines. Top out and you restart the machine, never the trial.' },
+        text: 'NES Tetris, level 2. Ten lines. Top out and you restart the machine, never the trial.' },
       { type: 'deco', kind: 'lamp', x: 201.4, y: 1.4 },
       { type: 'deco', kind: 'lamp', x: 214.4, y: 1.4 },
       { type: 'lXarcade', x: 210, y: 0 }

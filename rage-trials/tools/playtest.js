@@ -114,7 +114,7 @@ async function main() {
     const t = await page.evaluate(async () => {
       const d = window.__dbg, out = { started: false, level: 0, gravity: null, lines: 0, over: false, err: null };
       try {
-        d.tetris(28);
+        d.tetris(2);
         const s0 = d.tetrisState();
         out.started = !!s0; out.level = s0 && s0.level;
         // drop 8 pieces with hard drop, confirm the board fills and nothing throws

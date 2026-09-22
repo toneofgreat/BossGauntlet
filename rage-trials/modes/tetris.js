@@ -16,7 +16,7 @@
 // * Gravity, in FRAMES PER CELL (NTSC, 60.0988 Hz - we use the engine's 60 Hz):
 //       lvl  0: 48   1: 43   2: 38   3: 33   4: 28   5: 23   6: 18   7: 13
 //       lvl  8:  8   9:  6   10-12: 5   13-15: 4   16-18: 3   19-28: 2   29+: 1
-//   Level 28 (our finale) is therefore 2 frames per cell - 30 cells a second.
+//   Level 2 (our finale) is therefore 38 frames per cell - about 1.6 cells a second.
 // * NES rotation: pure rotation about the piece's own centre cell.  NO wall kicks,
 //   NO SRS, NO floor kicks.  If the rotated cells collide, the rotation is refused.
 //   S, Z and I have only TWO states (they toggle); O has one; T, J, L have four.
@@ -33,12 +33,12 @@
 //   frames -> 5 steps x 4 = 20 frames, then the rows above shift down.
 // * Scoring: 40 / 100 / 300 / 1200 times (level + 1), plus one point per cell of
 //   soft drop (push down), banked when the piece locks.
-// * Level: +1 every 10 lines.  Our finale starts at 28 and ends the moment 10 lines
-//   are cleared, so 29 only ever appears on the very last clear.
+// * Level: +1 every 10 lines.  Our finale starts at 2 and ends the moment 10 lines
+//   are cleared, so 3 only ever appears on the very last clear.
 // * Colours: the NES has ONE palette per level, level mod 10, and draws pieces with
 //   only three tile styles - white (T, O, I), colour 1 (S, Z) and colour 2 (J, L).
-//   28 mod 10 = 8, the blue/red palette (NES $12 = #0058F8 and $16 = #F83800),
-//   the same one competitive players see at level 18.
+//   2 mod 10 = 2, the magenta/orange palette (#D800CC and #E45C10), the same one
+//   the NES shows at levels 2, 12 and 22.
 // * No hold, no ghost piece, no 7-bag, no lock delay, no IRS.  Soft drop only.
 //   Our two deliberate concessions (CONTRACT 10): a hard drop, and DAS at
 //   10 frames initial / 2 frames repeat instead of the NES 16/6.
@@ -120,13 +120,13 @@
   var PALETTES = [
     ['#0058F8', '#3CBCFC'],  // 0  blue / cyan
     ['#00A800', '#B8F818'],  // 1  green / lime
-    ['#D800CC', '#E45C10'],  // 2  magenta / orange
+    ['#D800CC', '#E45C10'],  // 2  magenta / orange <- level 2, our finale
     ['#0058F8', '#58D854'],  // 3  blue / green
     ['#E40058', '#58F898'],  // 4  red / mint
     ['#58F898', '#6888FC'],  // 5  mint / periwinkle
     ['#F83800', '#7C7C7C'],  // 6  red / grey
     ['#6844FC', '#A80020'],  // 7  violet / crimson
-    ['#0058F8', '#F83800'],  // 8  blue / red   <- level 18 / 28, our finale
+    ['#0058F8', '#F83800'],  // 8  blue / red   <- level 18 / 28
     ['#F83800', '#FC9838']   // 9  red / orange <- level 19 / 29, the kill screen
   ];
   var WHITE = '#FCFCFC';
@@ -177,7 +177,7 @@
   }
 
   function newState(opts) {
-    var startLevel = Math.max(0, Math.round(opts.level == null ? 28 : opts.level));
+    var startLevel = Math.max(0, Math.round(opts.level == null ? 2 : opts.level));
     return {
       opts: opts,
       board: blankBoard(),
@@ -386,7 +386,7 @@
   var TAUNTS = [
     'THE MACHINE WINS AGAIN.',
     'TEN LINES. THAT IS ALL.',
-    'LEVEL 28 DOES NOT CARE.',
+    'LEVEL 2 DOES NOT CARE.',
     'YOU STACKED. IT STACKED HIGHER.',
     'THE I PIECE IS NOT COMING.',
     'BLAME THE RANDOMIZER.',

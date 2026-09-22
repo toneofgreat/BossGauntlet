@@ -5193,7 +5193,7 @@ var __dbg = {
   tetris: function (level) {
     if (!RT.Tetris || typeof RT.Tetris.start !== 'function') return null;
     try {
-      RT.Tetris.start({ level: level === undefined ? 28 : level, linesToWin: 10 });
+      RT.Tetris.start({ level: level === undefined ? 2 : level, linesToWin: 10 });
     } catch (e) { logError('Tetris.start', e); return null; }
     return __dbg.tetrisState();
   },

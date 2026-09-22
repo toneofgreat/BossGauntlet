@@ -533,3 +533,22 @@ sfx or music name changed meaning.
   free, so the gaps between them are one tile — too narrow for a blade, which is why each gap is
   guarded by a short-fused `cannon` (`life: 0.6`) instead. The DROPPER survives at 6/s.
 - **`window.__L11`** — level 11's state object, for tests only, like `window.__L10`.
+
+### 2026-09-22 — the arcade cabinet runs NES level 2, not level 28
+
+- **`RT.Tetris.start({level:2, linesToWin:10})`** is what level 10's cabinet now calls. Sections
+  10 and the 2026-09-20 tetris amendment quote `level:28`; read that as `level:2` everywhere.
+  Nothing in the API changed — `start()` has always taken the level as an option and derived
+  gravity, palette and the level-up target from it.
+- **Gravity is 38 frames per cell instead of 2.** The gravity table, the NES randomizer, ARE, the
+  line-clear sweep, scoring, DAS and the absence of hold/ghost/lock-delay are all unchanged; only
+  the starting level moved, so the cabinet is a Tetris game you can lose rather than one you
+  cannot win. Ten lines still ends it, and the level still ticks once (2 → 3) on the last clear.
+- **The palette follows the level.** `paletteFor(2)` is the magenta/orange pair (`#D800CC` /
+  `#E45C10`) instead of the level-8 blue/red, because the NES picks its palette by `level mod 10`.
+  Nothing hard-codes the finale's colours.
+- **`RT.Tetris.start()`'s default level and `__dbg.tetris()`'s default are both 2** so that a
+  call with no level starts the shipped game. `tools/playtest.js` drives `d.tetris(2)`.
+- **Copy that named level 28** (the cabinet marquee, the movement-IV sign, the level-10 taunt, the
+  TOP OUT taunt list, DESIGN.md and the platyfy card) now names level 2. `docs/research-tetris.md`
+  is left alone: it is the research record of how the NES behaves at 28, and is still accurate.
