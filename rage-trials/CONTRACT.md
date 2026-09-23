@@ -605,3 +605,42 @@ sfx or music name changed meaning.
   troll obby, through a second real input route (`docs/routes/level12-troll.json`, 34 segments,
   253 → 371 with zero deaths). It asserts fifteen named acts plus `won`, and both endings — the
   one-spike ending and the every-ticket ending — must win.
+
+### 2026-09-22 (later still) — the bosses are now beatable, and the gate proves it
+
+The four bosses in level 12 shipped provably *reachable* (the finale drove them through
+`__L12.dbg.hit`) but not provably *winnable*. They were not. Every fix below is a rule change in
+`levels/level12.js`; nothing outside that file changed.
+
+- **The universal one: a stomped boss killed you on the landing frame.** You damage a boss by
+  falling onto its open core, which leaves you standing on a body that becomes lethal again the
+  instant the window closes. `bossHit()` now sets `e.grace = 1.15` and every boss's contact test
+  skips while `grace > 0`. Without it no boss in the level could be hit twice.
+- **VULCAN-9's core was out of reach.** Stunned, it hovered with its back 4.7 tiles up; a jump
+  from the arena floor tops out at 3.18. It now SLUMPS to 1.15 tiles, putting the core at 2.5,
+  and the ram never flies lower than 2.4 tiles so standing on the floor is always a legal answer
+  to it. The ram is also in every phase list now — it is the only way in, so it is never more
+  than one attack away — and a stun pops any live drones.
+- **GALE PRIME could not be hit twice, ever.** `if (!e.stalled && …)` guarded the element clock,
+  and `e.stalled` goes *negative* on the frame it expires, so `!(-0.003)` is false and the clock
+  froze on water after the first steam. Compare, never negate. The funnel and its eyewall now
+  THROW the player (`gust()`) instead of killing: a lethal column that follows you around a
+  walled arena has no counterplay, a knock-back does. Rain is weather, not damage; the floor jet
+  became a crossing wave and then went away entirely (the water phase's job is to place puddles);
+  the tier jets sit at 4.7 and 7.2 tiles, above the head of anyone jumping from the floor.
+- **THE JESTER had two killers in the damage window.** Its body hurt while its hat was open (you
+  are *supposed* to land on it) and its three copies were lethal to touch — four killers hopping
+  around a 24-tile room. Copies are now illusions that only punish a wrong hat, and the body only
+  hurts on the way DOWN.
+- **THE AUTHOR's window was arithmetically unhittable, and its arena had no roof.** The written
+  pad sat 3.2 tiles up — reachable only at a perfect apex — and the phase-5 window (0.34s) closed
+  before a jump from it could ever arrive. The pad is 2.5 tiles, the core 3.0 above that, and the
+  windows are 0.9s → 0.58s, which is still beat-accurate but no longer impossible. The arena now
+  has a solid roof at row 2, because the boss flips your gravity and an open sky above that is a
+  hole you fall out of for eight seconds.
+- **The gate is now an autoplayer, not a poke.** `tools/playtest.js`'s level-12 finale contains a
+  ~90-line bot that fights with the same four buttons a person has (dodge markers, jump sweeps,
+  stomp drones, climb the pad, jump on four). VULCAN-9, GALE PRIME and THE AUTHOR must be
+  *defeated by it* for the level to pass; THE JESTER must give it at least two hits, and its two
+  deaths are then driven through `__L12.dbg` so the resurrection chain stays covered. If a future
+  change makes a fight unwinnable again, the suite fails instead of going green.

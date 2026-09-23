@@ -303,6 +303,9 @@
   slab(AX.x0 - 1, AX.x1 + 1, AX.floor, 2);
   col_(AX.x0 - 1, AX.top, AX.floor - 1, '#');
   col_(AX.x1 + 1, AX.top, AX.floor - 1, '#');
+  /* a ROOF, because THE AUTHOR flips your gravity and an open sky above an
+   * arena that does that is a hole you fall out of for eight seconds */
+  row(AX.top, AX.x0 - 1, AX.x1 + 1, '#');
   row(AX.floor - 5, 262, 266, '-');
   row(AX.floor - 5, 308, 312, '-');
   row(AX.floor - 9, 280, 294, '-');
@@ -406,6 +409,10 @@
     if (e.invuln > 0 || e.dying || e.gone) return;
     e.hp = Math.max(0, e.hp - (n || 1));
     e.invuln = 1.0;
+    /* You land ON the thing you just hit. Without this the body that was
+     * harmless a frame ago kills you the frame after the stomp, which makes
+     * every boss in here unbeatable for exactly the reason nobody expects. */
+    e.grace = Math.max(e.grace || 0, 1.15);
     e.open = 0;
     e.flash = 0.6;
     RT.hitstop(5);
@@ -680,6 +687,7 @@
       e.col2 = d.col2 || '#ffd23f';
       e.grow = d.grow === undefined ? 0.18 : d.grow;
       e.warmup = d.warmup === undefined ? 0.16 : d.warmup;
+      e.cause = d.cause || (e.kind === 'spike' ? 'spike' : e.kind === 'bolt' ? 'laser' : 'fire');
     },
     update: function (e, dt) {
       e.x += e.vx * dt;
@@ -687,7 +695,7 @@
       if (e.life <= 0) { RT.remove(e); return; }
       if (e.at < e.warmup) return;                  /* a frame of warning    */
       var ins = e.kind === 'spike' ? 5 : 7;
-      if (hitP(e.x + ins, e.y + ins, e.w - ins * 2, e.h - ins * 2, 4)) kill(e.kind === 'spike' ? 'spike' : e.kind === 'bolt' ? 'laser' : 'fire');
+      if (hitP(e.x + ins, e.y + ins, e.w - ins * 2, e.h - ins * 2, 4)) kill(e.cause);
       if (Math.random() < 0.5) {
         RT.particles.burst(e.x + Math.random() * e.w, e.y + e.h * (0.2 + Math.random() * 0.8), {
           n: 1, colors: [e.col, e.col2, '#ffffff'], speed: 60, life: 0.5, size: 3, gravity: -160
@@ -770,11 +778,11 @@
     init: function (e, d) {
       e.w = T * 1.1; e.h = T * 0.9;
       e.vx = 0; e.vy = 0;
-      e.speed = d.speed || 150;
-      e.life = d.life || 14;
+      e.speed = d.speed || 130;
+      e.life = d.life || 10;
       e.col = d.col || '#ff5b5b';
       e.hpD = 1;
-      e.arm = 0.5;
+      e.arm = 1;                     /* it cannot touch you while it spins up */;
     },
     update: function (e, dt) {
       e.life -= dt;
@@ -790,8 +798,8 @@
       e.arm -= dt;
       if (e.arm > 0 || !alive()) return;
       var p = P();
-      var top = { x: e.x + 3, y: e.y - 4, w: e.w - 6, h: 12 };
-      if (p.vy > 60 && RT.overlaps({ x: p.x + 3, y: p.y + p.h - 8, w: p.w - 6, h: 12 }, top)) {
+      var top = { x: e.x + 2, y: e.y - 8, w: e.w - 4, h: 18 };
+      if (p.vy > 30 && RT.overlaps({ x: p.x + 2, y: p.y + p.h - 10, w: p.w - 4, h: 16 }, top)) {
         sfx('stomp'); RT.hitstop(3); RT.cam.shake(4, 0.2);
         if (RT.bounce) RT.bounce(-520); else p.vy = -520;
         pop(e);
@@ -1169,6 +1177,7 @@
       e.stT += dt;
       if (e.invuln > 0) e.invuln -= dt;
       if (e.flash > 0) e.flash -= dt;
+      if (e.grace > 0) e.grace -= dt;
 
       if (e.st === 'sleep') {
         if (alive() && pcx() > e.wake && pcx() < (A2.x1 + 2) * T &&
@@ -1194,7 +1203,10 @@
       }
       place(e);
       /* the hull kills while it is flying, and does nothing while stunned */
-      if (e.st !== 'stun' && !e.dying && hitP(e.x + 10, e.y + 8, e.w - 20, e.h - 12, 4)) kill('hull');
+      /* and for most of a second after it gets up, because the body is still
+       * lying where you were standing on it */
+      if (e.st !== 'stun' && !e.dying && !(e.grace > 0) &&
+          hitP(e.x + 10, e.y + 8, e.w - 20, e.h - 12, 4)) kill('hull');
       coreStomp(e);
     },
     draw: function (e, g) { drawVulcan(e, g); },
@@ -1231,9 +1243,10 @@
     hover(e, dt, clamp(px, V.L + 120, V.R - 120), (A2.floor - 7.2) * T + Math.sin(e.at * 1.7) * 14, 170);
     var wait = e.phase === 1 ? 0.95 : e.phase === 2 ? 0.7 : 0.5;
     if (e.stT < wait) return;
-    var list = e.phase === 1 ? ['missiles', 'sweep', 'ram']
-             : e.phase === 2 ? ['missiles', 'drones', 'ram', 'sweep', 'ram']
-             : ['shrapnel', 'sweep', 'ram', 'drones', 'missiles', 'ram'];
+    /* the ram is the only way in, so it is never more than one attack away */
+    var list = e.phase === 1 ? ['ram', 'missiles', 'ram', 'sweep']
+             : e.phase === 2 ? ['ram', 'missiles', 'ram', 'drones', 'ram', 'sweep']
+             : ['ram', 'shrapnel', 'ram', 'sweep', 'ram', 'drones', 'ram', 'missiles'];
     var nx = nextPattern(e, list);
     e.shots = 0;
     bossState(e, nx === 'ram' ? 'ramwind' : nx);
@@ -1248,7 +1261,7 @@
     if (e.stT > 1.5) bossState(e, 'idle');
   }
   function recoverT(e, dt) {
-    hover(e, dt, e.hx, (A2.floor - 7) * T, 120);
+    hover(e, dt, e.hx, (A2.floor - 7) * T, 260);
     if (e.stT > 0.7) bossState(e, 'idle');
   }
 
@@ -1315,9 +1328,11 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       var n = e.phase === 3 ? 3 : 2, i;
       sfx('pop');
       for (i = 0; i < n; i++) {
+        /* never on top of you: they come from the far half of the arena */
+        var sx = alive() && pcx() > (V.L + V.R) / 2 ? V.L + 60 : V.R - 60;
         RT.spawn({
-          px: true, type: 'lGdrone', x: e.hx + (i - (n - 1) / 2) * 50, y: e.hy + 10,
-          speed: 120 + e.phase * 22, life: 13
+          px: true, type: 'lGdrone', x: sx + (i - (n - 1) / 2) * 50, y: e.hy + 10,
+          speed: 100 + e.phase * 20, life: 10
         });
       }
       RT.speech(e.hx, e.hy - 40, 'stomp them. i will wait.', 1.8);
@@ -1347,7 +1362,9 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
 
   /* --------------------------------------------------------------- ram - */
   function ramWindT(e, dt) {
-    var py = alive() ? clamp(pcy() - 6, (A2.top + 2) * T, V.FLOOR - T * 1.2) : e.hy;
+    /* the ram never comes lower than 2.4 tiles up, so standing on the floor is
+     * always a legal answer to it; being on a tier is what it punishes */
+    var py = alive() ? clamp(pcy() - 6, (A2.top + 2) * T, V.FLOOR - T * 2.4) : e.hy;
     hover(e, dt, e.hx - e.face * 40, py, 220);
     if (e.stT % 0.1 < dt) {
       RT.particles.burst(e.hx - e.face * e.w * 0.5, e.hy, {
@@ -1376,7 +1393,10 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       e.wall = hitL ? -1 : 1;
       bossState(e, 'stun');
       e.open = 1;
-      e.openT = e.phase === 1 ? 2.8 : e.phase === 2 ? 2.2 : 1.7;
+      e.openT = e.phase === 1 ? 3.4 : e.phase === 2 ? 2.6 : 2;
+      /* the drones are on its power bus: a ram puts them on the floor too */
+      var ds = RT.find('lGdrone'), di;
+      for (di = 0; di < ds.length; di++) pop(ds[di]);
       sfx('thwomp'); sfx('bonk');
       RT.cam.shake(13, 0.8);
       RT.hitstop(6);
@@ -1391,11 +1411,14 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     }
   }
   function stunT(e, dt) {
-    /* it slides down the wall and lies there with its back open */
-    e.hy = approach(e.hy, V.FLOOR - T * 3.4, 240 * dt);
+    /* It does not hover while it is stunned: it SLUMPS, nose down the wall,
+     * until its back is 2.5 tiles off the floor. That is inside the arc of a
+     * standing jump from the arena floor, which is the only reason any of
+     * this is beatable - the tiers are a shortcut, not the requirement. */
+    e.hy = approach(e.hy, V.FLOOR - T * 1.15, 300 * dt);
     e.hx = approach(e.hx, e.wall < 0 ? V.L + e.w / 2 + 10 : V.R - e.w / 2 - 10, 60 * dt);
     e.openT -= dt;
-    e.core.r = 26;
+    e.core.r = 30;
     if (e.stT % 0.22 < dt) {
       RT.particles.burst(e.core.x, e.core.y, {
         n: 3, colors: ['#ffd23f', '#ffffff'], speed: 70, life: 0.6, size: 3, gravity: -120
@@ -1403,6 +1426,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     }
     if (e.openT <= 0) {
       e.open = 0;
+      e.grace = 1;                 /* it cannot kill you while it climbs off you */
       bossState(e, 'recover');
       sfx('charge');
       RT.speech(e.hx, e.hy - 40, e.hp > 0 ? 'up again' : '', 1.2);
@@ -1668,8 +1692,8 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     init: function (e, d) {
       e.dir = d.dir === 'left' ? -1 : 1;
       e.len = (d.len === undefined ? 8 : d.len) * T;
-      e.life = d.life === undefined ? 1.5 : d.life;
-      e.warm = 0.45;
+      e.life = d.life === undefined ? 1.2 : d.life;
+      e.warm = 0.75;                 /* three quarters of a second of stripe */
       e.w = 0; e.h = 0;
       e.thick = T * 0.9;
     },
@@ -1743,6 +1767,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       e.stT += dt;
       if (e.invuln > 0) e.invuln -= dt;
       if (e.flash > 0) e.flash -= dt;
+      if (e.grace > 0) e.grace -= dt;
       placeGale(e);
 
       if (e.st === 'sleep') {
@@ -1766,7 +1791,10 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       /* ---- element clock ------------------------------------------- */
       var period = e.phase === 1 ? 7.4 : e.phase === 2 ? 5.8 : 4.6;
       e.elT += dt;
-      if (!e.stalled && e.elT > period) {
+      /* stalled goes NEGATIVE on the frame it expires, and !(-0.003) is false,
+       * which froze the element clock on water forever after the first hit
+       * and quietly made the whole fight unwinnable. Compare, never negate. */
+      if (e.stalled <= 0 && e.elT > period) {
         e.elT = 0;
         e.el = e.el === 'fire' ? 'water' : 'fire';
         sfx(e.el === 'fire' ? 'charge' : 'portal');
@@ -1780,6 +1808,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
         e.stalled -= dt;
         e.eyeY = approach(e.eyeY, (A4.floor - 2.4) * T, 180 * dt);
         if (e.stalled <= 0) {
+          e.stalled = 0;
           e.open = 0;
           e.el = 'water'; e.elT = 0;
           sfx('portal');
@@ -1826,12 +1855,16 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       }
 
       /* ---- the funnel kills ----------------------------------------- */
-      if (hitP(e.hx - e.w * 0.36, e.eyeY - T, e.w * 0.72, (G4.FLOOR - e.eyeY) + T, 4)) kill('wind');
+      /* THE FUNNEL DOES NOT KILL. It throws. A lethal column that follows you
+       * around a walled arena is not a fight, it is a countdown - you cannot
+       * pass it and the wall is always behind you. Being picked up and put
+       * down somewhere worse is the punishment, and the spouts do the rest. */
+      if (hitP(e.hx - e.w * 0.25, e.eyeY - T * 0.6, e.w * 0.5, (G4.FLOOR - e.eyeY) + T, 4)) gust(e.hx);
 
       /* ---- attacks --------------------------------------------------- */
       e.atk -= dt;
       if (e.atk <= 0) {
-        e.atk = (e.phase === 1 ? 2.1 : e.phase === 2 ? 1.6 : 1.25);
+        e.atk = (e.phase === 1 ? 2.7 : e.phase === 2 ? 2.1 : 1.7);
         galeAttack(e);
       }
       /* ---- constant weather ----------------------------------------- */
@@ -1845,27 +1878,36 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
           }
         }
       }
+      /* RAIN IS WEATHER, NOT DAMAGE. Ten lethal drops a second across a
+       * forty-tile arena is not a boss fight, it is a hailstorm. Only the
+       * fire phase throws anything that can kill you, and it throws it
+       * about twice a second, big and slow enough to read. */
       e.rain -= dt;
       if (e.rain <= 0) {
-        e.rain = e.el === 'water' ? 0.1 : 0.26;
         var rx = G4.L + lrand() * (G4.R - G4.L);
         if (e.el === 'water') {
-          shot(rx, (A4.top - 1) * T, 0, 210, { kind: 'drop', col: '#3df0ff', col2: '#dff6ff', grav: 380, life: 5, r: 5 });
-          var pool = poolNear(rx);
-          if (pool && Math.abs((pool.x + pool.w / 2) - e.hx) < T * 5) pool.wet = Math.min(1, pool.wet + 0.05);
-        } else if (e.phase >= 2) {
-          shot(rx, (A4.top - 1) * T, 0, 190, { kind: 'ember', col: '#ff8a3a', col2: '#ffe9a8', grav: 300, life: 5, r: 5 });
+          e.rain = 0.04;
+          RT.particles.burst(rx, (A4.top - 1) * T, {
+            n: 1, colors: ['#3df0ff', '#dff6ff', '#9ad4ff'], speed: 30, life: 1.6, size: 3, gravity: 900
+          });
+        } else {
+          e.rain = e.phase >= 3 ? 0.7 : 1.1;
+          if (e.phase >= 2) {
+            shot(rx, (A4.top - 1) * T, 0, 150, { kind: 'ember', col: '#ff8a3a', col2: '#ffe9a8', grav: 260, life: 5, r: 7 });
+          }
         }
       }
       /* ---- the eyewall, phase three --------------------------------- */
-      if (e.phase >= 3) {
+      /* it drops out of the air while the funnel is stalled, because orbiting
+       * debris through the one window you get is not a fight either */
+      if (e.phase >= 3 && e.stalled <= 0) {
         e.orbit += dt * 2.3;
         var j, a2, ox, oy;
         for (j = 0; j < 4; j++) {
           a2 = e.orbit + j * 1.5708;
           ox = e.hx + Math.cos(a2) * 96;
           oy = e.eyeY + Math.sin(a2) * 52;
-          if (hitP(ox - 12, oy - 12, 24, 24, 4)) kill('wind');
+          if (hitP(ox - 12, oy - 12, 24, 24, 4)) gust(ox);
         }
       }
       coreStomp(e);
@@ -1889,6 +1931,19 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     }
     return bd < T * 2.5 ? best : null;
   }
+  /* the tornado and everything orbiting it THROW, they do not kill */
+  function gust(fromX) {
+    if (S.gustT > 0 || !alive()) return;
+    S.gustT = 0.85;
+    var away = pcx() < fromX ? -1 : 1;
+    P().vx = away * 430;
+    P().vy = -540;
+    sfx('launch'); sfx('hurt');
+    RT.cam.shake(6, 0.35);
+    float(pcx(), pcy() - 22, 'THROWN', '#3df0ff', 0.9);
+    boom(pcx(), pcy(), ['#3df0ff', '#dff6ff', '#ffffff'], 20, 220, { life: 0.7 });
+  }
+
   function steamFx(e) {
     if (Math.random() < 0.9) {
       RT.particles.burst(e.hx + (Math.random() - 0.5) * T * 3, G4.FLOOR - Math.random() * T * 4, {
@@ -1901,22 +1956,46 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     var px = alive() ? pcx() : e.hx;
     if (e.el === 'fire') {
       /* spouts under you, plus one where you are about to be */
+      /* one spout lands on you and the rest keep five tiles away from it, so
+       * a volley can never close both escape directions at once */
       var n = e.phase === 3 ? 3 : 2, i, sx;
       for (i = 0; i < n; i++) {
-        sx = i === 0 ? px : px + (lrand() - 0.5) * T * 9;
+        if (i === 0) sx = px;
+        else {
+          sx = G4.L + T * 3 + lrand() * (G4.R - G4.L - T * 6);
+          if (Math.abs(sx - px) < T * 5) sx += (sx < px ? -T * 5 : T * 5);
+        }
         sx = clamp(sx, G4.L + T, G4.R - T * 2);
         RT.spawn({
           px: true, type: 'lGmark', x: sx - T * 0.8, y: G4.FLOOR, w: T * 1.6,
-          delay: e.phase === 3 ? 0.62 : 0.85, kind: 'spout', from: 0, col: '#ff8a3a'
+          delay: e.phase === 3 ? 0.75 : 1, kind: 'spout', from: 0, col: '#ff8a3a'
         });
       }
       sfx('charge');
     } else {
-      /* water jets from both walls at player height, and a wave at the floor */
-      var y = alive() ? clamp(pcy() - 14, (A4.top + 1) * T, G4.FLOOR - T) : G4.FLOOR - T * 2;
-      RT.spawn({ px: true, type: 'lGjet', x: G4.L + 6, y: y, w: 0, h: 0, dir: 'right', len: 9, life: 1.6 });
+      /* Two heights, never a third: a wave ALONG THE FLOOR that you jump, and
+       * from phase two a second one at tier height that punishes camping up
+       * there. A jet at whatever height you happen to be standing is not a
+       * pattern, it is a coin toss. */
+      /* The water phase does NOT kill on the floor. Its job is to put puddles
+       * where you are standing, and the floor is where you have to stand to
+       * choose one. What it does threaten is the TIERS: a jet at tier height
+       * from phase two, so camping up there costs you. Everything lethal in
+       * this fight belongs to the fire phase, which is the half you spend
+       * moving. That rhythm - reposition, then dodge - is the fight. */
       if (e.phase >= 2) {
-        RT.spawn({ px: true, type: 'lGjet', x: G4.R - 6, y: y - T * 2.2, w: 0, h: 0, dir: 'left', len: 9, life: 1.6 });
+        RT.spawn({
+          /* above the head of anyone jumping from the floor (apex head 4.05
+           * tiles) and through the body of anyone standing on the tier */
+          px: true, type: 'lGjet', x: G4.R - 6, y: G4.FLOOR - T * 4.7,
+          w: 0, h: 0, dir: 'left', len: 12, life: 1.3
+        });
+      }
+      if (e.phase >= 3) {
+        RT.spawn({
+          px: true, type: 'lGjet', x: G4.L + 6, y: G4.FLOOR - T * 7.2,
+          w: 0, h: 0, dir: 'right', len: 12, life: 1.3
+        });
       }
       sfx('laser');
     }
@@ -1981,7 +2060,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       g.globalAlpha = dying;
     }
     /* the eyewall */
-    if (e.phase >= 3 && !e.dying) {
+    if (e.phase >= 3 && !e.dying && e.stalled <= 0) {
       for (i = 0; i < 4; i++) {
         var a2 = e.orbit + i * 1.5708;
         var ox = e.hx + Math.cos(a2) * 96, oy = e.eyeY + Math.sin(a2) * 52;
@@ -2463,7 +2542,9 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
         RT.toast('wrong one.', 1.4);
         return;
       }
-      if (hitP(e.x + 6, e.y + 14, e.w - 12, e.h - 18, 4)) kill('troll');
+      /* A COPY CANNOT TOUCH YOU. It is a picture of a jester; the only thing
+       * it can do to you is be the wrong hat. Four lethal bodies hopping
+       * around a twenty-four tile room is not a boss, it is a blender. */
     },
     draw: function (e, g) { drawJesterBody(e, g, true); }
   });
@@ -2491,6 +2572,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       e.stT += dt;
       if (e.invuln > 0) e.invuln -= dt;
       if (e.flash > 0) e.flash -= dt;
+      if (e.grace > 0) e.grace -= dt;
       placeJester(e);
 
       if (e.st === 'sleep') {
@@ -2514,6 +2596,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       e.hop += dt;
       var hopPeriod = e.round === 2 ? 0.62 : 0.8;
       var k = (e.hop % hopPeriod) / hopPeriod;
+      e.hopK = k;
       e.hy = J8.FLOOR - T * 1.9 - Math.sin(k * Math.PI) * T * 1.9;
 
       switch (e.st) {
@@ -2540,10 +2623,16 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
         case 'dropped': jDropped(e, dt); break;
       }
       placeJester(e);
-      if (!e.open && hitP(e.x + 6, e.y + 16, e.w - 12, e.h - 20, 4)) kill('troll');
-      if (e.open && !coreStomp(e)) {
-        if (hitP(e.x + 6, e.y + 26, e.w - 12, e.h - 30, 4)) kill('troll');
-      }
+      /* It only hurts on the way DOWN. A boss that homes in on you at hop
+       * speed and kills on touch turns a twenty-four tile room into a
+       * countdown; coming down on your head is a thing you can read and
+       * step out from under, which is what the shadow is for. */
+      var landing = e.hopK > 0.52;
+      if (landing && !e.open && !(e.grace > 0) &&
+          hitP(e.x + 6, e.y + 16, e.w - 12, e.h - 20, 4)) kill('troll');
+      /* while the hat is open the rest of it is a costume: you are supposed
+       * to be landing on it, so it cannot punish you for arriving */
+      if (e.open) coreStomp(e);
     },
     draw: function (e, g) {
       if (e.gone) return;
@@ -3052,6 +3141,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       e.stT += dt;
       if (e.invuln > 0) e.invuln -= dt;
       if (e.flash > 0) e.flash -= dt;
+      if (e.grace > 0) e.grace -= dt;
       e.x = e.hx - e.w / 2; e.y = e.hy - e.h / 2;
       e.core.x = e.hx; e.core.y = e.hy + T * 0.9;
       e.core.r = e.open ? 24 : 15;
@@ -3078,7 +3168,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
           break;
       }
       /* the pen itself is lethal, the pages are not */
-      if (!e.open && hitP(e.hx - 22, e.hy - 22, 44, 44, 4)) kill('ink');
+      if (!e.open && !(e.grace > 0) && hitP(e.hx - 22, e.hy - 22, 44, 44, 4)) kill('ink');
       coreStomp(e);
     },
     draw: function (e, g) { drawAuthor(e, g); },
@@ -3153,16 +3243,18 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       var px = alive() ? clamp(pcx(), AU.L + T * 4, AU.R - T * 6) : e.hx;
       var padX = Math.round(px / T) * T;
       e.padX = clamp(padX, AU.L + T * 3, AU.R - T * 6);
+      /* 2.5 tiles: a jump clears 3.18, so a pad at 3.2 was a pad you could
+       * only reach at the exact apex - which is to say, never */
       e.pad = RT.spawn({
-        px: true, type: 'lGwrit', x: e.padX, y: AU.FLOOR - T * 3.2,
+        px: true, type: 'lGwrit', x: e.padX, y: AU.FLOOR - T * 2.5,
         w: 3, h: 1, life: 6.5, word: 'jump on four'
       });
       e.hx = e.padX + T * 1.5;
-      e.hy = AU.FLOOR - T * 7.1;                  /* core sits 3.2 above pad */
+      e.hy = AU.FLOOR - T * 6.9;                  /* core lands 3.0 above the pad */
       sfx('tick');
     }
     e.hx = approach(e.hx, e.padX + T * 1.5, 220 * dt);
-    e.hy = approach(e.hy, AU.FLOOR - T * 7.1, 200 * dt);
+    e.hy = approach(e.hy, AU.FLOOR - T * 6.9, 200 * dt);
     var period = e.phase >= 4 ? 0.46 : 0.56;
     e.beat += dt;
     if (e.beat >= period) {
@@ -3173,7 +3265,11 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       if (e.beats >= 4) {
         bossState(e, 'window');
         e.open = 1;
-        e.windowT = [0.62, 0.55, 0.48, 0.4, 0.34][clamp(e.phase - 1, 0, 4)];
+        /* You jump ON four. From the written pad the apex arrives 0.36s later
+         * and you fall through the core for another 0.2s, so the window has
+         * to outlast that or the beat is a lie: 0.34s could never be hit by
+         * anyone, ever, which is what the last two phases used to ask. */
+        e.windowT = [0.9, 0.82, 0.74, 0.66, 0.58][clamp(e.phase - 1, 0, 4)];
         sfx('powerup');
       }
     }
@@ -3894,6 +3990,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
         RT.flash('rgba(255,62,165,0.3)', 0.12);
         RT.toast('left is right in here. eight tiles.', 2);
       }
+      if (S.gustT > 0) S.gustT -= dt;
       /* ---- reversed control sources, combined ---------------------- */
       if (S.revT > 0) S.revT -= dt;
       p.controlsReversed = inTrench || (S.revT > 0);

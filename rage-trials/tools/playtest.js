@@ -113,16 +113,130 @@ async function main() {
       let troll = [];
       try { troll = JSON.parse(fs.readFileSync(trollFile, 'utf8')); } catch (e) { }
       r.finale = await page.evaluate(async (troll) => {
-        const RT = window.RT, d = window.__dbg, o = { acts: {}, won: false, err: null, deaths: 0 };
+        const RT = window.RT, d = window.__dbg, T = 32;
+        const o = { acts: {}, won: false, err: null, deaths: 0, fights: {} };
         const G = () => window.__L12;
+        const dlog = []; RT.on('death', c => dlog.push(c + '@' + (RT.player.x/32).toFixed(1) + ',' + (RT.player.y/32).toFixed(1)));
         const hold = (h, s) => { d.hold(h || {}); d.step(s || 1); };
+        const P = () => RT.player;
+        const pcx = () => P().x + P().w / 2;
+        const pcy = () => P().y + P().h / 2;
+
+        /* ------------------------------------------------------------------
+         * THE AUTOPLAYER. The bosses cannot be driven by a fixed input script
+         * - they move - so the gate is a small bot that plays them with the
+         * same four buttons a person has. If it can win, the fight is winnable.
+         * ---------------------------------------------------------------- */
+        function fight(who, maxSeconds, arena) {
+          const boss = () => G().dbg.boss(who);
+          let jumpFor = 0, jumpCool = 0, hits = 0, lastHp = null;
+          const L0 = arena[0] * T, R0 = arena[1] * T;
+          const N = Math.round(maxSeconds * 60);
+          for (let f = 0; f < N; f++) {
+            const bo = boss();
+            if (!bo || bo.gone) break;
+            if (lastHp === null) lastHp = bo.hp;
+            let left = false, right = false, jump = false;
+            const X = pcx(), Y = pcy(), onG = P().onGround;
+            if (!P().dead) {
+              const open = bo.open && (who !== 'gale' || bo.stalled > 0);
+              if (open) {
+                const dx = bo.core.x - X;
+                if (Math.abs(dx) > 10) { right = dx > 0; left = dx < 0; }
+                if (onG && Math.abs(dx) < 130 && jumpCool <= 0) { jumpFor = 26; jumpCool = 16; }
+              } else {
+                let dodge = 0, danger = 0;
+                const marks = RT.find('lGmark');
+                for (let i = 0; i < marks.length; i++) {
+                  const m = marks[i];
+                  if (m.fired) continue;
+                  const mx = m.x + m.w / 2;
+                  if (Math.abs(mx - X) < T * 2.2) { danger = 1; dodge += (X < mx ? -1 : 1); }
+                }
+                const shots = RT.find('lGshot');
+                for (let i = 0; i < shots.length; i++) {
+                  const sh = shots[i], sx = sh.x + sh.w / 2, sy = sh.y + sh.h / 2;
+                  if (Math.abs(sx - X) < T * 1.8 && Math.abs(sy - Y) < T * 2) { danger = 1; dodge += (sx > X ? -1 : 1); }
+                }
+                const jets = RT.find('lGjet');
+                for (let i = 0; i < jets.length; i++) {
+                  const jt = jets[i], lethalIn = Math.max(0, jt.warm - jt.at);
+                  if (Math.abs(jt.y - (Y - 8)) < T * 1.6 && onG && jumpCool <= 0 && lethalIn < 0.25) { jumpFor = 26; jumpCool = 18; }
+                }
+                const flames = RT.find('lGflame');
+                for (let i = 0; i < flames.length; i++) {
+                  const fl = flames[i], fx = fl.x + fl.w / 2;
+                  if (fl.kind === 'sweep') {
+                    const closing = (fl.vx || 0) * (X - fx) > 0;
+                    if (closing && Math.abs(fx - X) < T * 2.6 && onG && jumpCool <= 0) { jumpFor = 26; jumpCool = 14; }
+                  } else if (Math.abs(fx - X) < T * 2.4) { danger = 1; dodge += (fx > X ? -1 : 1); }
+                }
+                const drones = RT.find('lGdrone');
+                for (let i = 0; i < drones.length; i++) {
+                  const dr = drones[i];
+                  const ddx = (dr.x + dr.w / 2) - X, ddy = (dr.y + dr.h / 2) - Y;
+                  if (Math.abs(ddx) > T * 3 || Math.abs(ddy) > T * 3) continue;
+                  danger = 1;
+                  if (onG && jumpCool <= 0 && ddy > 10 && Math.abs(ddx) < 44) { jumpFor = 26; jumpCool = 16; }
+                  else dodge += (ddx > 0 ? -1.5 : 1.5);
+                }
+                const clones = RT.find('lGclone');
+                for (let i = 0; i < clones.length; i++) {
+                  const cx = clones[i].x + clones[i].w / 2;
+                  if (Math.abs(cx - X) < T * 2) { danger = 1; dodge += (cx > X ? -1 : 1); }
+                }
+                if (who === 'gale') {
+                  const fdx = bo.hx - X;
+                  if (Math.abs(fdx) < T * 3) { danger = 1; dodge += (fdx > 0 ? -1 : 1); }
+                } else {
+                  const bdx = (bo.x + bo.w / 2) - X;
+                  if (Math.abs(bdx) < T * 2 && Math.abs((bo.y + bo.h / 2) - Y) < T * 3) { danger = 1; dodge += (bdx > 0 ? -1 : 1); }
+                }
+                if (who === 'author' && bo.st === 'count' && bo.pad) {
+                  /* climb the written pad, then jump on the fourth beat */
+                  const padX = bo.pad.rest.x + bo.pad.dw / 2, pdx = padX - X;
+                  danger = 0;
+                  if (Math.abs(pdx) > 12) { right = pdx > 0; left = pdx < 0; }
+                  if (onG && P().y + P().h > bo.pad.rest.y + 8 && jumpCool <= 0 && Math.abs(pdx) < 60) { jumpFor = 26; jumpCool = 14; }
+                  if (bo.beats >= 4 && onG && jumpCool <= 0) { jumpFor = 26; jumpCool = 14; }
+                } else if (danger) { right = dodge > 0; left = dodge < 0; }
+                else {
+                  let want = (L0 + R0) / 2;
+                  if (who === 'gale') {
+                    const pools = RT.find('lGpool');
+                    let best = null, bd = 1e9;
+                    for (let i = 0; i < pools.length; i++) {
+                      const pl = pools[i], cx = pl.x + pl.w / 2;
+                      const score = Math.abs(cx - X) - pl.wet * 200;
+                      if (score < bd) { bd = score; best = cx; }
+                    }
+                    if (best !== null) want = best;
+                  }
+                  if (Math.abs(X - want) > T * 1.2) { right = X < want; left = X > want; }
+                }
+                if (X < L0 + T * 2) { right = true; left = false; }
+                if (X > R0 - T * 2) { left = true; right = false; }
+              }
+            }
+            if (jumpFor > 0) { jump = true; jumpFor--; }
+            if (jumpCool > 0) jumpCool--;
+            d.hold({ left: left, right: right, jump: jump });
+            d.step(1);
+            const b2 = boss();
+            if (b2) { if (b2.hp < lastHp) hits++; lastHp = b2.hp; }
+          }
+          d.hold({});
+          d.step(360);
+          return { hits: hits, done: !!G().done[who], deaths: d.state().deaths };
+        }
+
         try {
           if (!G() || !G().dbg) { o.err = '__L12.dbg missing'; return o; }
 
-          /* II. VULCAN-9 - six hits, then the shaft door is carved open */
-          for (let i = 0; i < 6; i++) { G().dbg.hit('vulcan'); d.step(70); }
-          d.step(340);
-          o.acts.vulcan = G().done.vulcan === 1 && d.tile(105, 44) === '.';
+          /* II. VULCAN-9 - played, not poked */
+          RT.setCheckpoint(78 * T, 45 * T);
+          o.fights.vulcan = fight('vulcan', 150, [75, 103]);
+          o.acts.vulcan = o.fights.vulcan.done && d.tile(105, 44) === '.';
 
           /* III. THE MELT - it arms on entry and the lava actually climbs */
           G().dbg.skipTo('melt'); d.step(20);
@@ -134,21 +248,12 @@ async function main() {
           o.acts.meltTop = G().meltWon === 1;
 
           /* IV. GALE PRIME - water fills a pool, fire boils it, the eye opens */
-          G().dbg.skipTo('gale'); d.step(20); d.god(true);
-          hold({ right: true }, 90); hold({}, 20);
-          let stall = 0, wet = 0;
-          for (let i = 0; i < 260; i++) {
-            d.step(10);
-            const b = G().dbg.boss('gale');
-            if (!b) break;
-            if (b.stalled > 0) stall++;
-            const ps = RT.find('lGpool');
-            for (let j = 0; j < ps.length; j++) wet = Math.max(wet, ps[j].wet);
-          }
-          o.acts.galeSteam = stall > 0 && wet > 0.3;
-          for (let i = 0; i < 6; i++) { G().dbg.hit('gale'); d.step(70); }
-          d.step(340);
-          o.acts.gale = G().done.gale === 1 && d.tile(174, 12) === '.';
+          G().dbg.skipTo('gale'); d.step(20);
+          hold({ right: true }, 120); hold({}, 20);
+          RT.setCheckpoint(139 * T, 11 * T);
+          o.fights.gale = fight('gale', 150, [135, 177]);
+          o.acts.galeSteam = o.fights.gale.hits > 0;
+          o.acts.gale = o.fights.gale.done && d.tile(174, 12) === '.';
 
           /* V. THE LONG COUNTER - sixteen purchases open the wall at 249 */
           G().dbg.skipTo('counter'); d.step(30);
@@ -166,9 +271,14 @@ async function main() {
           o.acts.troll = (s7.x / 32) > 370 && s7.deaths === d0;
           o.trollX = +(s7.x / 32).toFixed(1);
 
-          /* VIII. THE JESTER - it dies once for show, then three more times */
+          /* VIII. THE JESTER - the bot must reach its hat, then the two deaths
+             are driven to the end so the resurrection chain is proven too */
+          G().dbg.skipTo('jester'); d.step(20);
+          hold({ right: true }, 90); hold({}, 20);
+          RT.setCheckpoint(376 * T, 43 * T);
+          o.fights.jester = fight('jester', 90, [374, 398]);
+          o.acts.jesterReachable = o.fights.jester.hits >= 2;
           d.god(true);
-          hold({ right: true }, 70); hold({}, 40);
           for (let i = 0; i < 6; i++) { G().dbg.hit('jester'); d.step(50); }
           d.step(420);
           const jb = G().dbg.boss('jester');
@@ -188,18 +298,23 @@ async function main() {
           d.step(220);
           o.acts.fakewin = !RT.getMode() && !!G().dbg.boss('author');
 
-          /* X. THE AUTHOR - five hits, then the booth opens by itself */
-          for (let i = 0; i < 5; i++) { G().dbg.hit('author'); d.step(60); }
-          d.step(420);
-          o.acts.author = G().done.author === 1 && !!RT.getMode();
+          /* X. THE AUTHOR - played, four beats and a third of a second */
+          d.god(false);
+          RT.setCheckpoint(256 * T, 16 * T);
+          o.fights.author = fight('author', 150, [254, 321]);
+          o.acts.author = o.fights.author.done && !!RT.getMode();
 
           /* the booth, three tickets missed: that is the one-spike ending */
           G().dbg.tickets(false); d.step(30);
           o.acts.tickets = G().spikeOn === 1;
           d.god(false);
-          hold({ right: true }, 38);
-          hold({ right: true, jump: true }, 20);
-          hold({ right: true }, 90);
+          /* walk up to the spike, then one full jump - no frame counting */
+          for (let i = 0; i < 400; i++) {
+            if (d.state().x / 32 >= 338.2) break;
+            d.hold({ right: true }); d.step(1);
+          }
+          hold({ right: true, jump: true }, 26);
+          hold({ right: true }, 100);
           o.acts.spike = d.state().won === true;
           o.won = d.state().won;
           o.deaths = d.state().deaths;
@@ -211,12 +326,14 @@ async function main() {
           d.step(60);
           o.acts.perfect = d.state().won === true;
         } catch (e) { o.err = String(e && e.message || e); }
+        o.dlog = dlog.slice(-8);
         return o;
       }, troll).catch(e => ({ err: 'finale eval failed: ' + e.message }));
       const f = r.finale || {};
       const acts = f.acts || {};
       const allActs = ['vulcan', 'melt', 'meltTop', 'galeSteam', 'gale', 'counter', 'troll',
-                       'jesterFake', 'jester', 'onejump', 'fakewin', 'author', 'tickets', 'spike', 'perfect'];
+                       'jesterReachable', 'jesterFake', 'jester', 'onejump', 'fakewin', 'author',
+                       'tickets', 'spike', 'perfect'];
       f.failed = allActs.filter(k => !acts[k]);
       if (f.won && !f.failed.length) r.won = true;
       console.log('L12 FINALE', JSON.stringify(f));
