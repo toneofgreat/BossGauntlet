@@ -135,6 +135,18 @@
     padding:8px 12px;border-radius:10px;border:2px solid #ffd83d;background:#0a0d16dd;color:#ffd83d;cursor:pointer;letter-spacing:1px}
   #bPlay{position:fixed;left:14px;top:76px;z-index:22;display:none;font-family:inherit;font-weight:900;font-size:12px;
     padding:8px 12px;border-radius:10px;border:2px solid #7dffa0;background:#0a0d16dd;color:#7dffa0;cursor:pointer;letter-spacing:1px}
+  #music{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:46;
+    background:#0a0d16f2;border:2px solid #ff8ad8;border-radius:16px;padding:18px 22px;
+    display:none;text-align:center;max-width:92vw}
+  #music h3{color:#ff8ad8;margin:0 0 10px;font-size:18px;letter-spacing:1px}
+  #music button{font-family:inherit;font-weight:800;font-size:14px;margin:4px;
+    padding:10px 16px;border-radius:10px;border:0;cursor:pointer;display:block;width:100%;
+    background:linear-gradient(180deg,#3b4b66,#232c40);color:#cfe0ff;box-shadow:0 3px 0 #10151f}
+  #music button:active{transform:translateY(2px)}
+  #music button.on{background:linear-gradient(180deg,#ff8ad8,#b83fa0);color:#2a0620}
+  #musNote{color:#8fa4c4;font-size:12px;margin:10px 2px 4px;max-width:340px;line-height:1.45}
+  #bMusic{position:fixed;left:14px;top:116px;z-index:22;display:none;font-family:inherit;font-weight:900;font-size:12px;
+    padding:8px 12px;border-radius:10px;border:2px solid #ff8ad8;background:#0a0d16dd;color:#ff8ad8;cursor:pointer;letter-spacing:1px}
   #warn{display:none;background:#1a0505f2}
   #warn h1{background:linear-gradient(180deg,#ffe14d,#ff3b3b);-webkit-background-clip:text;background-clip:text}
 </style>
@@ -183,6 +195,19 @@
   <div><button id="btnGuards">🕴️ BODYGUARDS: OFF</button>
   <button id="btnFormsClose">CLOSE</button></div>
 </div>
+<div id="music">
+  <h3>🎵 CASOH'S JUKEBOX</h3>
+  <div id="musBtns">
+    <button data-mus="off">🔇 OFF</button>
+    <button data-mus="chill">🌊 CHILL</button>
+    <button data-mus="crazy">🤪 CRAZY</button>
+    <button data-mus="burger">🍔 CASOH SINGS ABOUT BURGERS</button>
+  </div>
+  <p id="musNote">He wrote the last one himself, about a burger, and he is not a singer.
+  It uses your device's own speech voice, so he sounds a little different on every machine.</p>
+  <div><button id="btnMusClose">CLOSE</button></div>
+</div>
+<button id="bMusic">🎵 MUSIC</button>
 <div class="ov" id="start">
   <h1>BRICK LEGEND</h1>
   <p>You are a cool brick-built construction worker. Click the glowing <b style="color:#7df3ff">translucent cyan part</b> to snap each piece of your house into place — walls, windows, a door with its own little window and doorknob, a roof, grass and a pathway. Then things get... legendary.</p>
@@ -1212,7 +1237,7 @@ function save(){
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
      sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,
      by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,fin:finWon?1:0,
-     cn:coins,bq:blobsDone?1:0,bh:bhStage,v:3};
+     cn:coins,bq:blobsDone?1:0,bh:bhStage,mus:(typeof MUS!=='undefined'?MUS.cur:'off'),v:3};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1279,6 +1304,7 @@ function spawnPlayer(kind){
   world.add(player.group);
 }
 function updateMobileUI(){
+  if(typeof musSyncUI==='function') musSyncUI();
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
     ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'||PH==='mcbuild'
@@ -2937,6 +2963,7 @@ var UPV=new THREE.Vector3(0,1,0), a2Timer=null, carryBook=null;
 var battleTimer=null;
 function battleMusic(on){
   if(battleTimer){ clearInterval(battleTimer); battleTimer=null; }
+  if(typeof musPause==='function') musPause(!!on);   /* the jukebox steps aside for a fight */
   if(!on||!actx()) return;
   var beat=0, step=0.36;
   battleTimer=setInterval(function(){
@@ -2950,6 +2977,226 @@ function battleMusic(on){
     beat++;
   },step*1000);
 }
+/* ============================================================
+   THE JUKEBOX — unlocked by beating ULTIMATE CASOH.
+   Three things you can equip: CHILL, CRAZY, and the one he hands
+   you when he falls: CASOH SINGS ABOUT BURGERS.
+   All synthesised. The singing uses the device's own speech voice
+   (the same one that says "pew!" when you shoot) pitched and timed
+   onto the piano, with a formant-synth choir under it so the song
+   still has vocals on a device with no speech voice at all.
+   ============================================================ */
+var MUS={cur:'off',timer:null,beat:0,paused:false,voice:null,voiceTried:false};
+
+/* ---- a piano note: three partials, a hammer, and a long tail ---- */
+function pianoNote(midi,when,dur,vel){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime+(when||0);
+  var f=440*Math.pow(2,(midi-69)/12);
+  var v=(vel==null?0.5:vel);
+  var parts=[[1,1],[2,0.36],[3,0.14],[4.02,0.06]];
+  for(var i=0;i<parts.length;i++){
+    var o=a.createOscillator(), g=a.createGain();
+    o.type=i===0?'triangle':'sine';
+    o.frequency.setValueAtTime(f*parts[i][0]*(1+(i?0.0015*i:0)),t);
+    var pk=v*0.22*parts[i][1];
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(pk,t+0.006);
+    g.gain.exponentialRampToValueAtTime(pk*0.3,t+Math.min(0.5,dur*0.4));
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t); o.stop(t+dur+0.06);
+  }
+  knock(2600,v*0.1,0.02,when||0);          /* the hammer */
+}
+function chordNotes(root,kind){
+  var K={maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],maj9:[0,4,7,11,14],min9:[0,3,7,10,14]};
+  var iv=K[kind]||K.maj7, out=[];
+  for(var i=0;i<iv.length;i++) out.push(root+iv[i]);
+  return out;
+}
+
+/* ---- a sung vowel: glottal buzz through three formants ---- */
+var VOWEL={a:[730,1090,2440],e:[530,1840,2480],i:[270,2290,3010],o:[570,840,2410],u:[300,870,2240]};
+function vox(midi,when,dur,vowel,peak){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime+(when||0);
+  var f=440*Math.pow(2,(midi-69)/12);
+  var F=VOWEL[vowel]||VOWEL.o;
+  var o=a.createOscillator(); o.type='sawtooth';
+  o.frequency.setValueAtTime(f,t);
+  var lfo=a.createOscillator(), lg=a.createGain();   /* a human never holds still */
+  lfo.type='sine'; lfo.frequency.setValueAtTime(5.2,t); lg.gain.setValueAtTime(f*0.012,t);
+  lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t+dur+0.1);
+  var mix=a.createGain(); mix.gain.value=1;
+  for(var i=0;i<3;i++){
+    var bp=a.createBiquadFilter(); bp.type='bandpass';
+    bp.frequency.setValueAtTime(F[i],t); bp.Q.value=i===0?7:9;
+    var fg=a.createGain(); fg.gain.value=[1,0.6,0.3][i];
+    o.connect(bp); bp.connect(fg); fg.connect(mix);
+  }
+  var g=a.createGain();
+  var pk=(peak==null?0.12:peak);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(pk,t+0.09);
+  g.gain.setValueAtTime(pk,t+Math.max(0.1,dur-0.12));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  mix.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t+dur+0.1);
+}
+
+/* ---- the speaking voice, pitched and timed onto the bar ---- */
+function pickVoice(){
+  if(MUS.voiceTried) return MUS.voice;
+  MUS.voiceTried=true;
+  try{
+    var vs=speechSynthesis.getVoices()||[];
+    var pref=['Google UK English Male','Microsoft David','Daniel','Alex','Google US English'];
+    for(var p=0;p<pref.length;p++)
+      for(var i=0;i<vs.length;i++)
+        if(vs[i].name.indexOf(pref[p])>=0){ MUS.voice=vs[i]; return MUS.voice; }
+    for(var j=0;j<vs.length;j++) if(/en(-|_)/i.test(vs[j].lang)){ MUS.voice=vs[j]; return MUS.voice; }
+  }catch(e){}
+  return MUS.voice;
+}
+function casohSing(text,pitch,rate,vol){
+  try{
+    if(!window.speechSynthesis) return false;
+    var u=new SpeechSynthesisUtterance(text);
+    var v=pickVoice(); if(v) u.voice=v;
+    u.pitch=pitch==null?0.7:pitch;
+    u.rate=rate==null?0.85:rate;
+    u.volume=vol==null?1:vol;
+    speechSynthesis.speak(u);
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---- the three tracks ---------------------------------------- */
+/* CHILL: Fmaj9 Am7 Dm9 G7, brushed, slow, nothing happens and that is the point */
+var CHILL_CH=[[53,'maj9'],[57,'min7'],[50,'min9'],[55,'dom7']];
+function chillBeat(b){
+  var bar=(b>>2)%4, beat=b%4, ch=CHILL_CH[bar];
+  var notes=chordNotes(ch[0],ch[1]);
+  if(beat===0){
+    pianoNote(ch[0]-12,0,2.2,0.5);
+    for(var i=0;i<notes.length;i++) pianoNote(notes[i],0.02*i,1.9,0.26);
+  }
+  if(beat===2) pianoNote(notes[(bar+1)%notes.length]+12,0,1.4,0.2);
+  if(beat===1||beat===3) pianoNote(notes[(b+bar)%notes.length]+12,0.18,0.9,0.13);
+  knock(7000,beat%2?0.05:0.09,0.03,0);            /* brush */
+  if(beat===2) knock(320,0.16,0.09,0);            /* soft rim */
+  if(Math.random()<0.25) knock(5000+Math.random()*3000,0.02,0.02,Math.random()*0.4); /* vinyl */
+}
+/* CRAZY: everything, all the time, in A minor and getting faster in your head */
+var CRAZY_CH=[[45,'min7'],[53,'maj7'],[43,'dom7'],[48,'maj7']];
+function crazyBeat(b){
+  var bar=(b>>2)%4, beat=b%4, ch=CRAZY_CH[bar], notes=chordNotes(ch[0],ch[1]);
+  blip(58,'sine',0.8,0.12,0,30);                                   /* kick */
+  if(beat%2===1) knock(6800,0.22,0.03,0);                          /* hat */
+  if(beat===1||beat===3) knock(1900,0.5,0.08,0);                   /* snare */
+  for(var i=0;i<4;i++){
+    var n=notes[(b*3+i)%notes.length]+12*(i%2?2:1);
+    blip(440*Math.pow(2,(n-69)/12),'square',0.11,0.1,i*0.09);
+  }
+  blip(440*Math.pow(2,(ch[0]-24-69)/12),'sawtooth',0.34,0.3,0);    /* bass */
+  if(b%16===15){ scrape(400,3000,0.5,0,0.25); blip(1200,'square',0.2,0.4,0,2400); }
+  if(Math.random()<0.2) blip(1200+Math.random()*2000,'square',0.08,0.06,Math.random()*0.3);
+}
+/* BURGER: the song he gives you. C ballad, and he is not a singer. */
+var BURGER_CH=[[48,'maj7'],[45,'min7'],[53,'maj7'],[55,'dom7'],
+               [53,'maj7'],[55,'dom7'],[52,'min7'],[45,'min7']];
+var BURGER_LINES={
+  /* bar: [text, pitch, rate, and whether the choir joins] */
+  2:['I have a burger.',0.7,0.8,0],
+  4:['It is a burger.',0.68,0.78,0],
+  6:['I am holding... the burger.',0.72,0.74,0],
+  8:['The lettuce is in there. Somewhere.',0.66,0.86,0],
+  10:['BUR-GER.',1.1,0.62,1],
+  11:['BUR-GER.',1.15,0.62,1],
+  12:['It is a burger, man.',0.9,0.8,1],
+  14:['Cheese is optional. Not for me.',0.7,0.9,0],
+  16:['The blob man asked me what I was eating.',0.64,1,0],
+  18:['I said... this is my burger.',0.74,0.76,0],
+  21:['...anyway.',0.6,0.7,0],
+  22:['Thank you for beating me.',0.8,0.78,1],
+  24:['Enjoy the burger song.',0.86,0.74,1]
+};
+function burgerBeat(b){
+  var bar=(b>>2)%26, beat=b%4;
+  var ch=BURGER_CH[bar%8], notes=chordNotes(ch[0],ch[1]);
+  if(beat===0){
+    pianoNote(ch[0]-12,0,2.6,0.55);
+    pianoNote(ch[0],0,2.4,0.3);
+  }
+  /* a rolling left-to-right arpeggio, like somebody who practised once */
+  var pat=[0,2,1,3,2,1,3,2];
+  var n1=notes[pat[(b*2)%pat.length]%notes.length]+12;
+  var n2=notes[pat[(b*2+1)%pat.length]%notes.length]+12;
+  pianoNote(n1,0,0.9,0.2); pianoNote(n2,0.4,0.9,0.16);
+  if(beat===2) knock(300,0.1,0.12,0);
+  if(bar>=10&&bar<=12&&beat===0) knock(2000,0.3,0.1,0);
+  /* the words, at the top of their bar */
+  if(beat===0){
+    var L=BURGER_LINES[bar];
+    if(L){
+      var spoke=casohSing(L[0],L[1],L[2],1);
+      if(L[3]||!spoke){
+        /* the choir: it sings the chord whether or not the device can talk */
+        for(var i=0;i<3;i++) vox(notes[i%notes.length]+12,0.05*i,2.2,'o',spoke?0.05:0.13);
+      }
+    }
+    if(bar===20){ /* the awkward silence, and he knows it */
+      for(var k=0;k<3;k++) vox(notes[k%notes.length],0.1*k,2.4,'u',0.05);
+    }
+  }
+}
+var TRACKS={
+  chill:{step:0.42,fn:chillBeat,name:'🌊 CHILL'},
+  crazy:{step:0.17,fn:crazyBeat,name:'🤪 CRAZY'},
+  burger:{step:0.395,fn:burgerBeat,name:'🍔 CASOH SINGS ABOUT BURGERS'}
+};
+function musStop(){
+  if(MUS.timer){ clearInterval(MUS.timer); MUS.timer=null; }
+  try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
+}
+function musStart(){
+  musStop();
+  var T=TRACKS[MUS.cur];
+  if(!T||MUS.paused) return;
+  audioInit();
+  if(!actx()) return;
+  MUS.beat=0;
+  MUS.timer=setInterval(function(){
+    if(!AC||MUS.paused) return;
+    try{ T.fn(MUS.beat); }catch(e){}
+    MUS.beat++;
+  },T.step*1000);
+}
+function musSet(name){
+  MUS.cur=TRACKS[name]?name:'off';
+  musStart();
+  save();
+  musSyncUI();
+}
+function musPause(on){            /* boss fights take the stage */
+  MUS.paused=!!on;
+  if(on) musStop(); else musStart();
+}
+function musUnlocked(){ return !!ultWon; }
+function musSyncUI(){
+  var btn=$('bMusic'), panel=$('music');
+  if(!btn) return;
+  var show=musUnlocked()&&PH!=='menu'&&PH!=='boss';
+  btn.style.display=show?'block':'none';
+  if(!show&&panel) panel.style.display='none';
+  var cur=MUS.cur;
+  btn.textContent='🎵 '+(cur==='off'?'MUSIC':(TRACKS[cur]?TRACKS[cur].name:'MUSIC'));
+  var bs=panel?panel.querySelectorAll('button[data-mus]'):[];
+  for(var i=0;i<bs.length;i++)
+    bs[i].className=(bs[i].getAttribute('data-mus')===cur)?'on':'';
+}
+
 function updateBuxHud(){
   var e=$('bux'); e.style.display=bux>0?'block':'none';
   e.textContent='🧱 '+bux+' LEGO BUX';
@@ -6158,6 +6405,24 @@ function toggleForms(show){
   if(show) buildFormMenu();
 }
 $('btnFormsClose').addEventListener('click',function(){ toggleForms(false); });
+$('bMusic').addEventListener('click',function(e){
+  e.stopPropagation();
+  var p=$('music');
+  p.style.display=(p.style.display==='block')?'none':'block';
+  musSyncUI();
+});
+$('btnMusClose').addEventListener('click',function(){ $('music').style.display='none'; });
+(function(){
+  var bs=$('musBtns').querySelectorAll('button');
+  for(var i=0;i<bs.length;i++)(function(b){
+    b.addEventListener('click',function(e){
+      e.stopPropagation();
+      audioInit(); actx();          /* the tap that unlocks audio and the voice */
+      musSet(b.getAttribute('data-mus'));
+      if(b.getAttribute('data-mus')==='burger') pickVoice();
+    });
+  })(bs[i]);
+})();
 $('btnGuards').addEventListener('click',function(){
   if(bodyguards.length){
     bodyguards.forEach(function(b){ world.remove(b.ref.group); });
@@ -8593,7 +8858,7 @@ function applyAct7Skip(sv){
 /* ================================================================
    ACT 8 — THE BEYOND
    Through the gate past the RPG: build 10 themed zones (4,000
-   clicks), then the ULTIMATE ARENA (12,000 clicks) — statues of
+   clicks), then the ULTIMATE ARENA (no filler, every click a thing) — statues of
    everything ever, 200 casohs, hundreds of weird things — then the
    ULTIMATE BATTLE against ULTIMATE CASOH and his minions of every
    act. Filler clicks extend giant star-clouds (drawRange), so 16,000
@@ -8603,6 +8868,14 @@ var BY={x:-300,z:-1150,r:148};
 var byGroup=null,byChunks=[],byIdx=0,byStage=0,byDone1=false,byDone2=false;
 var byParts=0,byPartsTotal=0,byGate=null,byBtn1=null,byBtn2=null,byBtn3=null,byGhostMk=null;
 var ultBoss=null,ultMinions=[],ultState='none',ultWon=false,byCd=0;
+var BY_ARENA_CLICKS=0;
+/* how many clicks the arena really is, worked out once from the build itself
+   so the number on the button can never drift from the number of pieces */
+function byArenaClicks(){
+  if(!BY_ARENA_CLICKS){ try{ genUltArena(); }catch(e){ BY_ARENA_CLICKS=0; } }
+  return BY_ARENA_CLICKS||0;
+}
+function byArenaClicksStr(){ var n=byArenaClicks(); return n?n.toLocaleString():'a lot of'; }
 function makeBigButton(label,color){
   var g=new THREE.Group();
   var base=studdedBox(2.6,0.5,2.6,0x4a4f57,0x3a3f45); base.position.y=0.25; g.add(base);
@@ -8971,11 +9244,11 @@ function genUltArena(){
       var carpet=box(2.4,0.08,26,0xc62b21); carpet.position.set(tx,0.08,tz+15); return carpet;
     });
   })(th);
-  /* cosmic confetti fills to exactly 12,000 clicks */
-  var fill=12000-defs.length;
-  addCloudChunks(defs,fill,AX,AZ,44,2,30,'Cosmic confetti ×30',9);
-  defs.length=12000;
+  /* No confetti. The arena used to be padded out to a round 12,000 clicks
+     with a cosmic confetti cloud; it is now exactly as many clicks as it has
+     actual things in it, and every one of them is a thing. */
   defs.sort(function(a,b){ return a.key-b.key; });
+  BY_ARENA_CLICKS=defs.length;
   return defs;
 }
 function startByBuild(stage){
@@ -9004,7 +9277,7 @@ function startByBuild(stage){
   setMood('space');
   camOrbit.a=0.4; camOrbit.target=0.4;
   showByGhost();
-  msg(stage===2?'⚔️ THE ULTIMATE ARENA!<br><span style="font-size:55%"><b>12,000 CLICKS</b>: a colosseum, statues of EVERYTHING ever, 200 casohs, 400 weird things, the Ultimate Throne… then the ULTIMATE BATTLE.</span>'
+  msg(stage===2?'⚔️ THE ULTIMATE ARENA!<br><span style="font-size:55%"><b>'+byArenaClicksStr()+' CLICKS</b>, every one of them a real thing: a colosseum, statues of EVERYTHING ever, 200 casohs, 400 weird things, the Ultimate Throne… then the ULTIMATE BATTLE.</span>'
     :'🌌 THE BEYOND!<br><span style="font-size:55%"><b>4,000 CLICKS</b> across 10 zones: Candy Land, Lava Fields, Frozen Wastes, Dune Sea, Shroom Grove, Cyber Core, Ghost Yard, Cloud Kingdom, Toy Box… and THE WEIRD.</span>',8000);
   updateMobileUI();
 }
@@ -9073,7 +9346,7 @@ function finishByBuild(){
     byDone1=true; save();
     sndFanfare(); setTimeout(sndFanfare,600);
     enterBY();
-    msg('🌌 TEN ZONES BUILT!<br><span style="font-size:55%">Now the center calls: the ULTIMATE ARENA button — <b>12,000 clicks</b>.</span>',7000);
+    msg('🌌 TEN ZONES BUILT!<br><span style="font-size:55%">Now the center calls: the ULTIMATE ARENA button — <b>'+byArenaClicksStr()+' clicks</b>.</span>',7000);
     obj('⚔️ Press the gold ULTIMATE ARENA button at the center of The Beyond.');
   } else {
     byDone2=true; save();
@@ -9107,7 +9380,7 @@ function enterBY(){
     world.add(byBtn1);
   }
   if(byDone1&&!byBtn2&&!byDone2){
-    byBtn2=makeBigButton('⚔️ ULTIMATE ARENA\n12,000 CLICKS',0xffd83d);
+    byBtn2=makeBigButton('⚔️ ULTIMATE ARENA\n'+byArenaClicksStr()+' CLICKS',0xffd83d);
     byBtn2.position.set(BY.x,0,BY.z+8);
     world.add(byBtn2);
   }
@@ -9180,6 +9453,7 @@ function hurtUltBoss(dmg,fromTorn){
   doFlash('#7ba03a');
   if(ultBoss.hp<=0){
     ultState='won'; ultWon=true; save();
+    if(typeof musSyncUI==='function') musSyncUI();
     world.remove(ultBoss.mesh); ultBoss=null;
     ultMinions.forEach(function(m2){ if(!m2.dead) world.remove(m2.mesh); });
     ultMinions.length=0;
@@ -9196,6 +9470,12 @@ function hurtUltBoss(dmg,fromTorn){
       if(fw>24) clearInterval(iv);
     },300);
     msg('👑 ULTIMATE CASOH FALLS 👑<br><span style="font-size:55%">…but the void tears open. THE FINALE begins. A gate glows behind the throne.</span>',6000);
+    /* he drops his jukebox: CHILL, CRAZY, and the song he wrote himself */
+    setTimeout(function(){
+      musSyncUI();
+      msg('🎵 JUKEBOX UNLOCKED 🎵<br><span style="font-size:55%">Tap <b>🎵 MUSIC</b> (top left) to equip <b>CHILL</b>, <b>CRAZY</b>, or the one he leaves behind: <b>🍔 CASOH SINGS ABOUT BURGERS</b>.</span>',7000);
+      sndSparkle();
+    },6200);
     obj('🌟 THE FINALE — step into the white gate behind the throne.');
     if(!finGate){
       finGate=makePortal(BY.x,BY.z-40);
@@ -9340,6 +9620,8 @@ function applyAct8Skip(sv){
     }
     ultWon=!!sv.ult;
     finWon=!!sv.fin;
+    if(sv.mus&&TRACKS[sv.mus]){ MUS.cur=sv.mus; if(ultWon) musStart(); }
+    musSyncUI();
     if(ultWon&&!finGate){
       finGate=makePortal(BY.x,BY.z-40);
       finGate.userData.ring.material=bmat(0xffffff);
