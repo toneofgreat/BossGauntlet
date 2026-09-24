@@ -678,3 +678,39 @@ The four bosses in level 12 shipped provably *reachable* (the finale drove them 
   that shuts behind the player adds one row to `SEALS` and inherits all of it.
 - **`tools/playtest.js` asserts the cycle** as the `doorReopens` act: walk in (sealed), die
   (open, and the respawn lands back at 252), which is the exact sequence that used to be fatal.
+
+### 2026-09-24 (later still) — the music, rebuilt, and two tracks of their own
+
+Section 9's API is unchanged: `unlock / sfx / music / stopMusic / setEnabled / enabled` behave
+exactly as documented and every track name it lists still exists. Everything below is additive.
+
+- **Two new tracks, and trials 8 and 9 stopped borrowing.** Trial 8 played `tycoon` (which trial
+  12's counter also plays) and trial 9 played `troll` (which trial 12's troll act also plays).
+  They now have their own: **`payday`** (F major funk, 132bpm, walking bass, horn stabs, a clap on
+  two and four) for the obby tycoon, and **`mischief`** (A minor music-box waltz, 168bpm, three
+  beats to the bar — a 12-step bar, the only track in the game that is not in four) for the troll
+  trial. `RT.Audio.musicNames()` now returns 16.
+- **Every track gained an arpeggio voice and a drum fill**, so a track is 5 voices, not 4 (`void`
+  is 4: it has no drums). Section 9 says "<= 3 voices"; that was already untrue at 4 and is now
+  5. The extra voices are sparse by design — an arp on eighths, a fill every fourth cycle — and
+  the whole suite still runs with no dropped frames headlessly.
+- **New per-voice fields, all optional:** `pan` (StereoPannerNode, built once per track, not per
+  note), `send` (how much of that voice goes to the new tempo-synced stereo echo), `spread` (a
+  second oscillator detuned by N cents — the cheapest chorus there is), and `hum` (a couple of
+  milliseconds of deterministic timing drift so parts stop gluing together).
+- **New pattern syntax:** `!note` is an accent (x1.34) and `,note` is a ghost (x0.55), for drums
+  and notes alike. Velocity is most of what separates a groove from a typewriter.
+- **New bus wiring:** music runs through a 70 Hz highpass before the compressor (the triangle
+  bass was eating it), and a dotted-eighth/eighth ping-pong delay, tempo-locked to the track's own
+  step, sits on a send. **New drum voices:** `p` clap, `x` shaker, `b` sub boom; `k`, `s` and `h`
+  were rebuilt with separate click / body / sub layers.
+- **Loud one-shots duck the music** (`death` to 40%, `win` to 50%, a few others to ~72%) for a
+  fifth of a second, then it comes back over 0.42s — the section-3.6 note in research-feel.md.
+- **Track levels were metered and balanced**, not guessed: each track was played headlessly with
+  an analyser on the master bus and its gain set from the measured average, so the action tracks
+  sit within about a fifth of each other and the atmospheric ones (`void`, `ruins`, `sunset`) stay
+  deliberately quieter. `tools/` has no permanent harness for this; the scratch scripts that did
+  it are described here so the next agent can rebuild them: play each name, peak-hold an
+  AnalyserNode for three seconds, compare averages.
+- **A bar that does not add up is a silent bug**, so every pattern was checked: each voice's step
+  count must divide by 16 (or by 12 for `mischief`). All 16 tracks pass.

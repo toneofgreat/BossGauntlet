@@ -282,7 +282,7 @@
     subtitle: 'Buy the level you are standing in',
     theme: 'tycoon',
     themeZones: [{ x0: 113.5, x1: 400, theme: SKY_HIGH }],
-    music: 'tycoon',
+    music: 'payday',
 
     tiles: [
       '...............................................................................................................................................###',

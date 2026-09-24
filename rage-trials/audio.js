@@ -50,6 +50,8 @@
   var silentDone = false;
 
   var master = null, comp = null, sfxBus = null, musicBus = null;
+  var musicHP = null, delaySend = null, delayL = null, delayR = null;
+  var delayFb = null, delayTone = null, delayWet = null;
   var noiseBuffer = null;
   var waveCache = {};
 
@@ -110,8 +112,47 @@
     musicBus = ctx.createGain();
     musicBus.gain.value = MUSIC_GAIN;
 
+    /* Music gets a 70 Hz highpass so the triangle bass stops eating the
+     * compressor, and a tempo-synced stereo echo that every voice can send
+     * to. Chiptune without an echo sounds like a spreadsheet. */
+    musicHP = ctx.createBiquadFilter();
+    musicHP.type = 'highpass';
+    sp(musicHP.frequency, 70);
+    musicBus.connect(musicHP);
+    musicHP.connect(comp);
+
+    try {
+      delaySend = ctx.createGain();
+      delaySend.gain.value = 1;
+      delayL = ctx.createDelay(1.5);
+      delayR = ctx.createDelay(1.5);
+      delayFb = ctx.createGain();
+      delayFb.gain.value = 0.3;
+      delayTone = ctx.createBiquadFilter();
+      delayTone.type = 'lowpass';
+      sp(delayTone.frequency, 2800);
+      delayWet = ctx.createGain();
+      delayWet.gain.value = 0.5;
+      sp(delayL.delayTime, 0.24);
+      sp(delayR.delayTime, 0.36);
+      delaySend.connect(delayL);
+      delayL.connect(delayTone);
+      delayTone.connect(delayR);
+      delayR.connect(delayFb);
+      delayFb.connect(delayL);
+      if (ctx.createStereoPanner) {
+        var pl = ctx.createStereoPanner(), pr = ctx.createStereoPanner();
+        sp(pl.pan, -0.55); sp(pr.pan, 0.55);
+        delayTone.connect(pl); pl.connect(delayWet);
+        delayR.connect(pr); pr.connect(delayWet);
+      } else {
+        delayTone.connect(delayWet);
+        delayR.connect(delayWet);
+      }
+      delayWet.connect(musicHP);
+    } catch (eDly) { delaySend = null; }
+
     sfxBus.connect(comp);
-    musicBus.connect(comp);
     comp.connect(master);
     master.connect(ctx.destination);
   }
@@ -534,17 +575,34 @@
    * ==================================================================== */
 
   var DRUM = {
-    k: function (t, g, bus) {                       // kick
-      tone({ t: t, f: 138, f2: 44, dur: 0.14, gt: 0.07, gain: 0.85 * g, wave: 'sine', a: 0.002, d: 0.05, sus: 0.3, r: 0.07, bus: bus });
-      noise({ t: t, dur: 0.028, gain: 0.22 * g, a: 0.001, d: 0.012, sus: 0.05, r: 0.012, filt: { type: 'lowpass', f: 2200 }, bus: bus });
+    k: function (t, g, bus) {                       // kick: click, body, sub
+      tone({ t: t, f: 170, f2: 44, dur: 0.16, gt: 0.055, gain: 0.8 * g, wave: 'sine', a: 0.001, d: 0.05, sus: 0.32, r: 0.08, bus: bus });
+      tone({ t: t, f: 58, f2: 36, dur: 0.22, gt: 0.16, gain: 0.5 * g, wave: 'sine', a: 0.002, d: 0.09, sus: 0.45, r: 0.12, bus: bus });
+      noise({ t: t, dur: 0.02, gain: 0.26 * g, a: 0.0005, d: 0.008, sus: 0.04, r: 0.01, filt: { type: 'bandpass', f: 2600, q: 0.9 }, bus: bus });
     },
-    s: function (t, g, bus) {                       // snare
-      noise({ t: t, dur: 0.125, gain: 0.5 * g, a: 0.001, d: 0.045, sus: 0.22, r: 0.06, filt: { type: 'highpass', f: 1400 }, bus: bus });
-      noise({ t: t, dur: 0.07, gain: 0.26 * g, a: 0.001, d: 0.03, sus: 0.1, r: 0.03, filt: { type: 'bandpass', f: 420, q: 1.3 }, bus: bus });
-      tone({ t: t, f: 196, f2: 150, dur: 0.06, gain: 0.2 * g, wave: 'triangle', a: 0.001, d: 0.03, sus: 0.1, r: 0.025, bus: bus });
+    s: function (t, g, bus) {                       // snare: crack, buzz, shell
+      noise({ t: t, dur: 0.145, gain: 0.46 * g, a: 0.001, d: 0.05, sus: 0.2, r: 0.075, filt: { type: 'highpass', f: 1500 }, bus: bus });
+      noise({ t: t, dur: 0.05, gain: 0.3 * g, a: 0.0005, d: 0.018, sus: 0.06, r: 0.02, filt: { type: 'bandpass', f: 3400, q: 0.8 }, bus: bus });
+      noise({ t: t, dur: 0.08, gain: 0.22 * g, a: 0.001, d: 0.03, sus: 0.12, r: 0.035, filt: { type: 'bandpass', f: 420, q: 1.3 }, bus: bus });
+      tone({ t: t, f: 210, f2: 148, dur: 0.07, gain: 0.2 * g, wave: 'triangle', a: 0.001, d: 0.03, sus: 0.1, r: 0.03, bus: bus });
     },
-    h: function (t, g, bus) {                       // closed hat
-      noise({ t: t, dur: 0.032, gain: 0.2 * g, a: 0.001, d: 0.012, sus: 0.05, r: 0.014, filt: { type: 'highpass', f: 7200 }, bus: bus });
+    h: function (t, g, bus) {                       // closed hat, tightened
+      noise({ t: t, dur: 0.028, gain: 0.17 * g, a: 0.0005, d: 0.009, sus: 0.04, r: 0.012, filt: { type: 'highpass', f: 8200 }, bus: bus });
+      noise({ t: t, dur: 0.016, gain: 0.08 * g, a: 0.0005, d: 0.006, sus: 0.02, r: 0.008, filt: { type: 'bandpass', f: 6200, q: 1.4 }, bus: bus });
+    },
+    p: function (t, g, bus) {                       // clap: three flams, then the tail
+      var o, i2;
+      for (i2 = 0; i2 < 3; i2++) {
+        o = t + i2 * 0.011;
+        noise({ t: o, dur: 0.03, gain: 0.3 * g, a: 0.0005, d: 0.012, sus: 0.05, r: 0.012, filt: { type: 'bandpass', f: 1800, q: 0.9 }, bus: bus });
+      }
+      noise({ t: t + 0.03, dur: 0.16, gain: 0.22 * g, a: 0.002, d: 0.06, sus: 0.22, r: 0.09, filt: { type: 'bandpass', f: 1500, q: 0.6 }, bus: bus });
+    },
+    x: function (t, g, bus) {                       // shaker
+      noise({ t: t, dur: 0.05, gain: 0.11 * g, a: 0.004, d: 0.02, sus: 0.18, r: 0.02, filt: { type: 'highpass', f: 5200 }, bus: bus });
+    },
+    b: function (t, g, bus) {                       // sub boom, for downbeats
+      tone({ t: t, f: 74, f2: 30, dur: 0.5, gt: 0.32, gain: 0.55 * g, wave: 'sine', a: 0.004, d: 0.18, sus: 0.5, r: 0.24, bus: bus });
     },
     H: function (t, g, bus) {                       // open hat
       noise({ t: t, dur: 0.16, gain: 0.17 * g, a: 0.001, d: 0.05, sus: 0.22, r: 0.09, filt: { type: 'highpass', f: 6000 }, bus: bus });
@@ -914,6 +972,26 @@
   var GAP = { step: 0.06, tick: 0.03, coin: 0.018, cash: 0.02, tetrisMove: 0.018, bonk: 0.05, land: 0.05, laser: 0.12, crumble: 0.06 };
   var recent = [];
 
+  /* A death or a win is the loudest thing in the game. The music steps back
+   * under it for a moment so the hit lands instead of fighting the mix, then
+   * comes back up. Half a dB of production, and it is the difference between
+   * a chiptune and a soundtrack. */
+  var DUCK = { death: 0.4, win: 0.5, hurt: 0.72, thwomp: 0.72, troll: 0.7, laser: 0.78, powerup: 0.7 };
+  var duckUntil = 0;
+  function duckMusic(amount, hold) {
+    if (!musicBus || !ctx) return;
+    var t = ctx.currentTime;
+    if (t < duckUntil) return;
+    duckUntil = t + hold * 0.65;
+    try {
+      musicBus.gain.cancelScheduledValues(t);
+      musicBus.gain.setValueAtTime(musicBus.gain.value, t);
+      musicBus.gain.linearRampToValueAtTime(MUSIC_GAIN * amount, t + 0.035);
+      musicBus.gain.setValueAtTime(MUSIC_GAIN * amount, t + hold);
+      musicBus.gain.linearRampToValueAtTime(MUSIC_GAIN, t + hold + 0.42);
+    } catch (e) {}
+  }
+
   A.sfx = function (name, when) {
     syncPref();
     if (!A.enabled) return false;
@@ -937,6 +1015,7 @@
     recent.push(t);
 
     try { fn(when == null ? t : Math.max(t, when)); } catch (e) { return false; }
+    if (DUCK[name] && mus) duckMusic(DUCK[name], name === 'win' ? 0.5 : 0.22);
     return true;
   };
 
@@ -964,6 +1043,8 @@
 
   var TRACKS = {};
 
+  function hash01(x) { var s2 = Math.sin(x * 12.9898) * 43758.5453; return s2 - Math.floor(s2); }
+
   function parsePattern(text, isDrum) {
     var toks = String(text).replace(/\|/g, ' ').split(/\s+/);
     var step = 0, evs = [], i, j;
@@ -976,18 +1057,25 @@
         if (!(mult > 0)) mult = 1;
         tk = tk.substring(0, star);
       }
+      /* !note = accent, ,note = ghost. Velocity is most of what separates a
+       * groove from a typewriter, and it costs one character. */
+      var vel = 1;
+      while (tk.charAt(0) === '!' || tk.charAt(0) === ',') {
+        vel *= (tk.charAt(0) === '!') ? 1.34 : 0.55;
+        tk = tk.substring(1);
+      }
       if (tk === '-' || tk === '.' || tk === '_') { step += mult; continue; }
       if (isDrum) {
         var hits = tk.split('+'), valid = [];
         for (j = 0; j < hits.length; j++) if (DRUM[hits[j]]) valid.push(hits[j]);
-        if (valid.length) evs.push({ step: step, drums: valid, dur: mult });
+        if (valid.length) evs.push({ step: step, drums: valid, dur: mult, vel: vel });
       } else {
         var parts = tk.split('+'), ns = [];
         for (j = 0; j < parts.length; j++) {
           var m = midiOf(parts[j]);
           if (m != null) ns.push(m);
         }
-        if (ns.length) evs.push({ step: step, notes: ns, dur: mult });
+        if (ns.length) evs.push({ step: step, notes: ns, dur: mult, vel: vel });
       }
       step += mult;
     }
@@ -1017,7 +1105,9 @@
         oct: vd.oct || 0, gate: vd.gate == null ? 0.9 : vd.gate,
         a: vd.a, d: vd.d, sus: vd.sus == null ? 0.65 : vd.sus, r: vd.r,
         filt: vd.filt || null, detune: vd.detune || 0,
-        vib: vd.vib || null, maxDur: vd.maxDur || 0
+        vib: vd.vib || null, maxDur: vd.maxDur || 0,
+        pan: vd.pan || 0, send: vd.send || 0, spread: vd.spread || 0,
+        hum: vd.hum == null ? 0.0022 : vd.hum
       });
       if (p.len > len) len = p.len;
     }
@@ -1073,7 +1163,35 @@
           lfo = { osc: lo, gain: lg };
         } catch (e4) { lfo = null; }
       }
-      rt.push({ lfo: lfo });
+      /* Every voice gets its own output: pan, and its own send into the
+       * echo. Built once per track, not once per note. */
+      var vout = null, vpan = null, vsend = null;
+      try {
+        vout = c.createGain();
+        vout.gain.value = 1;
+        if (v.pan && c.createStereoPanner) {
+          vpan = c.createStereoPanner();
+          sp(vpan.pan, Math.max(-1, Math.min(1, v.pan)));
+          vout.connect(vpan);
+          vpan.connect(g);
+        } else {
+          vout.connect(g);
+        }
+        if (v.send && delaySend) {
+          vsend = c.createGain();
+          vsend.gain.value = v.send;
+          vout.connect(vsend);
+          vsend.connect(delaySend);
+        }
+      } catch (eOut) { vout = null; }
+      rt.push({ lfo: lfo, out: vout, pan: vpan, send: vsend });
+    }
+    /* tie the echo to the tempo: a dotted eighth and an eighth */
+    if (delaySend && delayL && delayR) {
+      try {
+        sp(delayL.delayTime, comp.stepDur * 3);
+        sp(delayR.delayTime, comp.stepDur * 4.5);
+      } catch (eT) {}
     }
 
     mus = {
@@ -1090,10 +1208,12 @@
   }
 
   function playVoiceEvent(v, rv, ev, t, m) {
+    var vel = ev.vel == null ? 1 : ev.vel;
+    var out = (rv && rv.out) ? rv.out : m.gain;
     if (v.drum) {
       for (var i = 0; i < ev.drums.length; i++) {
         var fn = DRUM[ev.drums[i]];
-        if (fn) { try { fn(t, v.gain, m.gain); } catch (e) {} }
+        if (fn) { try { fn(t, v.gain * vel, out); } catch (e) {} }
       }
       return;
     }
@@ -1101,14 +1221,24 @@
     if (v.maxDur && dur > v.maxDur) dur = v.maxDur;
     if (dur < 0.03) dur = 0.03;
     var n = ev.notes.length;
-    var g = v.gain * (n > 1 ? (1 / Math.sqrt(n)) * 1.05 : 1);
+    var g = v.gain * vel * (n > 1 ? (1 / Math.sqrt(n)) * 1.05 : 1);
     for (var j = 0; j < n; j++) {
+      var fq = freqOf(ev.notes[j] + v.oct * 12);
       tone({
-        t: t, f: freqOf(ev.notes[j] + v.oct * 12), dur: dur, gain: g,
+        t: t, f: fq, dur: dur, gain: g,
         wave: v.wave, duty: v.duty, a: v.a, d: v.d, sus: v.sus, r: v.r,
-        filt: v.filt, detune: v.detune, bus: m.gain,
+        filt: v.filt, detune: v.detune, bus: out,
         mod: rv.lfo ? rv.lfo.gain : null
       });
+      /* a second, slightly detuned oscillator: the cheapest chorus there is */
+      if (v.spread) {
+        tone({
+          t: t, f: fq, dur: dur, gain: g * 0.55,
+          wave: v.wave, duty: v.duty, a: v.a, d: v.d, sus: v.sus, r: v.r,
+          filt: v.filt, detune: v.detune + v.spread, bus: out,
+          mod: rv.lfo ? rv.lfo.gain : null
+        });
+      }
     }
   }
 
@@ -1120,6 +1250,9 @@
       if (!ev) continue;
       var st = t;
       if (m.comp.swing && (step % 2) === 1) st += m.comp.swing * m.comp.stepDur;
+      /* a couple of milliseconds of deterministic drift per voice, so the
+       * parts stop landing on the exact same sample and gluing together */
+      if (v.hum && !v.drum) st += (hash01(step * 13.7 + i * 7.3) - 0.5) * v.hum * 2;
       playVoiceEvent(v, m.rt[i], ev, st, m);
     }
   }
@@ -1170,6 +1303,13 @@
       m.gain.gain.linearRampToValueAtTime(0, t + f);
     } catch (e) { try { m.gain.gain.value = 0; } catch (e2) {} }
     for (var i = 0; i < m.rt.length; i++) {
+      (function (r) {
+        setTimeout(function () {
+          try { if (r.send) r.send.disconnect(); } catch (x) {}
+          try { if (r.pan) r.pan.disconnect(); } catch (x) {}
+          try { if (r.out) r.out.disconnect(); } catch (x) {}
+        }, (f + 0.35) * 1000);
+      })(m.rt[i]);
       var lfo = m.rt[i].lfo;
       if (!lfo) continue;
       try { lfo.osc.stop(t + f + 0.05); } catch (e3) {}
@@ -1272,13 +1412,17 @@
           'a2*2 -*2 a2*2 e3*2 a2*2 -*2 c3*2 e3*2 | f2*2 -*2 f2*2 c3*2 f2*2 -*2 a2*2 c3*2',
       B2: 'f2*2 -*2 f2*2 c3*2 f2*2 -*2 a2*2 c3*2 | g2*2 -*2 g2*2 d3*2 g2*2 -*2 b2*2 d3*2 |' +
           'c3*2 -*2 c3*2 g3*2 c3*2 -*2 e3*2 g3*2 | c3*2 -*2 g3*2 -*2 c3*2 e3*2 g3*2 g2*2',
+      A1: 'c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | b4*2 d5*2 g5*2 d5*2 b5*2 g5*2 d5*2 g5*2 |a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 | f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2',
+      A2: 'f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 | g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 |c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | c5*2 g5*2 e5*2 g5*2 c6*2 e6*2 g5*2 e5*2',
+      D2: 'k*4 h*2 s*2 k*4 s*2 h*2 | k*2 !t*2 t*2 s*2 t*2 t*2 !s*2 !c*2',
       D1: 'k*4 h*2 h*2 s*4 h*2 h*2 | k*2 k*2 h*4 s*4 h*2 s*2'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.155, gate: 0.82, a: 0.004, d: 0.05, sus: 0.72, r: 0.04 },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.062, gate: 0.6, a: 0.003, d: 0.04, sus: 0.5, r: 0.03 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.155, gate: 0.82, a: 0.004, d: 0.05, sus: 0.72, r: 0.04, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.062, gate: 0.6, a: 0.003, d: 0.04, sus: 0.5, r: 0.03, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.21, gate: 0.85, a: 0.004, d: 0.05, sus: 0.6, r: 0.04 },
-      { seq: ['D1'], drum: true, gain: 0.5 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.5, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1286,7 +1430,7 @@
    * Warm F major, slow. P1 = F Am Dm Bb, P2 = Bb C F F.
    */
   track('sunset', {
-    bpm: 112, gain: 0.95,
+    bpm: 112, gain: 1.28,
     pat: {
       L1: 'f5*4 a5*4 c6*6 a5*2 | a5*6 g5*2 e5*4 c5*4 |' +
           'd5*4 f5*4 a5*6 f5*2 | bb5*8 a5*4 f5*4',
@@ -1300,13 +1444,17 @@
           'f4+a4+c5*16 | f4+a4+c5*8 c4+f4+a4*8',
       B1: 'f2*8 c3*8 | a2*8 e3*8 | d2*8 a2*8 | bb2*8 f3*8',
       B2: 'bb2*8 f3*8 | c3*8 g3*8 | f2*8 c3*8 | f2*8 a2*4 c3*4',
+      A1: 'f4*4 a4*4 c5*4 a4*4 | a4*4 c5*4 e5*4 c5*4 | d4*4 f4*4 a4*4 f4*4 | bb4*4 d5*4 f5*4 d5*4',
+      A2: 'bb4*4 d5*4 f5*4 d5*4 | c5*4 e5*4 g5*4 e5*4 | f4*4 a4*4 c5*4 a4*4 | c5*4 a4*4 f4*4 c5*4',
+      D2: 'k*4 -*4 s*4 -*4 | k*4 t*2 t*2 s*4 !c*4',
       D1: 'k*4 h*4 r*4 h*4 | k*4 h*4 r*4 h*2 H*2'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.14, gate: 0.94, a: 0.02, d: 0.12, sus: 0.7, r: 0.09, vib: { hz: 4.8, cents: 12 } },
-      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.085, gate: 0.96, a: 0.06, d: 0.15, sus: 0.72, r: 0.12 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.14, gate: 0.94, a: 0.02, d: 0.12, sus: 0.7, r: 0.09, vib: { hz: 4.8, cents: 12 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.085, gate: 0.96, a: 0.06, d: 0.15, sus: 0.72, r: 0.12, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.2, gate: 0.9, a: 0.01, d: 0.1, sus: 0.6, r: 0.08 },
-      { seq: ['D1'], drum: true, gain: 0.32 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.32, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1314,7 +1462,7 @@
    * Sparse A minor pads, no percussion. P1 = Am F Dm E, P2 = Am G F E.
    */
   track('void', {
-    bpm: 80, gain: 0.9,
+    bpm: 80, gain: 1.53,
     pat: {
       L1: 'a5*12 -*4 | c6*8 a5*8 | d6*12 -*4 | b5*8 g#5*8',
       L2: 'e6*8 c6*4 a5*4 | d6*12 -*4 | c6*8 -*4 a5*4 | b5*16',
@@ -1322,12 +1470,15 @@
       H1: 'a3+c4+e4*16 | f3+a3+c4*16 | d3+f3+a3*16 | e3+g#3+b3*16',
       H2: 'a3+c4+e4*16 | g3+b3+d4*16 | f3+a3+c4*16 | e3+g#3+b3*16',
       B1: 'a2*16 | f2*16 | d2*16 | e2*16',
-      B2: 'a2*16 | g2*16 | f2*16 | e2*16'
+      B2: 'a2*16 | g2*16 | f2*16 | e2*16',
+      A1: 'a4*4 c5*4 e5*4 c5*4 | f4*4 a4*4 c5*4 a4*4 | d4*4 f4*4 a4*4 f4*4 | e4*4 g#4*4 b4*4 g#4*4',
+      A2: 'a4*4 c5*4 e5*4 c5*4 | g4*4 b4*4 d5*4 b4*4 | f4*4 a4*4 c5*4 a4*4 | e4*4 b4*4 g#4*4 e4*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'triangle', gain: 0.12, gate: 0.9, a: 0.07, d: 0.3, sus: 0.6, r: 0.3, vib: { hz: 3.6, cents: 16 } },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.125, gain: 0.05, gate: 0.97, a: 0.35, d: 0.4, sus: 0.7, r: 0.5, filt: { type: 'lowpass', f: 1100, q: 1 } },
-      { seq: ['B1', 'B2'], wave: 'sine', gain: 0.22, gate: 0.96, a: 0.06, d: 0.3, sus: 0.7, r: 0.35 }
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'triangle', gain: 0.12, gate: 0.9, a: 0.07, d: 0.3, sus: 0.6, r: 0.3, vib: { hz: 3.6, cents: 16 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.125, gain: 0.05, gate: 0.97, a: 0.35, d: 0.4, sus: 0.7, r: 0.5, filt: { type: 'lowpass', f: 1100, q: 1 }, pan: -0.26, send: 0.14 },
+      { seq: ['B1', 'B2'], wave: 'sine', gain: 0.22, gate: 0.96, a: 0.06, d: 0.3, sus: 0.7, r: 0.35 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1335,7 +1486,7 @@
    * Mysterious D minor (harmonic on the A). P1 = Dm Bb C A, P2 = Dm Gm Bb A.
    */
   track('ruins', {
-    bpm: 104, gain: 0.95,
+    bpm: 104, gain: 1.38,
     pat: {
       L1: 'd5*4 -*2 f5*2 a5*4 -*2 d5*2 | bb4*4 -*2 d5*2 f5*4 d5*4 |' +
           'c5*4 e5*2 g5*2 e5*4 c5*4 | a4*4 c#5*2 e5*2 a5*6 -*2',
@@ -1349,13 +1500,17 @@
           'bb3*2 f4*2 d4*2 f4*2 bb3*2 f4*2 d4*2 f4*2 | a3*2 e4*2 c#4*2 e4*2 a3*2 e4*2 c#4*2 e4*2',
       B1: 'd2*4 a2*4 d3*4 a2*4 | bb1*4 f2*4 bb2*4 f2*4 | c2*4 g2*4 c3*4 g2*4 | a1*4 e2*4 a2*4 e2*4',
       B2: 'd2*4 a2*4 d3*4 a2*4 | g1*4 d2*4 g2*4 d2*4 | bb1*4 f2*4 bb2*4 f2*4 | a1*4 e2*4 a2*4 a1*4',
+      A1: 'd5*2 f5*2 a5*2 f5*2 d5*2 a5*2 f5*2 a5*2 | bb4*2 d5*2 f5*2 d5*2 bb5*2 f5*2 d5*2 f5*2 |c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | a4*2 c#5*2 e5*2 c#5*2 a5*2 e5*2 c#5*2 e5*2',
+      A2: 'd5*2 f5*2 a5*2 f5*2 d5*2 a5*2 f5*2 a5*2 | g4*2 bb4*2 d5*2 bb4*2 g5*2 d5*2 bb4*2 d5*2 |bb4*2 d5*2 f5*2 d5*2 bb5*2 f5*2 d5*2 f5*2 | a4*2 e5*2 c#5*2 e5*2 a5*2 c#6*2 e5*2 c#5*2',
+      D2: 'k*4 h*2 s*2 k*2 k*2 s*2 h*2 | k*4 t*2 t*2 !s*4 !c*4',
       D1: 'r*4 -*4 r*4 -*2 r*2 | r*4 -*4 r*2 r*2 t*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.14, gate: 0.88, a: 0.008, d: 0.08, sus: 0.66, r: 0.06, vib: { hz: 5, cents: 14 } },
-      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.085, gate: 0.7, a: 0.004, d: 0.05, sus: 0.5, r: 0.04 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.14, gate: 0.88, a: 0.008, d: 0.08, sus: 0.66, r: 0.06, vib: { hz: 5, cents: 14 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.085, gate: 0.7, a: 0.004, d: 0.05, sus: 0.5, r: 0.04, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.2, gate: 0.8, a: 0.006, d: 0.07, sus: 0.55, r: 0.05 },
-      { seq: ['D1'], drum: true, gain: 0.34 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.34, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1363,7 +1518,7 @@
    * Driving E minor. P1 = Em C G D, P2 = Em D C B.
    */
   track('volcano', {
-    bpm: 170, gain: 1.0,
+    bpm: 170, gain: 0.95,
     pat: {
       L1: 'e5*2 e5*2 g5*2 e5*2 b5*4 -*4 | c5*2 c5*2 e5*2 g5*2 c6*4 -*4 |' +
           'd5*2 d5*2 g5*2 b5*2 d6*4 -*4 | d5*2 f#5*2 a5*2 f#5*2 d5*8',
@@ -1379,14 +1534,17 @@
           'g1*2 g1*2 g1*2 g2*2 g1*2 g1*2 d2*2 b1*2 | d2*2 d2*2 d2*2 d3*2 d2*2 d2*2 a2*2 f#2*2',
       B2: 'e2*2 e2*2 e2*2 e3*2 e2*2 e2*2 d3*2 b2*2 | d2*2 d2*2 d2*2 d3*2 d2*2 d2*2 a2*2 f#2*2 |' +
           'c2*2 c2*2 c2*2 c3*2 c2*2 c2*2 g2*2 e2*2 | b1*2 b1*2 b1*2 b2*2 b1*2 b1*2 f#2*2 d#2*2',
+      A1: 'e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 | c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 |g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2',
+      A2: 'e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 | d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2 |c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | b4*2 d#5*2 f#5*2 d#5*2 b5*2 f#5*2 d#5*2 f#5*2',
       D1: 'k*2 h*2 s*2 h*2 k*2 h*2 s*2 h*2',
       D2: 'k*2 h*2 s*2 k*2 k*2 h*2 s*2 h*2'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.8, a: 0.003, d: 0.05, sus: 0.7, r: 0.04 },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.125, gain: 0.07, gate: 0.55, a: 0.002, d: 0.04, sus: 0.45, r: 0.03 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.8, a: 0.003, d: 0.05, sus: 0.7, r: 0.04, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.125, gain: 0.07, gate: 0.55, a: 0.002, d: 0.04, sus: 0.45, r: 0.03, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'sawtooth', gain: 0.17, gate: 0.7, a: 0.003, d: 0.05, sus: 0.55, r: 0.03, filt: { type: 'lowpass', f: 900, q: 2 } },
-      { seq: ['D1', 'D2'], drum: true, gain: 0.55 }
+      { seq: ['D1', 'D2'], drum: true, gain: 0.55, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1394,7 +1552,7 @@
    * Original bouncy overworld-spirit tune in C. P1 = C Am F G, P2 = C F G C.
    */
   track('mario1', {
-    bpm: 184, gain: 1.0, swing: 0.14,
+    bpm: 184, gain: 0.95, swing: 0.14,
     pat: {
       L1: 'g5*2 e5*2 c6*2 -*2 g5*2 a5*2 g5*4 | e5*2 a5*2 c6*2 -*2 a5*2 b5*2 a5*4 |' +
           'f5*2 a5*2 c6*2 -*2 f6*4 -*2 c6*2 | b5*2 d6*2 g6*2 -*2 d6*2 b5*2 g5*4',
@@ -1410,13 +1568,17 @@
           'f2*2 c3*2 f3*2 c3*2 a2*2 c3*2 f3*2 c3*2 | g2*2 d3*2 g3*2 d3*2 b2*2 d3*2 g3*2 f3*2',
       B2: 'c3*2 g2*2 c3*2 e3*2 g3*2 e3*2 c3*2 g2*2 | f2*2 c3*2 f3*2 c3*2 a2*2 c3*2 f3*2 c3*2 |' +
           'g2*2 d3*2 g3*2 d3*2 b2*2 d3*2 g3*2 d3*2 | c3*2 g2*2 c3*2 e3*2 g3*2 e3*2 c3*4',
+      A1: 'c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 |f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 | g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2',
+      A2: 'c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 |g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | c5*2 g5*2 e5*2 g5*2 c6*2 e6*2 g5*2 e5*2',
+      D2: 'k*4 h*2 s*2 k*4 s*2 h*2 | k*2 k*2 t*2 t*2 s*2 t*2 !s*2 !c*2',
       D1: 'k*4 h*2 s*4 h*2 k*2 s*2 | k*2 k*2 h*2 s*4 h*2 k*2 s*2'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.72, a: 0.003, d: 0.045, sus: 0.72, r: 0.035 },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.062, gate: 0.5, a: 0.002, d: 0.03, sus: 0.4, r: 0.025 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.72, a: 0.003, d: 0.045, sus: 0.72, r: 0.035, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.062, gate: 0.5, a: 0.002, d: 0.03, sus: 0.4, r: 0.025, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.21, gate: 0.72, a: 0.003, d: 0.045, sus: 0.55, r: 0.03 },
-      { seq: ['D1'], drum: true, gain: 0.45 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.45, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1424,7 +1586,7 @@
    * Original athletic-spirit gallop in G. P1 = G Em C D, P2 = G C D G.
    */
   track('mario2', {
-    bpm: 196, gain: 1.0,
+    bpm: 196, gain: 0.85,
     pat: {
       L1: 'd5*3 g5*1 b5*3 g5*1 d6*3 b5*1 g5*3 d5*1 | b4*3 e5*1 g5*3 e5*1 b5*3 g5*1 e5*3 b4*1 |' +
           'c5*3 e5*1 g5*3 e5*1 c6*3 g5*1 e5*3 c5*1 | d5*3 f#5*1 a5*3 f#5*1 d6*3 a5*1 f#5*3 d5*1',
@@ -1440,14 +1602,17 @@
           'c2*3 c2*1 g2*3 c2*1 c2*3 c2*1 g2*3 e2*1 | d2*3 d2*1 a2*3 d2*1 d2*3 d2*1 a2*3 f#2*1',
       B2: 'g2*3 g2*1 d3*3 g2*1 g2*3 g2*1 d3*3 b2*1 | c2*3 c2*1 g2*3 c2*1 c2*3 c2*1 g2*3 e2*1 |' +
           'd2*3 d2*1 a2*3 d2*1 d2*3 d2*1 a2*3 f#2*1 | g2*3 g2*1 d3*3 g2*1 b2*3 d3*1 g3*3 g2*1',
+      A1: 'g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | e4*2 g4*2 b4*2 g4*2 e5*2 b4*2 g4*2 b4*2 |c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2',
+      A2: 'g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 |d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2 | g4*2 d5*2 b4*2 d5*2 g5*2 b5*2 d5*2 b4*2',
       D1: 'k*2 h*2 k*2 s*2 h*2 k*2 s*2 h*2',
       D2: 'k*2 h*2 k*2 s*2 h*2 k*2 s*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.8, a: 0.003, d: 0.04, sus: 0.72, r: 0.03 },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.058, gate: 0.55, a: 0.002, d: 0.03, sus: 0.42, r: 0.025 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.8, a: 0.003, d: 0.04, sus: 0.72, r: 0.03, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.058, gate: 0.55, a: 0.002, d: 0.03, sus: 0.42, r: 0.025, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.2, gate: 0.75, a: 0.003, d: 0.04, sus: 0.55, r: 0.03 },
-      { seq: ['D1', 'D2'], drum: true, gain: 0.48 }
+      { seq: ['D1', 'D2'], drum: true, gain: 0.48, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1455,7 +1620,7 @@
    * Original castle-march in C minor. P1 = Cm Ab Eb G, P2 = Cm Fm Ab G.
    */
   track('mario3', {
-    bpm: 132, gain: 1.0,
+    bpm: 132, gain: 0.78,
     pat: {
       L1: 'c5*4 eb5*2 g5*2 c6*4 g5*4 | ab4*4 c5*2 eb5*2 ab5*4 eb5*4 |' +
           'eb5*4 g5*2 bb5*2 eb6*4 bb5*4 | g5*4 b5*2 d6*2 g5*8',
@@ -1471,13 +1636,17 @@
           'eb2*4 eb2*4 bb2*4 eb3*4 | g1*4 g1*4 d2*4 g2*4',
       B2: 'c2*4 c2*4 g2*4 c3*4 | f1*4 f1*4 c2*4 f2*4 |' +
           'ab1*4 ab1*4 eb2*4 ab2*4 | g1*4 d2*4 g2*4 g1*4',
+      A1: 'c5*4 eb5*4 g5*4 eb5*4 | ab4*4 c5*4 eb5*4 c5*4 | eb5*4 g5*4 bb5*4 g5*4 | g4*4 b4*4 d5*4 b4*4',
+      A2: 'c5*4 eb5*4 g5*4 eb5*4 | f4*4 ab4*4 c5*4 ab4*4 | ab4*4 c5*4 eb5*4 c5*4 | g4*4 d5*4 b4*4 g4*4',
+      D2: 'k*4 -*2 s*2 k*4 s*2 -*2 | k*4 t*2 t*2 !s*4 !c*4',
       D1: 'k*2 s*1 s*1 s*2 k*2 s*2 k*2 s*2 s*1 s*1'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.85, a: 0.004, d: 0.06, sus: 0.7, r: 0.05 },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.5, gain: 0.06, gate: 0.6, a: 0.003, d: 0.05, sus: 0.45, r: 0.04 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.85, a: 0.004, d: 0.06, sus: 0.7, r: 0.05, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.5, gain: 0.06, gate: 0.6, a: 0.003, d: 0.05, sus: 0.45, r: 0.04, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.22, gate: 0.8, a: 0.004, d: 0.06, sus: 0.6, r: 0.04 },
-      { seq: ['D1'], drum: true, gain: 0.42 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.42, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1485,7 +1654,7 @@
    * Industrial A minor riff. P1 = Am F Am G, P2 = Am F G E.
    */
   track('factory', {
-    bpm: 140, gain: 1.0,
+    bpm: 140, gain: 0.92,
     pat: {
       L1: 'a4*2 a4*1 a4*1 c5*2 a4*2 e5*2 a4*2 d5*2 a4*2 | f4*2 f4*1 f4*1 a4*2 f4*2 c5*2 f4*2 bb4*2 f4*2 |' +
           'a4*2 a4*1 a4*1 c5*2 a4*2 e5*2 g5*2 e5*2 c5*2 | g4*2 g4*1 g4*1 b4*2 g4*2 d5*2 g4*2 f5*2 d5*2',
@@ -1501,14 +1670,17 @@
           'a1*2 a1*2 a1*2 a2*2 a1*2 a1*2 e2*2 g2*2 | g1*2 g1*2 g1*2 g2*2 g1*2 g1*2 d2*2 f2*2',
       B2: 'a1*2 a1*2 a1*2 a2*2 a1*2 a1*2 e2*2 g2*2 | f1*2 f1*2 f1*2 f2*2 f1*2 f1*2 c2*2 e2*2 |' +
           'g1*2 g1*2 g1*2 g2*2 g1*2 g1*2 d2*2 f2*2 | e1*2 e1*2 e1*2 e2*2 e1*2 e1*2 b1*2 g#1*2',
+      A1: 'a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 | f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 |a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 | g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2',
+      A2: 'a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 | f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 |g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | e4*2 g#4*2 b4*2 g#4*2 e5*2 b4*2 g#4*2 b4*2',
       D1: 'k*2 m*2 s*2 m*2 k*2 m*2 s*2 m*2',
       D2: 'k*2 m*2 s*2 k*2 m*2 m*2 s*2 h*2'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.125, gain: 0.13, gate: 0.7, a: 0.002, d: 0.04, sus: 0.6, r: 0.03, filt: { type: 'lowpass', f: 2800, q: 1.5 } },
-      { seq: ['H1', 'H2'], wave: 'sawtooth', gain: 0.055, gate: 0.6, a: 0.004, d: 0.05, sus: 0.5, r: 0.04, filt: { type: 'lowpass', f: 1500, q: 3 } },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.125, gain: 0.13, gate: 0.7, a: 0.002, d: 0.04, sus: 0.6, r: 0.03, filt: { type: 'lowpass', f: 2800, q: 1.5 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'sawtooth', gain: 0.055, gate: 0.6, a: 0.004, d: 0.05, sus: 0.5, r: 0.04, filt: { type: 'lowpass', f: 1500, q: 3 }, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'sawtooth', gain: 0.18, gate: 0.62, a: 0.002, d: 0.04, sus: 0.5, r: 0.025, filt: { type: 'lowpass', f: 700, q: 2.5 } },
-      { seq: ['D1', 'D2'], drum: true, gain: 0.5 }
+      { seq: ['D1', 'D2'], drum: true, gain: 0.5, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1516,7 +1688,7 @@
    * Jaunty G major ragtime. P1 = G D Em C, P2 = G C D G.
    */
   track('tycoon', {
-    bpm: 160, gain: 0.95, swing: 0.18,
+    bpm: 160, gain: 0.81, swing: 0.18,
     pat: {
       L1: 'd5*2 g5*2 b5*2 g5*2 d6*4 b5*4 | a5*2 f#5*2 a5*2 d6*2 a5*4 f#5*4 |' +
           'e5*2 g5*2 b5*2 g5*2 e6*4 b5*4 | c5*2 e5*2 g5*2 e5*2 c6*4 g5*4',
@@ -1532,13 +1704,17 @@
           'e2*4 b2*4 e2*4 g2*4 | c2*4 g2*4 c2*4 e2*4',
       B2: 'g2*4 d3*4 g2*4 b2*4 | c2*4 g2*4 c2*4 e2*4 |' +
           'd2*4 a2*4 d2*4 f#2*4 | g2*4 d3*4 b2*4 g2*4',
+      A1: 'g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2 |e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 | c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2',
+      A2: 'g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 |d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2 | g4*2 d5*2 b4*2 d5*2 g5*2 b5*2 d5*2 b4*2',
+      D2: 'k*4 h*2 s*2 k*4 s*2 h*2 | k*2 r*2 t*2 t*2 s*2 t*2 !s*2 !c*2',
       D1: 'k*4 h*2 s*2 k*4 s*2 h*2 | k*4 h*2 s*2 k*2 k*2 s*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.145, gate: 0.74, a: 0.003, d: 0.045, sus: 0.7, r: 0.035 },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.06, gate: 0.45, a: 0.002, d: 0.035, sus: 0.4, r: 0.03 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.145, gate: 0.74, a: 0.003, d: 0.045, sus: 0.7, r: 0.035, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.06, gate: 0.45, a: 0.002, d: 0.035, sus: 0.4, r: 0.03, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.21, gate: 0.6, a: 0.003, d: 0.05, sus: 0.5, r: 0.03 },
-      { seq: ['D1'], drum: true, gain: 0.45 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.45, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1547,7 +1723,7 @@
    * P2 = C F G7 C.
    */
   track('troll', {
-    bpm: 180, gain: 0.95,
+    bpm: 180, gain: 0.78,
     pat: {
       L1: 'c5*2 e5*2 g5*2 e5*2 c5*2 e5*2 g5*4 | b4*2 d5*2 f5*2 d5*2 b4*2 d5*2 g5*4 |' +
           'e5*1 f5*1 e5*1 d5*1 c5*4 e5*2 g5*2 c6*4 | a5*1 g#5*1 g5*1 f#5*1 f5*4 d5*2 b4*2 g4*4',
@@ -1561,13 +1737,90 @@
           '-*4 b4+d5+f5*4 -*4 b4+d5+f5*4 | -*4 c5+e5+g5*4 -*4 c5+e5+g5*4',
       B1: 'c2*4 -*4 g2*4 -*4 | g1*4 -*4 d2*4 -*4 | c2*4 -*4 g2*4 -*4 | g1*4 -*4 d2*4 -*4',
       B2: 'c2*4 -*4 g2*4 -*4 | f1*4 -*4 c2*4 -*4 | g1*4 -*4 d2*4 -*4 | c2*4 -*4 g2*4 c2*4',
+      A1: 'c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | b4*2 d5*2 f5*2 d5*2 g5*2 f5*2 d5*2 b4*2 |c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | b4*2 d5*2 f5*2 d5*2 g5*2 f5*2 d5*2 b4*2',
+      A2: 'c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 |b4*2 d5*2 f5*2 d5*2 g5*2 f5*2 d5*2 b4*2 | c5*2 g5*2 e5*2 g5*2 c6*2 e6*2 g5*2 e5*2',
+      D2: 'k*4 s*2 h*2 k*4 s*2 h*2 | k*2 r*2 r*2 s*2 t*2 t*2 !s*2 !c*2',
       D1: 'k*4 s*2 h*2 k*4 s*2 h*2 | k*4 s*2 h*2 k*2 k*2 c*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.72, a: 0.003, d: 0.04, sus: 0.72, r: 0.03, vib: { hz: 6.5, cents: 10 } },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.5, gain: 0.055, gate: 0.42, a: 0.002, d: 0.03, sus: 0.4, r: 0.025 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.72, a: 0.003, d: 0.04, sus: 0.72, r: 0.03, vib: { hz: 6.5, cents: 10 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.5, gain: 0.055, gate: 0.42, a: 0.002, d: 0.03, sus: 0.4, r: 0.025, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.23, gate: 0.6, a: 0.004, d: 0.05, sus: 0.5, r: 0.03 },
-      { seq: ['D1'], drum: true, gain: 0.48 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.48, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
+    ]
+  });
+
+  /* --------------------------------------------------------------- payday
+   * Trial 8's own music: F major funk with a walking bass, horn stabs on the
+   * off-beats and a clap on two and four. Greedy, bouncy, and it never stops
+   * moving, because neither does the lap you are running to pay for the tower.
+   * P1 = F Dm Bb C, P2 = F Bb Gm C.
+   */
+  track('payday', {
+    bpm: 132, gain: 1.25, swing: 0.16,
+    pat: {
+      L1: '!f5*2 -*1 f5*1 a5*2 c6*2 -*2 a5*2 f5*4 | !d5*2 -*1 d5*1 f5*2 a5*2 -*2 f5*2 d5*4 |' +
+          '!bb4*2 -*1 bb4*1 d5*2 f5*2 -*2 d5*2 bb4*4 | c5*2 e5*2 g5*2 bb5*2 !a5*4 g5*4',
+      L2: 'a5*2 c6*2 !f6*4 c6*2 a5*2 f5*4 | f5*2 a5*2 !d6*4 a5*2 f5*2 d5*4 |' +
+          'd5*2 f5*2 !bb5*4 f5*2 d5*2 bb4*4 | g5*2 bb5*2 c6*4 e6*2 c6*2 !g5*4',
+      L3: 'c6*1 bb5*1 a5*2 f5*2 a5*2 !c6*4 a5*4 | a5*1 g5*1 f5*2 d5*2 f5*2 !a5*4 f5*4 |' +
+          'f5*1 eb5*1 d5*2 bb4*2 d5*2 !f5*4 d5*4 | c6*2 bb5*2 a5*2 g5*2 !f5*8',
+      H1: '-*2 f4+a4+c5*2 -*4 f4+a4+c5*2 -*6 | -*2 d4+f4+a4*2 -*4 d4+f4+a4*2 -*6 |' +
+          '-*2 bb3+d4+f4*2 -*4 bb3+d4+f4*2 -*6 | -*2 c4+e4+g4*2 -*4 c4+e4+g4*2 -*6',
+      H2: '-*2 f4+a4+c5*2 -*4 f4+a4+c5*2 -*6 | -*2 bb3+d4+f4*2 -*4 bb3+d4+f4*2 -*6 |' +
+          '-*2 g3+bb3+d4*2 -*4 g3+bb3+d4*2 -*6 | -*2 c4+e4+g4*2 -*4 c4+e4+g4*2 -*6',
+      B1: 'f2*2 f2*2 a2*2 c3*2 f3*2 c3*2 a2*2 g2*2 | d2*2 d2*2 f2*2 a2*2 d3*2 a2*2 f2*2 e2*2 |' +
+          'bb1*2 bb1*2 d2*2 f2*2 bb2*2 f2*2 d2*2 c2*2 | c2*2 c2*2 e2*2 g2*2 c3*2 g2*2 e2*2 eb2*2',
+      B2: 'f2*2 f2*2 a2*2 c3*2 f3*2 c3*2 a2*2 g2*2 | bb1*2 bb1*2 d2*2 f2*2 bb2*2 f2*2 d2*2 c2*2 |' +
+          'g2*2 g2*2 bb2*2 d3*2 g3*2 d3*2 bb2*2 a2*2 | c2*2 c2*2 e2*2 g2*2 c3*2 bb2*2 a2*2 f2*2',
+      A1: 'f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 | d4*2 f4*2 a4*2 f4*2 d5*2 a4*2 f4*2 a4*2 |' +
+          'bb3*2 d4*2 f4*2 d4*2 bb4*2 f4*2 d4*2 f4*2 | c4*2 e4*2 g4*2 e4*2 c5*2 g4*2 e4*2 g4*2',
+      A2: 'f4*2 a4*2 c5*2 a4*2 f5*2 c5*2 a4*2 c5*2 | bb3*2 d4*2 f4*2 d4*2 bb4*2 f4*2 d4*2 f4*2 |' +
+          'g3*2 bb3*2 d4*2 bb3*2 g4*2 d4*2 bb3*2 d4*2 | c4*2 e4*2 g4*2 e4*2 c5*2 g4*2 e4*2 g4*2',
+      D1: '!k*4 ,h*2 p*2 k*2 k*2 !p*2 ,h*2 | !k*4 ,h*2 p*2 k*2 ,h*2 !p*2 x*2',
+      D2: '!k*4 ,h*2 p*2 k*2 k*2 !p*2 ,h*2 | k*2 t*2 t*2 p*2 t*2 t*2 !p*2 !c*2'
+    },
+    voices: [
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.14, gate: 0.7, a: 0.003, d: 0.04, sus: 0.66, r: 0.035, pan: 0.18, send: 0.26 },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.075, gate: 0.3, a: 0.002, d: 0.025, sus: 0.3, r: 0.02, pan: -0.3, send: 0.2, spread: 8 },
+      { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.24, gate: 0.52, a: 0.003, d: 0.04, sus: 0.45, r: 0.025 },
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.46, send: 0.06 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.042, gate: 0.32, a: 0.002, d: 0.03, sus: 0.26, r: 0.02, pan: 0.36, send: 0.4, spread: 6 }
+    ]
+  });
+
+  /* ------------------------------------------------------------- mischief
+   * Trial 9's own music: a music-box waltz in A minor, three beats to the bar
+   * (twelve steps), that keeps almost falling over. Oom-pah-pah bass, a celesta
+   * lead detuned just enough to be wrong, and brushes instead of a backbeat.
+   * P1 = Am E7 Am E7, P2 = Am Dm E7 Am.
+   */
+  track('mischief', {
+    bpm: 168, gain: 1.38,
+    pat: {
+      L1: '!a5*3 c6*3 e6*3 c6*3 | b5*3 d6*3 g#5*3 b5*3 | !a5*3 c6*3 e6*3 a6*3 | g#5*6 e5*6',
+      L2: 'e6*3 d6*3 c6*3 b5*3 | a5*3 b5*3 c6*3 d6*3 | !e6*6 c6*3 a5*3 | b5*6 e5*6',
+      L3: 'c6*2 b5*1 c6*3 e6*3 c6*3 | d6*2 c#6*1 d6*3 f6*3 d6*3 | !e6*3 c6*3 a5*3 e5*3 | g#5*3 b5*3 e6*6',
+      H1: '-*4 a4+c5+e5*4 a4+c5+e5*4 | -*4 g#4+b4+e5*4 g#4+b4+e5*4 |' +
+          '-*4 a4+c5+e5*4 a4+c5+e5*4 | -*4 e4+g#4+b4*4 e4+g#4+b4*4',
+      H2: '-*4 a4+c5+e5*4 a4+c5+e5*4 | -*4 d4+f4+a4*4 d4+f4+a4*4 |' +
+          '-*4 e4+g#4+b4*4 e4+g#4+b4*4 | -*4 a4+c5+e5*4 a4+c5+e5*4',
+      B1: '!a2*4 -*8 | !e2*4 -*8 | !a2*4 -*8 | !e2*4 -*4 b2*4',
+      B2: '!a2*4 -*8 | !d2*4 -*8 | !e2*4 -*8 | !a2*4 -*4 e2*4',
+      A1: 'a4*2 c5*2 e5*2 a5*2 e5*2 c5*2 | g#4*2 b4*2 e5*2 g#5*2 e5*2 b4*2 |' +
+          'a4*2 c5*2 e5*2 a5*2 e5*2 c5*2 | b4*2 e5*2 g#5*2 b5*2 g#5*2 e5*2',
+      A2: 'a4*2 c5*2 e5*2 a5*2 e5*2 c5*2 | d5*2 f5*2 a5*2 d6*2 a5*2 f5*2 |' +
+          'e5*2 g#5*2 b5*2 e6*2 b5*2 g#5*2 | a4*2 e5*2 c5*2 e5*2 a5*2 c6*2',
+      D1: 'k*4 x*4 ,x*4 | k*4 x*4 s*4 | k*4 x*4 ,x*4 | k*2 ,k*2 s*4 x*4',
+      D2: 'k*4 x*4 ,x*4 | k*4 r*2 r*2 s*4 | k*4 x*4 ,x*4 | t*2 t*2 !s*4 !c*4'
+    },
+    voices: [
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'triangle', gain: 0.135, gate: 0.62, a: 0.004, d: 0.09, sus: 0.34, r: 0.1, pan: 0.14, send: 0.34, spread: 11, vib: { hz: 4.8, cents: 9 } },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.055, gate: 0.38, a: 0.003, d: 0.04, sus: 0.3, r: 0.04, pan: -0.32, send: 0.16 },
+      { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.22, gate: 0.42, a: 0.003, d: 0.05, sus: 0.35, r: 0.03 },
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.4, send: 0.08 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.04, gate: 0.3, a: 0.002, d: 0.03, sus: 0.24, r: 0.02, pan: 0.38, send: 0.42, spread: 7 }
     ]
   });
 
@@ -1575,7 +1828,7 @@
    * Epic D minor. P1 = Dm Bb F C, P2 = Dm Bb Gm A.
    */
   track('apocalypse', {
-    bpm: 92, gain: 1.0,
+    bpm: 92, gain: 1.15,
     pat: {
       L1: 'd5*8 a5*8 | bb5*8 f5*8 | a5*8 c6*8 | g5*8 e5*8',
       L2: 'd6*6 c6*2 a5*4 f5*4 | bb5*6 a5*2 f5*4 d5*4 |' +
@@ -1588,13 +1841,17 @@
           'f1*2 f1*2 f1*2 f1*2 c2*2 c2*2 f2*2 f1*2 | c2*2 c2*2 c2*2 c2*2 g2*2 g2*2 c3*2 c2*2',
       B2: 'd2*2 d2*2 d2*2 d2*2 a2*2 a2*2 d3*2 d2*2 | bb1*2 bb1*2 bb1*2 bb1*2 f2*2 f2*2 bb2*2 bb1*2 |' +
           'g1*2 g1*2 g1*2 g1*2 d2*2 d2*2 g2*2 g1*2 | a1*2 a1*2 a1*2 a1*2 e2*2 e2*2 a2*2 a1*2',
+      A1: 'd5*4 f5*4 a5*4 f5*4 | bb4*4 d5*4 f5*4 d5*4 | f4*4 a4*4 c5*4 a4*4 | c5*4 e5*4 g5*4 e5*4',
+      A2: 'd5*4 f5*4 a5*4 f5*4 | bb4*4 d5*4 f5*4 d5*4 | g4*4 bb4*4 d5*4 bb4*4 | a4*4 c#5*4 e5*4 c#5*4',
+      D2: 'k*8 s*8 | k*4 t*2 t*2 !s*4 !c*4',
       D1: 'k*4 t*2 t*2 k*4 s*4 | k*2 k*2 t*2 t*2 k*4 s*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.94, a: 0.01, d: 0.12, sus: 0.72, r: 0.09, vib: { hz: 4.5, cents: 15 } },
-      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.08, gate: 0.97, a: 0.12, d: 0.3, sus: 0.72, r: 0.25 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.94, a: 0.01, d: 0.12, sus: 0.72, r: 0.09, vib: { hz: 4.5, cents: 15 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.08, gate: 0.97, a: 0.12, d: 0.3, sus: 0.72, r: 0.25, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'sawtooth', gain: 0.17, gate: 0.78, a: 0.004, d: 0.06, sus: 0.55, r: 0.04, filt: { type: 'lowpass', f: 800, q: 2 } },
-      { seq: ['D1'], drum: true, gain: 0.55 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.55, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1619,13 +1876,17 @@
           'g1*4 g1*2 d2*2 g2*4 d2*4 | d2*4 d2*2 a2*2 d3*4 a2*4',
       B2: 'c2*4 c2*2 g2*2 c3*4 g2*4 | g1*4 g1*2 d2*2 g2*4 d2*4 |' +
           'a1*4 a1*2 e2*2 a2*4 e2*4 | b1*4 b1*2 f#2*2 b2*4 f#2*4',
+      A1: 'e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 | c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 |g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 | d5*2 f#5*2 a5*2 f#5*2 d6*2 a5*2 f#5*2 a5*2',
+      A2: 'c5*2 e5*2 g5*2 e5*2 c6*2 g5*2 e5*2 g5*2 | g4*2 b4*2 d5*2 b4*2 g5*2 d5*2 b4*2 d5*2 |a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 | b4*2 d#5*2 f#5*2 d#5*2 b5*2 f#5*2 d#5*2 f#5*2',
+      D2: 'k*4 h*2 s*2 k*4 s*2 h*2 | k*4 t*2 t*2 !s*4 !c*4',
       D1: 'c*4 h*2 s*2 k*4 s*2 h*2 | k*4 h*2 s*2 k*2 k*2 s*4'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.9, a: 0.005, d: 0.08, sus: 0.72, r: 0.06, vib: { hz: 5, cents: 12 } },
-      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.075, gate: 0.95, a: 0.05, d: 0.2, sus: 0.7, r: 0.15 },
+      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'pulse', duty: 0.5, gain: 0.15, gate: 0.9, a: 0.005, d: 0.08, sus: 0.72, r: 0.06, vib: { hz: 5, cents: 12 }, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2'], wave: 'triangle', gain: 0.075, gate: 0.95, a: 0.05, d: 0.2, sus: 0.7, r: 0.15, pan: -0.26, send: 0.14 },
       { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.2, gate: 0.8, a: 0.004, d: 0.06, sus: 0.58, r: 0.04 },
-      { seq: ['D1'], drum: true, gain: 0.42 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.42, send: 0.05 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 
@@ -1637,7 +1898,7 @@
    *   B: Am G F E Am G Am E   (the classic descending accompaniment)
    */
   track('korobeiniki', {
-    bpm: 150, gain: 1.0,
+    bpm: 150, gain: 1.05,
     pat: {
       A1: 'e5*4 b4*2 c5*2 d5*4 c5*2 b4*2 | a4*4 a4*2 c5*2 e5*4 d5*2 c5*2 |' +
           'b4*6 c5*2 d5*4 e5*4 | c5*4 a4*4 a4*8',
@@ -1661,13 +1922,17 @@
           'f2*2 f3*2 f2*2 f3*2 f2*2 f3*2 f2*2 f3*2 | e2*2 e3*2 e2*2 e3*2 e2*2 e3*2 e2*2 e3*2',
       C4: 'a2*2 a3*2 a2*2 a3*2 a2*2 a3*2 a2*2 a3*2 | g2*2 g3*2 g2*2 g3*2 g2*2 g3*2 g2*2 g3*2 |' +
           'a2*2 a3*2 a2*2 a3*2 a2*2 a3*2 a2*2 a3*2 | e2*2 e3*2 e2*2 e3*2 e2*2 e3*2 e2*2 e3*2',
+      R1: 'e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 | a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 |e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 | b4*2 d#5*2 f#5*2 d#5*2 b5*2 f#5*2 d#5*2 f#5*2',
+      R2: 'a4*2 c5*2 e5*2 c5*2 a5*2 e5*2 c5*2 e5*2 | e5*2 g5*2 b5*2 g5*2 e6*2 b5*2 g5*2 b5*2 |b4*2 d#5*2 f#5*2 d#5*2 b5*2 f#5*2 d#5*2 f#5*2 | e5*2 b5*2 g5*2 b5*2 e6*2 g6*2 b5*2 g5*2',
+      D2: 'k*4 h*2 s*2 k*4 s*2 h*2 | k*2 k*2 t*2 t*2 s*2 t*2 !s*2 !c*2',
       D1: 'k*4 h*4 s*4 h*4'
     },
     voices: [
-      { seq: ['A1', 'A2', 'B1', 'B2'], wave: 'pulse', duty: 0.5, gain: 0.16, gate: 0.88, a: 0.003, d: 0.06, sus: 0.75, r: 0.04 },
-      { seq: ['H1', 'H2', 'H3', 'H4'], wave: 'pulse', duty: 0.25, gain: 0.06, gate: 0.5, a: 0.002, d: 0.04, sus: 0.45, r: 0.03 },
+      { seq: ['A1', 'A2', 'B1', 'B2'], wave: 'pulse', duty: 0.5, gain: 0.16, gate: 0.88, a: 0.003, d: 0.06, sus: 0.75, r: 0.04, pan: 0.16, send: 0.24 },
+      { seq: ['H1', 'H2', 'H3', 'H4'], wave: 'pulse', duty: 0.25, gain: 0.06, gate: 0.5, a: 0.002, d: 0.04, sus: 0.45, r: 0.03, pan: -0.26, send: 0.14 },
       { seq: ['C1', 'C2', 'C3', 'C4'], wave: 'triangle', gain: 0.2, gate: 0.72, a: 0.003, d: 0.05, sus: 0.55, r: 0.03 },
-      { seq: ['D1'], drum: true, gain: 0.34 }
+      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.34, send: 0.05 },
+      { seq: ['R1', 'R2'], wave: 'pulse', duty: 0.125, gain: 0.045, gate: 0.34, a: 0.002, d: 0.03, sus: 0.28, r: 0.02, pan: 0.34, send: 0.38, spread: 5 }
     ]
   });
 

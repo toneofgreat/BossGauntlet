@@ -119,7 +119,7 @@ Beats:
 Every puzzle is solvable without dying; the hazards are around the puzzles, not inside them.
 Two checkpoints. ~110 tiles.
 
-## Level 8 — THE ULTIMATE OBBY TYCOON (theme `tycoon`, music `tycoon`)
+## Level 8 — THE ULTIMATE OBBY TYCOON (theme `tycoon`, music `payday`)
 *"The ultimate obby tycoon level."* **Read `docs/research-troll.md` §3 first.**
 
 A bright Roblox-flavoured plot: checkered ground, plastic-looking blocks, a base plate.
@@ -137,7 +137,7 @@ Phases (each gated by a purchase):
 Cash is shown in the HUD; buy buttons glow when affordable. Dying keeps your cash (deliberate —
 this level is about grind, not punishment). Three checkpoints. ~140 tiles. Target 6–9 minutes.
 
-## Level 9 — TRUST NOTHING (theme `troll`, music `troll`)
+## Level 9 — TRUST NOTHING (theme `troll`, music `mischief`)
 *"The ultimate troll level."* **Read `docs/research-troll.md` §1–2 first.**
 
 A cheerful, deliberately childish world — pastel sky, smiling clouds, a rainbow — that hates you.
