@@ -1,7 +1,7 @@
 /* =========================================================================
  * RAGE TRIALS - LEVEL 10: THE LAST TRIAL
  * -------------------------------------------------------------------------
- * The finale. Four movements and then an arcade cabinet.
+ * The finale. Four movements and then a dead arcade cabinet.
  *
  *   I.   LUCK     cols   0- 55   chance doors, a 50/50 bridge, a slot gate
  *                                and one rigged door, all BOUNDED by the four
@@ -26,13 +26,13 @@
  *                                reversed tiles, a four-gap precision run,
  *                                and a fake goal at the end of it.
  *   IV.  ARCADE   cols 196-219   one screen higher. An actual cabinet.
- *                                RT.Tetris.start({level:2, linesToWin:10}).
- *                                Ten lines on NES level 2 wins the game.
+ *                                It does not work. Pulling its plug opens
+ *                                the shutter at 215; the door is behind it.
  *
  * Grid: 220 x 20. Movements I-II walk on row 13 (slab rows 13-19);
  * movement III is a thin row-8 catwalk over the void; movement IV is a
- * row-3 gantry above it. Topping out in Tetris restarts TETRIS, never the
- * level - the cabinet is the checkpoint.
+ * row-3 gantry above it, with the checkpoint on it at 202, so the last
+ * stretch costs you the gantry and nothing else.
  * ========================================================================= */
 (function () {
   var RT = window.RT;
@@ -123,7 +123,7 @@
       rigTries: 0, rigOpen: 0,
       tycoonOn: 0, lastDeaths: 0,
       laps: 0, plateArmed: 1, lapBest: 0, lapT: 0,
-      arcadeTries: 0, movement: 1
+      arcadeTries: 0, arcadeDead: 0, movement: 1
     };
     S = {};
     luckRng = 20260921;
@@ -546,13 +546,12 @@
       var near = hitP(e.x - T, e.y, e.w + T * 2, e.h + T, 2);
       e.glow += ((near ? 1 : 0) - e.glow) * Math.min(1, dt * 6);
       if (!near || e.cool > 0) return;
-      if (!RT.Tetris || !RT.Tetris.start) return;
       if (RT.getMode && RT.getMode()) return;
       var go = (RT.input && RT.input.actionPressed) || e.dwell > 0.8;
       e.dwell = near ? (e.dwell || 0) + dt : 0;
       if (!go) return;
       e.cool = 1.2; e.dwell = 0;
-      startTetris();
+      powerDown(e);
     },
     reset: function (e) { e.cool = 0; e.dwell = 0; },
     draw: function (e, g) {
@@ -564,7 +563,7 @@
       var sx = x + 6, sy = y + 8, sw = w - 12, sh = hh * 0.42;
       rr(g, sx, sy, sw, sh, 3, '#07060d');
       g.save();
-      g.globalAlpha = 0.55 + e.glow * 0.4;
+      g.globalAlpha = (L.arcadeDead ? 0.12 : 0.55) + e.glow * 0.4;
       for (var i = 0; i < 7; i++) {
         var bx = sx + 3 + (i % 4) * (sw - 8) / 4;
         var by = sy + 4 + ((i * 7 + Math.floor(e.at * 2)) % 5) * (sh - 10) / 5;
@@ -574,7 +573,7 @@
       g.restore();
       /* marquee */
       rr(g, x + 3, y + 2, w - 6, 9, 2, '#ffd23f');
-      RT.drawText(g, 'TETRIS', x + w / 2, y + 6.5, { size: 7, color: '#2a2340' });
+      RT.drawText(g, L.arcadeDead ? 'CLOSED' : 'ARCADE', x + w / 2, y + 6.5, { size: 7, color: '#2a2340' });
       /* controls */
       rr(g, sx, y + hh * 0.58, sw, hh * 0.16, 3, '#1c1730');
       circ(g, sx + 9, y + hh * 0.66, 4, '#ff4d4d');
@@ -587,39 +586,34 @@
         RT.drawText(g, RT.isTouch && RT.isTouch() ? 'TAP ACTION' : 'PRESS E', x + w / 2, y - 14, {
           size: 11, color: '#ffe9a8', stroke: 'rgba(20,10,30,0.9)', strokeWidth: 3, alpha: e.glow
         });
-        RT.drawText(g, 'LEVEL 2  -  10 LINES', x + w / 2, y - 28, {
+        RT.drawText(g, L.arcadeDead ? 'IT IS OUT OF ORDER' : 'IT WANTS A COIN', x + w / 2, y - 28, {
           size: 9, color: '#9ad4ff', stroke: 'rgba(20,10,30,0.9)', strokeWidth: 3, alpha: e.glow
         });
       }
     }
   });
 
-  var TAUNTS = [
-    'Level 2. The machine is not even trying. Again.',
-    'The blocks are not the problem. The blocks are never the problem.',
-    'You have beaten nine trials to get shouted at by a 1989 arcade machine.',
-    'Ten lines. That is all anyone is asking.',
-    'It does not get faster. That is the good news.'
-  ];
+  /* ------------------------------------------------------------------- *
+   * THE CABINET DOES NOT WORK.                                          *
+   * It used to run Tetris. It has been unplugged since 1989 and the
+   * power it was drawing is the reason the door at the end of the gantry
+   * never opened. Pull its plug properly and the door gets it instead.   *
+   * ------------------------------------------------------------------- */
+  function carve(tx, ty, ch) { RT.setTile(tx, ty, ch); }
 
-  function startTetris() {
-    L.arcadeTries++;
-    sfx('powerup');
-    RT.Tetris.start({
-      level: 2,
-      linesToWin: 10,
-      onWin: function () {
-        RT.clearMode && RT.clearMode();
-        RT.flash('#ffffff', 0.3);
-        RT.winLevel();
-      },
-      onLose: function () {
-        RT.toast(TAUNTS[(L.arcadeTries - 1) % TAUNTS.length], 3);
-      },
-      onQuit: function () {
-        RT.toast('the cabinet is still there. it is not going anywhere.', 2.2);
-      }
-    });
+  function powerDown(e) {
+    if (L.arcadeDead) return;
+    L.arcadeDead = 1;
+    sfx('bonk'); sfx('death'); sfx('door');
+    RT.cam.shake(9, 0.9);
+    RT.flash('#ffd23f', 0.14);
+    RT.hitstop(5);
+    boom(e.x + e.w / 2, e.y + e.h * 0.4, ['#ffd23f', '#ff3ea5', '#3df0ff', '#ffffff'], 34, 260, { life: 1.1 });
+    var y;
+    for (y = 0; y <= 2; y++) carve(215, y, '.');
+    boom(215.5 * T, 1.5 * T, ['#9aa6c4', '#ffe9a8', '#ffffff'], 40, 320, { life: 1.3, spreadY: 60 });
+    RT.banner(['OUT OF ORDER', 'it has not worked since 1989'], 2.6);
+    RT.toast('the shutter at 215 took the power instead. the door is behind it.', 3.6);
   }
 
   /* ==================================================================== */
@@ -757,9 +751,9 @@
     music: 'apocalypse',
 
     tiles: [
-      '............................................................................................................................................................................................................................',
-      '............................................................................................................................................................................................................................',
-      '..........................................................................................................................................................................................................C.................',
+      '.......................................................................................................................................................................................................................#....',
+      '.......................................................................................................................................................................................................................#....',
+      '..........................................................................................................................................................................................................C............#..G.',
       '......................................................................................................................................................................................................######################',
       '.........................................................####.........................................................................................................................................######################',
       '..............................................................###...........................................................................................................................................................',
@@ -781,7 +775,7 @@
 
     intro: [
       'TRIAL 10 - THE LAST TRIAL',
-      'Four movements. Luck, money, trolls, and then Tetris.',
+      'Four movements. Luck, money, trolls, and a door that is not where you think.',
       'Everything that can be learned, can be beaten.'
     ],
 
@@ -885,7 +879,7 @@
       /* ===================== MOVEMENT IV - THE ARCADE ================== */
       { type: 'text', x: 199, y: 1, w: 10, text: 'IV. THE ARCADE', size: 0.9, color: '#ffffff', alpha: 0.3 },
       { type: 'sign', x: 205, y: 2, w: 11, range: 2.6,
-        text: 'NES Tetris, level 2. Ten lines. Top out and you restart the machine, never the trial.' },
+        text: 'An arcade cabinet, at the end of the hardest trial in the game. Of course there is. Press ACTION on it anyway.' },
       { type: 'deco', kind: 'lamp', x: 201.4, y: 1.4 },
       { type: 'deco', kind: 'lamp', x: 214.4, y: 1.4 },
       { type: 'lXarcade', x: 210, y: 0 }

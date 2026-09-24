@@ -644,3 +644,19 @@ The four bosses in level 12 shipped provably *reachable* (the finale drove them 
   *defeated by it* for the level to pass; THE JESTER must give it at least two hits, and its two
   deaths are then driven through `__L12.dbg` so the resurrection chain stays covered. If a future
   change makes a fight unwinnable again, the suite fails instead of going green.
+
+### 2026-09-24 — level 10 has no Tetris in it
+
+- **The cabinet at 210 no longer starts anything.** `levels/level10.js` does not reference
+  `RT.Tetris`; pressing ACTION on the cabinet runs `powerDown()`, which carves the shutter at
+  column 215 (rows 0–2) and leaves the trial's real goal — a `G` tile at 218,2 authored into the
+  map — behind it. The cabinet is scenery with a joke on it: OUT OF ORDER since 1989.
+- **Level 10 therefore has no special pass condition any more.** The 2026-09-21 amendment let its
+  route stop at the cabinet and proved the rest through `RT.Tetris`; `docs/routes/level10.json`
+  now plays through to the door (74 segments, wins with zero deaths) and the level-10 clause is
+  gone from `tools/playtest.js`. Section 13's plain rule applies to it again.
+- **`modes/tetris.js` is untouched and still loaded.** Section 10, the `RT.Tetris` API, the
+  `korobeiniki` track and `__dbg.tetris()` / `tetrisState()` / `tetrisInput()` in section 8 all
+  still work exactly as documented, and `playtest.js tetris` still exercises them. Nothing in the
+  game calls them now — the module is there for the contract and for the next agent who wants a
+  cabinet that does work.

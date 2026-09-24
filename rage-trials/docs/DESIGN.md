@@ -12,7 +12,7 @@ Global rules for every level:
   *sometimes* trolls, but never in a way that can soft-lock the player.
 - **Beatable**: every level ships a scripted route in `docs/routes/levelNN.json` proving it.
 - **Length**: L1 ~35 tiles, L2 ~50, L3 ~60, L4 ~70, L5 ~85, L6 ~230, L7 ~110, L8 ~140,
-  L9 ~120, L10 ~180 + the Tetris finale.
+  L9 ~120, L10 ~180 + the gantry and the dead cabinet.
 - **Look**: each level has its own theme, its own parallax, its own ambient particles, its own
   colour identity. No two levels should look alike.
 - The player is a small round-headed runner; the engine draws it. Levels do not draw the player.
@@ -152,9 +152,9 @@ Rules that keep it fun: instant respawn, generous checkpoints (the trap checkpoi
 few tiles), a visible death counter that turns into a badge, comedy sfx on every troll, and the
 final door opening with a sincere "ok, you earned it". ~120 tiles.
 
-## Level 10 — THE LAST TRIAL (themes `apocalypse` → `tycoon` → `troll` → Tetris, music `apocalypse`)
-*"Luck and skill and tycoon in one, rage-inducing trolls, possible but insane, then beat Tetris
-level 2."*
+## Level 10 — THE LAST TRIAL (themes `apocalypse` → `tycoon` → `troll` → `void`, music `apocalypse`)
+*"Luck and skill and tycoon in one, rage-inducing trolls, possible but insane, and then a door
+that is not where you think it is."*
 
 The finale. A burning sky, floating debris, lightning, the ruins of every earlier world drifting
 in the parallax. Four movements, each with a checkpoint at its start:
@@ -178,9 +178,9 @@ in the parallax. Four movements, each with a checkpoint at its start:
    crumble staircase that trolls the rhythm, a laser maze with reversed controls for 6 tiles, and
    a final 12-tile precision run with a fake goal at the end (the real goal is one screen higher).
 4. **THE ARCADE** — an actual arcade cabinet stands at the end. Touch it, the screen fills, and
-   `RT.Tetris.start({level:2, linesToWin:10})` runs the authentic NES Tetris at
-   level 2. Clear 10 lines to win the game. Top out → you restart Tetris only (the checkpoint is
-   the cabinet, never the level), with a taunt line each time.
+   it turns out to be dead: it has not worked since 1989. Pressing ACTION on it pulls its plug,
+   the power goes to the shutter at 215 instead, and the trial's actual door is behind that.
+   The checkpoint is on the gantry at 202, so the last stretch costs the gantry and nothing else.
 Winning shows THE END: total deaths, total time, a rage rating, and the credits.
 
 ---
@@ -190,8 +190,8 @@ Winning shows THE END: total deaths, total time, a rage rating, and the credits.
 `docs/routes/levelNN.json` = `[{"hold":{"right":true},"steps":40},{"tap":"jump"},…]` — a legal
 input script that reaches the goal, used by the automated playtest. `tap` presses for 1 step.
 For levels 8 and 10 the route may call `"cash": n` to grant cash (testing the tycoon separately)
-but must otherwise be legal. For level 10 the route may end at the arcade; Tetris is tested
-separately through `__dbg.tetrisInput`.
+but must otherwise be legal. Level 10's route now plays all the way to its door, so it needs no
+special case at all; level 12's finale is driven by the autoplayer in tools/playtest.js.
 
 ---
 

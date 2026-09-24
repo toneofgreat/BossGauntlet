@@ -85,24 +85,6 @@ async function main() {
       } catch (e) { out.err = String(e && e.message || e); }
       return out;
     }, n, route).catch(e => ({ level: n, err: 'evaluate failed: ' + e.message }));
-    if (n === 10 && !r.won) {
-      r.finale = await page.evaluate(async () => {
-        const RT = window.RT, d = window.__dbg, o = { arcade: false, cleared: 0, won: false, err: null };
-        try {
-          o.arcade = !!(RT.Tetris && RT.Tetris.active);
-          if (!o.arcade) return o;
-          RT.Tetris.setLines(9);                 /* nine of ten lines already down */
-          RT.Tetris.debugFill(['##########']);   /* the tenth is one lock away */
-          for (let i = 0; i < 6 && !d.state().won; i++) { d.tetrisInput('harddrop'); d.step(60); }
-          const ts = d.tetrisState();
-          o.cleared = ts ? ts.lines : -1;
-          o.won = !!d.state().won;
-        } catch (e) { o.err = String(e && e.message || e); }
-        return o;
-      }).catch(e => ({ err: 'finale eval failed: ' + e.message }));
-      if (r.finale && r.finale.won) r.won = true;
-      console.log('L10 FINALE', JSON.stringify(r.finale));
-    }
     // ---- level 12: the route proves the rocket race, this proves the rest --
     // Four bosses, a rising shaft, a sixteen-item tycoon, a 119-tile troll
     // obby, a fake ending and a ticket booth cannot be driven by a fixed input
