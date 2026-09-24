@@ -690,6 +690,13 @@ exactly as documented and every track name it lists still exists. Everything bel
   two and four) for the obby tycoon, and **`mischief`** (A minor music-box waltz, 168bpm, three
   beats to the bar — a 12-step bar, the only track in the game that is not in four) for the troll
   trial. `RT.Audio.musicNames()` now returns 16.
+- **Trial 9 is jazz now, not a waltz.** `mischief` was replaced by **`hustle`**: A minor at
+  186bpm, swung 0.22, over the Autumn-Leaves cycle (Am7 D7 Gmaj7 Cmaj7 / F#m7b5 B7b9 Em7 E7).
+  A walking bass in quarters approaching every root chromatically, rootless comping that lands
+  on the AND, a bebop lead with chromatic descents, a spang-a-lang ride with ghost-note answers,
+  and an eighth-note arpeggio hard right for the arcade half. Its note data was checked against
+  its own chord chart: every note is a chord tone, a scale tone, or an approach that resolves by
+  a semitone into the next one - including across the bar line.
 - **Every track gained an arpeggio voice and a drum fill**, so a track is 5 voices, not 4 (`void`
   is 4: it has no drums). Section 9 says "<= 3 voices"; that was already untrue at 4 and is now
   5. The extra voices are sparse by design — an arp on eighths, a fill every fourth cycle — and

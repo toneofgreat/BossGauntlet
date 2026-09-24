@@ -1758,7 +1758,7 @@
    * P1 = F Dm Bb C, P2 = F Bb Gm C.
    */
   track('payday', {
-    bpm: 132, gain: 1.25, swing: 0.16,
+    bpm: 132, gain: 1.48, swing: 0.16,
     pat: {
       L1: '!f5*2 -*1 f5*1 a5*2 c6*2 -*2 a5*2 f5*4 | !d5*2 -*1 d5*1 f5*2 a5*2 -*2 f5*2 d5*4 |' +
           '!bb4*2 -*1 bb4*1 d5*2 f5*2 -*2 d5*2 bb4*4 | c5*2 e5*2 g5*2 bb5*2 !a5*4 g5*4',
@@ -1790,37 +1790,55 @@
     ]
   });
 
-  /* ------------------------------------------------------------- mischief
-   * Trial 9's own music: a music-box waltz in A minor, three beats to the bar
-   * (twelve steps), that keeps almost falling over. Oom-pah-pah bass, a celesta
-   * lead detuned just enough to be wrong, and brushes instead of a backbeat.
-   * P1 = Am E7 Am E7, P2 = Am Dm E7 Am.
+  /* --------------------------------------------------------------- hustle
+   * Trial 9's own music: jazz, played at arcade speed and volume. A minor,
+   * 186bpm, swung hard (0.22), over the Autumn-Leaves cycle - Am7 D7 Gmaj7
+   * Cmaj7 / F#m7b5 B7b9 Em7 E7 - which is the most-played eight bars in jazz
+   * and the reason the line can be bebop instead of just fast.
+   *
+   * Four things make it jazz rather than chiptune in a minor key:
+   *   - the bass WALKS in quarters and approaches every root chromatically
+   *   - the comp lands on the AND, never the beat, in rootless voicings
+   *     (3rds, 7ths and 9ths - no roots, the bass has those)
+   *   - the lead runs chromatic approach notes on the way down
+   *   - the ride plays spang-a-lang and the snare answers in ghost notes
+   * and one thing makes it arcade: none of it ever stops for breath.
    */
-  track('mischief', {
-    bpm: 168, gain: 1.38,
+  track('hustle', {
+    bpm: 186, gain: 1.07, swing: 0.22,
     pat: {
-      L1: '!a5*3 c6*3 e6*3 c6*3 | b5*3 d6*3 g#5*3 b5*3 | !a5*3 c6*3 e6*3 a6*3 | g#5*6 e5*6',
-      L2: 'e6*3 d6*3 c6*3 b5*3 | a5*3 b5*3 c6*3 d6*3 | !e6*6 c6*3 a5*3 | b5*6 e5*6',
-      L3: 'c6*2 b5*1 c6*3 e6*3 c6*3 | d6*2 c#6*1 d6*3 f6*3 d6*3 | !e6*3 c6*3 a5*3 e5*3 | g#5*3 b5*3 e6*6',
-      H1: '-*4 a4+c5+e5*4 a4+c5+e5*4 | -*4 g#4+b4+e5*4 g#4+b4+e5*4 |' +
-          '-*4 a4+c5+e5*4 a4+c5+e5*4 | -*4 e4+g#4+b4*4 e4+g#4+b4*4',
-      H2: '-*4 a4+c5+e5*4 a4+c5+e5*4 | -*4 d4+f4+a4*4 d4+f4+a4*4 |' +
-          '-*4 e4+g#4+b4*4 e4+g#4+b4*4 | -*4 a4+c5+e5*4 a4+c5+e5*4',
-      B1: '!a2*4 -*8 | !e2*4 -*8 | !a2*4 -*8 | !e2*4 -*4 b2*4',
-      B2: '!a2*4 -*8 | !d2*4 -*8 | !e2*4 -*8 | !a2*4 -*4 e2*4',
-      A1: 'a4*2 c5*2 e5*2 a5*2 e5*2 c5*2 | g#4*2 b4*2 e5*2 g#5*2 e5*2 b4*2 |' +
-          'a4*2 c5*2 e5*2 a5*2 e5*2 c5*2 | b4*2 e5*2 g#5*2 b5*2 g#5*2 e5*2',
-      A2: 'a4*2 c5*2 e5*2 a5*2 e5*2 c5*2 | d5*2 f5*2 a5*2 d6*2 a5*2 f5*2 |' +
-          'e5*2 g#5*2 b5*2 e6*2 b5*2 g#5*2 | a4*2 e5*2 c5*2 e5*2 a5*2 c6*2',
-      D1: 'k*4 x*4 ,x*4 | k*4 x*4 s*4 | k*4 x*4 ,x*4 | k*2 ,k*2 s*4 x*4',
-      D2: 'k*4 x*4 ,x*4 | k*4 r*2 r*2 s*4 | k*4 x*4 ,x*4 | t*2 t*2 !s*4 !c*4'
+      /* --- the head: eighths, chromatic on the way down ---------------- */
+      L1: '!a4*2 b4*2 c5*2 e5*2 g5*2 f#5*2 f5*2 e5*2 | !d5*2 f#5*2 a5*2 c6*2 b5*2 a5*2 f#5*2 d5*2 |' +
+          '!g5*2 a5*2 b5*2 d6*2 b5*2 a5*2 g5*2 f#5*2 | !e5*2 g5*2 b5*2 c6*2 b5*2 g5*2 e5*2 d5*2',
+      L2: '!f#5*2 a5*2 c6*2 e6*2 c6*2 a5*2 f#5*2 e5*2 | !d#5*2 f#5*2 a5*2 c6*2 b5*2 a5*2 f#5*2 d#5*2 |' +
+          '!e5*2 g5*2 b5*2 d6*2 b5*2 g5*2 e5*2 d5*2 | !g#5*2 b5*2 d6*2 e6*2 d6*2 b5*2 g#5*2 f#5*2',
+      /* --- the shout chorus: a riff that refuses to move --------------- */
+      L3: 'a5*1 a5*1 c6*2 -*2 !a5*2 e5*2 g5*2 !a5*4 | a5*1 a5*1 c6*2 -*2 !a5*2 f#5*2 a5*2 !c6*4 |' +
+          'b5*1 b5*1 d6*2 -*2 !b5*2 g5*2 b5*2 !d6*4 | e6*2 d6*2 c6*2 b5*2 !a5*4 g#5*2 !a5*2',
+      /* --- rootless comping, always on the and ------------------------- */
+      H1: '-*3 c5+e5+g5*1 -*4 c5+e5+g5*2 -*6 | -*3 f#4+c5+e5*1 -*4 f#4+c5+e5*2 -*6 |' +
+          '-*3 b4+d5+f#5*1 -*4 b4+d5+f#5*2 -*6 | -*3 e5+g5+b5*1 -*4 e5+g5+b5*2 -*6',
+      H2: '-*3 a4+c5+e5*1 -*4 a4+c5+e5*2 -*6 | -*3 d#5+a5+c6*1 -*4 d#5+a5+c6*2 -*6 |' +
+          '-*3 g4+b4+d5*1 -*4 g4+b4+d5*2 -*6 | -*3 g#4+d5+f#5*1 -*4 g#4+d5+f#5*2 -*6',
+      /* --- the walk: four to the bar, chromatic into the next root ----- */
+      B1: 'a2*4 c3*4 e3*4 c#3*4 | d3*4 f#3*4 a3*4 ab3*4 | g2*4 b2*4 d3*4 b2*4 | c3*4 e3*4 g3*4 f3*4',
+      B2: 'f#2*4 a2*4 c3*4 e3*4 | b2*4 d#3*4 f#3*4 f3*4 | e2*4 g2*4 b2*4 d3*4 | e2*4 g#2*4 b2*4 b2*4',
+      /* --- ride, ghosts, and a clap where the crowd would be ----------- */
+      D1: '!k*2 h*2 ,s*2 h*2 k*2 !s*2 h*2 ,h*2 | h*2 ,h*2 k*2 ,s*2 !s*2 h*2 k*2 p*2',
+      D2: '!k*2 h*2 ,s*2 h*2 k*2 !s*2 h*2 ,h*2 | t*2 t*2 ,s*2 t*2 !s*2 t*2 !s*2 !c*2',
+      D3: '!k*2 h*1 h*1 ,s*2 h*2 !k*2 !s*2 h*1 h*1 p*2 | !k*2 h*2 ,s*2 !s*2 k*2 h*2 !s*2 !c*2',
+      /* --- the arcade half: eighth-note arpeggios, hard right ---------- */
+      A1: 'a4*2 c5*2 e5*2 g5*2 a5*2 g5*2 e5*2 c5*2 | d5*2 f#5*2 a5*2 c6*2 a5*2 f#5*2 d5*2 a4*2 |' +
+          'g4*2 b4*2 d5*2 f#5*2 g5*2 f#5*2 d5*2 b4*2 | c5*2 e5*2 g5*2 b5*2 c6*2 b5*2 g5*2 e5*2',
+      A2: 'f#4*2 a4*2 c5*2 e5*2 f#5*2 e5*2 c5*2 a4*2 | d#5*2 f#5*2 a5*2 c6*2 a5*2 f#5*2 d#5*2 b4*2 |' +
+          'e4*2 g4*2 b4*2 d5*2 e5*2 d5*2 b4*2 g4*2 | g#4*2 b4*2 d5*2 f#5*2 g#5*2 f#5*2 d5*2 b4*2'
     },
     voices: [
-      { seq: ['L1', 'L2', 'L1', 'L3'], wave: 'triangle', gain: 0.135, gate: 0.62, a: 0.004, d: 0.09, sus: 0.34, r: 0.1, pan: 0.14, send: 0.34, spread: 11, vib: { hz: 4.8, cents: 9 } },
-      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.25, gain: 0.055, gate: 0.38, a: 0.003, d: 0.04, sus: 0.3, r: 0.04, pan: -0.32, send: 0.16 },
-      { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.22, gate: 0.42, a: 0.003, d: 0.05, sus: 0.35, r: 0.03 },
-      { seq: ['D1', 'D1', 'D1', 'D2'], drum: true, gain: 0.4, send: 0.08 },
-      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.04, gate: 0.3, a: 0.002, d: 0.03, sus: 0.24, r: 0.02, pan: 0.38, send: 0.42, spread: 7 }
+      { seq: ['L1', 'L2', 'L3', 'L2'], wave: 'pulse', duty: 0.25, gain: 0.15, gate: 0.62, a: 0.002, d: 0.035, sus: 0.6, r: 0.03, pan: 0.18, send: 0.3, vib: { hz: 5.5, cents: 7 } },
+      { seq: ['H1', 'H2'], wave: 'pulse', duty: 0.5, gain: 0.07, gate: 0.34, a: 0.002, d: 0.03, sus: 0.3, r: 0.035, pan: -0.34, send: 0.22, spread: 9 },
+      { seq: ['B1', 'B2'], wave: 'triangle', gain: 0.25, gate: 0.56, a: 0.003, d: 0.045, sus: 0.42, r: 0.03 },
+      { seq: ['D1', 'D1', 'D3', 'D2'], drum: true, gain: 0.5, send: 0.07 },
+      { seq: ['A1', 'A2'], wave: 'pulse', duty: 0.125, gain: 0.05, gate: 0.3, a: 0.002, d: 0.025, sus: 0.24, r: 0.02, pan: 0.4, send: 0.42, spread: 6 }
     ]
   });
 
