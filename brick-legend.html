@@ -2984,8 +2984,27 @@ function battleMusic(on){
    (the same one that says "pew!" when you shoot) pitched and timed
    onto the piano, with a formant-synth choir under it so the song
    still has vocals on a device with no speech voice at all.
+
+   CASOH'S VOICE. The real CaseOh is a heavy Southern American
+   baritone - he grew up in Dallas County, Arkansas, and the drawl
+   came with him (he is the man who says "warshed" for "washed").
+   So the voice here is built to that description, three ways:
+     - pickVoice() scores the device's voices and takes the deepest
+       AMERICAN male it can find, and pushes the bright British and
+       novelty voices to the bottom where they belong;
+     - CASOH.pitch/.rate drop the whole performance into a baritone
+       and slow it to a drawl, and every line keeps its own relative
+       pitch on top of that, so the shouts still sit above the mumbles;
+     - drawl() respells the words the way he says them, because a
+       speech synth pronounces what you WRITE - "I" becomes "Ah",
+       "you are" becomes "yer", "-ing" loses its g, and so on.
+   Then chest() puts a sub-bass swell under every line so a big man's
+   voice moves a bit of air. It is an impression built out of a text
+   to speech voice, not a recording of anybody.
    ============================================================ */
-var MUS={cur:'off',timer:null,beat:0,paused:false,voice:null,voiceTried:false};
+var MUS={cur:'off',timer:null,beat:0,paused:false,voice:null,voiceHook:false};
+/* how deep and how slow he is, before a line's own pitch is applied */
+var CASOH={pitch:0.5,rate:0.78};
 
 /* ---- a piano note: three partials, a hammer, and a long tail ---- */
 function pianoNote(midi,when,dur,vel){
@@ -3046,29 +3065,91 @@ function vox(midi,when,dur,vowel,peak){
 
 /* ---- the speaking voice, pitched and timed onto the bar ---- */
 function pickVoice(){
-  if(MUS.voiceTried) return MUS.voice;
-  MUS.voiceTried=true;
-  try{
-    var vs=speechSynthesis.getVoices()||[];
-    var pref=['Google UK English Male','Microsoft David','Daniel','Alex','Google US English'];
-    for(var p=0;p<pref.length;p++)
-      for(var i=0;i<vs.length;i++)
-        if(vs[i].name.indexOf(pref[p])>=0){ MUS.voice=vs[i]; return MUS.voice; }
-    for(var j=0;j<vs.length;j++) if(/en(-|_)/i.test(vs[j].lang)){ MUS.voice=vs[j]; return MUS.voice; }
-  }catch(e){}
+  if(MUS.voice) return MUS.voice;
+  var vs=[];
+  try{ vs=speechSynthesis.getVoices()||[]; }catch(e){ return null; }
+  if(!vs.length){                       /* Chrome fills the list in late */
+    if(!MUS.voiceHook){ MUS.voiceHook=true;
+      try{ speechSynthesis.addEventListener('voiceschanged',function(){ pickVoice(); }); }catch(e){} }
+    return null;
+  }
+  var best=null,bs=-1e9;
+  for(var i=0;i<vs.length;i++){
+    var v=vs[i], n=(v.name||'').toLowerCase(), l=(v.lang||'').toLowerCase(), sc=0;
+    if(!/^en/.test(l)) continue;
+    if(/en[-_]us/.test(l)) sc+=40;                                    /* American, first of all */
+    if(/en[-_](gb|au|in|ie|za|nz)/.test(l)) sc-=30;                   /* he is not British */
+    if(/(zira|hazel|susan|samantha|victoria|karen|moira|tessa|fiona|serena|female|woman|girl)/.test(n)) sc-=70;
+    if(/male/.test(n)&&!/female/.test(n)) sc+=25;
+    if(/\b(guy|david|mark|andrew|brian|steffan|roger|davis|jason|aaron|fred|alex|daniel|christopher|eric|tony|reed|ralph|junior)\b/.test(n)) sc+=30;
+    if(/(guy|david|mark|fred)/.test(n)) sc+=18;                       /* the deepest ones on Windows and Mac */
+    if(/google us english/.test(n)) sc+=20;
+    if(/natural/.test(n)) sc+=14;                                     /* the neural voices sound like a person */
+    if(/(novelty|whisper|bells|bubbles|cellos|organ|trinoids|zarvox|bahh|boing|jester|bad news|good news|wobble|superstar|albert)/.test(n)) sc-=90;
+    if(v.localService) sc+=5;
+    if(sc>bs){ bs=sc; best=v; }
+  }
+  MUS.voice=best;
   return MUS.voice;
 }
+/* ---- the drawl: a speech synth says what you WRITE, so write it his way ---- */
+var DRAWL=[
+  [/\byou are\b/gi,'yer'],[/\byou're\b/gi,'yer'],[/\byour\b/gi,'yer'],[/\byou\b/gi,'yew'],
+  [/\bI'm\b/g,'Ahm'],[/\bI\b/g,'Ah'],[/\bmy\b/gi,'mah'],
+  [/\bis not\b/gi,"ain't"],[/\bisn't\b/gi,"ain't"],[/\bare not\b/gi,"ain't"],
+  [/\bgoing to\b/gi,'finna'],[/\bwant to\b/gi,'wanna'],
+  [/\bthere\b/gi,'thurr'],[/\bwhere\b/gi,'whurr'],
+  [/\bjust\b/gi,'jus'],[/\bget\b/gi,'git'],[/\bthem\b/gi,'em'],
+  [/\babout\b/gi,'bout'],[/\bbecause\b/gi,'cuz'],[/\bman\b/gi,'mane'],
+  [/\bwashed\b/gi,'warshed'],                      /* the tell everybody quotes */
+  [/(\w{3,})ing\b/gi,'$1in'],                      /* holding -> holdin */
+  [/\bof course\b/gi,'oh eff see']
+];
+function drawl(t){
+  var out=String(t);
+  for(var i=0;i<DRAWL.length;i++) out=out.replace(DRAWL[i][0],DRAWL[i][1]);
+  return out.replace(/(^|[.!?]\s+)([a-z])/g,function(m,a,b){ return a+b.toUpperCase(); });
+}
+/* ---- the air a big voice moves, under every line ---- */
+function chest(dur,vol){
+  var a=actx(); if(!a) return;
+  var t=a.currentTime, v=(vol==null?0.14:vol);
+  var o=a.createOscillator(), g=a.createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(64,t);
+  o.frequency.linearRampToValueAtTime(50,t+dur);         /* he lands every sentence on the floor */
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(v,t+0.13);
+  g.gain.setValueAtTime(v,t+Math.max(0.16,dur-0.3));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur+0.12);
+  o.connect(g); g.connect(sfxGain); o.start(t); o.stop(t+dur+0.24);
+  var lfo=a.createOscillator(), lg=a.createGain();       /* breathing, not droning */
+  lfo.type='sine'; lfo.frequency.setValueAtTime(5.4,t); lg.gain.setValueAtTime(2.4,t);
+  lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t+dur+0.24);
+}
 function casohSing(text,pitch,rate,vol){
+  var line=drawl(text), spoke=false;
+  var p0=clamp(CASOH.pitch*((pitch==null?0.75:pitch)/0.75),0.1,2);
+  var r0=clamp(CASOH.rate*((rate==null?0.8:rate)/0.8),0.1,2);
   try{
-    if(!window.speechSynthesis) return false;
-    var u=new SpeechSynthesisUtterance(text);
-    var v=pickVoice(); if(v) u.voice=v;
-    u.pitch=pitch==null?0.7:pitch;
-    u.rate=rate==null?0.85:rate;
-    u.volume=vol==null?1:vol;
-    speechSynthesis.speak(u);
-    return true;
-  }catch(e){ return false; }
+    if(window.speechSynthesis&&window.SpeechSynthesisUtterance){
+      /* he pauses mid-sentence and comes back lower - so split on his pauses */
+      var parts=line.split(/\s*\.\.\.\s*/).filter(function(x){ return /\S/.test(x); });
+      if(!parts.length) parts=[line];
+      if(/^\s*\.\.\./.test(line)) parts[0]='... '+parts[0];   /* he leaves the pause in front, too */
+      for(var i=0;i<parts.length;i++){
+        var u=new SpeechSynthesisUtterance(parts[i]+(i<parts.length-1?'...':''));
+        var v=pickVoice(); if(v) u.voice=v;
+        u.pitch=clamp(p0*(1-i*0.12)+rand(-0.02,0.02),0.1,2);
+        u.rate=clamp(r0*(i===parts.length-1?0.92:1),0.1,2);
+        u.volume=vol==null?1:vol;
+        speechSynthesis.speak(u);
+        spoke=true;
+      }
+    }
+  }catch(e){ spoke=false; }
+  chest(Math.min(4.2,0.5+line.length*0.052/Math.max(0.4,r0)),spoke?0.12:0.19);
+  return spoke;
 }
 
 /* ---- the three tracks ---------------------------------------- */
@@ -3105,21 +3186,22 @@ function crazyBeat(b){
 /* BURGER: the song he gives you. C ballad, and he is not a singer. */
 var BURGER_CH=[[48,'maj7'],[45,'min7'],[53,'maj7'],[55,'dom7'],
                [53,'maj7'],[55,'dom7'],[52,'min7'],[45,'min7']];
+/* Written plain; drawl() puts the accent on at sing time. */
 var BURGER_LINES={
   /* bar: [text, pitch, rate, and whether the choir joins] */
-  2:['I have a burger.',0.7,0.8,0],
-  4:['It is a burger.',0.68,0.78,0],
+  2:['Chat. I have a burger.',0.7,0.8,0],
+  4:['It is a burger, chat.',0.68,0.78,0],
   6:['I am holding... the burger.',0.72,0.74,0],
   8:['The lettuce is in there. Somewhere.',0.66,0.86,0],
   10:['BUR-GER.',1.1,0.62,1],
   11:['BUR-GER.',1.15,0.62,1],
   12:['It is a burger, man.',0.9,0.8,1],
-  14:['Cheese is optional. Not for me.',0.7,0.9,0],
+  14:['Cheese is optional... not for me.',0.7,0.9,0],
   16:['The blob man asked me what I was eating.',0.64,1,0],
   18:['I said... this is my burger.',0.74,0.76,0],
   21:['...anyway.',0.6,0.7,0],
   22:['Thank you for beating me.',0.8,0.78,1],
-  24:['Enjoy the burger song.',0.86,0.74,1]
+  24:['Enjoy the burger song... you are banned.',0.86,0.74,1]
 };
 function burgerBeat(b){
   var bar=(b>>2)%26, beat=b%4;
@@ -3143,6 +3225,7 @@ function burgerBeat(b){
       if(L[3]||!spoke){
         /* the choir: it sings the chord whether or not the device can talk */
         for(var i=0;i<3;i++) vox(notes[i%notes.length]+12,0.05*i,2.2,'o',spoke?0.05:0.13);
+        vox(ch[0]-12,0,2.4,'u',spoke?0.055:0.09);   /* and a big man under all of it */
       }
     }
     if(bar===20){ /* the awkward silence, and he knows it */
