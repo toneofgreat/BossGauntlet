@@ -9133,7 +9133,7 @@ function startUltBattle(){
   ref.group.add(spr);
   ref.group.position.set(BY.x,0,BY.z-20);
   world.add(ref.group);
-  ultBoss={mesh:ref.group,ref:ref,hp:6000,maxHp:6000,atkCd:3,t:0,phase:0,stunT:0,touchCd:0};
+  ultBoss={mesh:ref.group,ref:ref,hp:1200,maxHp:1200,atkCd:3,t:0,phase:0,stunT:0,touchCd:0};
   P.dead=false; P.hp=P.maxHp;
   $('hpBar').firstElementChild.style.width='100%';
   P.pos.set(BY.x,0,BY.z+30); P.vy=0;
@@ -9144,7 +9144,7 @@ function startUltBattle(){
   $('bossBar').firstElementChild.style.width='100%';
   battleMusic(true); setMood('boss');
   sndRoar(true); sndRoar(true); doFlash('#7ba03a'); camShake=1.4;
-  msg('👁️ ULTIMATE CASOH 👁️<br><span style="font-size:55%">"erm what then FINAL blob man?" — 6,000 HP. He summons EVERYTHING you\'ve ever fought.</span>',6000);
+  msg('👁️ ULTIMATE CASOH 👁️<br><span style="font-size:55%">"erm what then FINAL blob man?" — 1,200 HP. He summons EVERYTHING you\'ve ever fought.</span>',6000);
   obj('👁️ THE ULTIMATE BATTLE — everything you own, everything he has. GO.');
   updateMobileUI();
 }
