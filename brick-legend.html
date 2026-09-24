@@ -9722,11 +9722,18 @@ function startFinaleObby(){
   clearBlockColliders();
   obbyPads.length=0;
   var ox=FIN.x, oz=FIN.z+6, ang=0, y=1;
+  /* You jump 10.5 up against gravity 30 and run at 6.5, which is an apex of
+     1.84 and about four units of ground covered if you land a little higher
+     than you left. The spiral used to step a fixed ANGLE (0.7-1.2 rad), so the
+     gap grew with the radius and most of the climb was 6-8 units across and up
+     to 1.5 up - unreachable, not hard. Now it steps a fixed DISTANCE around the
+     spiral instead, and the rise is half what it was. */
   for(var i=0;i<26;i++){
-    ang+=rand(0.7,1.2); y+=rand(0.9,1.5);
     var r2=6+i*0.15;
+    ang+=(4.2/r2)*rand(0.92,1.1);   /* ~4.2 units of arc, whatever the radius */
+    y+=rand(0.5,0.8);
     var px=ox+Math.cos(ang)*r2, pz=oz+Math.sin(ang)*r2;
-    var hw=rand(1,1.7), hd=rand(1,1.7), col=RAINBOW[i%7];
+    var hw=rand(0.95,1.45), hd=rand(0.95,1.45), col=RAINBOW[i%7];
     var m=box(hw*2,1,hd*2,col);
     m.position.set(px,y,pz);
     finGroup.add(m);
