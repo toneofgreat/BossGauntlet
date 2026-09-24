@@ -98,6 +98,10 @@
   #bForm{left:34px;bottom:250px;display:none;background:#66d9ef33;border-color:#9ae8f588}
   #bSlam{right:100px;bottom:170px;display:none;background:#9b5cff33;border-color:#c9a8ff88}
   #bGren{right:176px;bottom:170px;display:none;background:#ff8ac233;border-color:#ffc9e088}
+  #bDown{right:100px;bottom:104px;display:none;background:#bfe9ff33;border-color:#dff4ff88}
+  #bAngel{left:34px;bottom:318px;display:none;background:#ffe97a33;border-color:#fff6c088}
+  #bRoll{right:176px;bottom:236px;display:none;background:#7ba03a33;border-color:#c6de8a88}
+  #bBaby{right:100px;bottom:236px;display:none;background:#ffffff33;border-color:#ffffff88}
   #bAuto{position:fixed;right:16px;bottom:16px;z-index:22;display:none;gap:4px;align-items:center;
     flex-wrap:wrap;justify-content:flex-end;max-width:min(96vw,600px);padding:6px 8px;
     border-radius:12px;border:2px solid #7df3ff;background:#0a2a3add}
@@ -185,6 +189,10 @@
   <div class="mbtn" id="bForm">FORM</div>
   <div class="mbtn" id="bSlam">SLAM</div>
   <div class="mbtn" id="bGren">CAT NADE</div>
+  <div class="mbtn" id="bDown">DOWN</div>
+  <div class="mbtn" id="bAngel">ANGEL</div>
+  <div class="mbtn" id="bRoll">ROLL</div>
+  <div class="mbtn" id="bBaby">BABIES</div>
 </div>
 <div id="bAuto"><b>⚡ AUTO-BUILD</b><button data-r="0" class="on">🖱️ CLICK</button><button data-r="1">1 / s</button><button data-r="2">1 / 0.5s</button><button data-r="3">1 / 0.1s</button><button data-r="4">1 / 0.01s</button><button data-r="5">1 / 1ms</button></div>
 <button id="bMenu">🏠 MENU</button>
@@ -226,7 +234,7 @@
 <div class="ov" id="death">
   <h1 id="deathTitle">CHOMPED!</h1>
   <p id="deathText">The T-rex got you. Bosses reset when you fall — go again?</p>
-  <div><button id="btnRetry">RETRY BOSS</button><button class="alt" id="btnQuit">QUIT (GO HOME)</button></div>
+  <div><button id="btnRetry">RETRY BOSS</button><button class="alt" id="btnCut" style="display:none">SEE CUTSCENE</button><button class="alt" id="btnQuit">QUIT (GO HOME)</button></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script>
@@ -960,6 +968,7 @@ var MOODS={
   golem: {sky:0x201808,fog:[26,120],amb:0.32,hemi:0.2,sun:0.5,sunC:0xffc966},  // molten gold dark
   lib:   {sky:0x221a12,fog:[22,85],amb:0.5,hemi:0.28,sun:0.32,sunC:0xffd9a3},  // candlelight
   space: {sky:0x030309,fog:[120,500],amb:0.4,hemi:0.25,sun:0.55,sunC:0xdfe8ff}, // the void
+  heaven:{sky:0xdcecff,fog:[90,420],amb:0.8,hemi:0.72,sun:1.25,sunC:0xfff6d8},  // too much light
 };
 function setMood(k){
   var m=MOODS[k]||MOODS.day;
@@ -1227,6 +1236,7 @@ function progScore(s){
     +(s.god?16:0)+(s.oc?32:0)+(s.spat?64:0)+(s.cw?128:0)+(s.fr?256:0)
     +(s.sz?512:0)+(s.win?1024:0)+(s.sx?2048:0)+(s.rpg||0)*300
     +(s.by1?4096:0)+(s.by2?8192:0)+(s.ult?16384:0)+(s.fin?32768:0)+(s.bq?65536:0)+(s.bh||0)*131072
+    +(s.sky||0)*1048576+(s.af?8388608:0)
     +(s.cl||0)*0.5+(s.fl||0)*0.5+(s.tk||0)*0.1+Math.min(s.xp||0,4000)*0.001;
 }
 function save(){
@@ -1237,7 +1247,8 @@ function save(){
      cw:catUnlocked?1:0,cl:catLvl,cf:cafeFloors,fr:fragPlaced?1:0,
      sz:szDone?1:0,win:gameWon?1:0,sx:sxDone?1:0,rpg:rpgStage,rg:rpgGold,sw:rpgSword?1:0,
      by1:byDone1?1:0,by2:byDone2?1:0,ult:ultWon?1:0,fin:finWon?1:0,
-     cn:coins,bq:blobsDone?1:0,bh:bhStage,mus:(typeof MUS!=='undefined'?MUS.cur:'off'),v:3};
+     cn:coins,bq:blobsDone?1:0,bh:bhStage,sky:skyStage||0,af:angelForm?1:0,
+     mus:(typeof MUS!=='undefined'?MUS.cur:'off'),v:3};
     var stored=loadSave();
     if(stored&&progScore(stored)>progScore(cur)+0.0001) return; // guard: never regress
     localStorage.setItem('brickLegendSave',JSON.stringify(cur));
@@ -1286,6 +1297,9 @@ function spawnPlayer(kind){
     kind==='catcasoh'?
     {torso:0x7ba03a,legs:0x55702a,arms:0x7ba03a,face:'cool',catty:true,
      catFur:0x7ba03a,gunHand:true}:
+    kind==='angelcasoh'?
+    {torso:0xdff0a8,legs:0xc6de8a,arms:0xdff0a8,face:'cool',catty:true,
+     catFur:0xdff0a8,gunHand:true}:
     kind==='god'?
     {torso:0xd4af37,legs:0xb8912b,arms:0xd4af37,face:'cool',hat:'tophat',
      backpack:0x8a5a2a,gunHand:true}:
@@ -1308,7 +1322,8 @@ function updateMobileUI(){
   if(!IS_TOUCH){ $('mc').style.display='none'; return; }
   $('mc').style.display=(PH==='menu'||PH==='build'||PH==='citybuild'||PH==='jgbuild'
     ||PH==='ocbuild'||PH==='catbuild'||PH==='szbuild'||PH==='bybuild'||PH==='bhbuild'||PH==='mcbuild'
-    ||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5'||PH==='cut6')?'none':'block';
+    ||PH==='cut'||PH==='cut2'||PH==='cut3'||PH==='cut4'||PH==='cut5'||PH==='cut6'
+    ||PH==='cut7'||PH==='cut8'||PH==='cut9'||PH==='cut10')?'none':'block';
   var inBoss=PH==='boss';
   $('bWave').style.display=(PH==='hw'&&hwState==='peace'&&!isGod)?'flex':'none';
   $('bForm').style.display=spatula?'flex':'none';
@@ -1319,6 +1334,10 @@ function updateMobileUI(){
   $('bReload').style.display=(gunEquipped&&!inBoss)?'flex':'none';
   $('bThrow').style.display=(inBoss)?'flex':'none';
   $('bTorn').style.display=tornadoOwned?'flex':'none';
+  $('bDown').style.display=canFly()?'flex':'none';
+  $('bAngel').style.display=angelForm?'flex':'none';
+  $('bRoll').style.display=formOn?'flex':'none';
+  $('bBaby').style.display=formOn?'flex':'none';
 }
 
 /* ---------------- INPUT ---------------- */
@@ -1335,6 +1354,9 @@ addEventListener('keydown',function(e){
   if(e.code==='KeyP') toggleForms($('forms').style.display!=='block');
   if(e.code==='Digit4') throwCatGrenade();
   if(e.code==='KeyV') trySlam();
+  if(e.code==='KeyH') toggleAngel();
+  if(e.code==='KeyC') tryRoll();
+  if(e.code==='KeyZ') trySummonBabies();
   if(e.code==='KeyB'&&inBuildPhase()) setAutoRate((autoIdx+1)%AUTO_RATES.length);
 });
 addEventListener('keyup',function(e){ keys[e.code]=false; });
@@ -1379,6 +1401,10 @@ addEventListener('pointerup',function(e){
   if(PH==='mcbuild'){ mcTryPlace(e); return; }
   if(PH==='mc'){ tryPunch(); return; }
   if(PH==='cut6'){ if(cutSkipOk) endCut6(); return; }
+  if(PH==='cut7'){ if(cutSkipOk) endCut7(); return; }
+  if(PH==='cut8'){ if(cutSkipOk) endCut8(); return; }
+  if(PH==='cut9'){ if(cutSkipOk) endCut9(); return; }
+  if(PH==='cut10'){ if(cutSkipOk) endCut10(); return; }
   if(PH==='haven'){
     if(cf&&cf.state==='contest'){ cfContestClick(); return; }
     if(gunEquipped) shoot(); else tryPunch();
@@ -1399,7 +1425,8 @@ addEventListener('pointerup',function(e){
   if(furnMode&&ghost&&tryPlace(e,true)) return; // Act 2 furnishing tap
   if(PH==='metro'){ if(tryChop(e)) return; if(gunEquipped) shoot(); else tryPunch(); return; }
   if(PH==='jungle'||PH==='home'||PH==='path'||PH==='ninja'||PH==='bridge'
-     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'||PH==='rpg'||PH==='by'||PH==='fin'){
+     ||PH==='golem'||PH==='mlib'||PH==='lib2'||PH==='city'||PH==='hw'||PH==='cw'||PH==='sz'||PH==='rpg'||PH==='by'||PH==='fin'||PH==='sky'){
+    if(PH==='sky'&&skyAttackHook()) return;
     if(gunEquipped) shoot(); else tryPunch();
   }
 });
@@ -1443,6 +1470,10 @@ bindBtn('bWave',function(){ doWave(); });
 bindBtn('bForm',function(){ toggleForms($('forms').style.display!=='block'); });
 bindBtn('bSlam',function(){ trySlam(); });
 bindBtn('bGren',function(){ throwCatGrenade(); });
+bindBtn('bDown',function(){ keys.ShiftLeft=true; },function(){ keys.ShiftLeft=false; });
+bindBtn('bAngel',function(){ toggleAngel(); });
+bindBtn('bRoll',function(){ tryRoll(); });
+bindBtn('bBaby',function(){ trySummonBabies(); });
 
 /* ---------------- BUILD PHASE ---------------- */
 var placedGroup=new THREE.Group(); world.add(placedGroup);
@@ -1575,6 +1606,7 @@ function combatTargets(){
   }
   combatTargetsFinale(list);
   combatTargetsAct10(list);
+  combatTargetsAct11(list);
   return list;
 }
 function shoot(){
@@ -1613,6 +1645,7 @@ function shoot(){
 /* ---------------- PUNCH ---------------- */
 function tryPunch(){
   if(punchCd>0||!player||PH==='cut'||PH==='menu') return;
+  if(PH==='sky'&&skyAttackHook()) return;
   punchCd=0.45; punchAnimT=0.22;
   player.armR.rotation.x=-1.7;
   var hit=false;
@@ -1630,6 +1663,8 @@ function tryPunch(){
   }
   var meleeDmg=isGod?40:(kick?20:(catF?(curForm==='catcasoh'?45:12+catLvl*10):12));
   if(PH==='rpg'&&rpgSword) meleeDmg+=25; // the NEON SWORD
+  if(formOn) meleeDmg+=58;                // ANGEL CASOH's lightsaber
+  else if(PH==='sky'&&hvSword) meleeDmg+=30; // the HEAVEN SWORD
   combatTargets().forEach(function(t){
     var d=t.pos.distanceTo(P.pos);
     if(d<(t.big?4.2:(isGod?3.4:(kick?2.6:1.9)))){
@@ -2356,6 +2391,7 @@ function hurtPlayer(dmg,why){
     else if(PH==='ninja') killPlayer('SLICED!','The ninjas got you — die once and you face ALL THREE again.',startNinjaFight);
     else if(PH==='bridge') killPlayer('GATOR FOOD!',why+' Try the bridge again.',startBridge);
     else if(PH==='golem') killPlayer('FLATTENED!','The Golden Golem crushed you into a 2x2 plate.',startGolem);
+    else if(PH==='sky') skyDeath();
     else {
       P.dead=true;
       msg('💀 Knocked out!<br><span style="font-size:55%">Waking up at the jungle gate…</span>',2600);
@@ -2368,9 +2404,11 @@ function hurtPlayer(dmg,why){
     }
   }
 }
-function killPlayer(title,text,retry){
+var deathCut=null;
+function killPlayer(title,text,retry,cutFn){
   if(P.dead) return;
-  P.dead=true; deathRetry=retry||null;
+  P.dead=true; deathRetry=retry||null; deathCut=cutFn||null;
+  $('btnCut').style.display=deathCut?'':'none';
   bossMusic(false); battleMusic(false); slideLoop.set(0);
   if(a2Timer){ clearTimeout(a2Timer); a2Timer=null; } // no victory handoff may fire under the overlay
   $('btnRetry').textContent=retry?'RETRY':'RETRY BOSS';
@@ -2386,8 +2424,16 @@ $('btnRetry').addEventListener('click',function(){
   var f=deathRetry; deathRetry=null;
   if(f) f(); else enterBoss(bossN);
 });
+$('btnCut').addEventListener('click',function(){
+  $('death').style.display='none'; $('btnCut').style.display='none';
+  sndUi();
+  P.dead=false; P.hp=P.maxHp;
+  $('hpBar').firstElementChild.style.width='100%';
+  var f=deathCut; deathCut=null; deathRetry=null;
+  if(f) f();
+});
 $('btnQuit').addEventListener('click',function(){
-  $('death').style.display='none';
+  $('death').style.display='none'; $('btnCut').style.display='none'; deathCut=null;
   P.dead=false; P.hp=P.maxHp; deathRetry=null;
   $('hpBar').firstElementChild.style.width='100%';
   bossMusic(false);
@@ -2471,6 +2517,13 @@ function groundYAt(){
      &&P.pos.x>WALL.x0-0.8&&P.pos.x<WALL.x1+0.8
      &&P.pos.z>WALL.z0-0.8&&P.pos.z<WALL.z1+0.8&&P.pos.y>4.4) return 5.55;
   if(PH==='castle') return 0.3; // castle floor
+  if(PH==='sky'&&typeof skyPlats!=='undefined'&&skyPlats.length&&P.vy<=0){
+    var py0=(P.prevY==null?P.pos.y:P.prevY);
+    for(var sp2=0;sp2<skyPlats.length;sp2++){
+      var q=skyPlats[sp2];
+      if(Math.hypot(P.pos.x-q.x,P.pos.z-q.z)<q.r&&py0>=q.y-0.25&&P.pos.y<=q.y+0.4) return q.y;
+    }
+  }
   return 0;
   }
 }
@@ -2487,11 +2540,13 @@ function collideHouseWalls(){
 }
 function playerControlAllowed(){
   return player&&!P.dead&&PH!=='cut'&&PH!=='cut2'&&PH!=='cut3'&&PH!=='cut4'&&PH!=='cut5'
+    &&PH!=='cut7'&&PH!=='cut8'&&PH!=='cut9'&&PH!=='cut10'
     &&PH!=='menu'&&PH!=='build'&&PH!=='citybuild'&&PH!=='jgbuild'&&PH!=='ocbuild'
     &&PH!=='catbuild'&&PH!=='szbuild'&&PH!=='bybuild';
 }
 function updatePlayer(dt){
   if(!playerControlAllowed()) return;
+  P.prevY=P.pos.y;   /* for swept floor tests - see the sky cloudlets in groundYAt */
   var ix=0,iz=0;
   if(keys.KeyW||keys.ArrowUp) iz+=1;
   if(keys.KeyS||keys.ArrowDown) iz-=1;
@@ -2525,14 +2580,28 @@ function updatePlayer(dt){
     if(P.pos.y>0.4&&Math.random()<dt*4) sndStep();
     if(P.pos.y>=5.5&&vx<0) P.pos.x=4.6; // hop onto the roof
   }
-  /* jump + gravity */
-  if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; sndWhoosh(true); }
-  if(!onLadder){
-    if(blockCols.length) resolveBlockWalls(); // head + torso collide with solid parts
-    P.vy-=30*dt; P.pos.y+=P.vy*dt;
-    var gy=groundYAt();
-    if(P.pos.y<=gy&&P.vy<=0){ P.pos.y=gy; if(!P.onGround){ sndStep(); } P.onGround=true; P.vy=0; }
-    else if(P.pos.y>gy+0.02) P.onGround=false;
+  /* jump + gravity — or, with WINGS, hold SPACE to climb and SHIFT to drop */
+  var flying=canFly()&&!onLadder;
+  if(flying){
+    if(blockCols.length) resolveBlockWalls();
+    if(keys.Space) P.vy=8.4;
+    else if(keys.ShiftLeft||keys.ShiftRight||keys.ControlLeft) P.vy=-8.4;
+    else P.vy+=(0-P.vy)*Math.min(1,dt*7);
+    P.pos.y=Math.min(P.pos.y+P.vy*dt,FLY_CEIL);
+    var gyf=groundYAt();
+    if(P.pos.y<=gyf){ P.pos.y=gyf; if(!P.onGround) sndStep(); P.onGround=true; if(P.vy<0) P.vy=0; }
+    else P.onGround=false;
+    if(P.pos.y>gyf+0.8&&Math.random()<dt*7)
+      burst(P.pos.clone().setY(P.pos.y+1.1),0xffffff,1,{speed:0.8,life:0.5,grav:-1.5,size:0.5});
+  } else {
+    if(keys.Space&&P.onGround){ P.vy=10.5; P.onGround=false; sndWhoosh(true); }
+    if(!onLadder){
+      if(blockCols.length) resolveBlockWalls(); // head + torso collide with solid parts
+      P.vy-=30*dt; P.pos.y+=P.vy*dt;
+      var gy=groundYAt();
+      if(P.pos.y<=gy&&P.vy<=0){ P.pos.y=gy; if(!P.onGround){ sndStep(); } P.onGround=true; P.vy=0; }
+      else if(P.pos.y>gy+0.02) P.onGround=false;
+    }
   }
   /* fell off the bridge -> the gators are waiting */
   if(PH==='bridge'&&P.pos.y<1.1&&!P.dead){
@@ -2580,6 +2649,9 @@ function updatePlayer(dt){
   } else if(PH==='mc'){
     var mspan=MC.N*MC.PITCH/2+MC.ROAD;
     P.pos.x=clamp(P.pos.x,MC.x-mspan-200,MC.x+mspan); P.pos.z=clamp(P.pos.z,MC.z-mspan,MC.z+mspan);
+  } else if(PH==='sky'){
+    var dsk=new THREE.Vector3(P.pos.x-SKY.x,0,P.pos.z-SKY.z);
+    if(dsk.length()>SKY.r-2){ dsk.setLength(SKY.r-2); P.pos.x=SKY.x+dsk.x; P.pos.z=SKY.z+dsk.z; }
   } else if(PH==='haven'){
     var dh=new THREE.Vector3(P.pos.x-BH.x,0,P.pos.z-BH.z);
     if(dh.length()>BH.r-2){ dh.setLength(BH.r-2); P.pos.x=BH.x+dh.x; P.pos.z=BH.z+dh.z; }
@@ -2728,6 +2800,10 @@ function animate(){
   else if(PH==='cut4') updateCut4(dt);
   else if(PH==='cut5') updateCut5(dt);
   else if(PH==='cut6') updateCut6(dt);
+  else if(PH==='cut7') updateCut7(dt);
+  else if(PH==='cut8') updateCut8(dt);
+  else if(PH==='cut9') updateCut9(dt);
+  else if(PH==='cut10') updateCut10(dt);
   else {
     updatePlayer(dt);
     if(PH==='jungle'||PH==='home') updateHikers(dt);
@@ -2744,6 +2820,7 @@ function animate(){
     updateAct8(dt);
     updateFinale(dt);
     updateAct10(dt);
+    updateAct11(dt);
     updateMC(dt);
     /* autosave every 20s — the regression guard makes this always safe */
     autosaveT+=dt;
@@ -2791,6 +2868,7 @@ function startSkip(sv){
     applyAct7Skip(sv);
     applyAct8Skip(sv);
     applyAct10Skip(sv);
+    applyAct11Skip(sv);
     if(sv.bh>=7){ /* casoh beaten in Builder's Haven: back in the city with the stud bux */
       ensureCityExtraPads();
       var kk6=curForm==='worker'?false:curForm==='biz'?true:curForm;
@@ -2799,8 +2877,10 @@ function startSkip(sv){
       P.pos.set(CITY.x+30,0,CITY.z-6); if(player) player.group.position.copy(P.pos);
       camYaw=Math.PI/2; P.yaw=Math.PI/2;
       sbuxHud(); coinsHud(); catHud(); setMood('day');
-      obj('👑 casoh is beaten, 🪵 '+studBux.toLocaleString()+' STUD BUX are yours… and someone is looking for you. (to be continued)');
-      hint('The white FINALE gate in The Beyond → Builder\'s Haven, any time');
+      if(skyStage>=9) obj('😇 ANGEL CASOH. Press H to put the halo on — the HEAVEN GATE is west of the city.');
+      else if(skyStage>=1) obj('☁️ Heaven is not finished with you — the HEAVEN GATE is west of the city.');
+      else obj('👑 casoh is beaten, 🪵 '+studBux.toLocaleString()+' STUD BUX are yours… and something in the sky wants them.');
+      hint(skyStage>=1?'The HEAVEN GATE, west of the city':'The HEAVEN GATE, west of the city — 🪵 75,000 STUD BUX');
     } else if(sv.bh>=1){ /* mid-haven: straight back to the current build stage / the fight */
       var kk5=curForm==='worker'?false:curForm==='biz'?true:curForm;
       spawnPlayer(kk5);
@@ -4880,6 +4960,7 @@ function updateCity(dt){
       }
       else if(p.mode==='jungle') handleJunglePad();
       else if(p.mode==='ocean') handleOceanPad();
+      else if(p.mode==='sky') handleSkyPad();
       else if(p.mode==='gohome'){
         PH='home';
         P.pos.set(0,0,6); P.vy=0;
@@ -5394,6 +5475,7 @@ function ensureCityExtraPads(){
   }
   ensureCatPortal();
   ensureRocket();
+  ensureSkyPad();
   if(!cityPads.some(function(p){ return p.mode==='gohome'; })){
     var pad2=studdedBox(3,0.3,3,0xc62b21,0xa02318);
     pad2.position.set(CITY.x+44,0.15,CITY.z+24); world.add(pad2);
@@ -11018,6 +11100,1205 @@ function applyAct10Skip(sv){
 }
 
 /* ================================================================
+   ACT 11 — THE HEAVEN SAGA
+   Buy the HEAVEN GATE in the city for 75,000 STUD BUX (exactly what
+   casoh drops in Builder's Haven) and ride it into the clouds.
+     1. kill 3 HEAVENISTS that cannot fly      -> the HEAVEN SWORD
+     2. kill 10 HEAVENISTS that can            -> the WINGS
+     3. kill the quest giver, SAINT BRICKIEL   -> a hard fight
+     4. his FOUR SLEEPING KNIGHTS wake up      -> slow, and enormous
+     5. "2 HOURS EARLIER": a casoh rolls the knights flat in their
+        sleep and turns into THE ANGEL GOD. Attack him and you say
+        it out loud — "i know you are casoh" — he says "ok well im
+        not", says "cya", and down with the demons the angel casoh
+        tells the demon casoh that he thinks you are onto them.
+     6. ANGEL CASOH. Lose and you may RETRY, or SEE CUTSCENE, which
+        is you being cooked into a sandwich and fed to a dragon.
+     7. Beat him and you fly home to the city as ANGEL CASOH: wings,
+        a lightsaber, his roll, and five baby casohs a minute.
+   ================================================================ */
+var SKY={x:-1400,z:-1400,r:58};
+var skyGroup=null,skyState='none',skyT=0,skyStage=0,skyEv={},skyCd=0;
+var hvList=[],hvGround=0,hvAir=0,hvSword=false,hvWings=false;
+var GIVER_MAX=900,giverObj=null,giverHp=0,giverCd=0,giverMv='',giverT=0;
+var knightList=[],KNIGHT_MAX=340;
+var ANGEL_MAX=1500,angelObj=null,angelHp=0,angelCd=0,angelPh=0,angelT=0;
+var skyCols=[],skyRings=[],skyPlats=[],skyTimers=[];
+var angelForm=false,formOn=false,babyList=[],babyCd=0,rollT=0,rollV=null,rollHitCd=0,FLY_CEIL=78;
+var cut7T=-1,cut8T=-1,cut9T=-1,cut10T=-1;
+var skyCine=null;   /* the angel god standing in the temple between cutscenes */
+
+/* NOTE on the guards in here: animate() runs its body once SYNCHRONOUSLY, before
+   this act's var initialisers have run, so everything the loop touches on frame
+   zero has to survive being undefined. */
+function canFly(){ return !!(formOn||(PH==='sky'&&hvWings)); }
+function skyTimer(fn,ms){ var id=setTimeout(function(){ fn(); },ms); skyTimers.push(id); return id; }
+function clearSkyTimers(){ skyTimers.forEach(clearTimeout); skyTimers.length=0; }
+
+/* ---------------- the realm ---------------- */
+function cloudPuff(x,y,z,s,c){
+  var g=new THREE.Group();
+  for(var i=0;i<5;i++){
+    var b=box(s*rand(0.7,1.3),s*rand(0.45,0.8),s*rand(0.7,1.3),c||0xffffff);
+    b.position.set(rand(-s*0.7,s*0.7),rand(-s*0.2,s*0.3),rand(-s*0.7,s*0.7));
+    g.add(b);
+  }
+  g.position.set(x,y,z);
+  return g;
+}
+function goldPillar(x,z,h){
+  var g=new THREE.Group();
+  g.add(studdedBox(2.4,0.5,2.4,0xd4af37,0xf3d97a));
+  var sh=box(1.5,h,1.5,0xf5efd0); sh.position.y=h/2+0.25; g.add(sh);
+  for(var i=0;i<6;i++){ var fl=box(1.7,0.12,1.7,0xe8dcae); fl.position.y=0.5+i*(h/6); g.add(fl); }
+  var cap=studdedBox(2.4,0.6,2.4,0xd4af37,0xf3d97a); cap.position.y=h+0.55; g.add(cap);
+  var lamp=bx(0.6,0.6,0.6,0xffe97a); lamp.position.y=h+1.2; g.add(lamp);
+  g.position.set(x,0,z);
+  return g;
+}
+function buildSky(){
+  if(skyGroup) return;
+  skyGroup=new THREE.Group(); world.add(skyGroup);
+  var X=SKY.x, Z=SKY.z, R=SKY.r;
+  /* the cloud the whole place sits on */
+  var disc=new THREE.Mesh(new THREE.CylinderGeometry(R,R-3,1.6,40),mat(0xfbfcff));
+  disc.position.set(X,-0.8,Z); skyGroup.add(disc);
+  var top=new THREE.Mesh(new THREE.CircleGeometry(R-0.5,40),mat(0xf2f6ff));
+  top.rotation.x=-Math.PI/2; top.position.set(X,0.02,Z); skyGroup.add(top);
+  for(var i=0;i<70;i++){ var a=rand(0,6.28), rr=rand(R-8,R+5);
+    skyGroup.add(cloudPuff(X+Math.cos(a)*rr,rand(-5,-0.5),Z+Math.sin(a)*rr,rand(4,9))); }
+  /* gold trim ring + lamp pillars */
+  var ring=new THREE.Mesh(new THREE.TorusGeometry(R-1.5,0.5,6,48),mat(0xd4af37));
+  ring.rotation.x=Math.PI/2; ring.position.set(X,0.4,Z); skyGroup.add(ring);
+  for(var p=0;p<14;p++){ var pa=p/14*6.283;
+    skyGroup.add(goldPillar(X+Math.cos(pa)*(R-7),Z+Math.sin(pa)*(R-7),rand(7,10))); }
+  /* the temple, north */
+  var TZ=Z-R+16, tg=new THREE.Group();
+  for(var s2=0;s2<4;s2++){ var st=studdedBox(34-s2*2,0.6,18-s2*1.4,0xf5efd0,0xffffff);
+    st.position.set(0,0.3+s2*0.6,s2*0.8); tg.add(st); }
+  var floor=studdedBox(30,0.5,14,0xffe97a,0xfff6c0); floor.position.set(0,2.6,3.6); tg.add(floor);
+  for(var c=-5;c<=5;c++){ if(c===0) continue;
+    var col=goldPillar(c*2.7,0,12); col.position.y=2.8; col.position.z=-1.6; tg.add(col); }
+  var lint=studdedBox(31,1.4,3,0xd4af37,0xf3d97a); lint.position.set(0,15.5,-1.6); tg.add(lint);
+  for(var r2=0;r2<6;r2++){ var rf=box(30-r2*4.6,0.8,3.2,0xf5efd0); rf.position.set(0,16.4+r2*0.8,-1.6); tg.add(rf); }
+  var thr=studdedBox(5,3,4,0xd4af37,0xf3d97a); thr.position.set(0,4.4,7); tg.add(thr);
+  var back=studdedBox(5,7,1,0xd4af37,0xf3d97a); back.position.set(0,8.4,8.8); tg.add(back);
+  var sun=bx(6,6,0.6,0xffe97a); sun.position.set(0,13,9.2); tg.add(sun);
+  tg.position.set(X,0,TZ); skyGroup.add(tg);
+  SKY.tz=TZ;
+  /* four knight plinths, asleep out front */
+  SKY.plinth=[];
+  for(var k=0;k<4;k++){ var kx=X+(k<2?-1:1)*(k%2?6:13), kz=TZ+13;
+    var pl=studdedBox(4,1,4,0xe8dcae,0xffffff); pl.position.set(kx,0.5,kz); skyGroup.add(pl);
+    SKY.plinth.push({x:kx,z:kz}); }
+  /* the arrival gate, south */
+  var gate=new THREE.Group();
+  for(var gs=-1;gs<=1;gs+=2){ var gp=goldPillar(gs*4,0,11); gate.add(gp); }
+  var arch=studdedBox(11,1.6,2.4,0xd4af37,0xf3d97a); arch.position.y=12; gate.add(arch);
+  var gl=bx(7,7,0.4,0xbfe9ff); gl.position.set(0,6,0); gl.material.transparent=true; gl.material.opacity=0.35; gate.add(gl);
+  gate.position.set(X,0,Z+R-9); skyGroup.add(gate);
+  SKY.gz=Z+R-9;
+  /* cloudlets you have to fly between */
+  skyPlats.length=0;
+  for(var f=0;f<30;f++){
+    var fa=rand(0,6.28), fr=rand(10,R-10), fy=rand(7,34);
+    var px=X+Math.cos(fa)*fr, pz=Z+Math.sin(fa)*fr;
+    var pw=rand(4,9);
+    var pf=cloudPuff(px,fy,pz,pw*0.5);
+    skyGroup.add(pf); skyPlats.push({x:px,y:fy,z:pz,r:pw*0.55});
+  }
+  /* light shafts + far islands */
+  for(var l=0;l<10;l++){ var la=rand(0,6.28), lr=rand(14,R-6);
+    var sh2=new THREE.Mesh(new THREE.CylinderGeometry(1.6,4.2,44,7,1,true),
+      new THREE.MeshBasicMaterial({color:0xfff3c4,transparent:true,opacity:0.1,side:THREE.DoubleSide,depthWrite:false}));
+    sh2.position.set(X+Math.cos(la)*lr,24,Z+Math.sin(la)*lr); skyGroup.add(sh2); }
+  for(var d2=0;d2<16;d2++){ var da=rand(0,6.28), dr=rand(R+55,R+190);
+    var di=cloudPuff(X+Math.cos(da)*dr,rand(-30,40),Z+Math.sin(da)*dr,rand(9,26),0xf0f6ff);
+    skyGroup.add(di); }
+  skyGroup.visible=false;
+}
+
+/* ---------------- entering ---------------- */
+function handleSkyPad(){
+  if(skyStage>=1){ enterSky(); return; }
+  if(studBux<75000){
+    msg('🔒 THE HEAVEN GATE — 🪵 75,000 STUD BUX.<br><span style="font-size:55%">You have '+studBux.toLocaleString()+'. Beat casoh in Builder\'s Haven; he is carrying exactly that much.</span>',3600);
+    return;
+  }
+  studBux-=75000; sbuxHud();
+  skyStage=1; save();
+  sndJingle(); sndPortal(); sndSparkle(); doFlash('#ffffff');
+  msg('💸 75,000 STUD BUX SPENT!<br><span style="font-size:55%">The HEAVEN GATE opens. Up you go.</span>',3600);
+  enterSky();
+}
+function enterSky(){
+  clearHazards(); clearSkyRealm(); clearSkyTimers();
+  buildSky(); skyGroup.visible=true;
+  if(!player) spawnPlayer(curForm==='worker'?false:curForm==='biz'?true:curForm);
+  PH='sky';
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(SKY.x,0,SKY.gz-4); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI; P.yaw=Math.PI;
+  setMood('heaven'); sndPortal(); sndChime();
+  $('bossWrap').style.display='none';
+  if(skyStage>=9){ skyState='free'; skyFreeRoam(); }
+  else if(skyStage>=8){ skyState='free'; skyFreeRoam(); }
+  else skyBeginQuest();
+  updateMobileUI();
+}
+function skyFreeRoam(){
+  hvSword=true; hvWings=true; attachSaber();
+  obj('☁️ HEAVEN. It is quiet now. The gate home is south.');
+  hint('SPACE to climb · SHIFT to drop');
+  msg('☁️ HEAVEN<br><span style="font-size:55%">Nobody is trying to kill you up here any more.</span>',2800);
+}
+function skyBeginQuest(){
+  if(!hvSword){ skyState='q1'; skyStartQ1(); }
+  else if(!hvWings){ skyState='q2'; skyStartQ2(); }
+  else if(skyStage<4){ startGiverFight(); }
+  else if(skyStage<5){ startKnights(); }
+  else if(skyStage<6){ skyStandoff(); }
+  else startAngelFight();
+}
+function clearSkyRealm(){
+  hvList.forEach(function(h){ if(h.ref) world.remove(h.ref.group); }); hvList.length=0;
+  knightList.forEach(function(k){ world.remove(k.mesh); }); knightList.length=0;
+  if(giverObj){ world.remove(giverObj.group); giverObj=null; }
+  if(angelObj){ world.remove(angelObj.group); angelObj=null; }
+  if(skyCine){ world.remove(skyCine.group); skyCine=null; }
+  skyCols.forEach(function(c){ world.remove(c.mesh); }); skyCols.length=0;
+  skyRings.forEach(function(r){ world.remove(r.mesh); }); skyRings.length=0;
+  babyList.forEach(function(b){ world.remove(b.mesh); }); babyList.length=0;
+}
+
+/* ---------------- heavenists ---------------- */
+function makeWings(scale,color){
+  var wg=new THREE.Group();
+  for(var s=-1;s<=1;s+=2){
+    for(var i=0;i<5;i++){
+      var f=bx(0.18,(1.1-i*0.13)*scale,(0.5+i*0.22)*scale,color||0xfffdf0);
+      f.position.set(s*(0.5+i*0.17)*scale,(1.5-i*0.11)*scale,(-0.18-i*0.06)*scale);
+      f.rotation.z=s*(0.22+i*0.11);
+      wg.add(f);
+    }
+  }
+  return wg;
+}
+function makeHeavenist(fly){
+  var ref=makeMinifig({torso:fly?0xfff3c4:0xf1f1ee,legs:0xe0d7a8,arms:0xfff3c4,
+    face:'cool',tie:0xd4af37,gunHand:true});
+  var g=ref.group;
+  var wg=makeWings(1,fly?0xfffdf0:0xe6e2d2); g.add(wg);
+  var halo=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.08,6,14),bmat(0xffe97a));
+  halo.rotation.x=Math.PI/2; halo.position.y=2.5; g.add(halo);
+  var spear=bx(0.12,2.6,0.12,0xf3d97a); spear.position.set(0.55,1.2,0.3); spear.rotation.z=-0.25; g.add(spear);
+  world.add(g);
+  return {ref:ref,wings:wg,halo:halo,fly:!!fly,hp:fly?55:70,dead:false,
+    t:rand(0,6),cd:rand(1.4,3.4),stunT:0,y:fly?rand(6,20):0,tgt:null};
+}
+function spawnHeavenists(n,fly){
+  for(var i=0;i<n;i++){
+    var h=makeHeavenist(fly);
+    var a=rand(0,6.28), r=rand(16,SKY.r-12);
+    h.ref.group.position.set(SKY.x+Math.cos(a)*r,h.y,SKY.z+Math.sin(a)*r);
+    hvList.push(h);
+  }
+}
+function skyStartQ1(){
+  spawnHeavenists(3,false);
+  hvGround=0;
+  $('bossWrap').style.display='none';
+  msg('😇 SAINT BRICKIEL: "welcome, brick."<br><span style="font-size:55%">"Three heavenists have fallen out of grace — and out of the sky. They cannot fly. Put them down and the HEAVEN SWORD is yours."</span>',6000);
+  obj('⚔️ QUEST 1 — kill 3 grounded HEAVENISTS: 0/3');
+  hint('They walk. They hit hard up close. Shoot them or punch them.');
+  sndChime();
+}
+function skyStartQ2(){
+  spawnHeavenists(10,true);
+  hvAir=0;
+  msg('😇 SAINT BRICKIEL: "good. now the ones with wings."<br><span style="font-size:55%">"Ten of them. Bring them down and I will give you wings of your own."</span>',5600);
+  obj('🕊️ QUEST 2 — kill 10 FLYING HEAVENISTS: 0/10');
+  hint('They hover and throw light. Shoot them out of the air — the SWORD only reaches what lands.');
+  sndChime();
+}
+function hurtHeavenist(h,d,tor){
+  if(h.dead) return;
+  h.hp-=d*(hvSword?1.4:1);
+  h.stunT=Math.max(h.stunT,tor?0.9:0.22);
+  burst(h.ref.group.position.clone().setY(1.5),0xffe97a,5,{speed:3,life:0.5});
+  sndPunch(false);
+  if(h.hp<=0) killHeavenist(h);
+}
+function killHeavenist(h){
+  if(h.dead) return;
+  h.dead=true;
+  var p=h.ref.group.position.clone().setY(1.4);
+  burst(p,0xffffff,24,{speed:6,life:1.1});
+  burst(p,0xffe97a,14,{speed:4,life:0.9});
+  sndCrack(); sndSparkle();
+  world.remove(h.ref.group);
+  if(h.fly){ hvAir++; obj('🕊️ QUEST 2 — kill 10 FLYING HEAVENISTS: '+hvAir+'/10');
+    if(hvAir>=10) giveWings();
+  } else { hvGround++; obj('⚔️ QUEST 1 — kill 3 grounded HEAVENISTS: '+hvGround+'/3');
+    if(hvGround>=3) giveSword();
+  }
+}
+function attachSaber(){
+  if(!player||!player.armR) return;
+  if(player.saber) return;
+  var blade=bx(0.16,2.9,0.16,formOn?0xff5a5a:0xbfe9ff);
+  blade.position.set(0,-1.7,0.15);
+  var hilt=box(0.22,0.6,0.22,0x9aa0a8); hilt.position.set(0,-0.3,0.15);
+  var gg=new THREE.Group(); gg.add(blade); gg.add(hilt);
+  player.armR.add(gg); player.saber=gg;
+}
+function giveSword(){
+  hvSword=true; skyStage=Math.max(skyStage,2); save();
+  attachSaber();
+  sndFanfare(); sndSparkle(); doFlash('#bfe9ff'); camShake=0.4;
+  burst(P.pos.clone().setY(2),0xbfe9ff,30,{speed:6,life:1.2});
+  msg('🗡️ THE HEAVEN SWORD! 🗡️<br><span style="font-size:55%">Your punch is a blade now — 40% more, and it reaches further.</span>',4200);
+  hint('');
+  skyTimer(function(){ if(PH==='sky'&&skyState==='q1'){ skyState='q2'; skyStartQ2(); } },3200);
+}
+function giveWings(){
+  hvWings=true; skyStage=Math.max(skyStage,3); save();
+  sndFanfare(); sndSparkle(); sndWhoosh(true); doFlash('#ffffff'); camShake=0.5;
+  for(var i=0;i<3;i++) skyTimer(function(){ burst(P.pos.clone().setY(2),0xffffff,26,{speed:7,life:1.2}); },i*220);
+  if(player&&!player.wings){ player.wings=makeWings(1.05,0xfffdf0); player.group.add(player.wings); }
+  msg('🕊️ THE WINGS! 🕊️<br><span style="font-size:55%">Hold SPACE to climb, SHIFT to drop. You can fly now.</span>',5000);
+  obj('🕊️ You can FLY. Saint Brickiel is waiting in the temple.');
+  hint('SPACE = up · SHIFT = down');
+  skyTimer(function(){ if(PH==='sky'&&skyState==='q2') startGiverFight(); },4600);
+}
+function updateHeavenists(dt){
+  for(var i=hvList.length-1;i>=0;i--){
+    var h=hvList[i];
+    if(h.dead){ hvList.splice(i,1); continue; }
+    var g=h.ref.group, to=P.pos.clone().sub(g.position), dd=to.length()||0.001;
+    h.t+=dt; h.halo.rotation.z+=dt*2;
+    h.wings.children.forEach(function(w,wi){ w.rotation.z=(wi?1:-1)*(0.3+Math.sin(h.t*(h.fly?9:4))*0.35); });
+    g.rotation.y=Math.atan2(to.x,to.z);
+    if(h.stunT>0){ h.stunT-=dt; g.rotation.z=Math.sin(GTIME*22)*0.12; continue; }
+    g.rotation.z=0;
+    if(h.fly){
+      /* hovers, keeps its distance, throws light */
+      var want=h.y+Math.sin(h.t*1.3)*1.6;
+      g.position.y+=(want-g.position.y)*Math.min(1,dt*2);
+      var flat=to.clone().setY(0), fd=flat.length()||0.001;
+      flat.multiplyScalar(1/fd);
+      var keep=11;
+      g.position.addScaledVector(flat,(fd-keep)*Math.min(1,dt*0.9));
+      /* drift around the island */
+      g.position.x+=Math.cos(h.t*0.6)*dt*2.2;
+      g.position.z+=Math.sin(h.t*0.6)*dt*2.2;
+      h.cd-=dt;
+      if(h.cd<=0&&!P.dead&&fd<34){
+        h.cd=rand(2.2,4);
+        var m=bx(0.34,0.34,0.9,0xfff3c4);
+        m.position.copy(g.position).setY(g.position.y+1.3);
+        var v=P.pos.clone().setY(P.pos.y+1).sub(m.position).normalize().multiplyScalar(17);
+        spawnEproj(m,v,0,11,'light');
+        blip(1200,'sine',0.22,0.14,0,520);
+      }
+    } else {
+      g.position.y=0;
+      if(dd>2.2){
+        var f2=to.clone().setY(0).normalize();
+        g.position.addScaledVector(f2,3.1*dt);
+        h.ref.legL.rotation.x=Math.sin(h.t*8)*0.8;
+        h.ref.legR.rotation.x=-Math.sin(h.t*8)*0.8;
+      }
+      h.cd-=dt;
+      if(dd<3&&h.cd<=0&&!P.dead){
+        h.cd=1.6;
+        h.ref.armR.rotation.x=-1.8;
+        tween(0.22,function(k){ if(h.ref) h.ref.armR.rotation.x=-1.8+1.8*k; });
+        hurtPlayer(14,'A heavenist ran you through!'); sndPunch(true);
+      }
+    }
+  }
+}
+
+/* ---------------- boss 1: the quest giver ---------------- */
+function makeSaint(){
+  var ref=makeMinifig({torso:0xffffff,legs:0xffe97a,arms:0xffffff,face:'cool',
+    hat:'tophat',tie:0xd4af37,fancy:true,gunHand:true});
+  var g=ref.group; g.scale.set(1.9,1.9,1.9);
+  g.add(makeWings(1.5,0xffffff));
+  var halo=new THREE.Mesh(new THREE.TorusGeometry(0.8,0.13,7,18),bmat(0xffe97a));
+  halo.rotation.x=Math.PI/2; halo.position.y=2.9; g.add(halo);
+  var staff=bx(0.16,5.2,0.16,0xf3d97a); staff.position.set(0.9,1.4,0.3); g.add(staff);
+  var orb=bx(0.8,0.8,0.8,0xbfe9ff); orb.position.set(0.9,4,0.3); g.add(orb);
+  world.add(g);
+  return {group:g,ref:ref,halo:halo,orb:orb};
+}
+function startGiverFight(){
+  clearSkyRealm(); clearHazards();
+  skyState='giver'; skyStage=Math.max(skyStage,3);
+  giverObj=makeSaint();
+  giverObj.group.position.set(SKY.x,0,SKY.tz+10);
+  giverHp=GIVER_MAX; giverCd=2.2; giverMv=''; giverT=0;
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(SKY.x,0,SKY.tz+34); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='😇 SAINT BRICKIEL 😇';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); setMood('heaven'); sndRoar(true); doFlash('#ffffff'); camShake=0.8;
+  msg('😇 SAINT BRICKIEL 😇<br><span style="font-size:55%">"you did every job i gave you. that was the job."<br>900 HP. He does not miss.</span>',5200);
+  obj('😇 Kill the quest giver.');
+  hint('Light columns land where you stand — MOVE. Jump the halo rings. He heals if you leave him alone.');
+  updateMobileUI();
+}
+function hurtGiver(d){
+  if(!giverObj||skyState!=='giver') return;
+  giverHp-=d; giverT=0;
+  $('bossBar').firstElementChild.style.width=clamp(giverHp/GIVER_MAX*100,0,100)+'%';
+  burst(giverObj.group.position.clone().setY(3.4),0xffe97a,6,{speed:4,life:0.6});
+  doFlash('#fff3c4');
+  if(giverHp<=0) giverDies();
+}
+function giverDies(){
+  skyState='giverdead'; skyStage=Math.max(skyStage,4); save();
+  battleMusic(false); clearHazards(); clearSkyCols();
+  sndRoar(true); sndCrack(); skyTimer(sndFanfare,900);
+  doFlash('#ffffff'); camShake=1.1;
+  var g=giverObj.group;
+  for(var i=0;i<26;i++)
+    burst(g.position.clone().add(new THREE.Vector3(rand(-3,3),rand(1,8),rand(-3,3))),
+      [0xffffff,0xffe97a,0xbfe9ff][(Math.random()*3)|0],3,{speed:7,life:1.3});
+  tween(1.6,function(k){ if(giverObj){ g.rotation.z=k*1.4; g.position.y=-k*3; } },
+    function(){ if(giverObj){ world.remove(g); giverObj=null; } });
+  $('bossWrap').style.display='none';
+  msg('😇 SAINT BRICKIEL IS DOWN.<br><span style="font-size:55%">"…they were supposed to be awake."</span>',4200);
+  obj('⚔️ Something on the temple steps is standing up.');
+  skyTimer(function(){ if(PH==='sky'&&skyState==='giverdead') startKnights(); },3600);
+}
+function clearSkyCols(){
+  skyCols.forEach(function(c){ world.remove(c.mesh); }); skyCols.length=0;
+  skyRings.forEach(function(r){ world.remove(r.mesh); }); skyRings.length=0;
+}
+function skyColumn(x,z,delay,dmg,color){
+  var m=new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,60,12,1,true),
+    new THREE.MeshBasicMaterial({color:color||0xfff3c4,transparent:true,opacity:0.18,side:THREE.DoubleSide,depthWrite:false}));
+  m.position.set(x,28,z); world.add(m);
+  skyCols.push({mesh:m,x:x,z:z,t:0,delay:delay,dmg:dmg,fired:false});
+  blip(320,'sine',0.2,0.3,0,900);
+}
+function skyRing(x,z,dmg,speed){
+  var m=new THREE.Mesh(new THREE.TorusGeometry(1,0.34,6,30),bmat(0xffe97a));
+  m.rotation.x=Math.PI/2; m.position.set(x,0.5,z); world.add(m);
+  skyRings.push({mesh:m,x:x,z:z,r:1,dmg:dmg,spd:speed||16,hit:false});
+}
+function updateSkyHazards(dt){
+  for(var i=skyCols.length-1;i>=0;i--){
+    var c=skyCols[i]; c.t+=dt;
+    if(!c.fired){
+      c.mesh.material.opacity=0.14+Math.sin(c.t*22)*0.1;
+      if(c.t>=c.delay){
+        c.fired=true; c.mesh.material.opacity=0.85; c.mesh.material.color.setHex(0xffffff);
+        sndTazer(); doFlash('#ffffff'); camShake=Math.min(camShake+0.3,0.8);
+        burst(new THREE.Vector3(c.x,1,c.z),0xffffff,18,{speed:6,life:0.8});
+        if(!P.dead&&Math.hypot(P.pos.x-c.x,P.pos.z-c.z)<3.1) hurtPlayer(c.dmg,'A column of light came down on you!');
+      }
+    } else {
+      c.mesh.material.opacity-=dt*2.4;
+      if(c.mesh.material.opacity<=0){ world.remove(c.mesh); skyCols.splice(i,1); }
+    }
+  }
+  for(var j=skyRings.length-1;j>=0;j--){
+    var s=skyRings[j]; s.r+=s.spd*dt;
+    s.mesh.scale.set(s.r,s.r,1);
+    s.mesh.material.opacity=1;
+    if(!s.hit&&!P.dead&&P.pos.y<1.6){
+      var pd=Math.hypot(P.pos.x-s.x,P.pos.z-s.z);
+      if(Math.abs(pd-s.r)<1.1){ s.hit=true; hurtPlayer(s.dmg,'Halo ring! Jump them or fly.'); P.vy=8; }
+    }
+    if(s.r>SKY.r+8){ world.remove(s.mesh); skyRings.splice(j,1); }
+  }
+}
+function updateGiver(dt){
+  if(!giverObj) return;
+  var g=giverObj.group, dd=g.position.distanceTo(P.pos);
+  giverT+=dt; giverCd-=dt;
+  giverObj.halo.rotation.z+=dt*1.6;
+  giverObj.orb.position.y=4+Math.sin(GTIME*3)*0.3;
+  g.position.y=Math.sin(GTIME*1.6)*0.4;
+  var ang=Math.atan2(P.pos.x-g.position.x,P.pos.z-g.position.z);
+  var da=ang-g.rotation.y;
+  while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
+  g.rotation.y+=da*(1-Math.pow(0.02,dt));
+  /* he closes slowly, and he heals if you hide */
+  if(dd>9){ g.position.x+=Math.sin(g.rotation.y)*3.4*dt; g.position.z+=Math.cos(g.rotation.y)*3.4*dt; }
+  if(giverT>4.5&&giverHp<GIVER_MAX){
+    giverHp=Math.min(GIVER_MAX,giverHp+22*dt);
+    $('bossBar').firstElementChild.style.width=clamp(giverHp/GIVER_MAX*100,0,100)+'%';
+    if(Math.random()<dt*3) burst(g.position.clone().setY(4),0x7dffa0,1,{speed:1,life:0.6,grav:-2,size:0.7});
+  }
+  if(dd<4.6&&giverMv===''&&!P.dead&&giverCd<-0.4){
+    giverCd=1.1; hurtPlayer(18,'Saint Brickiel backhanded you!'); sndPunch(true);
+    var away=P.pos.clone().sub(g.position).setY(0).normalize();
+    P.pos.addScaledVector(away,3.4); P.vy=6;
+  }
+  if(giverCd>0) return;
+  giverCd=Math.max(1.5,2.6-(1-giverHp/GIVER_MAX)*1.2);
+  var mv=['smite','rings','feathers','dive','smite'][(Math.random()*5)|0];
+  giverMv=mv;
+  if(mv==='smite'){
+    msg('✨ SMITE!',900); sndChime();
+    for(var i=0;i<4;i++){
+      var pxx=P.pos.x+rand(-7,7), pzz=P.pos.z+rand(-7,7);
+      if(i===0){ pxx=P.pos.x; pzz=P.pos.z; }
+      skyColumn(pxx,pzz,0.85+i*0.22,26);
+    }
+  } else if(mv==='rings'){
+    sndRoar(false); camShake=0.6;
+    skyRing(g.position.x,g.position.z,20,15);
+    skyTimer(function(){ if(giverObj) skyRing(g.position.x,g.position.z,20,15); },420);
+    skyTimer(function(){ if(giverObj) skyRing(g.position.x,g.position.z,20,15); },840);
+  } else if(mv==='feathers'){
+    sndTazer(); doFlash('#fff3c4');
+    for(var f=0;f<14;f++){
+      var m=bx(0.3,0.9,0.3,0xffffff);
+      m.position.copy(g.position).setY(4);
+      var a2=f/14*6.283;
+      spawnEproj(m,new THREE.Vector3(Math.cos(a2)*15,rand(-1,2),Math.sin(a2)*15),2,15,'feather');
+    }
+  } else {
+    sndWhoosh(true); camShake=0.4;
+    var to=P.pos.clone().sub(g.position).setY(0).normalize();
+    tween(0.42,function(k){ if(giverObj) giverObj.group.position.addScaledVector(to,26*0.02); });
+    skyTimer(function(){
+      if(giverObj&&!P.dead&&giverObj.group.position.distanceTo(P.pos)<5.5){
+        hurtPlayer(24,'He dived straight through you!'); sndPunch(true); camShake=0.7;
+      }
+    },420);
+  }
+  skyTimer(function(){ giverMv=''; },700);
+}
+
+/* ---------------- boss 2: the four knights ---------------- */
+function makeKnight(i){
+  var g=new THREE.Group();
+  var body=studdedBox(3.4,4.4,2.6,0xb9c2cc,0xdfe6ee); body.position.y=3.6; g.add(body);
+  var head=studdedBox(2.2,2,2.2,0xd8e0e8,0xffffff); head.position.y=6.9; g.add(head);
+  var vis=bx(1.8,0.5,0.2,0xffe97a); vis.position.set(0,6.9,1.15); g.add(vis);
+  var plume=box(0.5,1.6,0.5,0xc62b21); plume.position.y=8.4; g.add(plume);
+  for(var s=-1;s<=1;s+=2){
+    var arm=studdedBox(1.1,3.6,1.1,0xb9c2cc,0xdfe6ee); arm.position.set(s*2.4,3.8,0); g.add(arm);
+    var leg=studdedBox(1.3,3.2,1.3,0x8b95a1,0xb9c2cc); leg.position.set(s*0.9,1.6,0); g.add(leg);
+  }
+  var hilt=box(0.34,4.6,0.34,0x6b7480); hilt.position.set(2.4,4.2,1.2); g.add(hilt);
+  var blade=studdedBox(0.9,6.4,0.3,0xe8eef4,0xffffff); blade.position.set(2.4,8.4,1.2); g.add(blade);
+  var shield=studdedBox(0.4,4,3,0xd4af37,0xf3d97a); shield.position.set(-2.6,4,0.4); g.add(shield);
+  world.add(g);
+  return {mesh:g,hp:KNIGHT_MAX,dead:false,cd:1.8+i*0.7,t:0,state:'wake',swing:0};
+}
+function startKnights(){
+  clearHazards(); clearSkyCols();
+  skyState='knights'; skyStage=Math.max(skyStage,4);
+  knightList.length=0;
+  for(var i=0;i<4;i++){
+    var k=makeKnight(i), pl=SKY.plinth[i];
+    k.mesh.position.set(pl.x,0,pl.z);
+    k.mesh.rotation.y=Math.PI;
+    knightList.push(k);
+  }
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(SKY.x,0,SKY.tz+34); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='⚔️ THE FOUR SLEEPING KNIGHTS ⚔️';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); sndRoar(true); sndWoodFall(); doFlash('#ffffff'); camShake=1;
+  msg('⚔️ THE FOUR KNIGHTS WAKE UP ⚔️<br><span style="font-size:55%">They would have protected him. They were asleep.<br>Slow. Enormous. One swing takes half of you.</span>',5600);
+  obj('⚔️ Kill all 4 KNIGHTS: 4 left');
+  hint('They are SLOW — circle them. Do NOT stand in front of a swing. Fly if you have to.');
+  updateMobileUI();
+}
+function knightsLeft(){ var n=0; knightList.forEach(function(k){ if(!k.dead) n++; }); return n; }
+function hurtKnight(k,d){
+  if(k.dead||skyState!=='knights') return;
+  k.hp-=d;
+  burst(k.mesh.position.clone().setY(4),0xdfe6ee,5,{speed:3,life:0.5});
+  sndPunch(false); knock(200,0.3,0.06,0);
+  var tot=0; knightList.forEach(function(q){ tot+=Math.max(0,q.hp); });
+  $('bossBar').firstElementChild.style.width=clamp(tot/(KNIGHT_MAX*4)*100,0,100)+'%';
+  if(k.hp<=0){
+    k.dead=true;
+    sndWoodFall(); sndCrack(); camShake=0.7;
+    for(var i=0;i<18;i++)
+      burst(k.mesh.position.clone().add(new THREE.Vector3(rand(-2,2),rand(1,7),rand(-2,2))),0xb9c2cc,3,{speed:6,life:1.1});
+    tween(1.2,function(kk){ k.mesh.rotation.z=kk*1.5; k.mesh.position.y=-kk*3; },
+      function(){ world.remove(k.mesh); });
+    var left=knightsLeft();
+    obj('⚔️ Kill all 4 KNIGHTS: '+left+' left');
+    if(left<=0) knightsDown();
+  }
+}
+function knightsDown(){
+  skyState='knightsdead'; skyStage=Math.max(skyStage,5); save();
+  battleMusic(false); clearHazards();
+  $('bossWrap').style.display='none';
+  sndFanfare(); doFlash('#ffffff');
+  msg('⚔️ ALL FOUR KNIGHTS ARE DOWN.<br><span style="font-size:55%">…something about this does not add up.</span>',3800);
+  obj('');
+  skyTimer(function(){ if(PH==='sky') startCut7(); },3200);
+}
+function updateKnights(dt){
+  knightList.forEach(function(k){
+    if(k.dead) return;
+    var g=k.mesh, to=P.pos.clone().sub(g.position).setY(0), dd=to.length()||0.001;
+    k.t+=dt; k.cd-=dt;
+    if(k.state==='wake'){
+      g.rotation.x=Math.max(0,1.2-k.t*1.2);
+      if(k.t>1.4){ k.state='walk'; g.rotation.x=0; sndRoar(false); }
+      return;
+    }
+    var ang=Math.atan2(to.x,to.z), da=ang-g.rotation.y;
+    while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
+    g.rotation.y+=clamp(da,-1.1*dt,1.1*dt);   /* slow to turn */
+    if(k.state==='walk'){
+      if(dd>6){
+        g.position.x+=Math.sin(g.rotation.y)*2.1*dt;
+        g.position.z+=Math.cos(g.rotation.y)*2.1*dt;
+        g.position.y=Math.abs(Math.sin(k.t*3))*0.25;
+        if(Math.random()<dt*2.2){ knock(130,0.45,0.13,0); camShake=Math.min(camShake+0.08,0.28); }
+      }
+      if(dd<9&&k.cd<=0){ k.state='wind'; k.swing=0; k.cd=3.4; sndWhoosh(false); }
+    } else if(k.state==='wind'){
+      k.swing+=dt;
+      g.rotation.z=-Math.min(0.9,k.swing*1.6);
+      if(k.swing>0.85){ k.state='swing'; k.swing=0; }
+    } else if(k.state==='swing'){
+      k.swing+=dt;
+      g.rotation.z=-0.9+k.swing*7;
+      if(k.swing>0.14&&!k.hitDone){
+        k.hitDone=true;
+        sndPunch(true); camShake=0.8; doFlash('#dfe6ee');
+        var fwd=new THREE.Vector3(Math.sin(g.rotation.y),0,Math.cos(g.rotation.y));
+        var rel=P.pos.clone().sub(g.position).setY(0);
+        if(!P.dead&&rel.length()<10&&rel.normalize().dot(fwd)>0.2&&P.pos.y<7){
+          hurtPlayer(34,'A knight caught you with the big sword!');
+          P.pos.addScaledVector(fwd,5); P.vy=9;
+        }
+        skyRing(g.position.x,g.position.z,14,13);
+      }
+      if(k.swing>0.5){ k.state='walk'; k.hitDone=false; g.rotation.z=0; }
+    }
+  });
+}
+
+/* ---------------- cutscene 7: 2 HOURS EARLIER ---------------- */
+function makeAngelGod(){
+  var g=new THREE.Group();
+  var body=new THREE.Group();
+  var hL=new THREE.Mesh(new THREE.SphereGeometry(3.1,18,14,0,Math.PI),mat(0xdff0a8));
+  var hR=new THREE.Mesh(new THREE.SphereGeometry(3.1,18,14,Math.PI,Math.PI),mat(0xc6de8a));
+  body.add(hL); body.add(hR);
+  for(var i=0;i<10;i++){ var sp=box(0.7,0.7,0.7,0xffe97a); var a=rand(0,6.28), b=rand(-1,1);
+    sp.position.set(Math.cos(a)*2.9*Math.sqrt(1-b*b),b*2.9,Math.sin(a)*2.9*Math.sqrt(1-b*b)); body.add(sp); }
+  body.position.y=3.1; g.add(body);
+  var spr=makeCasohSprite(); spr.material.color.setHex(0xffffff);
+  spr.scale.set(4.8,7,1); spr.position.y=9.2; g.add(spr);
+  var wings=makeWings(3.4,0xffffff); wings.position.y=2.2; g.add(wings);
+  var halo=new THREE.Mesh(new THREE.TorusGeometry(2.4,0.24,8,24),bmat(0xffe97a));
+  halo.rotation.x=Math.PI/2; halo.position.y=12.4; g.add(halo);
+  world.add(g);
+  return {group:g,ball:body,spr:spr,wings:wings,halo:halo};
+}
+function startCut7(){
+  clearSkyRealm(); clearHazards(); clearSkyCols();
+  PH='cut7'; cut7T=0; cutSkipOk=false; skyEv={};
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  $('bossWrap').style.display='none';
+  /* four sleeping knights on their plinths, and a casoh at the top of the steps */
+  knightList.length=0;
+  for(var i=0;i<4;i++){
+    var k=makeKnight(i), pl=SKY.plinth[i];
+    k.mesh.position.set(pl.x,0,pl.z); k.mesh.rotation.y=Math.PI; k.mesh.rotation.x=1.25;
+    k.state='sleep'; knightList.push(k);
+  }
+  skyCine=makeAngelGod();
+  skyCine.group.position.set(SKY.x,0,SKY.tz-6);
+  skyCine.group.scale.set(0.42,0.42,0.42);
+  skyCine.wings.visible=false; skyCine.halo.visible=false;
+  skyCine.spr.material.color.setHex(0x7ba03a);
+  var bk=$('black'); bk.style.transition='none'; bk.style.opacity=1;
+  $('blackTxt').textContent='2 HOURS EARLIER'; $('blackTxt').style.opacity=1;
+  msg('',10);
+}
+function updateCut7(dt){
+  cut7T+=dt; var t=cut7T, X=SKY.x, TZ=SKY.tz, ev=skyEv, bk=$('black');
+  if(t>1.4) cutSkipOk=true;
+  if(t<2.2){ camera.position.set(X,10,TZ+40); camera.lookAt(X,4,TZ+10); return; }
+  if(!ev.fade){ ev.fade=1; bk.style.transition='opacity .8s'; bk.style.opacity=0;
+    skyTimer(function(){ $('blackTxt').style.opacity=0; },500); }
+  /* the roll */
+  var rollStart=3.2, rollEnd=8.4;
+  if(t<rollStart){
+    camera.position.set(X+14,7,TZ+26); camera.lookAt(X,3,TZ+13);
+    if(t>2.6&&!ev.snore){ ev.snore=1; msg('<span style="font-size:60%">😴 the four knights are asleep.</span>',2400); knock(90,0.4,0.5,0); }
+  } else if(t<rollEnd){
+    var k2=(t-rollStart)/(rollEnd-rollStart);
+    var zz=TZ-10+k2*34;
+    skyCine.group.position.set(X-9+k2*20,0,zz);
+    skyCine.ball.rotation.x-=dt*6;
+    camera.position.set(X+20,9,zz+16); camera.lookAt(X+2,3,zz);
+    if(!ev.roll){ ev.roll=1; sndRoar(false); msg('<span style="font-size:60%">🟢 …something is rolling.</span>',2200); }
+    if(Math.random()<dt*14) knock(140,0.5,0.12,0);
+    knightList.forEach(function(kn,ki){
+      if(kn.flat) return;
+      if(Math.abs(skyCine.group.position.z-kn.mesh.position.z)<4&&Math.abs(skyCine.group.position.x-kn.mesh.position.x)<7){
+        kn.flat=true;
+        sndWoodFall(); sndCrack(); camShake=0.9; doFlash('#ffffff');
+        burst(kn.mesh.position.clone().setY(3),0xb9c2cc,22,{speed:7,life:1.2});
+        tween(0.5,function(q){ kn.mesh.scale.set(1+q*0.7,1-q*0.92,1+q*0.7); kn.mesh.rotation.x=1.25+q*0.3; });
+        if(ki===0) msg('<span style="font-size:60%">💥 flattened. in their sleep.</span>',2200);
+      }
+    });
+  } else if(t<14.4){
+    /* the transformation */
+    var k3=clamp((t-8.8)/4.2,0,1);
+    var sc=0.42+k3*0.58;
+    skyCine.group.position.set(X+11,k3*7,TZ+24-k3*6);
+    skyCine.group.scale.set(sc,sc,sc);
+    skyCine.ball.rotation.x-=dt*(6-k3*5.4);
+    skyCine.spr.material.color.setHex(0x7ba03a).lerp(new THREE.Color(0xffffff),k3);
+    if(k3>0.25){ skyCine.wings.visible=true; skyCine.wings.scale.set(k3,k3,k3); }
+    if(k3>0.5){ skyCine.halo.visible=true; skyCine.halo.rotation.z+=dt*3; }
+    camera.position.set(X+30,12+k3*8,TZ+34); camera.lookAt(X+11,4+k3*8,TZ+20);
+    if(t>8.8&&!ev.tf){ ev.tf=1; sndRoar(true); sndSparkle(); doFlash('#ffffff'); camShake=1.1;
+      msg('<span style="font-size:62%">✨ and then he stood up.</span>',2600); }
+    if(t>11.4&&!ev.tf2){ ev.tf2=1; sndFanfare(); sndChime();
+      for(var b=0;b<4;b++) skyTimer(function(){ burst(skyCine.group.position.clone().setY(10),0xffffff,24,{speed:8,life:1.3}); },b*180);
+      cutSub('???','👼 THE ANGEL GOD','#ffe97a'); }
+    if(t>13.6&&!ev.out){ ev.out=1; bk.style.transition='opacity .7s'; bk.style.opacity=1; }
+  } else endCut7();
+}
+function endCut7(){
+  if(PH!=='cut7') return;
+  cut7T=-1; cutSkipOk=false;
+  var bk=$('black'); bk.style.transition='opacity .5s'; bk.style.opacity=0;
+  $('blackTxt').style.opacity=0;
+  knightList.forEach(function(k){ world.remove(k.mesh); }); knightList.length=0;
+  skyStandoff();
+}
+/* ---------------- the standoff + the reveal ---------------- */
+function skyStandoff(){
+  PH='sky'; skyState='attack'; skyStage=Math.max(skyStage,5); save();
+  if(!skyCine){ skyCine=makeAngelGod(); }
+  skyCine.group.scale.set(1,1,1);
+  skyCine.wings.visible=true; skyCine.wings.scale.set(1,1,1);
+  skyCine.halo.visible=true;
+  skyCine.spr.material.color.setHex(0xffffff);
+  skyCine.group.position.set(SKY.x,7,SKY.tz+6);
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(SKY.x,0,SKY.tz+30); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  setMood('heaven');
+  $('bossWrap').style.display='none';
+  msg('👼 THE ANGEL GOD is right there.<br><span style="font-size:55%"><b>ATTACK HIM.</b></span>',5200);
+  obj('👊 ATTACK THE ANGEL GOD (click, or F)');
+  hint('');
+  updateMobileUI();
+}
+function skyAttackHook(){
+  if(PH!=='sky'||skyState!=='attack') return false;
+  skyState='revealing';
+  sndPunch(true); camShake=0.5; doFlash('#ffffff');
+  if(player){ player.armR.rotation.x=-1.7; tween(0.22,function(k){ if(player) player.armR.rotation.x=-1.7+1.7*k; }); }
+  cutSub('YOU','i know you are casoh','#7fd8ff');
+  casohSay('i know you are casoh',0.78);
+  skyTimer(function(){ if(PH==='sky') startCut8(); },2400);
+  return true;
+}
+/* he talks in his own voice, same as the burger song */
+function casohSay(text,rate,note){
+  if(typeof casohSing==='function') return casohSing(text,{note:note==null?38:note,rate:rate||0.85,vol:1});
+  return false;
+}
+function startCut8(){
+  PH='cut8'; cut8T=0; cutSkipOk=false; skyEv={};
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+}
+function updateCut8(dt){
+  cut8T+=dt; var t=cut8T, ev=skyEv, g=skyCine?skyCine.group:null;
+  if(t>1) cutSkipOk=true;
+  if(g){
+    camera.position.set(SKY.x+9,11,SKY.tz+20); camera.lookAt(g.position.x,g.position.y+7,g.position.z);
+    skyCine.halo.rotation.z+=dt*2;
+    g.position.y=7+Math.sin(GTIME*1.6)*0.3;
+  }
+  if(t>0.6&&!ev.l1){ ev.l1=1; cutSub('THE ANGEL GOD','ok well im not','#ffe97a'); casohSay('ok well im not',0.9,40); }
+  if(t>3.4&&!ev.l2){ ev.l2=1; cutSub('THE ANGEL GOD','cya','#ffe97a'); casohSay('cya',0.7,43);
+    sndWhoosh(true); sndSparkle();
+    if(g){ tween(0.9,function(k){ g.position.y=7+k*40; g.scale.setScalar(1-k*0.8); },
+      function(){ if(skyCine){ world.remove(skyCine.group); skyCine=null; } }); }
+    burst(new THREE.Vector3(SKY.x,9,SKY.tz+6),0xffffff,34,{speed:9,life:1.3});
+  }
+  if(t>5.4&&!ev.out){ ev.out=1; var bk=$('black'); bk.style.transition='opacity .6s'; bk.style.opacity=1; }
+  if(t>6.2) endCut8();
+}
+function endCut8(){ if(PH!=='cut8') return; cut8T=-1; cutSkipOk=false; startCut9(); }
+
+/* ---------------- cutscene 9: back where the demons are ---------------- */
+function startCut9(){
+  PH='cut9'; cut9T=0; cutSkipOk=false; skyEv={};
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  buildBTS(); btsGroup.visible=true;
+  setMood('space');
+  var d=bts.demon; d.armL.rotation.set(0,0,0); d.armR.rotation.set(0,0,0); d.head.rotation.set(0,0,0);
+  d.group.rotation.set(0,Math.PI/2,0); d.group.position.set(BTS.x-22,30.2,BTS.z+8);
+  bts.god.position.set(BTS.x-16,31.9,BTS.z+8);
+  bts.god.visible=true;
+  var bk=$('black'); bk.style.transition='none'; bk.style.opacity=1;
+  $('blackTxt').textContent='MEANWHILE — BACK WHERE THE DEMONS ARE';
+  $('blackTxt').style.opacity=1;
+  msg('',10);
+}
+function updateCut9(dt){
+  cut9T+=dt; var t=cut9T, ev=skyEv, bk=$('black');
+  if(t>1.4) cutSkipOk=true;
+  camera.position.set(BTS.x-11,34.6,BTS.z+15); camera.lookAt(BTS.x-19,32.2,BTS.z+8);
+  if(t<2.2) return;
+  if(!ev.fade){ ev.fade=1; bk.style.transition='opacity .8s'; bk.style.opacity=0;
+    skyTimer(function(){ $('blackTxt').style.opacity=0; },520); }
+  if(t>3&&!ev.l1){ ev.l1=1; cutSub('ANGEL CASOH','i think hes onto us','#ffe97a'); casohSay('i think hes onto us',0.86,38); }
+  if(t>6&&!ev.l2){ ev.l2=1; cutSub('DEMON CASOH','then get him. now.','#ff3b3b');
+    casohSay('then get him now',0.8,33);
+    sndRoar(false); doFlash('#ff2211'); camShake=0.6;
+    var dg=bts.demon.group; tween(0.3,function(k){ dg.position.x=BTS.x-22+Math.sin(k*Math.PI)*1.4; }); }
+  if(t>8.6&&!ev.out){ ev.out=1; bk.style.transition='opacity .7s'; bk.style.opacity=1; }
+  if(t>9.4) endCut9();
+}
+function endCut9(){
+  if(PH!=='cut9') return;
+  cut9T=-1; cutSkipOk=false;
+  btsGroup.visible=false;
+  startAngelFight();
+}
+
+/* ---------------- boss 3: ANGEL CASOH ---------------- */
+function startAngelFight(){
+  clearSkyRealm(); clearHazards(); clearSkyCols(); clearSkyTimers();
+  buildSky(); skyGroup.visible=true;
+  PH='sky'; skyState='angel'; skyStage=Math.max(skyStage,6); save();
+  var bk=$('black'); bk.style.transition='opacity .6s'; bk.style.opacity=0; $('blackTxt').style.opacity=0;
+  angelObj=makeAngelGod();
+  angelObj.group.position.set(SKY.x,8,SKY.tz+4);
+  angelHp=ANGEL_MAX; angelCd=2.4; angelPh=0; angelT=0;
+  P.dead=false; P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%';
+  P.pos.set(SKY.x,0,SKY.tz+36); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=0; P.yaw=0;
+  setMood('heaven');
+  $('bossWrap').style.display='block';
+  $('bossName').textContent='😇 ANGEL CASOH 😇';
+  $('bossBar').firstElementChild.style.width='100%';
+  battleMusic(true); sndRoar(true); doFlash('#ffffff'); camShake=1.2;
+  msg('😇 ANGEL CASOH 😇<br><span style="font-size:55%">"erm what then winged man?"<br>1,500 HP. He rolls, he smites, and he brings friends.</span>',5600);
+  obj('😇 Kill ANGEL CASOH.');
+  hint('He rolls in a straight line — step aside. Fly when the floor lights up.');
+  updateMobileUI();
+}
+function hurtAngel(d){
+  if(!angelObj||skyState!=='angel') return;
+  angelHp-=d;
+  $('bossBar').firstElementChild.style.width=clamp(angelHp/ANGEL_MAX*100,0,100)+'%';
+  burst(angelObj.group.position.clone().setY(6),0xffe97a,6,{speed:4,life:0.6});
+  doFlash('#fff3c4');
+  var ph=angelHp<ANGEL_MAX*0.35?2:angelHp<ANGEL_MAX*0.7?1:0;
+  if(ph>angelPh){ angelPh=ph; angelCd=1.2;
+    sndRoar(true); doFlash('#ffffff'); camShake=0.9;
+    msg(ph===1?'😇 "ok that actually hurt"':'😇 "CHAT HE IS ACTUALLY DOING IT"',2200);
+  }
+  if(angelHp<=0) angelDefeated();
+}
+function updateAngel(dt){
+  if(!angelObj) return;
+  var g=angelObj.group, to=P.pos.clone().sub(g.position), dd=to.length()||0.001;
+  angelT+=dt; angelCd-=dt;
+  angelObj.halo.rotation.z+=dt*2.4;
+  angelObj.wings.children.forEach(function(w,wi){ w.rotation.z=(wi?1:-1)*(0.3+Math.sin(GTIME*7)*0.3); });
+  var ang=Math.atan2(to.x,to.z), da=ang-g.rotation.y;
+  while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
+  g.rotation.y+=da*(1-Math.pow(0.03,dt));
+  if(angelObj.rolling){
+    g.position.addScaledVector(angelObj.rollV,dt);
+    angelObj.ball.rotation.x-=dt*8;
+    angelObj.rollT-=dt;
+    if(!P.dead&&g.position.distanceTo(P.pos)<6){
+      hurtPlayer(30,'ANGEL CASOH rolled straight over you!'); sndPunch(true); camShake=0.9;
+      var aw=P.pos.clone().sub(g.position).setY(0).normalize(); P.pos.addScaledVector(aw,5); P.vy=8;
+      angelObj.rollT=0;
+    }
+    var dC=Math.hypot(g.position.x-SKY.x,g.position.z-SKY.z);
+    if(angelObj.rollT<=0||dC>SKY.r-6){
+      angelObj.rolling=false;
+      tween(0.5,function(k){ if(angelObj) angelObj.group.position.y=k*8; });
+    }
+    return;
+  }
+  /* hovering: keeps above you, follows */
+  var want=8+Math.sin(GTIME*1.4)*0.8;
+  g.position.y+=(want-g.position.y)*Math.min(1,dt*2);
+  if(dd>13){ g.position.x+=Math.sin(g.rotation.y)*4.6*dt; g.position.z+=Math.cos(g.rotation.y)*4.6*dt; }
+  if(angelCd>0) return;
+  angelCd=Math.max(1.3,2.5-angelPh*0.45);
+  var moves=['roll','smite','feathers','babies','beam'];
+  if(angelPh<1) moves=['roll','smite','feathers','roll'];
+  var mv=moves[(Math.random()*moves.length)|0];
+  if(mv==='roll'){
+    msg('🟢 HE IS ROLLING',1100); sndRoar(false); sndWhoosh(false); camShake=0.5;
+    angelObj.rollV=P.pos.clone().sub(g.position).setY(0).normalize().multiplyScalar(23);
+    angelObj.rolling=true; angelObj.rollT=2.4;
+    tween(0.3,function(k){ if(angelObj) angelObj.group.position.y=8-k*7.4; });
+  } else if(mv==='smite'){
+    sndChime(); msg('✨ THE FLOOR IS LIGHTING UP',1100);
+    for(var i=0;i<7;i++)
+      skyColumn(P.pos.x+rand(-11,11),P.pos.z+rand(-11,11),0.8+i*0.12,24,0xffffff);
+    skyColumn(P.pos.x,P.pos.z,0.95,24,0xffffff);
+  } else if(mv==='feathers'){
+    sndTazer(); doFlash('#fff3c4');
+    for(var f=0;f<18;f++){
+      var m=bx(0.32,1,0.32,0xffffff);
+      m.position.copy(g.position);
+      var a2=f/18*6.283;
+      spawnEproj(m,new THREE.Vector3(Math.cos(a2)*16,-4,Math.sin(a2)*16),3,14,'feather');
+    }
+  } else if(mv==='babies'){
+    sndMeow(); sndSparkle(); msg('👶 "GET HIM, CHILDREN"',1600);
+    for(var b=0;b<4;b++) spawnBabyCasoh(g.position.x+rand(-5,5),g.position.z+rand(-5,5),false,26);
+  } else {
+    sndTazer(); doFlash('#ffe97a'); camShake=0.5;
+    skyRing(g.position.x,g.position.z,22,17);
+    skyTimer(function(){ if(angelObj) skyRing(angelObj.group.position.x,angelObj.group.position.z,22,17); },400);
+    var bm=bx(1.1,1.1,1.1,0xffe97a);
+    bm.position.copy(g.position);
+    spawnEproj(bm,P.pos.clone().setY(P.pos.y+1).sub(g.position).normalize().multiplyScalar(26),0,26,'beam');
+  }
+}
+function angelDefeated(){
+  skyState='won'; skyStage=9; angelForm=true; save();
+  battleMusic(false); clearHazards(); clearSkyCols();
+  $('bossWrap').style.display='none';
+  sndRoar(true); sndFanfare(); skyTimer(sndFanfare,600); skyTimer(sndFanfare,1200);
+  doFlash('#ffffff'); camShake=1.3;
+  var g=angelObj?angelObj.group:null;
+  if(g){
+    for(var i=0;i<30;i++)
+      burst(g.position.clone().add(new THREE.Vector3(rand(-4,4),rand(1,10),rand(-4,4))),
+        [0xffffff,0xffe97a,0x7ba03a][(Math.random()*3)|0],3,{speed:8,life:1.4});
+    tween(1.8,function(k){ if(angelObj){ angelObj.group.position.y=8+k*26; angelObj.group.scale.setScalar(1-k*0.9); } },
+      function(){ if(angelObj){ world.remove(angelObj.group); angelObj=null; } });
+  }
+  msg('😇 ANGEL CASOH IS DOWN 😇<br><span style="font-size:55%">"…fine. take it."<br>The halo is yours.</span>',5200);
+  obj('😇 You can BECOME ANGEL CASOH. Press H.');
+  hint('');
+  var fw=0;
+  var iv=setInterval(function(){ fw++;
+    burst(new THREE.Vector3(SKY.x+rand(-30,30),rand(6,36),SKY.z+rand(-30,30)),RAINBOW[fw%7],22,{speed:8,life:1.6,grav:3});
+    blip(420+fw*52,'sine',0.3,0.4,0,1800);
+    if(fw>20) clearInterval(iv);
+  },300);
+  skyTimer(function(){ skyReturnToCity(); },5200);
+}
+function skyReturnToCity(){
+  if(skyGroup) skyGroup.visible=false;
+  clearSkyRealm();
+  ensureCityExtraPads();
+  PH='metro';
+  P.pos.set(CITY.x+30,0,CITY.z-6); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  camYaw=Math.PI/2; P.yaw=Math.PI/2;
+  setMood('day'); sndPortal(); windLoop.set(0.12);
+  msg('🏙️ BACK IN THE CITY<br><span style="font-size:55%">Press <b>H</b> to become ANGEL CASOH — wings, a lightsaber, his roll, and five baby casohs a minute.</span>',7000);
+  obj('😇 Press H to become ANGEL CASOH. The HEAVEN GATE takes you back up any time.');
+  updateMobileUI();
+}
+
+/* ---------------- the sandwich ---------------- */
+function startCut10(){
+  PH='cut10'; cut10T=0; cutSkipOk=false; skyEv={};
+  obj(''); hint(''); updateMobileUI();
+  keys={}; stickVec.x=stickVec.y=0;
+  clearSkyRealm(); clearHazards(); clearSkyCols();
+  if(skyGroup) skyGroup.visible=false;
+  buildBTS(); btsGroup.visible=true;
+  setMood('space');
+  var d=bts.demon;
+  d.group.rotation.set(0,Math.PI/2,0); d.group.position.set(BTS.x-22,30.2,BTS.z+8);
+  /* you, on a plate */
+  var you=new THREE.Group();
+  var bun1=studdedBox(4,0.9,4,0xe0a955,0xf0c078); bun1.position.y=0.5; you.add(bun1);
+  var meat=studdedBox(3.6,0.7,3.6,0x6b4226,0x8a5a2a); meat.position.y=1.25; you.add(meat);
+  var me=makeMinifig({torso:0x2a6fd6,legs:0x3a3f4a,arms:0x2a6fd6,face:'smile',hat:'hardhat',vest:true});
+  me.group.position.y=1.6; me.group.rotation.x=-1.4; you.add(me.group);
+  var let2=studdedBox(3.8,0.4,3.8,0x4caf50,0x7dffa0); let2.position.y=2.6; you.add(let2);
+  var bun2=studdedBox(4,1.1,4,0xe0a955,0xf0c078); bun2.position.y=3.3; you.add(bun2);
+  you.position.set(BTS.x-14,31.4,BTS.z+8);
+  world.add(you);
+  /* the dragon */
+  var dr=new THREE.Group();
+  var db=studdedBox(7,4,12,0x7ba03a,0x9ec45a); db.position.y=3; dr.add(db);
+  var dh=studdedBox(4,3.4,4.6,0x7ba03a,0x9ec45a); dh.position.set(0,4.6,7.4); dr.add(dh);
+  var ds=makeCasohSprite(); ds.scale.set(3,4.4,1); ds.position.set(0,5,9.8); dr.add(ds);
+  for(var s=-1;s<=1;s+=2){
+    var w=makeWings(2.6,0x55702a); w.position.set(s*3.4,5,0); w.rotation.y=s*0.6; dr.add(w);
+    var hn=box(0.5,1.8,0.5,0xf3d97a); hn.position.set(s*1.2,6.6,7.4); dr.add(hn);
+  }
+  var tail=studdedBox(2,2,7,0x7ba03a,0x9ec45a); tail.position.set(0,3,-8); dr.add(tail);
+  dr.position.set(BTS.x-40,28,BTS.z+8); dr.rotation.y=Math.PI/2;
+  world.add(dr);
+  skyEv.you=you; skyEv.dragon=dr; skyEv.plate=you;
+  var bk=$('black'); bk.style.transition='none'; bk.style.opacity=1;
+  $('blackTxt').textContent='WHAT HAPPENS NEXT'; $('blackTxt').style.opacity=1;
+  msg('',10);
+}
+function updateCut10(dt){
+  cut10T+=dt; var t=cut10T, ev=skyEv, bk=$('black');
+  if(t>1.4) cutSkipOk=true;
+  var X=BTS.x, Z=BTS.z;
+  if(t<2){ camera.position.set(X-10,34,Z+18); camera.lookAt(X-18,31.5,Z+8); return; }
+  if(!ev.fade){ ev.fade=1; bk.style.transition='opacity .8s'; bk.style.opacity=0;
+    skyTimer(function(){ $('blackTxt').style.opacity=0; },520); }
+  camera.position.set(X-9,34.4,Z+17); camera.lookAt(X-19,31.6,Z+8);
+  if(t>2.6&&!ev.l1){ ev.l1=1; cutSub('DEMON CASOH','got him','#ff3b3b'); casohSay('got him',0.8,33); }
+  if(t>5&&!ev.l2){ ev.l2=1; msg('<span style="font-size:60%">🔥 …and then they cooked you.</span>',2600);
+    sndTazer(); doFlash('#ff8844');
+    for(var q=0;q<10;q++) skyTimer(function(){ burst(ev.you.position.clone().setY(33),0xff7043,8,{speed:3,life:0.9,grav:-1}); },q*160); }
+  if(t>8&&!ev.l3){ ev.l3=1; cutSub('DEMON CASOH','sandwich','#ff3b3b'); casohSay('sandwich',0.62,31);
+    sndChomp(); }
+  if(t>10&&!ev.fly){ ev.fly=1; sndRoar(true); camShake=0.6;
+    msg('<span style="font-size:60%">🐉 dragon casoh is hungry.</span>',2600); }
+  if(t>10){
+    var k=clamp((t-10)/3.4,0,1);
+    ev.dragon.position.x=X-40+k*22;
+    ev.dragon.position.y=28+Math.sin(t*2)*0.5;
+    if(k>0.82&&!ev.eat){ ev.eat=1;
+      sndChomp(); sndCrack(); camShake=1; doFlash('#ff3b3b');
+      burst(ev.you.position.clone().setY(33),0xc62b21,30,{speed:7,life:1.2});
+      world.remove(ev.you); ev.you=null;
+      msg('<span style="font-size:62%">💀 …gone.</span>',2200);
+    }
+  }
+  if(t>15&&!ev.black){ ev.black=1;
+    bk.style.transition='opacity .9s'; bk.style.opacity=1;
+    skyTimer(function(){ $('blackTxt').textContent='that might have happened'; $('blackTxt').style.opacity=1; },900);
+    skyTimer(function(){ $('blackTxt').textContent='but no…'; },3400);
+  }
+  if(t>21) endCut10();
+}
+function endCut10(){
+  if(PH!=='cut10') return;
+  cut10T=-1; cutSkipOk=false;
+  if(skyEv.you) world.remove(skyEv.you);
+  if(skyEv.dragon) world.remove(skyEv.dragon);
+  skyEv={};
+  btsGroup.visible=false;
+  $('blackTxt').style.opacity=0;
+  startAngelFight();
+}
+
+/* ---------------- ANGEL CASOH: the form you get to keep ---------------- */
+function dressAngel(){
+  if(!player||!formOn) return;
+  if(!player.wings){ player.wings=makeWings(1.15,0xffffff); player.group.add(player.wings); }
+  if(!player.halo){
+    var h=new THREE.Mesh(new THREE.TorusGeometry(0.55,0.09,7,16),bmat(0xffe97a));
+    h.rotation.x=Math.PI/2; h.position.y=2.9; player.group.add(h); player.halo=h;
+  }
+  attachSaber();
+}
+function toggleAngel(on){
+  if(!angelForm){ msg('🔒 Beat ANGEL CASOH first.',1600); return; }
+  if(PH==='menu'||PH==='cut'||PH==='cut2') return;
+  formOn=(on==null?!formOn:!!on);
+  var keep=P.pos.clone();
+  spawnPlayer(formOn?'angelcasoh':(curForm==='worker'?false:curForm==='biz'?true:curForm));
+  if(formOn) player.group.scale.set(1.3,1.3,1.3);
+  P.pos.copy(keep); player.group.position.copy(P.pos);
+  if(formOn){ dressAngel(); sndSparkle(); sndFanfare(); doFlash('#ffffff'); camShake=0.5;
+    burst(P.pos.clone().setY(1.6),0xffffff,26,{speed:6,life:1.1});
+    msg('😇 ANGEL CASOH<br><span style="font-size:55%">SPACE fly · F lightsaber · C roll · Z summon 5 baby casohs (60s)</span>',4600);
+    hint('SPACE = fly up · SHIFT = down · C = roll · Z = baby casohs');
+  } else { if(hvSword) attachSaber(); sndWhoosh(false); msg('🧱 back to normal.',1400); hint(''); }
+  save(); updateMobileUI();
+}
+function spawnBabyCasoh(x,z,mine,hp){
+  var g=new THREE.Group();
+  var ball=new THREE.Group();
+  var bl=new THREE.Mesh(new THREE.SphereGeometry(0.85,12,10,0,Math.PI),mat(mine?0xdff0a8:0x7ba03a));
+  var br=new THREE.Mesh(new THREE.SphereGeometry(0.85,12,10,Math.PI,Math.PI),mat(mine?0xc6de8a:0x6a9030));
+  ball.add(bl); ball.add(br); ball.position.y=0.85; g.add(ball);
+  var s=makeCasohSprite(); s.scale.set(1.1,1.6,1); s.position.y=2.1;
+  if(mine) s.material.color.setHex(0xffffff);
+  g.add(s);
+  if(mine){ var h=new THREE.Mesh(new THREE.TorusGeometry(0.3,0.05,6,12),bmat(0xffe97a));
+    h.rotation.x=Math.PI/2; h.position.y=2.9; g.add(h); }
+  g.position.set(x,0,z);
+  world.add(g);
+  babyList.push({mesh:g,ball:ball,mine:!!mine,hp:hp||30,dead:false,life:20,cd:rand(0.4,1.2),t:0});
+  burst(g.position.clone().setY(1),mine?0xffffff:0x7ba03a,12,{speed:4,life:0.7});
+}
+function trySummonBabies(){
+  if(!formOn){ return; }
+  if(babyCd>0){ msg('👶 baby casohs in '+Math.ceil(babyCd)+'s',1200); return; }
+  babyCd=60;
+  sndMeow(); sndSparkle(); doFlash('#ffffff');
+  for(var i=0;i<5;i++){
+    var a=i/5*6.283;
+    spawnBabyCasoh(P.pos.x+Math.cos(a)*3.4,P.pos.z+Math.sin(a)*3.4,true,40);
+  }
+  msg('👶 FIVE BABY CASOHS<br><span style="font-size:55%">They fight for you. They last 20 seconds.</span>',2600);
+  updateMobileUI();
+}
+function tryRoll(){
+  if(!formOn||rollT>0) return;
+  rollT=0.72;
+  rollV=new THREE.Vector3(Math.sin(P.yaw),0,Math.cos(P.yaw)).multiplyScalar(26);
+  sndRoar(false); sndWhoosh(true); camShake=0.4;
+  if(player) player.group.rotation.x=0;
+}
+function updateAngelForm(dt){
+  if(babyCd>0) babyCd-=dt;
+  if(rollT>0){
+    rollT-=dt;
+    P.pos.addScaledVector(rollV,dt);
+    if(player) player.group.rotation.x-=dt*16;
+    if(Math.random()<dt*20) burst(P.pos.clone().setY(0.6),0xffe97a,2,{speed:2,life:0.5,size:0.7});
+    rollHitCd-=dt;
+    if(rollHitCd<=0){
+      var rolled=false;
+      combatTargets().forEach(function(t){ if(t.pos.distanceTo(P.pos)<3.8){ t.hurt(34,true); rolled=true; } });
+      if(rolled){ rollHitCd=0.25; sndPunch(true); camShake=Math.min(camShake+0.2,0.6); }
+    }
+    if(rollT<=0&&player) tween(0.2,function(k){ if(player) player.group.rotation.x=0; });
+  }
+  /* the babies */
+  for(var i=babyList.length-1;i>=0;i--){
+    var b=babyList[i];
+    b.t+=dt; b.life-=dt;
+    b.ball.rotation.x-=dt*4;
+    b.mesh.position.y=Math.abs(Math.sin(b.t*6))*0.22;
+    if(b.life<=0||b.dead){
+      burst(b.mesh.position.clone().setY(1),b.mine?0xffffff:0x7ba03a,12,{speed:4,life:0.7});
+      world.remove(b.mesh); babyList.splice(i,1); continue;
+    }
+    if(b.life<3&&Math.random()<dt*6) burst(b.mesh.position.clone().setY(1.4),0xffffff,1,{speed:1,life:0.5,size:0.6});
+    var tgt=null,bd=1e9;
+    if(b.mine){
+      combatTargets().forEach(function(t){ var d=t.pos.distanceTo(b.mesh.position); if(d<bd){ bd=d; tgt=t; } });
+    } else { tgt={pos:P.pos,y:1}; bd=P.pos.distanceTo(b.mesh.position); }
+    if(!tgt){ continue; }
+    var to=tgt.pos.clone().sub(b.mesh.position).setY(0), dd=to.length()||0.001;
+    b.mesh.rotation.y=Math.atan2(to.x,to.z);
+    if(dd>1.8&&dd<60) b.mesh.position.addScaledVector(to.multiplyScalar(1/dd),7*dt);
+    b.cd-=dt;
+    if(dd<2.6&&b.cd<=0){
+      b.cd=0.8;
+      if(b.mine){ tgt.hurt(9,false); burst(tgt.pos.clone().setY(tgt.y||1),0xffffff,4,{speed:2,life:0.4}); knock(300,0.2,0.05,0); }
+      else if(!P.dead){ hurtPlayer(7,'A baby casoh bit you!'); sndChomp(); }
+    }
+  }
+}
+function hurtBaby(b,d){ if(b.dead) return; b.hp-=d;
+  burst(b.mesh.position.clone().setY(1),0xffe97a,4,{speed:2,life:0.4});
+  if(b.hp<=0) b.dead=true; }
+
+/* ---------------- glue ---------------- */
+function combatTargetsAct11(list){
+  if(!babyList) return;                 /* frame zero, before the vars are set */
+  if(PH==='sky'){
+    hvList.forEach(function(h){ if(!h.dead)
+      list.push({pos:h.ref.group.position,y:1.3,hurt:function(d,t){ hurtHeavenist(h,d,t); }}); });
+    if(giverObj&&skyState==='giver')
+      list.push({pos:giverObj.group.position,y:4,big:true,hurt:function(d){ hurtGiver(d); }});
+    knightList.forEach(function(k){ if(!k.dead&&skyState==='knights')
+      list.push({pos:k.mesh.position,y:4,big:true,hurt:function(d){ hurtKnight(k,d); }}); });
+    if(angelObj&&skyState==='angel')
+      list.push({pos:angelObj.group.position,y:5,big:true,hurt:function(d){ hurtAngel(d); }});
+  }
+  babyList.forEach(function(b){ if(!b.dead&&!b.mine)
+    list.push({pos:b.mesh.position,y:1,hurt:function(d){ hurtBaby(b,d); }}); });
+}
+function updateAct11(dt){
+  if(!babyList) return;                 /* frame zero, before the vars are set */
+  if(formOn||babyList.length||rollT>0||babyCd>0) updateAngelForm(dt);
+  if(PH!=='sky') return;
+  if(skyCd>0) skyCd-=dt;
+  skyT+=dt;
+  updateSkyHazards(dt);
+  if(skyState==='q1'||skyState==='q2') updateHeavenists(dt);
+  if(skyState==='giver') updateGiver(dt);
+  if(skyState==='knights') updateKnights(dt);
+  if(skyState==='angel') updateAngel(dt);
+  if(skyCine&&skyState==='attack'){
+    skyCine.halo.rotation.z+=dt*2;
+    skyCine.group.position.y=7+Math.sin(GTIME*1.5)*0.35;
+    skyCine.group.rotation.y=Math.atan2(P.pos.x-skyCine.group.position.x,P.pos.z-skyCine.group.position.z);
+  }
+  /* the gate home, south */
+  if(skyState==='free'&&!P.dead&&skyCd<=0&&Math.hypot(P.pos.x-SKY.x,P.pos.z-(SKY.gz))<3.4&&P.pos.y<4){
+    skyCd=2; skyReturnToCity();
+  }
+  /* fell off the island */
+  if(P.pos.y<-24&&!P.dead&&!canFly()){
+    P.pos.set(SKY.x,0,SKY.gz-4); P.vy=0;
+    if(player) player.group.position.copy(P.pos);
+    hurtPlayer(12,'You fell off heaven.');
+  } else if(P.pos.y<-40&&!P.dead){
+    P.pos.set(SKY.x,2,SKY.gz-4); P.vy=0;
+    if(player) player.group.position.copy(P.pos);
+  }
+}
+function skyDeath(){
+  if(skyState==='q1'||skyState==='q2')
+    killPlayer('STRUCK DOWN!','The heavenists got you. The quest resets — go again?',function(){ skyRetryQuest(); });
+  else if(skyState==='giver')
+    killPlayer('JUDGED!','Saint Brickiel decided against you. He goes back to full HP.',startGiverFight);
+  else if(skyState==='knights')
+    killPlayer('CRUSHED!','A knight put you through the cloud. All four get back up.',startKnights);
+  else if(skyState==='angel')
+    killPlayer('SMITED!','ANGEL CASOH got you. Retry — or see what he did next.',startAngelFight,startCut10);
+  else { P.hp=P.maxHp; $('hpBar').firstElementChild.style.width='100%'; }
+}
+function skyRetryQuest(){
+  clearHazards();
+  hvList.forEach(function(h){ if(h.ref) world.remove(h.ref.group); }); hvList.length=0;
+  P.pos.set(SKY.x,0,SKY.gz-4); P.vy=0;
+  if(player) player.group.position.copy(P.pos);
+  if(!hvSword){ skyState='q1'; skyStartQ1(); }
+  else { skyState='q2'; skyStartQ2(); }
+}
+function ensureSkyPad(){
+  if(!rich||bhStage<7) return;
+  buildCity();
+  if(cityPads.some(function(p){ return p.mode==='sky'; })) return;
+  var pad=studdedBox(3,0.3,3,0xfff3c4,0xffffff);
+  pad.position.set(CITY.x-44,0.15,CITY.z-26); world.add(pad);
+  var sign=textBoard('HEAVEN GATE\n75,000 STUD BUX',4.2,2,'#2a2510','#ffe97a',22);
+  sign.position.set(CITY.x-44,3.4,CITY.z-27.9); world.add(sign);
+  var beam=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.5,60,10,1,true),
+    new THREE.MeshBasicMaterial({color:0xfff3c4,transparent:true,opacity:0.22,side:THREE.DoubleSide,depthWrite:false}));
+  beam.position.set(CITY.x-44,30,CITY.z-26); world.add(beam);
+  cityPads.push({x:CITY.x-44,z:CITY.z-26,mode:'sky',pad:pad});
+}
+function applyAct11Skip(sv){
+  skyStage=sv.sky||0; angelForm=!!sv.af;
+  if(skyStage>=2) hvSword=true;
+  if(skyStage>=3) hvWings=true;
+}
+
+/* ================================================================
    THE MEGA CITY — a standalone build from the main menu.
    50,000 clicks, 1,250,000 parts, NO auto-build: a 9×9-block city
    with roads (tiles, lane dashes, crosswalks, traffic lights),
@@ -12337,6 +13618,32 @@ window.__dbg={
   havenGatePos:function(){ return havenGate?{x:havenGate.position.x,z:havenGate.position.z}:null; },
   gotoHaven:function(stage){ if(!player) spawnPlayer('rich'); finWon=true; blobsDone=true; bhStage=stage||1; enterHaven(); },
   placeBh:function(n){ for(var i=0;i<(n||1);i++){ if(bhCine||bhIdx>=bhChunks.length) break; placeBhChunk(true); } },
+  /* ---- Act 11: THE HEAVEN SAGA ---- */
+  sky:function(){ return {stage:skyStage,state:skyState,sword:hvSword,wings:hvWings,
+    ground:hvGround,air:hvAir,
+    alive:hvList.filter(function(h){ return !h.dead; }).length,
+    giver:giverObj?Math.round(giverHp):null,
+    knights:knightList.filter(function(k){ return !k.dead; }).length,
+    angel:angelObj?Math.round(angelHp):null,
+    cine:!!skyCine,form:formOn,unlocked:angelForm,fly:canFly(),
+    babies:babyList.length,babyCd:Math.round(babyCd),bux:studBux}; },
+  gotoSky:function(){ if(!player) spawnPlayer('rich'); rich=true;
+    bhStage=Math.max(bhStage,7); studBux=Math.max(studBux,75000); sbuxHud();
+    buildCity(); ensureSkyPad(); handleSkyPad(); },
+  skyPadPos:function(){ var p=null; cityPads.forEach(function(q){ if(q.mode==='sky') p={x:q.x,z:q.z}; }); return p; },
+  skyKill:function(){ for(var i=0;i<hvList.length;i++) if(!hvList[i].dead){ killHeavenist(hvList[i]); return true; } return false; },
+  skyKillAll:function(){ hvList.slice().forEach(function(h){ if(!h.dead) killHeavenist(h); }); },
+  hitGiver:function(n){ hurtGiver(n||9999); },
+  hitKnight:function(n){ for(var i=0;i<knightList.length;i++) if(!knightList[i].dead){ hurtKnight(knightList[i],n||9999); return true; } return false; },
+  hitKnights:function(n){ knightList.forEach(function(k){ if(!k.dead) hurtKnight(k,n||9999); }); },
+  hitAngel:function(n){ hurtAngel(n||9999); },
+  skyAttack:function(){ return skyAttackHook(); },
+  skySandwich:function(){ startCut10(); },
+  beAngel:function(on){ angelForm=true; toggleAngel(on); },
+  skyBabies:function(){ babyCd=0; trySummonBabies(); },
+  skyRoll:function(){ tryRoll(); },
+  skySkipCut:function(){ if(PH==='cut7') endCut7(); else if(PH==='cut8') endCut8();
+    else if(PH==='cut9') endCut9(); else if(PH==='cut10') endCut10(); },
   startCasoh:function(){ if(PH!=='haven') __dbg.gotoHaven(6); if(bhTimer){ clearTimeout(bhTimer); bhTimer=null; } startCasohFight(); },
   cfWinRound:function(){ if(cf&&cf.state!=='won') cfRoundWon(); },
   cfClickN:function(n){ for(var i=0;i<(n||1);i++) cfContestClick(); },
