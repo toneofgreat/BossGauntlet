@@ -2994,13 +2994,31 @@ function battleMusic(on){
        novelty voices to the bottom where they belong;
      - CASOH.pitch/.rate drop the whole performance into a baritone
        and slow it to a drawl, and every line keeps its own relative
-       pitch on top of that, so the shouts still sit above the mumbles;
+       pitch on top of that, and a shout is LOUD and slow rather than
+       high, because a big man does not get squeaky when he shouts;
      - drawl() respells the words the way he says them, because a
        speech synth pronounces what you WRITE - "I" becomes "Ah",
        "you are" becomes "yer", "-ing" loses its g, and so on.
    Then chest() puts a sub-bass swell under every line so a big man's
    voice moves a bit of air. It is an impression built out of a text
    to speech voice, not a recording of anybody.
+
+   HE SINGS IN KEY. A speech synth's "pitch" is a unitless 0-2 knob,
+   not a note - so casohNote() turns the bar's chord into a note in
+   the one octave he talks in (midi 32-43) and casohPitch() converts
+   that note into the knob - 0.5 sits on midi 36, 0.40 to 0.79 across.
+   The result is that his voice MOVES WITH THE CHORDS: he sits low on
+   the A minor bars, climbs on the F and G bars, and every "..." drops
+   him a whole tone. chest() tunes its sub to the same note, and vox()
+   doubles him an octave up on it, so the talking is never off-key
+   against the piano.
+
+   HE SAYS OTHER THINGS. BURGER_LINES is the spine of the song; the
+   bars in BURGER_FREE are his, and on each of them he either picks a
+   whole thought out of CASOH_SAYS, throws a chat-ism from
+   CASOH_ADLIB, or just chews. It is different every time the loop
+   comes round, and it never talks over itself - a free bar checks
+   speechSynthesis.pending first.
    ============================================================ */
 var MUS={cur:'off',timer:null,beat:0,paused:false,voice:null,voiceHook:false};
 /* how deep and how slow he is, before a line's own pitch is applied */
@@ -3095,13 +3113,19 @@ function pickVoice(){
 /* ---- the drawl: a speech synth says what you WRITE, so write it his way ---- */
 var DRAWL=[
   [/\byou are\b/gi,'yer'],[/\byou're\b/gi,'yer'],[/\byour\b/gi,'yer'],[/\byou\b/gi,'yew'],
-  [/\bI'm\b/g,'Ahm'],[/\bI\b/g,'Ah'],[/\bmy\b/gi,'mah'],
+  [/\bI'm\b/g,'Ahm'],[/\bI\b/g,'Ah'],[/\boh my\b/gi,'aw mah'],[/\bmy\b/gi,'mah'],
   [/\bis not\b/gi,"ain't"],[/\bisn't\b/gi,"ain't"],[/\bare not\b/gi,"ain't"],
+  [/\bcannot\b/gi,"cain't"],[/\bcan't\b/gi,"cain't"],
+  [/\bthat is\b/gi,'thass'],[/\bthat's\b/gi,'thass'],
   [/\bgoing to\b/gi,'finna'],[/\bwant to\b/gi,'wanna'],
-  [/\bthere\b/gi,'thurr'],[/\bwhere\b/gi,'whurr'],
-  [/\bjust\b/gi,'jus'],[/\bget\b/gi,'git'],[/\bthem\b/gi,'em'],
+  [/\bkind of\b/gi,'kinda'],[/\bsort of\b/gi,'sorta'],[/\bgive me\b/gi,'gimme'],
+  [/\bthere\b/gi,'thurr'],[/\bwhere\b/gi,'whurr'],[/\bhere\b/gi,'heer'],
+  [/\bjust\b/gi,'jus'],[/\bget\b/gi,'git'],[/\bthem\b/gi,'em'],[/\bfor\b/gi,'fer'],
   [/\babout\b/gi,'bout'],[/\bbecause\b/gi,'cuz'],[/\bman\b/gi,'mane'],
+  [/\bthings\b/gi,'thangs'],[/\bthing\b/gi,'thang'],[/\bbrother\b/gi,'brutha'],
+  [/\breally\b/gi,'rilly'],[/\bno\b/gi,'nah'],[/\byes\b/gi,'yessir'],
   [/\bwashed\b/gi,'warshed'],                      /* the tell everybody quotes */
+  [/\bgoing\b/gi,'goin'],[/\bdoing\b/gi,'doin'],
   [/(\w{3,})ing\b/gi,'$1in'],                      /* holding -> holdin */
   [/\bof course\b/gi,'oh eff see']
 ];
@@ -3110,14 +3134,15 @@ function drawl(t){
   for(var i=0;i<DRAWL.length;i++) out=out.replace(DRAWL[i][0],DRAWL[i][1]);
   return out.replace(/(^|[.!?]\s+)([a-z])/g,function(m,a,b){ return a+b.toUpperCase(); });
 }
-/* ---- the air a big voice moves, under every line ---- */
-function chest(dur,vol){
+/* ---- the air a big voice moves, under every line, IN THE CHORD ---- */
+function chest(dur,vol,note){
   var a=actx(); if(!a) return;
   var t=a.currentTime, v=(vol==null?0.14:vol);
+  var f0=440*Math.pow(2,((note==null?36:note)-69)/12);
   var o=a.createOscillator(), g=a.createGain();
   o.type='sine';
-  o.frequency.setValueAtTime(64,t);
-  o.frequency.linearRampToValueAtTime(50,t+dur);         /* he lands every sentence on the floor */
+  o.frequency.setValueAtTime(f0,t);
+  o.frequency.linearRampToValueAtTime(f0*0.891,t+dur);   /* he lands every sentence a tone lower */
   g.gain.setValueAtTime(0.0001,t);
   g.gain.linearRampToValueAtTime(v,t+0.13);
   g.gain.setValueAtTime(v,t+Math.max(0.16,dur-0.3));
@@ -3127,10 +3152,21 @@ function chest(dur,vol){
   lfo.type='sine'; lfo.frequency.setValueAtTime(5.4,t); lg.gain.setValueAtTime(2.4,t);
   lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t+dur+0.24);
 }
-function casohSing(text,pitch,rate,vol){
+/* a chord root and a scale degree, folded into the one octave he talks in.
+   Must be a MODULO, not a pair of while loops against a window narrower than
+   an octave: that has no fixed point, and bar 13's fifth over G escaped it. */
+function casohNote(root,deg){
+  var n=root+(deg||0)-12;
+  return 32+((((n-32)%12)+12)%12);            /* midi 32-43, pitch 0.40-0.79 */
+}
+/* that note, as the 0-2 knob a speech synth calls "pitch" (0.5 sits on midi 36) */
+function casohPitch(note){ return clamp(CASOH.pitch*Math.pow(2,((note==null?36:note)-36)/12),0.12,1.6); }
+function casohSing(text,o){
+  o=o||{};
   var line=drawl(text), spoke=false;
-  var p0=clamp(CASOH.pitch*((pitch==null?0.75:pitch)/0.75),0.1,2);
-  var r0=clamp(CASOH.rate*((rate==null?0.8:rate)/0.8),0.1,2);
+  var note=(o.note==null?36:o.note);
+  var r0=clamp(CASOH.rate*((o.rate==null?0.8:o.rate)/0.8),0.1,2);
+  var vol=(o.vol==null?0.9:o.vol);
   try{
     if(window.speechSynthesis&&window.SpeechSynthesisUtterance){
       /* he pauses mid-sentence and comes back lower - so split on his pauses */
@@ -3140,15 +3176,18 @@ function casohSing(text,pitch,rate,vol){
       for(var i=0;i<parts.length;i++){
         var u=new SpeechSynthesisUtterance(parts[i]+(i<parts.length-1?'...':''));
         var v=pickVoice(); if(v) u.voice=v;
-        u.pitch=clamp(p0*(1-i*0.12)+rand(-0.02,0.02),0.1,2);
+        u.pitch=clamp(casohPitch(note-i*2)+rand(-0.015,0.015),0.1,2);   /* a whole tone down per pause */
         u.rate=clamp(r0*(i===parts.length-1?0.92:1),0.1,2);
-        u.volume=vol==null?1:vol;
+        u.volume=clamp(vol*(i?0.88:1),0,1);
         speechSynthesis.speak(u);
         spoke=true;
       }
     }
   }catch(e){ spoke=false; }
-  chest(Math.min(4.2,0.5+line.length*0.052/Math.max(0.4,r0)),spoke?0.12:0.19);
+  /* he is never alone: a sub on his note, and a voice doubling him an octave up */
+  var dur=Math.min(4.2,0.5+line.length*0.052/Math.max(0.4,r0));
+  chest(dur,spoke?0.12:0.19,note);
+  if(o.solo!==true) vox(note+12,0,Math.min(2.6,dur),'o',spoke?0.038:0.12);
   return spoke;
 }
 
@@ -3186,25 +3225,77 @@ function crazyBeat(b){
 /* BURGER: the song he gives you. C ballad, and he is not a singer. */
 var BURGER_CH=[[48,'maj7'],[45,'min7'],[53,'maj7'],[55,'dom7'],
                [53,'maj7'],[55,'dom7'],[52,'min7'],[45,'min7']];
-/* Written plain; drawl() puts the accent on at sing time. */
+/* Written plain; drawl() puts the accent on at sing time.
+   bar: [text, semitones above the bar's chord root, rate, choir?, shout?] */
 var BURGER_LINES={
-  /* bar: [text, pitch, rate, and whether the choir joins] */
-  2:['Chat. I have a burger.',0.7,0.8,0],
-  4:['It is a burger, chat.',0.68,0.78,0],
-  6:['I am holding... the burger.',0.72,0.74,0],
-  8:['The lettuce is in there. Somewhere.',0.66,0.86,0],
-  10:['BUR-GER.',1.1,0.62,1],
-  11:['BUR-GER.',1.15,0.62,1],
-  12:['It is a burger, man.',0.9,0.8,1],
-  14:['Cheese is optional... not for me.',0.7,0.9,0],
-  16:['The blob man asked me what I was eating.',0.64,1,0],
-  18:['I said... this is my burger.',0.74,0.76,0],
-  21:['...anyway.',0.6,0.7,0],
-  22:['Thank you for beating me.',0.8,0.78,1],
-  24:['Enjoy the burger song... you are banned.',0.86,0.74,1]
+  1:['Chat. Chat. Hold on.',0,0.92,0],
+  2:['I have a burger.',0,0.8,0],
+  6:['I am holding... the burger.',0,0.74,0],
+  8:['The lettuce is in there. Somewhere.',0,0.86,0],
+  10:['BUR-GER.',0,0.62,1,1],
+  11:['BUR-GER.',0,0.62,1,1],
+  12:['It is a burger, man.',0,0.95,1,1],
+  13:['O. F. C.',0,0.68,1,1],
+  14:['Cheese is optional... not for me.',0,0.9,0],
+  16:['The blob man asked me what I was eating.',0,1,0],
+  18:['I said... this is my burger.',0,0.76,0],
+  20:['...anyway.',7,0.7,0],              /* deflated, so: down an octave */
+  22:['Thank you for beating me.',0,0.78,1],
+  24:['Enjoy the burger song... you are banned.',4,0.74,1]
 };
+/* His bars. Short ones: two beats of room, so chat-isms only. */
+var BURGER_FREE=[3,5,7,9,15,17,21,23,25,28,31];   /* 19 is the awkward silence - leave it alone */
+/* His bars with room to finish a thought: a whole line off CASOH_SAYS, and a
+   different one every loop. Each has at least two clear bars after it. */
+var BURGER_ROTATE=[4,26,29];
+var CASOH_SAYS=[
+  'I did not ask for lettuce. But it is there.',
+  'I put the cheese on first. That is the secret.',
+  'Look at it, chat. Look at the burger.',
+  'This is the best burger I have ever held.',
+  'I am not going to share it.',
+  'Somebody asked if I was going to eat the box.',
+  'The pickles are a bonus round.',
+  'I ate the fries on the way here.',
+  'It is a burger. It is not a salad.',
+  'I would fight a blob man for this.',
+  'One bite. That is all you get. Zero bites.',
+  'The bun is warm, chat. The bun is warm.',
+  'I am holding it with two hands. Respect.',
+  'You cannot rush a burger.',
+  'This burger has never lost.',
+  'They said I could not sing. And they were right.',
+  'I am doing my best out here.',
+  'That is a really big thing to say about a burger.',
+  'Do not tell me how to eat this.',
+  'I have got a whole song and one burger.',
+  'It is a burger. I do not know what else to say.',
+  'Somebody in chat said get a salad. You are banned.',
+  'I have held this burger the whole song.'
+];
+var CASOH_ADLIB=['Chat.','No.','Bro.','Hold on.','What.','Kitty?','Refund.','Cap.',
+  'Sheesh.','Stop.','Aw, dawg.','Erm.','Get out.','No way.','One.','Yes.',
+  'So good.','Come on.','Oh my.','That is crazy.','You are banned.','Big back.',
+  'Dub.','Nah, chat.'];
+/* on a free bar he throws in a chat-ism - unless he is still talking. Short,
+   because a free bar only has two beats before the song needs the room back. */
+function casohFreeBar(root){
+  try{ if(speechSynthesis&&(speechSynthesis.pending||speechSynthesis.speaking)) return; }catch(e){}
+  if(Math.random()<0.28) return;                      /* sometimes he just chews */
+  casohSing(CASOH_ADLIB[(Math.random()*CASOH_ADLIB.length)|0],
+    {note:casohNote(root,7),rate:1,vol:0.72});
+}
+/* a whole thought, on a bar that has room for one. Walks the list so the song
+   works through everything he has to say instead of repeating itself. */
+function casohRambles(root){
+  try{ if(speechSynthesis&&(speechSynthesis.speaking||speechSynthesis.pending)) speechSynthesis.cancel(); }catch(e){}
+  if(MUS.sayIdx==null) MUS.sayIdx=(Math.random()*CASOH_SAYS.length)|0;
+  var txt=CASOH_SAYS[MUS.sayIdx%CASOH_SAYS.length];
+  MUS.sayIdx=(MUS.sayIdx+1)%CASOH_SAYS.length;
+  casohSing(txt,{note:casohNote(root,0),rate:1.02,vol:0.88});
+}
 function burgerBeat(b){
-  var bar=(b>>2)%26, beat=b%4;
+  var bar=(b>>2)%32, beat=b%4;
   var ch=BURGER_CH[bar%8], notes=chordNotes(ch[0],ch[1]);
   if(beat===0){
     pianoNote(ch[0]-12,0,2.6,0.55);
@@ -3216,22 +3307,29 @@ function burgerBeat(b){
   var n2=notes[pat[(b*2+1)%pat.length]%notes.length]+12;
   pianoNote(n1,0,0.9,0.2); pianoNote(n2,0.4,0.9,0.16);
   if(beat===2) knock(300,0.1,0.12,0);
-  if(bar>=10&&bar<=12&&beat===0) knock(2000,0.3,0.1,0);
+  if(bar>=10&&bar<=13&&beat===0) knock(2000,0.3,0.1,0);
   /* the words, at the top of their bar */
   if(beat===0){
     var L=BURGER_LINES[bar];
     if(L){
-      var spoke=casohSing(L[0],L[1],L[2],1);
+      /* he talks over himself otherwise, and the song drifts off its own chords */
+      try{ if(speechSynthesis&&(speechSynthesis.speaking||speechSynthesis.pending)) speechSynthesis.cancel(); }catch(e){}
+      var note=casohNote(ch[0],L[1]);
+      var spoke=casohSing(L[0],{note:note,rate:L[2],vol:L[4]?1:0.9});
       if(L[3]||!spoke){
         /* the choir: it sings the chord whether or not the device can talk */
         for(var i=0;i<3;i++) vox(notes[i%notes.length]+12,0.05*i,2.2,'o',spoke?0.05:0.13);
         vox(ch[0]-12,0,2.4,'u',spoke?0.055:0.09);   /* and a big man under all of it */
       }
     }
-    if(bar===20){ /* the awkward silence, and he knows it */
+    if(bar===19){ /* the awkward silence, right before he says "anyway" */
       for(var k=0;k<3;k++) vox(notes[k%notes.length],0.1*k,2.4,'u',0.05);
     }
   }
+  /* and on his own bars: a chat-ism halfway in, or a whole thought on the ones
+     with room for one (bar 4, and the bridge at the end where he just talks) */
+  if(beat===0&&BURGER_ROTATE.indexOf(bar)>=0) casohRambles(ch[0]);
+  else if(beat===2&&BURGER_FREE.indexOf(bar)>=0) casohFreeBar(ch[0]);
 }
 var TRACKS={
   chill:{step:0.42,fn:chillBeat,name:'🌊 CHILL'},
