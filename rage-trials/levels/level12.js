@@ -337,7 +337,7 @@
       steam: 0, galeHits: 0,
       laps: 0, plateArmed: 1, tycoonOn: 0, gateOpen: 0,
       trollEntered: 0, trollTricks: {},
-      jesterFake: 0,
+      jesterFake: 0, sealed: {},
       jumped: 0, fakeWinShown: 0, authorOn: 0,
       ticketRun: 0, ticketPerfect: 0, spikeOn: 0,
       deathsAt: 0, lastDeaths: 0
@@ -2809,6 +2809,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     openJesterExit(b);
   }
   function openJesterExit(b) {
+    unsealArena('jester');
     RT.banner(['THE JESTER IS DOWN', 'three of four'], 2.2);
     RT.spawn({
       type: 'portal', x: A8.x1 - 2, y: A8.floor - 2, w: 1.4, h: 2,
@@ -2850,12 +2851,42 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
     }
   }
 
-  function sealJester() {
-    var y;
-    for (y = 38; y <= 43; y++) carve(A8.x0 - 1, y, '#');
+  /* ==================================================================== *
+   * ARENA DOORS                                                          *
+   * -------------------------------------------------------------------- *
+   * A boss arena that shuts behind you has to open again the moment the
+   * fight is over, either way it ended. It shuts so you cannot walk out of
+   * a fight; it opens so that dying to one is a retry and not the end of
+   * the run. Before this existed, dying to THE JESTER left the doorway at
+   * 373 welded shut and the level could not be finished at all.
+   * ==================================================================== */
+  var SEALS = {
+    jester: { x: A8.x0 - 1, y0: 38, y1: 43 }
+  };
+
+  function sealArena(key) {
+    var s = SEALS[key], y;
+    if (!s || L.sealed[key]) return;
+    L.sealed[key] = 1;
+    for (y = s.y0; y <= s.y1; y++) carve(s.x, y, '#');
     sfx('door');
     RT.cam.shake(5, 0.4);
+    boom((s.x + 0.5) * T, (s.y1 - 1) * T, ['#9aa6c4', '#ff3ea5'], 18, 180, { life: 0.7, spreadY: 60 });
   }
+
+  function unsealArena(key, quiet) {
+    var s = SEALS[key], y;
+    if (!s || !L.sealed[key]) return;
+    L.sealed[key] = 0;
+    for (y = s.y0; y <= s.y1; y++) carve(s.x, y, '.');
+    if (quiet) return;
+    sfx('door');
+    boom((s.x + 0.5) * T, (s.y1 - 1) * T, ['#8dff9a', '#ffffff'], 22, 200, { life: 0.8, spreadY: 60 });
+  }
+
+  function unsealAll(quiet) { for (var k in SEALS) unsealArena(k, quiet); }
+
+  function sealJester() { sealArena('jester'); }
 
   /* ----------------------------------------------------------- the paint */
   function drawJesterBody(e, g, isClone) {
@@ -3917,6 +3948,7 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       RT.player.controlsReversed = false;
       RT.player.gravityFlip = false;
       restoreFakeFloor();
+      unsealAll();                 /* a death is a retry, not a locked door */
       var tx = ptx(), ty = pty();
       if (tx > A3.x0 && tx < A3.x1 && ty > 2) L.meltDeaths = (L.meltDeaths || 0) + 1;
       if (L.raceOn && !L.raceWon) L.raceOn = 0;
@@ -4002,6 +4034,16 @@ mx = i === 0 && alive() ? clamp(pcx(), V.L + 40, V.R - 40) : (V.L + 40 + lrand()
       if (L.fakeFloor) {
         L.fakeFloor.t -= dt;
         if (L.fakeFloor.t <= 0) restoreFakeFloor();
+      }
+
+      /* ---- the arena door, stated as one rule ------------------------ *
+       * Inside with the fight live: shut, so you cannot walk out of it.
+       * Anywhere else: open. You can be locked IN a boss fight and never
+       * locked OUT of one, whatever happened last. */
+      if (tx < A8.x0 - 1) unsealArena('jester', true);
+      else if (tx > A8.x0 && !L.done.jester) {
+        var jb = RT.find('lGjester')[0];
+        if (jb && jb.awake && !jb.gone && !jb.dying) sealArena('jester');
       }
 
       /* ---- VIII: keep the exit portal alive across deaths ---------- */

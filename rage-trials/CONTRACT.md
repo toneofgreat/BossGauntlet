@@ -660,3 +660,21 @@ The four bosses in level 12 shipped provably *reachable* (the finale drove them 
   still work exactly as documented, and `playtest.js tetris` still exercises them. Nothing in the
   game calls them now — the module is there for the contract and for the next agent who wants a
   cabinet that does work.
+
+### 2026-09-24 (later) — an arena door you cannot be locked out of
+
+- **Dying to THE JESTER used to end the run.** `sealJester()` welded the doorway at column 373
+  (rows 38–43) shut when the fight woke, and nothing ever reopened it — `RT.setTile` survives a
+  respawn by design. Since dying there sends you back to the checkpoint at 252, the walk back
+  through the troll obby ended at a wall, and trial 12 could not be finished without restarting
+  the level. THE AUTHOR was unreachable for the same reason: its retry path runs through that
+  doorway.
+- **The rule is now stated once, in `onUpdate`:** inside the arena with the fight live, the door
+  is shut, so you cannot walk out of a fight; anywhere else it is open. You can be locked IN a
+  boss fight and never locked OUT of one, whatever happened last.
+- **`SEALS` / `sealArena(key)` / `unsealArena(key, quiet)` / `unsealAll()`** hold the doorway
+  spans, and `L.sealed` tracks which are shut. The level's `onDeath` calls `unsealAll()` and a
+  boss's `onDead` opens its own door, so both endings of a fight leave it open. Any future arena
+  that shuts behind the player adds one row to `SEALS` and inherits all of it.
+- **`tools/playtest.js` asserts the cycle** as the `doorReopens` act: walk in (sealed), die
+  (open, and the respawn lands back at 252), which is the exact sequence that used to be fatal.

@@ -293,3 +293,8 @@ fit in a single row of tiles. The tile grid is painted by code, not typed.
     it, and a bomb arrives at the end — click the bomb and all of trial 12 starts again. Click every
     ticket and skip the bomb and you win outright; miss any and you get THE ONE SPIKE (330-366), one
     spike, dressed as the hardest thing in the game, with a door eight tiles past it.
+
+**Arena doors.** THE JESTER shuts the doorway at 373 behind you when it wakes, so you cannot
+walk out of the fight. It opens again the moment the fight ends either way - when it dies and
+when you do - and it is always open while you are outside it. You can be locked in a boss fight;
+you can never be locked out of one.

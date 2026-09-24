@@ -260,6 +260,15 @@ async function main() {
           RT.setCheckpoint(376 * T, 43 * T);
           o.fights.jester = fight('jester', 90, [374, 398]);
           o.acts.jesterReachable = o.fights.jester.hits >= 2;
+          /* the door it shuts behind you must open again when you die to it,
+             or dying to THE JESTER ends the run instead of costing a lap */
+          RT.setCheckpoint(252 * T, 43 * T);      /* the real one, as a player has */
+          G().dbg.warp(370, 43); d.step(20);
+          hold({ right: true }, 130); hold({}, 20);
+          const sealedNow = d.tile(373, 43) === '#';
+          d.kill(); d.step(150);
+          o.acts.doorReopens = sealedNow && d.tile(373, 43) === '.' &&
+                               Math.abs(d.state().x / 32 - 252) < 3;
           d.god(true);
           for (let i = 0; i < 6; i++) { G().dbg.hit('jester'); d.step(50); }
           d.step(420);
@@ -314,7 +323,7 @@ async function main() {
       const f = r.finale || {};
       const acts = f.acts || {};
       const allActs = ['vulcan', 'melt', 'meltTop', 'galeSteam', 'gale', 'counter', 'troll',
-                       'jesterReachable', 'jesterFake', 'jester', 'onejump', 'fakewin', 'author',
+                       'jesterReachable', 'doorReopens', 'jesterFake', 'jester', 'onejump', 'fakewin', 'author',
                        'tickets', 'spike', 'perfect'];
       f.failed = allActs.filter(k => !acts[k]);
       if (f.won && !f.failed.length) r.won = true;
