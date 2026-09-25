@@ -1,0 +1,477 @@
+// The OofRig — spec 05 §5.1: the six-box blocky avatar, its joint pivots, the head's
+// six-material front-face canvas texture (§5.3), and the per-rig update that drives the
+// animator (§5.2). Rig meshes are NOT Parts and never enter the collider set (§2).
+
+import * as THREE from "../../../../assets/vendor/three.module.js";
+// The engine material factory (spec 03 §5.1's plastic/neon/metal/glass/wood/lava
+// looks), named as a dependency by spec 05 §2. Its materials are cached and shared
+// engine-wide, so dispose() below never disposes them — only the geometry and the face
+// texture/material this rig created.
+import { getMaterial, getGeometry } from "../../../engine/parts.js";
+import { paintFace, DEFAULT_FACE_ID } from "./faces.js";
+import { createAnimator, AVATAR_TUNING } from "./animator.js";
+import { getItem, DEFAULT_BODY_COLORS } from "./catalog-data.js";
+import { createAura, createTrail } from "./effects.js";
+
+const FACE_CANVAS_SIZE = AVATAR_TUNING.FACE_CANVAS_SIZE;
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+const DEFAULT_MATERIAL = "plastic";
+const DEG = Math.PI / 180;
+
+// §5.1 — every limb: its joint pivot in rig-local space (origin = feet centre, +Y up,
+// facing -Z), the mesh offset from that pivot, and the box size. Legs 2 + torso 2 +
+// head 1 = RIG_HEIGHT (5.0): the head mesh top lands at 4 + 0.5 + 0.5 exactly.
+const LIMBS = Object.freeze([
+  { key: "leftLeg", pivot: [-0.5, 2, 0], offset: [0, -1, 0], size: [1, 2, 1] },
+  { key: "rightLeg", pivot: [0.5, 2, 0], offset: [0, -1, 0], size: [1, 2, 1] },
+  { key: "leftArm", pivot: [-1.5, 4, 0], offset: [0, -1, 0], size: [1, 2, 1] },
+  { key: "rightArm", pivot: [1.5, 4, 0], offset: [0, -1, 0], size: [1, 2, 1] },
+  { key: "head", pivot: [0, 4, 0], offset: [0, 0.5, 0], size: [1.2, 1, 1.2] },
+]);
+// The torso hangs off the rig root (§5.1's "root [0,3,0]" pivot with a zero mesh
+// offset), so it has no entry in `joints` — nothing ever rotates it.
+const TORSO = Object.freeze({ center: [0, 3, 0], size: [2, 2, 1] });
+
+// §5.4 anchor points, created here because they are rig structure. attachments.js
+// (§5.4, task M2-T12) hangs hat/gear prim groups off them.
+const HAT_ANCHOR = [0, 0.5, 0];    // head-local: the top face of the 1-unit head
+const GEAR_ANCHOR = [0, -2, 0];    // rightArm-pivot-local: the hand end of the arm
+// torso-local. A shirt sits ON the torso, so its prims are sized a hair larger than
+// the torso itself rather than co-planar with it, which would z-fight. The torso is
+// 2 x 2 x 1, so a wrapping prim is ~2.06 wide and ~1.06 deep — a prim SMALLER than
+// that is inside the opaque torso and invisible, which rule 20:G2 now rejects (both
+// original shirts shipped that way and nobody ever saw one).
+const SHIRT_ANCHOR = [0, 0, 0];
+// Pants prims default to the same torso anchor (the hip band). A prim carrying
+// `limb: "leftLeg" | "rightLeg"` is routed to that LEG'S JOINT instead — leg-pivot
+// local, pivot at the hip, the leg mesh spanning y 0..-2 at x ±0.5 within a 1x2x1
+// box — so pant legs swing with the walk cycle instead of standing rigid.
+const PANTS_ANCHOR = [0, 0, 0];
+
+// BoxGeometry material slots run +X, -X, +Y, -Y, +Z, -Z; the rig faces -Z, so the face
+// texture belongs to slot 5.
+const HEAD_FACE_SLOT = 5;
+
+const LIMB_KEYS = Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg"]);
+
+// A limb color is either a hex literal or a bodycolor item id whose swatch also names
+// the material to render it with (§3.1 / §3.5). Unknown values fall back to the
+// "Classic Oof" default for that limb — §3.1's "never crash on unknown ids".
+function resolveLimb(limbKey, value) {
+  if (typeof value === "string" && HEX_RE.test(value)) {
+    return { color: value.toLowerCase(), material: DEFAULT_MATERIAL };
+  }
+  const item = getItem(value);
+  const swatch = item && item.type === "bodycolor" && item.appearance ? item.appearance.swatch : null;
+  if (swatch) return { color: swatch, material: item.appearance.material || DEFAULT_MATERIAL };
+  return { color: DEFAULT_BODY_COLORS[limbKey], material: DEFAULT_MATERIAL };
+}
+
+function readColors(state) {
+  const src = (state && state.bodyColors) || {};
+  const out = {};
+  for (const key of LIMB_KEYS) out[key] = resolveLimb(key, src[key]);
+  return out;
+}
+
+function readEquipped(state) {
+  const eq = (state && state.equipped) || {};
+  return {
+    face: typeof eq.face === "string" && eq.face ? eq.face : DEFAULT_FACE_ID,
+    hat: eq.hat || null,
+    gear: eq.gear || null,
+    aura: eq.aura || null,
+    trail: eq.trail || null,
+    // The slot list's THIRD copy (avatar.js EQUIP_SLOTS, applyAttachments, here) — this
+    // one silently ate shirts: a slot missing here reads as null and never draws.
+    shirt: eq.shirt || null,
+    pants: eq.pants || null,
+  };
+}
+
+function makeMesh(size, position) {
+  const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
+  const mesh = new THREE.Mesh(geo, getMaterial(DEFAULT_MATERIAL, DEFAULT_BODY_COLORS.torso, 0));
+  mesh.position.set(position[0], position[1], position[2]);
+  // Harmless when the quality tier has shadows off — the renderer owns that switch.
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function makeAnchor(name, at) {
+  const anchor = new THREE.Object3D();
+  anchor.name = name;
+  anchor.position.set(at[0], at[1], at[2]);
+  return anchor;
+}
+
+// The six boxes and the five joint pivots of §5.1's table.
+function buildSkeleton() {
+  const group = new THREE.Group();
+  group.name = "OofRig";
+  // §5.1's mount adapter. Rig-local space faces -Z, but spec 03 §5.6.14 mounts the
+  // avatar with `object3D.rotation.y = yaw`, and a yaw of t aims an Object3D's local
+  // +Z along the heading (sin t, cos t). Mounting the -Z-facing rig straight onto that
+  // drew the face on the BACK of the head: the follow camera sits correctly behind the
+  // avatar and was looking at a smile. `body` carries the half-turn between the two
+  // frames, so everything under it keeps §5.1's -Z-facing coordinates - the limb table,
+  // §5.3's -Z face slot, the positive-X-swings-forward joint rule, §5.4's anchors -
+  // while the "OofRig" root presents the +Z front the engine mounts.
+  const body = new THREE.Group();
+  body.name = "OofRigBody";
+  body.rotation.y = Math.PI;
+  group.add(body);
+  const joints = {};
+  const meshes = { torso: makeMesh(TORSO.size, TORSO.center) };
+  body.add(meshes.torso);
+  for (const limb of LIMBS) {
+    const pivot = new THREE.Group();
+    pivot.name = "OofJoint_" + limb.key;
+    pivot.position.set(limb.pivot[0], limb.pivot[1], limb.pivot[2]);
+    const mesh = makeMesh(limb.size, limb.offset);
+    pivot.add(mesh);
+    body.add(pivot);
+    joints[limb.key] = pivot;
+    meshes[limb.key] = mesh;
+  }
+  return { group, body, joints, meshes };
+}
+
+// §5.3 — the head's front face is a canvas texture; the other five slots share the head
+// color, so a head recolor repaints this canvas's background too.
+function buildFace() {
+  const canvas = document.createElement("canvas");
+  canvas.width = FACE_CANVAS_SIZE;
+  canvas.height = FACE_CANVAS_SIZE;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return { ctx: canvas.getContext("2d"), texture, material: new THREE.MeshLambertMaterial({ map: texture }) };
+}
+
+// buildRig(scene, state) -> Rig (§5.1). `scene` may be null for an off-scene rig (the
+// Avatar Editor preview builds its own scene and adds the group itself).
+export function buildRig(scene, state) {
+  const { group, joints, meshes } = buildSkeleton();
+  const { ctx: faceCtx, texture: faceTexture, material: faceMaterial } = buildFace();
+
+  const anchors = {
+    hat: makeAnchor("HatAnchor", HAT_ANCHOR),
+    gear: makeAnchor("GearAnchor", GEAR_ANCHOR),
+    shirt: makeAnchor("ShirtAnchor", SHIRT_ANCHOR),
+    pants: makeAnchor("PantsAnchor", PANTS_ANCHOR),
+  };
+  // Per-limb anchors for `limb`-routed clothing prims (pant legs). On the JOINTS, not
+  // the meshes, so they inherit the walk swing.
+  const limbAnchors = {
+    leftLeg: makeAnchor("PantsLeftLegAnchor", [0, 0, 0]),
+    rightLeg: makeAnchor("PantsRightLegAnchor", [0, 0, 0]),
+  };
+  meshes.head.add(anchors.hat);
+  joints.rightArm.add(anchors.gear);
+  meshes.torso.add(anchors.shirt);
+  meshes.torso.add(anchors.pants);
+  joints.leftLeg.add(limbAnchors.leftLeg);
+  joints.rightLeg.add(limbAnchors.rightLeg);
+
+  const rig = {
+    group, joints, meshes, anchors,
+    faceId: DEFAULT_FACE_ID,     // the id currently PAINTED (spec 05 §8's probe field)
+    gearEquipped: false,         // read by the animator for §5.2 step 5's hold pose
+  };
+  const animator = createAnimator(rig);
+
+  let colors = null;             // last applied resolved limb colors
+  let equipped = null;           // last applied equipped ids
+  let flash = null;              // { faceId, remaining } while flashFace is running
+  let attachTime = 0;            // sim seconds, drives §5.4 prim spin/bob/flicker
+
+  function paint() {
+    const wanted = flash ? flash.faceId : equipped.face;
+    rig.faceId = paintFace(faceCtx, wanted, colors.head.color);
+    faceTexture.needsUpdate = true;
+  }
+
+  function headMaterials(sideMaterial) {
+    const slots = [sideMaterial, sideMaterial, sideMaterial, sideMaterial, sideMaterial, sideMaterial];
+    slots[HEAD_FACE_SLOT] = faceMaterial;
+    return slots;
+  }
+
+  function applyColors(next) {
+    const headChanged = !colors || colors.head.color !== next.head.color
+      || colors.head.material !== next.head.material;
+    for (const key of LIMB_KEYS) {
+      const prev = colors ? colors[key] : null;
+      if (prev && prev.color === next[key].color && prev.material === next[key].material) continue;
+      const mat = getMaterial(next[key].material, next[key].color, 0);
+      meshes[key].material = key === "head" ? headMaterials(mat) : mat;
+    }
+    colors = next;
+    return headChanged;
+  }
+
+  // §5.4 attachments. Lives here rather than in attachments.js (M2-T12's file) because
+  // that module does not exist and the Catalog's three accessories are inside SLICE.md's
+  // scope — without this, buying the Traffic Cone spends 75 of a starting 100 Oofbux and
+  // changes nothing on the avatar. Moving these three functions into attachments.js
+  // later is a file move, not a rewrite: they touch only `anchors`, never the rig
+  // skeleton, the state or the item schema.
+  const attached = { hat: null, gear: null }; // { group, prims: [{ mesh, base, spin, bob, flicker }] }
+
+  // §5.5's two effect slots. An aura is parented to the rig, so it rides along; a trail
+  // is world-space, because the whole point of a trail is that it stays where you were.
+  const effects = { aura: null, trail: null };
+  // The trail asks how fast we are going rather than reaching into physics for it —
+  // measured off the rig root, which the controller has already moved this tick.
+  const lastPos = { x: 0, y: 0, z: 0, has: false };
+  let planarSpeed = 0;
+
+  // The nine shapes of the 2026-09-25 engine pack (spec 03 §5.2a), reachable by an avatar
+  // prim through the engine's own geometry cache. This is the fix for the trap that shipped
+  // a `cone` in a hat before anyone noticed the two shape lists differed: there is ONE list
+  // of shapes now, and an item naming any of these gets what an engine part of that name
+  // gets. The engine builds them normalised to the unit box, so they are scaled by `size`
+  // here, and the cache's geometry is CLONED first — buildAttachment disposes every prim
+  // geometry it makes.
+  const PACK_SHAPES = new Set([
+    "wedge", "pyramid", "prism", "dome", "capsule", "ring", "star", "diamond", "tube",
+  ]);
+
+  function primGeometry(prim) {
+    const size = Array.isArray(prim.size) ? prim.size : [1, 1, 1];
+    const sx = size[0] || 0, sy = size[1] || 0, sz = size[2] || 0;
+    if (PACK_SHAPES.has(prim.shape)) {
+      const geom = getGeometry(prim.shape).clone();
+      geom.scale(sx || 1, sy || 1, sz || 1);
+      return geom;
+    }
+    switch (prim.shape) {
+      // Segment counts are §5.4's: cylinder/cone 16 radial, sphere 12x8, torus 24x8.
+      case "cylinder": return new THREE.CylinderGeometry(sx / 2, sx / 2, sy, 16);
+      // `cone` predates the pack and keeps its own 16-segment builder, so every item that
+      // already used it renders exactly as it did before.
+      case "cone": return new THREE.ConeGeometry(sx / 2, sy, 16);
+      case "sphere": return new THREE.SphereGeometry(sx / 2, 12, 8);
+      // `torus` is the pre-pack name for a ring, and its size means [radius, tube, -]
+      // rather than a box. Kept because avatars already wear it (hat_halo); a new item
+      // should use `ring`, which follows the engine's size convention.
+      case "torus": return new THREE.TorusGeometry(sx, sy, 8, 24);
+      default: return new THREE.BoxGeometry(sx, sy, sz);
+    }
+  }
+
+  function buildAttachment(item) {
+    const prims = item && item.appearance && Array.isArray(item.appearance.prims)
+      ? item.appearance.prims : null;
+    if (!prims || !prims.length) return null;
+    const group = new THREE.Group();
+    group.name = "OofAttach_" + item.id;
+    const legGroups = {}; // limbKey -> Group, created only when a prim routes there
+    const records = [];
+    for (const prim of prims) {
+      const mesh = new THREE.Mesh(
+        primGeometry(prim),
+        getMaterial(prim.material || DEFAULT_MATERIAL, prim.color || "#ffffff", prim.transparency || 0)
+      );
+      const off = Array.isArray(prim.offset) ? prim.offset : [0, 0, 0];
+      const rot = Array.isArray(prim.rotation) ? prim.rotation : [0, 0, 0];
+      mesh.position.set(off[0] || 0, off[1] || 0, off[2] || 0);
+      // §5.4: "torus lies flat, i.e. rotated so the ring is horizontal before
+      // `rotation` applies" — THREE builds it in the XY plane, so tip it onto XZ first.
+      const baseX = prim.shape === "torus" ? -Math.PI / 2 : 0;
+      mesh.rotation.set(baseX + rot[0] * DEG, rot[1] * DEG, rot[2] * DEG);
+      // `limb` routing (pants): the prim rides that leg's joint instead of the torso.
+      if (prim.limb === "leftLeg" || prim.limb === "rightLeg") {
+        if (!legGroups[prim.limb]) {
+          legGroups[prim.limb] = new THREE.Group();
+          legGroups[prim.limb].name = "OofAttach_" + item.id + "_" + prim.limb;
+        }
+        legGroups[prim.limb].add(mesh);
+      } else {
+        group.add(mesh);
+      }
+      records.push({
+        mesh,
+        baseY: mesh.position.y,
+        spin: Number(prim.spin) || 0,
+        bob: prim.bob && Number.isFinite(prim.bob.amp) ? prim.bob : null,
+        flicker: prim.flicker && Number.isFinite(prim.flicker.amp) ? prim.flicker : null,
+      });
+    }
+    return { group, legGroups, prims: records };
+  }
+
+  function clearAttachment(slot) {
+    const current = attached[slot];
+    if (!current) return;
+    if (current.group.parent) current.group.parent.remove(current.group);
+    for (const g of Object.values(current.legGroups || {})) {
+      if (g.parent) g.parent.remove(g);
+    }
+    // Materials come from the engine's shared cache (see the getMaterial import) and
+    // are never this rig's to dispose; the geometries are.
+    for (const record of current.prims) record.mesh.geometry.dispose();
+    attached[slot] = null;
+  }
+
+  function applySlot(slot, itemId) {
+    const prevId = equipped ? equipped[slot] : null;
+    if (attached[slot] && prevId === itemId) return;
+    clearAttachment(slot);
+    if (!itemId) return;
+    const built = buildAttachment(getItem(itemId));
+    if (!built) return;
+    anchors[slot].add(built.group);
+    for (const [limb, g] of Object.entries(built.legGroups || {})) {
+      if (limbAnchors[limb]) limbAnchors[limb].add(g);
+    }
+    attached[slot] = built;
+  }
+
+  function applyAttachments(next) {
+    applySlot("hat", next.hat);
+    applySlot("gear", next.gear);
+    applySlot("shirt", next.shirt);
+    applySlot("pants", next.pants);
+    rig.gearEquipped = Boolean(next.gear);
+  }
+
+  // §5.4's prim animation, advanced on SIM time only (never wall clock).
+  function stepAttachments(step) {
+    if (!attached.hat && !attached.gear) return;
+    attachTime += step;
+    for (const slot of ["hat", "gear"]) {
+      const current = attached[slot];
+      if (!current) continue;
+      for (const record of current.prims) {
+        if (record.spin) record.mesh.rotation.y += record.spin * DEG * step;
+        if (record.bob) {
+          record.mesh.position.y = record.baseY
+            + record.bob.amp * Math.sin(2 * Math.PI * (record.bob.hz || 0) * attachTime);
+        }
+        if (record.flicker) {
+          record.mesh.scale.y = 1
+            + record.flicker.amp * Math.sin(2 * Math.PI * (record.flicker.hz || 0) * attachTime);
+        }
+      }
+    }
+  }
+
+  // §5.5 — swap one effect slot. Effects are disposed and rebuilt on change rather than
+  // reconfigured: the pools are sized from the spec, so a new spec is a new pool.
+  function applyEffect(slot, itemId) {
+    if (effects[slot]) {
+      effects[slot].dispose();
+      effects[slot] = null;
+    }
+    if (!itemId) return;
+    const item = getItem(itemId);
+    if (!item || !item.appearance) return;
+    if (slot === "aura") {
+      effects.aura = createAura(group, item.appearance);
+      return;
+    }
+    // A trail needs a world-space parent. An off-scene rig (the Editor preview builds
+    // its own scene) simply has nowhere to put one, and goes without.
+    const world = group.parent;
+    if (!world) return;
+    effects.trail = createTrail(world, item.appearance, () => ({
+      pos: [group.position.x, group.position.y, group.position.z],
+      yaw: group.rotation.y,
+      speed: planarSpeed,
+    }));
+  }
+
+  // setState(avatarState) — §5.1: re-apply colors/face/hat/gear/aura/trail; idempotent,
+  // and only what actually changed is rebuilt.
+  function setState(avatarState) {
+    const nextColors = readColors(avatarState);
+    const nextEquipped = readEquipped(avatarState);
+    const headChanged = applyColors(nextColors);
+    const faceChanged = !equipped || equipped.face !== nextEquipped.face;
+    const auraChanged = !equipped || equipped.aura !== nextEquipped.aura;
+    const trailChanged = !equipped || equipped.trail !== nextEquipped.trail;
+    // applyAttachments must run BEFORE `equipped` is replaced. applySlot decides whether
+    // to rebuild by comparing the requested id against `equipped[slot]` — what is
+    // currently ON the rig — so assigning first made every comparison "same id, already
+    // attached" and it returned without doing anything. The visible bug (shipped until
+    // 2026-09-25): the first hat you equipped appeared, and after that you could neither
+    // SWAP it for another hat nor TAKE IT OFF without reloading the page — the same for
+    // gear, shirts and pants. Found by equipping all 28 items in a row and counting the
+    // meshes that actually reached the scene; scenario:avatar now does that too.
+    applyAttachments(nextEquipped);
+    equipped = nextEquipped;
+    if (auraChanged) applyEffect("aura", nextEquipped.aura);
+    if (trailChanged) applyEffect("trail", nextEquipped.trail);
+    if (headChanged || faceChanged) paint();
+  }
+
+  function setAnimState(next) {
+    animator.setAnimState(next);
+  }
+
+  function playEmote(name) {
+    animator.playEmote(name);
+  }
+
+  // flashFace(faceId, seconds) — §5.3: paint now, revert to the equipped face after
+  // `seconds` of SIM time (counted down in update); a second flash restarts the timer.
+  function flashFace(faceId, seconds) {
+    const s = Number.isFinite(seconds) && seconds > 0 ? seconds : AVATAR_TUNING.OOF_FACE_SECONDS;
+    flash = { faceId, remaining: s };
+    paint();
+  }
+
+  function update(dt) {
+    const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
+    animator.update(step);
+    if (flash) {
+      flash.remaining -= step;
+      if (flash.remaining <= 0) {
+        flash = null;
+        paint();
+      }
+    }
+    stepAttachments(step);
+    if (step > 0) {
+      const dx = group.position.x - lastPos.x;
+      const dz = group.position.z - lastPos.z;
+      planarSpeed = lastPos.has ? Math.hypot(dx, dz) / step : 0;
+      lastPos.x = group.position.x;
+      lastPos.y = group.position.y;
+      lastPos.z = group.position.z;
+      lastPos.has = true;
+    }
+    if (effects.aura) effects.aura.update(step);
+    if (effects.trail) effects.trail.update(step);
+  }
+
+  function dispose() {
+    clearAttachment("hat");
+    clearAttachment("gear");
+    applyEffect("aura", null);
+    applyEffect("trail", null);
+    if (group.parent) group.parent.remove(group);
+    for (const key of LIMB_KEYS) {
+      const mesh = meshes[key];
+      if (mesh && mesh.geometry) mesh.geometry.dispose();
+    }
+    faceTexture.dispose();
+    faceMaterial.dispose();
+  }
+
+  rig.setState = setState;
+  rig.setAnimState = setAnimState;
+  rig.playEmote = playEmote;
+  rig.flashFace = flashFace;
+  rig.update = update;
+  rig.dispose = dispose;
+
+  // Joints are left at zero rotation: §5.1's table is the REST pose, and §7 criterion 1
+  // measures the six mesh centres against it straight after buildRig. The first
+  // update(dt) writes the live pose.
+  setState(state);
+  if (scene) scene.add(group);
+  return rig;
+}

@@ -146,12 +146,12 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <span class="tag" style="background:#0a3a1a;color:#7dffa0">3D ADVENTURE &middot; 6 ACTS &middot; LOUD</span>
     </div>
   </a>
-  <a href="oofcubes/index.html" class="card">
+  <a href="oofworld/index.html" class="card" data-plays-key="oofcubes-index-html">
     <div class="card-img bg-oof"><canvas id="c34"></canvas></div>
     <div class="card-body">
-      <h2>OOFCUBES</h2>
-      <p>A browser Roblox-like &mdash; a platform, not a single game. Spawn into a hub plaza, dress your blocky avatar from a catalog you buy with Oofbux, then walk through a portal into one of two worlds: an 8-stage Difficulty Chart Obby that ramps from Easy up to Insane, or a Boss Tycoon with droppers, a conveyor and a collector. Cash, purchases and stage progress all save. Custom engine &mdash; parts, physics and the character controller are hand-built, no game framework. PC + mobile. Early slice: more worlds and catalog items still to come.</p>
-      <span class="tag" style="background:#062a44;color:#7fd8ff">3D PLATFORM &middot; HUB + 2 WORLDS &middot; EARLY</span>
+      <h2>OOFWORLD</h2>
+      <p>A browser Roblox-like &mdash; a platform, not a single game (it was called OofCubes until 2026-09-25). Spawn into a plaza lit by real lamps, with neon hoops down the runway, a galaxy hologram over the fountain and fireworks every nine seconds, then dress your blocky avatar from a catalog of hats, faces, shirts, pants, gear, auras and trails bought with Oofbux. Nine portals: a 93-stage DIFFICULTY CHART OBBY from The Beginning to Not Possible (no towers &mdash; the big stages are long gauntlets now, and the whole chart is lamp-lit and decorated), BOSS TYCOON with three floors, sixteen droppers and a boss office with a vault, WEIGHT LIFTING SIMULATOR, TROLL OBBY, BOSS BATTLES, SPEED SIMULATOR, BATTLES (nine swords and a coliseum), OVERTIME, and BRICK LEGEND &mdash; which is locked until you beat the Brick Climb behind the plaza's brick gate. Build your own worlds in OOF STUDIO: thirteen part shapes, sixteen materials, lamps you place and aim, twelve lighting presets, and a share code anyone can play. Real multiplayer &mdash; every avatar you see is a live person. Custom engine, hand-built physics, no framework, everything procedural. PC + mobile.</p>
+      <span class="tag" style="background:#062a44;color:#7fd8ff">3D PLATFORM &middot; 9 WORLDS + STUDIO &middot; MULTIPLAYER</span>
     </div>
   </a>
   <a href="math-obby.html?tower" class="card">
@@ -2099,6 +2099,10 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
   var CACHE='platyfy_global_cache';          // local cache only for instant display before the network responds
   var BOOST_DAYS=7;
   function keyFor(h){return h.replace(/[^a-z0-9]/gi,'-').toLowerCase().replace(/^-+|-+$/g,'').slice(0,64);}
+  // The counter key is normally the href, which means MOVING a game would zero its plays
+  // and drop it to the bottom of the grid. data-plays-key lets a card keep the key it was
+  // counted under: oofcubes/ became oofworld/ on 2026-09-25 with 67 plays behind it.
+  function cardKey(c){return c.getAttribute('data-plays-key')||keyFor(c.getAttribute('href'));}
   function label(n){return '▶ '+(n==null?'…':Number(n).toLocaleString())+(n===1?' play':' plays');}
   function isNew(c){
     var d=c.getAttribute('data-launched');if(!d)return false;
@@ -2117,9 +2121,10 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
         var badge=document.createElement('div');badge.className='plays';
         badge.textContent=label(cache[href]!=null?cache[href]:null);
         c.appendChild(badge);c._badge=badge;
+        c._key=cardKey(c);
         c.addEventListener('click',function(){
           // record this play for EVERYONE (keepalive lets the request finish during navigation)
-          try{fetch(BASE+'/hit/'+keyFor(href),{method:'POST',keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
+          try{fetch(BASE+'/hit/'+c._key,{method:'POST',keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
           cache[href]=(cache[href]||0)+1;badge.textContent=label(cache[href]);
           try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
         });
@@ -2140,7 +2145,7 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
         .then(function(r){return r.json();})
         .then(function(all){
           cards.forEach(function(c){
-            var v=all[keyFor(c._href)];
+            var v=all[c._key];
             if(typeof v==='number'){cache[c._href]=v;c._badge.textContent=label(v);}
           });
           try{localStorage.setItem(CACHE,JSON.stringify(cache));}catch(e){}
