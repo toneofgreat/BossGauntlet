@@ -730,31 +730,59 @@ function duckMusic(on){
 }
 var SPEAK={
   on:true, have:false, voices:[], picked:{}, tried:0, spoke:0, firstTry:0, unlocked:false, cur:null,
-  /* pref = names to look for, in order; pitch/rate are the character on top of the voice */
+  /* pref = voice names to look for; sex steers the fallback; pitch and rate
+     stay inside a human band, because a browser voice pushed past about 1.5
+     or below about 0.6 stops sounding like a person and starts sounding like
+     a fax machine. Beverly is allowed to: she is a metal detector. */
   PROFILE:{
-    narr:   {pref:["Sonia","Libby","Hazel","Samantha","Serena","Kate","Jenny","Zira","Female"],        pitch:1.02, rate:1.02},
-    digby:  {pref:["Ryan","Guy","Alex","Daniel","Tom","Male"],                                          pitch:1.28, rate:1.1},
-    nubbins:{pref:["George","Gordon","Fred","Oliver","David","Male"],                                   pitch:0.45, rate:0.8},
-    dnub:   {pref:["George","Gordon","Fred","Oliver","David","Male"],                                   pitch:0.82, rate:1.0},
-    follop: {pref:["Hazel","Susan","Catherine","Libby","Zira","Female"],                                pitch:1.4,  rate:1.0},
-    gil:    {pref:["Mark","Christopher","Brian","David","Daniel","Male"],                               pitch:0.75, rate:0.92},
-    pepper: {pref:["Zira","Aria","Michelle","Hazel","Female"],                                          pitch:1.45, rate:0.94},
-    colin:  {pref:["Libby","Ana","Zira","Jenny","Female"],                                              pitch:1.85, rate:1.22},
-    mayor:  {pref:["Eric","Roger","Daniel","George","David","Male"],                                    pitch:0.85, rate:0.88},
-    wicket: {pref:["David","Steffan","Thomas","Mark","Male"],                                           pitch:0.9,  rate:0.82},
-    fizz:   {pref:["Aria","Jenny","Emma","Nancy","Zira","Female"],                                      pitch:1.55, rate:1.3},
-    voice:  {pref:["Guy","Brian","Christopher","George","David","Male"],                                pitch:0.2,  rate:0.72},
-    duck:   {pref:["Ana","Zira","Libby","Female"],                                                      pitch:2.0,  rate:1.4},
-    beverly:{pref:["Michelle","Jenny","Zira","Aria","Female"],                                          pitch:1.9,  rate:1.12},
-    sign:   {pref:["Roger","George","David","Male"],                                                    pitch:0.5,  rate:0.78},
-    jar:    {pref:["Ana","Libby","Zira","Female"],                                                      pitch:1.7,  rate:1.15}
+    narr:   {pref:["Sonia","Libby","Emma","Hazel","Samantha","Serena","Kate","Jenny","Zira"], sex:"f", pitch:1.0,  rate:1.0},
+    digby:  {pref:["Ryan","Guy","Alex","Tom","Liam","Daniel"],                                 sex:"m", pitch:1.16, rate:1.06},
+    nubbins:{pref:["George","Gordon","Fred","Oliver","Arthur","Daniel"],                       sex:"m", pitch:0.72, rate:0.86},
+    dnub:   {pref:["George","Gordon","Fred","Oliver","Arthur","Daniel"],                       sex:"m", pitch:0.95, rate:1.0},
+    follop: {pref:["Hazel","Susan","Catherine","Libby","Sonia","Zira"],                        sex:"f", pitch:1.12, rate:0.98},
+    gil:    {pref:["Mark","Christopher","Brian","Thomas","David"],                             sex:"m", pitch:0.86, rate:0.94},
+    pepper: {pref:["Zira","Aria","Michelle","Hazel","Catherine"],                              sex:"f", pitch:1.16, rate:0.96},
+    colin:  {pref:["Ana","Libby","Jenny","Zira"],                                              sex:"f", pitch:1.45, rate:1.14},
+    mayor:  {pref:["Eric","Roger","Steffan","George","Daniel"],                                sex:"m", pitch:0.9,  rate:0.9},
+    wicket: {pref:["David","Steffan","Thomas","Mark","Brian"],                                 sex:"m", pitch:0.92, rate:0.86},
+    fizz:   {pref:["Aria","Jenny","Nancy","Emma","Michelle"],                                  sex:"f", pitch:1.3,  rate:1.2},
+    voice:  {pref:["Guy","Brian","Christopher","Eric","George"],                               sex:"m", pitch:0.55, rate:0.8},
+    duck:   {pref:["Ana","Jenny","Zira"],                                                      sex:"f", pitch:1.7,  rate:1.3},
+    beverly:{pref:["Michelle","Zira","Ana","Aria"],                                            sex:"f", pitch:1.5,  rate:1.08},
+    sign:   {pref:["Roger","George","Eric","David"],                                           sex:"m", pitch:0.72, rate:0.86},
+    jar:    {pref:["Ana","Libby","Jenny","Zira"],                                              sex:"f", pitch:1.35, rate:1.1}
   },
+  /* the narrator talks the most, so it gets first pick of the good voices */
+  CAST:["narr","digby","nubbins","voice","follop","gil","pepper","fizz","mayor","wicket","colin","dnub","duck","beverly","sign","jar"],
+  FEM:["zira","hazel","susan","linda","heather","catherine","libby","sonia","aria","jenny","michelle","ana","emma","nancy","samantha","serena","kate","moira","tessa","fiona","karen","victoria","allison","ava","amber","ashley","cora","elizabeth","monica","female","woman","girl"],
+  MASC:["david","mark","guy","ryan","george","roger","christopher","eric","brian","steffan","thomas","daniel","alex","fred","gordon","oliver","tom","aaron","liam","jason","rishi","arthur","male","man","boy"],
   init:function(){
     if(!("speechSynthesis" in window)||!window.SpeechSynthesisUtterance) return;
     this.have=true;
     var self=this;
     this.load();
     try{ window.speechSynthesis.onvoiceschanged=function(){ self.load(); }; }catch(e){}
+  },
+  /* how good a voice is likely to SOUND. The neural "Natural"/"Online" voices
+     and the Google network voices are worlds better than the old local SAPI
+     "Desktop" ones, and eSpeak is the sound of a robot reading a phone book. */
+  score:function(v){
+    var nm=(v.name||"")+" "+(v.voiceURI||""), s=0;
+    if(/natural|neural/i.test(nm)) s+=120;
+    if(/premium|enhanced|siri/i.test(nm)) s+=90;
+    if(/^google/i.test(v.name||"")) s+=70;
+    if(/online/i.test(nm)) s+=40;
+    if(/desktop/i.test(nm)) s-=50;
+    if(/espeak|compact|pico|festival|android\.tts/i.test(nm)) s-=90;
+    if(v.localService===false) s+=15;
+    if(/^en-gb/i.test(v.lang||"")) s+=8;      // the book is British
+    return s;
+  },
+  sexOf:function(v){
+    var nm=(v.name||"").toLowerCase();
+    for(var i=0;i<this.FEM.length;i++) if(nm.indexOf(this.FEM[i])>=0) return "f";
+    for(var j=0;j<this.MASC.length;j++) if(nm.indexOf(this.MASC[j])>=0) return "m";
+    return "";
   },
   load:function(){
     var v=[];
@@ -763,18 +791,23 @@ var SPEAK={
     this.voices = en.length?en:v;
     this.picked={};
     var self=this, used={};
-    /* whole-word match, or "Male" happily matches "Female" */
     function hasWord(name,word){ return new RegExp("(^|[^a-z])"+word+"([^a-z]|$)","i").test(name); }
-    function find(prefs,skipUsed){
-      for(var i=0;i<prefs.length;i++) for(var j=0;j<self.voices.length;j++){
-        var nm=self.voices[j].name||"";
-        if(hasWord(nm,prefs[i]) && !(skipUsed&&used[nm])){ if(skipUsed) used[nm]=1; return self.voices[j]; }
-      }
-      return null;
+    function best(list){
+      if(!list.length) return null;
+      return list.slice().sort(function(a,b){ return self.score(b)-self.score(a); })[0];
     }
-    Object.keys(this.PROFILE).forEach(function(who){
-      var prefs=self.PROFILE[who].pref;
-      self.picked[who]=find(prefs,true)||find(prefs,false)||self.voices[0]||null;
+    function free(list){ return list.filter(function(x){ return !used[x.name]; }); }
+    this.CAST.forEach(function(who){
+      var p=self.PROFILE[who], pick=null;
+      var named=self.voices.filter(function(x){
+        return p.pref.some(function(w){ return hasWord(x.name||"",w); });
+      });
+      pick = best(free(named))                                                   // a name we asked for
+          || best(free(self.voices.filter(function(x){ return self.sexOf(x)===p.sex; })))  // right sort of voice
+          || best(free(self.voices))                                             // anything unused
+          || best(named) || best(self.voices);                                   // share one if we must
+      self.picked[who]=pick||null;
+      if(pick) used[pick.name]=1;
     });
   },
   unlock:function(){                       // some browsers need a gesture first
@@ -785,21 +818,36 @@ var SPEAK={
       u.volume=0; window.speechSynthesis.speak(u);
     }catch(e){}
   },
+  /* what this line will sound like and how long it will take - the one place
+     that maths lives, so the tests can check every caption against it */
+  plan:function(who,text,room){
+    var p=this.PROFILE[who]||this.PROFILE.narr;
+    var clean=String(text)
+      .replace(/[“”]/g,"").replace(/[‘’]/g,"'")
+      .replace(/…/g,"...")
+      .replace(/[—–-]+\s*$/,"...")          // a line that trails off should trail off
+      .replace(/\s*[—–]\s*/g,", ")          // asides read better as commas
+      .replace(/\b[A-Z]{2,}\b/g,function(m){ return m.charAt(0)+m.slice(1).toLowerCase(); });
+    var words=clean.split(/\s+/).filter(Boolean).length;
+    var need=words/2.7+0.35, avail=Math.max(1.1,room||3);
+    /* past about 1.5 these voices gabble, so that is the ceiling; most lines
+       sit at the character's own relaxed rate */
+    var rate=Math.max(0.78,Math.min(1.5, Math.max(p.rate, need/avail)));
+    /* a deterministic wobble per line so the narrator is not metronomic */
+    var jit=((clean.length*7+words*13+who.charCodeAt(0)*5)%7-3)/100;
+    rate=Math.max(0.6,Math.min(1.6,rate*(1+jit*0.5)));
+    return {clean:clean, words:words, need:need, room:avail, rate:rate,
+            pitch:Math.max(0.1,Math.min(2,p.pitch*(1+jit))), spoken:need/rate};
+  },
   say:function(who,text,dur){
     if(!this.on||!this.have||!AU.on) return false;
-    var p=this.PROFILE[who]||this.PROFILE.narr;
-    var clean=String(text).replace(/[—–]/g," - ").replace(/…/g,"...")
-                          .replace(/[“”]/g,"").replace(/[‘’]/g,"'");
-    var words=clean.split(/s+/).length;
-    var need=words/2.7+0.35, avail=Math.max(1.1,dur||3);
-    var rate=Math.max(0.8,Math.min(1.7, Math.max(p.rate, need/avail)));
+    var pl=this.plan(who,text,dur), clean=pl.clean;
     var self=this;
     try{
       window.speechSynthesis.cancel();
       var u=new SpeechSynthesisUtterance(clean);
       if(this.picked[who]) u.voice=this.picked[who];
-      u.pitch=Math.max(0,Math.min(2,p.pitch));
-      u.rate=rate; u.volume=1; u.lang=(this.picked[who]&&this.picked[who].lang)||"en-GB";
+      u.pitch=pl.pitch; u.rate=pl.rate; u.volume=1; u.lang=(this.picked[who]&&this.picked[who].lang)||"en-GB";
       u.onstart=function(){ self.spoke++; duckMusic(true); };
       u.onend=function(){ duckMusic(false); };
       u.onerror=function(){ duckMusic(false); };
@@ -2023,11 +2071,35 @@ var SPK={
   jar:    {name:"A JAR",    col:"#a0e86a", pitch:420}
 };
 function S(d,fn,lines,mood,flex){ return {d:d, fn:fn, lines:lines||[], mood:mood||null, flex:!!flex}; }
+/* Give every caption enough room to be SAID, not just read: if a line takes
+   longer to speak than the gap to the next caption, slide the rest of that
+   shot's captions back into the slack at the end of the shot. Cheaper than
+   making the voice talk faster, which is what makes it sound like a robot. */
+function fitLines(shots){
+  for(var k=0;k<shots.length;k++){
+    var sh=shots[k], L=sh.lines;
+    if(!L||!L.length) continue;
+    for(var i=0;i<L.length;i++){
+      var nextAt=(i+1<L.length)? L[i+1][0] : (sh.d+1.4);
+      var room=Math.max(1.2, nextAt-L[i][0]-0.15);
+      var spoken=SPEAK.plan(L[i][2],L[i][3],room).spoken;
+      var need=spoken-room;
+      if(need<=0.08 || i+1>=L.length) continue;
+      var last=L[L.length-1];
+      var tail=(sh.d-0.1)-(last[0]+last[1]);          // spare time at the end of the shot
+      var push=Math.min(need+0.05, Math.max(0,tail));
+      if(push<=0.02) continue;
+      for(var j=i+1;j<L.length;j++) L[j][0]+=push;
+      L[i][1]=Math.min(L[i][1]+push, L[i+1][0]-L[i][0]);
+    }
+  }
+}
 function buildFilm(target,shots){
   var fixed=0, flexT=0, i;
   for(i=0;i<shots.length;i++){ fixed+=shots[i].d; if(shots[i].flex) flexT+=shots[i].d; }
   var slack=target-fixed;
   if(slack>0 && flexT>0) for(i=0;i<shots.length;i++) if(shots[i].flex) shots[i].d += slack*(shots[i].d/flexT);
+  fitLines(shots);
   var t=0;
   for(i=0;i<shots.length;i++){ shots[i].t0=t; t+=shots[i].d; shots[i].t1=t; }
   return {dur:t, shots:shots, authored:fixed, target:target};
@@ -2470,7 +2542,7 @@ S(14,function(t,p){
   [6.0,4.4,"narr","The fog came in the way it always did, like a big wet dog lying down on the town."],
   [11.0,2.6,"narr","And then a bin spoke."]],"sad",true),
 
-S(10,function(t,p){
+S(10.5,function(t,p){
   camOn(400,330,1.45);
   var lift=ease(seg(t,1.2,3.2))*10+ease(seg(t,5,7))*40;
   bgTown(t,{mode:"dusk",pigeons:false,binLift:lift,binTilt:lift*0.006});
@@ -2481,7 +2553,7 @@ S(10,function(t,p){
   [5.4,3.2,"narr","The lid of the bin outside the bakery lifted up about an inch."],
   [8.8,1.2,"narr","And then a lot more."]],"sad"),
 
-S(15,function(t,p){
+S(16,function(t,p){
   camOn(380,320,1.4);
   var out=ease(seg(t,0.6,6));
   bgTown(t,{mode:"dusk",pigeons:false,bin:false});
@@ -3806,7 +3878,7 @@ S(12,function(t,p){
   [9.0,2.4,"narr","And then something did."]],"sad"),
 
 /* ------------------------------------------- ACT FIVE: THE VOICE ---------- */
-S(16,function(t,p){
+S(17.5,function(t,p){
   bgTown(t,{mode:"dusk",pigeons:false,bin:false,fog:0.2});
   binProp(300,GY+4,1,{t:t,lift:34,tilt:-0.95});
   nubbins(300,GY+4,1,{t:t,digbyInside:true,face:"shock",armR:0.6});
@@ -3965,7 +4037,7 @@ S(16,function(t,p){
   [8.6,3.6,"dnub","And then it has to hit the pole. The pole is important."],
   [13.0,2.6,"narr","He drew the pole on the blueprint and wrote BONK next to it."]],"lab"),
 
-S(16,function(t,p){
+S(17.5,function(t,p){
   bgLab(t,{arc:true,dial:0.4,chair:false,plans:true});
   g.save(); g.translate(480,430); rrect(-220,-30,440,30,6,"#6d5335",INK,2.8); g.restore();
   var built=seg(t,1,11);
@@ -4625,6 +4697,26 @@ window.__dbg={
     return {film:n,dur:Math.round(f.dur),shots:f.shots.length,lines:lines,overrunLines:subs,errors:FILM.errors};
   },
   sfxList:function(){ return Object.keys(BAMSFX); },
+  fit:function(slack){
+    slack=slack==null?0.15:slack;
+    var bad=[], over=[], total=0;
+    [1,2,3,4].forEach(function(n){
+      getFilm(n).shots.forEach(function(sh,si){
+        sh.lines.forEach(function(L,li){
+          total++;
+          var nextAt=(li+1<sh.lines.length)? sh.lines[li+1][0] : (sh.d+1.5);
+          if(L[0]+L[1] > nextAt+0.001) over.push({film:n,shot:si,line:li,at:L[0],dur:L[1],next:+nextAt.toFixed(2)});
+          var room=Math.max(1.2,nextAt-L[0]-0.15);
+          var pl=SPEAK.plan(L[2],L[3],room);
+          if(pl.spoken>room+slack) bad.push({film:n,shot:si,line:li,at:L[0],who:L[2],room:+room.toFixed(2),
+                                             spoken:+pl.spoken.toFixed(2),over:+(pl.spoken-room).toFixed(2),
+                                             rate:+pl.rate.toFixed(2),text:String(L[3]).slice(0,52)});
+        });
+      });
+    });
+    bad.sort(function(a,b){ return b.over-a.over; });
+    return {total:total, overlaps:over, cut:bad.length, worst:bad.slice(0,12)};
+  },
   voices:function(){
     var o={have:SPEAK.have,on:SPEAK.on,tried:SPEAK.tried,spoke:SPEAK.spoke,list:SPEAK.voices.map(function(v){return v.name;}),cast:{}};
     Object.keys(SPEAK.picked).forEach(function(k){ o.cast[k]=SPEAK.picked[k]?SPEAK.picked[k].name:null; });
