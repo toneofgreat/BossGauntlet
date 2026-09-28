@@ -109,6 +109,8 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-ocn canvas{width:100%;height:100%}
 .bg-spc{background:linear-gradient(135deg,#05030f 0%,#1a0a3a 55%,#3a1a6a 100%)}
 .bg-spc canvas{width:100%;height:100%}
+.bg-dgp{background:linear-gradient(135deg,#123b3a 0%,#2a6a63 45%,#e5b24a 100%)}
+.bg-dgp canvas{width:100%;height:100%}
 .bg-rt{background:linear-gradient(135deg,#ffd1ef 0%,#c9e6ff 45%,#ffe6c0 100%)}
 .bg-rt canvas{width:100%;height:100%}
 .bg-brl{background:linear-gradient(135deg,#3a7bd5 0%,#79c1f2 55%,#b8e6ff 100%)}
@@ -130,6 +132,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="digby-plunk.html" class="card" data-launched="2026-09-27">
+    <div class="card-img bg-dgp"><canvas id="c37"></canvas></div>
+    <div class="card-body">
+      <h2>THE TREASURE OF DIGBY PLUNK</h2>
+      <p>A book you read, get tested on, and then get to WATCH. Digby Plunk owns forty-one shovels, a metal detector called Beverly, and one idea: there is treasure in Dampwater Bay. Everybody in town tells him no &mdash; the baker, the fishmonger, the librarian with a chart of the four hundred and six things Old Barnaby Nubbins has been wrong about, a boy on a one-pedal bike, and the Mayor, who has nailed up a sign about it. Then a bin says &ldquo;boy&rdquo;, and the crazy man in the cone tells him where the treasure is, because he dreamed it &mdash; while awake, standing up, in a bin. Read chapter one, answer the question, and you get a <b>five-minute cartoon of the whole chapter</b>, drawn and scored in the browser: characters, voices, music, subtitles, a scrub bar. Chapter two is the beach: two hundred holes, one piece of gold the size of a raisin, a duck that eats it, a pole, a shark that eats the duck, another pole, the bottom of the sea, and an old man in a deck chair down there saying &ldquo;oh, this? found it in a duck.&rdquo; Chapter three is one quiet day at home: buttered toast on a bare foot, forty-one shovels falling one at a time, a doorknob, a bee, a rake he has never owned, a leak that makes the soup bigger, a duck with a dent in its head that takes his winning lottery ticket, and a hole under the floor with a sign in it. Then chapter four &mdash; <b>fifteen minutes of cartoon</b> &mdash; where he robs the bank with a sock on his head, pulls the lever marked DO NOT PULL &mdash; TIME, and goes down a laundry chute, out of a washing machine, into a cannon, through a whale, off a museum trampoline and into a clock tower bell &mdash; and wakes up eleven days ago, in a bathrobe, in a bin, as the crazy old man, with a voice from nowhere offering him ONE CENT to tell a boy there is treasure. Three questions per chapter at the end. <b>Get ONE question wrong and the book throws you out &mdash; straight back to this page.</b> Chapter five is a work in progress. There is a goat in it. PC + mobile.</p>
+      <span class="tag" style="background:#123b3a;color:#e5b24a">STORYBOOK &middot; QUIZ &middot; 30 MIN OF CARTOONS</span>
+    </div>
+  </a>
   <a href="rage-trials/index.html" class="card" data-launched="2026-09-21">
     <div class="card-img bg-rt"><canvas id="c36"></canvas></div>
     <div class="card-body">
@@ -2018,6 +2028,80 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
     ctx.fillStyle='rgba(10,20,40,.55)';ctx.fillRect(0,0,112,24);
     ctx.fillStyle='#ffd83d';ctx.font='bold 12px Arial';ctx.textAlign='left';
     ctx.fillText('🧱 BRICK LEGEND',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Digby Plunk preview: foggy town, a man holding gold, a duck with other plans ----
+(function(){
+  const c=document.getElementById('c37'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const S=Math.sin;
+  function draw(){
+    t+=0.02;
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#9fb0b4');g.addColorStop(.55,'#c8d2cf');g.addColorStop(1,'#e2e5dc');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    const gy=h*0.80;
+    // crooked town behind the fog
+    for(let i=0;i<5;i++){
+      const hx=i*72-10, hh=46+((i*37)%26);
+      ctx.fillStyle=i%2?'#b8a487':'#c9b08a';ctx.strokeStyle='#2c1e14';ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.rect(hx,gy-hh,58,hh);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#7a4a3e';ctx.beginPath();
+      ctx.moveTo(hx-4,gy-hh);ctx.lineTo(hx+62,gy-hh);ctx.lineTo(hx+52,gy-hh-12);ctx.lineTo(hx+6,gy-hh-12);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle='#8fb6c9';ctx.fillRect(hx+10,gy-hh+10,16,14);ctx.fillRect(hx+32,gy-hh+10,16,14);
+    }
+    ctx.fillStyle='#8d8477';ctx.fillRect(0,gy,w,h-gy);
+    ctx.fillStyle='#79705f';ctx.fillRect(0,gy,w,3);
+    // the bin, with a cone in it
+    const bx=w*0.16;
+    ctx.fillStyle='#4a5b52';ctx.strokeStyle='#2c1e14';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.moveTo(bx-13,gy);ctx.lineTo(bx+13,gy);ctx.lineTo(bx+11,gy-28);ctx.lineTo(bx-11,gy-28);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#f2792b';ctx.beginPath();
+    ctx.moveTo(bx,gy-46+S(t*1.4)*2);ctx.lineTo(bx+8,gy-28);ctx.lineTo(bx-8,gy-28);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fdf6ec';ctx.fillRect(bx-6,gy-40,12,4);
+    // Digby, holding it up
+    const px=w*0.55, py=gy;
+    ctx.fillStyle='rgba(30,20,10,.18)';ctx.beginPath();ctx.ellipse(px,py+1,13,3.4,0,0,7);ctx.fill();
+    ctx.strokeStyle='#2c1e14';ctx.lineWidth=1.6;
+    ctx.fillStyle='#31527f';ctx.fillRect(px-7,py-22,5,22);ctx.fillRect(px+2,py-22,5,22);
+    ctx.fillStyle='#3f74b8';ctx.beginPath();ctx.rect(px-10,py-46,20,26);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#e3b455';ctx.beginPath();ctx.rect(px-11,py-53,22,9);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#e3b455';ctx.lineWidth=5;
+    ctx.beginPath();ctx.moveTo(px+9,py-51);ctx.lineTo(px+17,py-68);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(px-9,py-51);ctx.lineTo(px-15,py-38);ctx.stroke();
+    ctx.fillStyle='#f4c99e';ctx.strokeStyle='#2c1e14';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.arc(px,py-62,10,0,7);ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.arc(px,py-64,10.4,Math.PI,0);ctx.closePath();ctx.fillStyle='#6f4a2a';ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(px-3.4,py-63,2.4,0,7);ctx.arc(px+3.4,py-63,2.4,0,7);ctx.fill();
+    ctx.fillStyle='#2c1e14';ctx.beginPath();ctx.arc(px-3,py-63,1.2,0,7);ctx.arc(px+4,py-63,1.2,0,7);ctx.fill();
+    // the gold, and the duck that wants it
+    const cx=px+18, cy=py-71;
+    ctx.fillStyle='#f0c040';ctx.strokeStyle='#2c1e14';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.ellipse(cx,cy,4*(0.45+Math.abs(Math.cos(t*2))*0.55),4.4,0,0,7);ctx.fill();ctx.stroke();
+    ctx.globalAlpha=0.4+0.4*S(t*4);ctx.fillStyle='#fff6c9';
+    ctx.beginPath();ctx.arc(cx+6,cy-6,2,0,7);ctx.fill();ctx.globalAlpha=1;
+    const dx=w*0.86-((t*16)%(w*0.5)), dy=h*0.30+S(t*2.4)*7;
+    ctx.fillStyle='#fbfaf4';ctx.strokeStyle='#2c1e14';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.ellipse(dx,dy,11,7,0,0,7);ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.arc(dx-9,dy-7,5,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#f2a13c';ctx.beginPath();
+    ctx.moveTo(dx-14,dy-8);ctx.lineTo(dx-21,dy-6);ctx.lineTo(dx-14,dy-4);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#f0eee3';ctx.beginPath();ctx.ellipse(dx+1,dy-3,8,4,-0.3+S(t*9)*0.4,0,7);ctx.fill();ctx.stroke();
+    // fog
+    ctx.save();ctx.globalAlpha=.26;ctx.fillStyle='#e8eeea';
+    for(let i=0;i<3;i++){const fx=((t*(7+i*4))%(w+160))-80;
+      ctx.beginPath();ctx.ellipse(fx,gy-16-i*22,70,9,0,0,7);ctx.fill();}
+    ctx.restore();
+    // wordmark, top-left, on a scrim (the plays badge owns top-right)
+    ctx.fillStyle='rgba(18,59,58,.72)';ctx.fillRect(0,0,124,24);
+    ctx.fillStyle='#e5b24a';ctx.font='bold 12px Georgia,serif';ctx.textAlign='left';
+    ctx.fillText('DIGBY PLUNK',6,16);
     requestAnimationFrame(draw);
   }
   draw();
