@@ -189,7 +189,7 @@ body{
     <div class="byline">by nobody in particular</div>
     <button class="btn" id="startBtn">Start reading</button>
   </div>
-  <div class="warn">Read the chapter, then answer for it. <b>Get one question wrong and the book throws you out of the book</b> &mdash; straight back to the platyfy home page. Get it right and you watch the whole chapter happen as a cartoon.</div>
+  <div class="warn">Read the chapter, then answer for it. <b>Get one question wrong and the book throws you out of the book</b> &mdash; straight back to the platyfy home page. Get it right and you watch the whole chapter happen as a cartoon, read out loud.</div>
   <div class="chaplist" id="chaplist"></div>
   <div class="tinybar">
     <span id="progNote">&nbsp;</span>
@@ -230,7 +230,7 @@ body{
   <div class="tapstart" id="tapStart">
     <div class="big" id="tapTitle">Chapter One: the cartoon</div>
     <div class="sm" id="tapSub">5 minutes &middot; tap or click to play</div>
-    <div class="sm" style="color:#6f685c">space = pause &middot; arrow keys = 10 seconds</div>
+    <div class="sm" style="color:#6f685c">space = pause &middot; arrow keys = 10 seconds &middot; the voices can be turned off</div>
   </div>
   <div class="endcard" id="endCard">
     <h3 id="endH">End of chapter one</h3>
@@ -245,6 +245,7 @@ body{
       <span id="tCode">0:00 / 5:00</span>
       <span class="ttl" id="filmTitle">The Treasure of Digby Plunk</span>
       <button class="ib" id="volBtn">sound on</button>
+      <button class="ib" id="voxBtn">voices on</button>
       <button class="ib" id="skipBtn">skip to end</button>
     </div>
   </div>
@@ -714,6 +715,113 @@ var AU = {
       if(!(step%8===7&&M.arp<2)) T(semi,1,spb*1.5,0.062,M.wave);
       if(M.arp>1 && s===6) T(semi+7,1,spb,0.045,M.wave);
     }
+  }
+};
+
+/* ================================================================ VOICES ==
+   The cartoons are spoken out loud with the browser's own speech synthesiser:
+   one voice, pitch and rate per character, picked from whatever the device
+   has. The captions stay on screen either way, and if speech turns out to be
+   silent (no voices, blocked, headless) it falls back to the blip voices.
+   ========================================================================= */
+function duckMusic(on){
+  if(!AU.ready||!AU.musicGain) return;
+  try{ AU.musicGain.gain.setTargetAtTime(on?0.10:0.30, AU.ctx.currentTime, 0.12); }catch(e){}
+}
+var SPEAK={
+  on:true, have:false, voices:[], picked:{}, tried:0, spoke:0, firstTry:0, unlocked:false, cur:null,
+  /* pref = names to look for, in order; pitch/rate are the character on top of the voice */
+  PROFILE:{
+    narr:   {pref:["Sonia","Libby","Hazel","Samantha","Serena","Kate","Jenny","Zira","Female"],        pitch:1.02, rate:1.02},
+    digby:  {pref:["Ryan","Guy","Alex","Daniel","Tom","Male"],                                          pitch:1.28, rate:1.1},
+    nubbins:{pref:["George","Gordon","Fred","Oliver","David","Male"],                                   pitch:0.45, rate:0.8},
+    dnub:   {pref:["George","Gordon","Fred","Oliver","David","Male"],                                   pitch:0.82, rate:1.0},
+    follop: {pref:["Hazel","Susan","Catherine","Libby","Zira","Female"],                                pitch:1.4,  rate:1.0},
+    gil:    {pref:["Mark","Christopher","Brian","David","Daniel","Male"],                               pitch:0.75, rate:0.92},
+    pepper: {pref:["Zira","Aria","Michelle","Hazel","Female"],                                          pitch:1.45, rate:0.94},
+    colin:  {pref:["Libby","Ana","Zira","Jenny","Female"],                                              pitch:1.85, rate:1.22},
+    mayor:  {pref:["Eric","Roger","Daniel","George","David","Male"],                                    pitch:0.85, rate:0.88},
+    wicket: {pref:["David","Steffan","Thomas","Mark","Male"],                                           pitch:0.9,  rate:0.82},
+    fizz:   {pref:["Aria","Jenny","Emma","Nancy","Zira","Female"],                                      pitch:1.55, rate:1.3},
+    voice:  {pref:["Guy","Brian","Christopher","George","David","Male"],                                pitch:0.2,  rate:0.72},
+    duck:   {pref:["Ana","Zira","Libby","Female"],                                                      pitch:2.0,  rate:1.4},
+    beverly:{pref:["Michelle","Jenny","Zira","Aria","Female"],                                          pitch:1.9,  rate:1.12},
+    sign:   {pref:["Roger","George","David","Male"],                                                    pitch:0.5,  rate:0.78},
+    jar:    {pref:["Ana","Libby","Zira","Female"],                                                      pitch:1.7,  rate:1.15}
+  },
+  init:function(){
+    if(!("speechSynthesis" in window)||!window.SpeechSynthesisUtterance) return;
+    this.have=true;
+    var self=this;
+    this.load();
+    try{ window.speechSynthesis.onvoiceschanged=function(){ self.load(); }; }catch(e){}
+  },
+  load:function(){
+    var v=[];
+    try{ v=window.speechSynthesis.getVoices()||[]; }catch(e){ v=[]; }
+    var en=v.filter(function(x){ return /^en/i.test(x.lang||""); });
+    this.voices = en.length?en:v;
+    this.picked={};
+    var self=this, used={};
+    /* whole-word match, or "Male" happily matches "Female" */
+    function hasWord(name,word){ return new RegExp("(^|[^a-z])"+word+"([^a-z]|$)","i").test(name); }
+    function find(prefs,skipUsed){
+      for(var i=0;i<prefs.length;i++) for(var j=0;j<self.voices.length;j++){
+        var nm=self.voices[j].name||"";
+        if(hasWord(nm,prefs[i]) && !(skipUsed&&used[nm])){ if(skipUsed) used[nm]=1; return self.voices[j]; }
+      }
+      return null;
+    }
+    Object.keys(this.PROFILE).forEach(function(who){
+      var prefs=self.PROFILE[who].pref;
+      self.picked[who]=find(prefs,true)||find(prefs,false)||self.voices[0]||null;
+    });
+  },
+  unlock:function(){                       // some browsers need a gesture first
+    if(!this.have||this.unlocked) return;
+    this.unlocked=true;
+    try{
+      var u=new SpeechSynthesisUtterance(" ");
+      u.volume=0; window.speechSynthesis.speak(u);
+    }catch(e){}
+  },
+  say:function(who,text,dur){
+    if(!this.on||!this.have||!AU.on) return false;
+    var p=this.PROFILE[who]||this.PROFILE.narr;
+    var clean=String(text).replace(/[—–]/g," - ").replace(/…/g,"...")
+                          .replace(/[“”]/g,"").replace(/[‘’]/g,"'");
+    var words=clean.split(/s+/).length;
+    var need=words/2.7+0.35, avail=Math.max(1.1,dur||3);
+    var rate=Math.max(0.8,Math.min(1.7, Math.max(p.rate, need/avail)));
+    var self=this;
+    try{
+      window.speechSynthesis.cancel();
+      var u=new SpeechSynthesisUtterance(clean);
+      if(this.picked[who]) u.voice=this.picked[who];
+      u.pitch=Math.max(0,Math.min(2,p.pitch));
+      u.rate=rate; u.volume=1; u.lang=(this.picked[who]&&this.picked[who].lang)||"en-GB";
+      u.onstart=function(){ self.spoke++; duckMusic(true); };
+      u.onend=function(){ duckMusic(false); };
+      u.onerror=function(){ duckMusic(false); };
+      this.cur=u; this.tried++;
+      if(!this.firstTry) this.firstTry=Date.now();
+      window.speechSynthesis.speak(u);
+      /* if nothing has actually started talking after a few lines AND a few
+         seconds, this device has no usable voice - go back to the blips
+         rather than playing silence at somebody */
+      if(this.tried>=3 && this.spoke===0 && (Date.now()-this.firstTry)>6000){
+        this.on=false; this.have=false;
+        var vb=$("voxBtn"); if(vb) vb.textContent="voices off";
+        return false;
+      }
+      return true;
+    }catch(e){ return false; }
+  },
+  stop:function(){
+    if(!("speechSynthesis" in window)) return;
+    try{ window.speechSynthesis.cancel(); }catch(e){}
+    this.cur=null;
+    duckMusic(false);
   }
 };
 
@@ -2007,10 +2115,15 @@ function renderFilm(time){
   }
   FILM.prevLt=lt;
   // subtitles
-  var line=null;
+  var line=null, lineRoom=0;
   for(var i=0;i<sh.lines.length;i++){
     var L=sh.lines[i];
-    if(lt>=L[0] && lt<L[0]+L[1]) { line=L; break; }
+    if(lt>=L[0] && lt<L[0]+L[1]){
+      line=L;
+      var nextAt=(i+1<sh.lines.length)? sh.lines[i+1][0] : (sh.d+1.5);
+      lineRoom=Math.max(1.2, nextAt-L[0]-0.15);
+      break;
+    }
   }
   if(line){
     var fade=Math.min(1, Math.min((lt-line[0])/0.18, (line[0]+line[1]-lt)/0.22));
@@ -2020,7 +2133,8 @@ function renderFilm(time){
       FILM.lastLine=key;
       if(FILM.playing && (lt-line[0])<0.4){
         var sp=SPK[line[2]]||SPK.narr;
-        AU.voice(sp.pitch, String(line[3]).split(" ").length);
+        if(!SPEAK.say(line[2], line[3], lineRoom))
+          AU.voice(sp.pitch, String(line[3]).split(" ").length);
       }
     }
   }
@@ -2364,8 +2478,8 @@ S(10,function(t,p){
   camOff();
   if(t>2.4&&t<4) bam(300,250,"BOY",seg(t,2.4,4),"#a8e8a0",0.7);
 },[[2.4,2.6,"nubbins","Boy."],
-  [5.4,3.6,"narr","The lid of the bin outside the bakery lifted up about an inch."],
-  [8.2,1.6,"narr","And then a lot more."]],"sad"),
+  [5.4,3.2,"narr","The lid of the bin outside the bakery lifted up about an inch."],
+  [8.8,1.2,"narr","And then a lot more."]],"sad"),
 
 S(15,function(t,p){
   camOn(380,320,1.4);
@@ -2696,11 +2810,10 @@ S(16,function(t,p){
   digby(760,284,1,{t:t,face:t>hit?"shock":"shout",armR:2.2,armL:-2.2});
   if(t>hit&&t<hit+2) bam(884,110,"BONK",seg(t,hit,hit+2),"#ffd23f",1.1);
   if(t>splash+1.5&&t<splash+3) bam(884,330,"SPLOOSH",seg(t,splash+1.5,splash+3),"#8fd0e8",0.9);
-},[[0.4,2.2,"narr","The duck flew about four feet to the left of where a duck ought to fly."],
-  [2.8,2.2,"narr","The duck hit the pole at the end of the pier."],
-  [5.4,2.6,"narr","There was a small pause. The sort of pause that happens after a bonk."],
-  [8.4,2.4,"narr","While the world decides what to do next."],
-  [11.4,3.4,"narr","Then the duck fell into the water."]],"chase"),
+},[[0.2,3.6,"narr","The duck flew about four feet to the left of where a duck ought to fly."],
+  [4.0,2.6,"narr","The duck hit the pole at the end of the pier."],
+  [6.9,3.0,"narr","A small pause. The sort that happens after a bonk."],
+  [10.0,4.0,"narr","And then the duck fell into the water."]],"chase"),
 
 S(11,function(t,p){
   bgSea(t,{deep:0,surface:true,pilings:true,floorY:520});
@@ -2910,8 +3023,8 @@ S(12,function(t,p){
     digby(420,366-hop,1,{t:t,face:"shout",armR:2.2,armL:-2.2,talk:t<7?t:0});
   }
   camOff();
-},[[0.4,2.0,"narr","The toast went butter side down. That is normal."],
-  [2.6,3.2,"narr","It landed on his bare foot. That is not."],
+},[[0.4,2.2,"narr","The toast went butter side down. That is normal."],
+  [2.8,3.0,"narr","It landed on his bare foot. That is not."],
   [6.2,2.4,"digby","AAAAH. AAAH. AH."],
   [9.0,2.4,"narr","He hopped. He said a word."]],"silly"),
 
@@ -2968,8 +3081,8 @@ S(12,function(t,p){
   if(t>2.6) dizzy(360,230,t,4,30);
   camOff();
   if(t>2.6&&t<5) bam(480,200,"BONG",seg(t,2.6,5),"#c9a05a",1);
-},[[0.4,2.2,"narr","The last one was number forty-one. His favourite. The bent one."],
-  [3.0,4.2,"narr","It hit him on the head with a noise like a church bell being disappointed."],
+},[[0.4,2.6,"narr","The last one was number forty-one. His favourite. The bent one."],
+  [3.2,4.0,"narr","It hit him on the head with a noise like a church bell being disappointed."],
   [8.2,2.6,"digby","…I am going to go outside."]],"silly"),
 
 S(18,function(t,p){
@@ -3158,7 +3271,7 @@ S(14,function(t,p){
 },[[0.6,2.2,"narr","Digby Plunk sat down in his chair."],
   [3.0,1.8,"narr","The chair broke."],
   [5.6,2.4,"narr","Then the floor broke."],
-  [8.4,4.2,"narr","Which is not a thing that chairs usually do to floors."],
+  [8.4,3.4,"narr","Which is not a thing that chairs usually do to floors."],
   [12.0,1.6,"narr","And down he went."]],"sad"),
 
 S(16,function(t,p){
@@ -4174,7 +4287,7 @@ var SCREENS=["home","read","quiz","fail","film","wip"];
 function show(id){
   for(var i=0;i<SCREENS.length;i++){ var el=$(SCREENS[i]); if(el) el.classList.toggle("show", SCREENS[i]===id); }
   CUR=id;
-  if(id==="film"){ fitScreen(); } else { AU.stopMusic(); FILM.playing=false; }
+  if(id==="film"){ fitScreen(); } else { AU.stopMusic(); SPEAK.stop(); FILM.playing=false; }
   if(id==="home"){ coverRunning=true; requestAnimationFrame(coverLoop); } else coverRunning=false;
 }
 var CUR="home";
@@ -4348,13 +4461,13 @@ function startFilm(n){
   updateFilmUI();
 }
 function playFilm(){
-  AU.init(); AU.resume();
+  AU.init(); AU.resume(); SPEAK.init(); SPEAK.unlock();
   var sh=shotAt(FILM.film,FILM.time);
   AU.startMusic(sh.mood||"town");
   FILM.playing=true; FILM.last=0; FILM.hideT=3.2;
   $("tapStart").classList.add("hidden");
 }
-function pauseFilm(){ FILM.playing=false; AU.stopMusic(); $("ctrls").classList.remove("hide"); }
+function pauseFilm(){ FILM.playing=false; AU.stopMusic(); SPEAK.stop(); $("ctrls").classList.remove("hide"); }
 function toggleFilm(){
   if($("endCard").classList.contains("show")) return;
   if($("tapStart").classList.contains("hidden")===false){ playFilm(); return; }
@@ -4363,12 +4476,12 @@ function toggleFilm(){
 function seekFilm(s){
   if(!FILM.film) return;
   FILM.time=Math.max(0,Math.min(FILM.film.dur-0.05,s));
-  FILM.prevLt=-1; BAMFIRED={};
+  FILM.prevLt=-1; BAMFIRED={}; SPEAK.stop();
   $("endCard").classList.remove("show");
   renderFilm(FILM.time); updateFilmUI();
 }
 function endFilm(){
-  FILM.playing=false; AU.stopMusic(); AU.sfx("sparkle",1);
+  FILM.playing=false; AU.stopMusic(); SPEAK.stop(); AU.sfx("sparkle",1);
   var n=FILM.ch, nxt=BOOK.chapters[n], last=(n>=4);
   $("endH").textContent="End of chapter "+["one","two","three","four"][n-1];
   $("endP").textContent = last
@@ -4421,8 +4534,16 @@ function boot(){
   $("skipBtn").addEventListener("click",function(){ seekFilm(FILM.film.dur-0.06); FILM.playing=false; endFilm(); });
   $("volBtn").addEventListener("click",function(){
     AU.init(); AU.mute(AU.on);
+    if(!AU.on) SPEAK.stop();
     $("volBtn").textContent=AU.on?"sound on":"sound off";
   });
+  $("voxBtn").addEventListener("click",function(){
+    SPEAK.init();
+    SPEAK.on=!SPEAK.on;
+    if(!SPEAK.on) SPEAK.stop();
+    $("voxBtn").textContent=SPEAK.on?"voices on":"voices off";
+  });
+  document.addEventListener("visibilitychange",function(){ if(document.hidden) SPEAK.stop(); });
   $("endBtn").addEventListener("click",function(){
     var n=FILM.ch;
     if(n>=4){ showWip(); return; }
@@ -4463,6 +4584,7 @@ function boot(){
       if(e.key==="m"){ AU.mute(AU.on); $("volBtn").textContent=AU.on?"sound on":"sound off"; }
     }
   });
+  SPEAK.init();
   requestAnimationFrame(filmLoop);
   coverRunning=true; requestAnimationFrame(coverLoop);
 }
@@ -4502,7 +4624,13 @@ window.__dbg={
     f.shots.forEach(function(s){ lines+=s.lines.length; s.lines.forEach(function(L){ if(L[0]+L[1]>s.d+0.01) subs++; }); });
     return {film:n,dur:Math.round(f.dur),shots:f.shots.length,lines:lines,overrunLines:subs,errors:FILM.errors};
   },
-  sfxList:function(){ return Object.keys(BAMSFX); }
+  sfxList:function(){ return Object.keys(BAMSFX); },
+  voices:function(){
+    var o={have:SPEAK.have,on:SPEAK.on,tried:SPEAK.tried,spoke:SPEAK.spoke,list:SPEAK.voices.map(function(v){return v.name;}),cast:{}};
+    Object.keys(SPEAK.picked).forEach(function(k){ o.cast[k]=SPEAK.picked[k]?SPEAK.picked[k].name:null; });
+    return o;
+  },
+  speak:function(who,text,dur){ SPEAK.init(); return SPEAK.say(who||"narr",text||"testing, testing",dur||4); }
 };
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot); else boot();
 </script>
