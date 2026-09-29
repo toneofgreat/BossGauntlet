@@ -125,6 +125,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-toh canvas{width:100%;height:100%}
 .bg-oof{background:linear-gradient(180deg,#dceeff 0%,#9fd0f5 45%,#3f7f43 100%)}
 .bg-oof canvas{width:100%;height:100%}
+/* Tanks card */
+.bg-tnk{background:linear-gradient(135deg,#ffffff 0%,#f2f6fc 55%,#dbe7fd 100%)}
+.bg-tnk canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -132,6 +135,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="tanks.html" class="card" data-launched="2026-09-29">
+    <div class="card-img bg-tnk"><canvas id="c38"></canvas></div>
+    <div class="card-body">
+      <h2>TANKS</h2>
+      <p>A blank white menu with one blue button on it, and behind that button a white arena with a blue tank at one end and a red tank at the other. Every shell crawls &mdash; nearly six seconds to cross the whole arena &mdash; so every shot fired at you is a shot you can walk out of the way of, and every shot you fire is one they can walk out of the way of too. <b>Three hits on the enemy flag brings it down.</b> Up to then their tank shrugs off everything you land on it; the moment the flag falls, one shell finishes it &mdash; and the same is true of you, so the round turns into a knife fight the second a flag goes. Once every twenty seconds you can drop a wall in front of you: one hit point, one shell, gone. <b>Play a bot</b> is slower than you and slow on the trigger. <b>The skilled bot</b> leads its shots, watches the shells you have already fired and slides out of their way, walls off the ones it cannot outrun, and goes straight for your flag &mdash; it is trying to win. Then <b>END MODE</b>: ten rungs, one coin per rung, starting with a plain bot and ending with ten of them &mdash; by way of a bot with three barrels, a skilled bot with two, a skilled bot with a friend, one bot with <i>ten barrels firing in every direction at once</i>, and three skilled bots together. Coins buy damage (1 &rarr; 3), reload (three seconds all the way down to no wait at all &mdash; twenty-six steps of it) and shooters (2, 3, 4, and for a hundred coins a full blast of ten in a ring). There is a locked sign under end mode that does nothing at all until you beat all ten rungs, and then it is a boss: a tank twice the size, in a pillared arena, that opens with four barrels and finishes with ten. WASD and mouse on a PC, a thumbstick and two big buttons on a phone. There is also a CODES box. 1234.</p>
+      <span class="tag" style="background:#1d6ef5;color:#ffffff">TOP-DOWN TANKS &middot; 10 RUNGS &middot; A BOSS BEHIND A LOCKED SIGN</span>
+    </div>
+  </a>
   <a href="digby-plunk.html" class="card" data-launched="2026-09-27">
     <div class="card-img bg-dgp"><canvas id="c37"></canvas></div>
     <div class="card-body">
@@ -2028,6 +2039,89 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
     ctx.fillStyle='rgba(10,20,40,.55)';ctx.fillRect(0,0,112,24);
     ctx.fillStyle='#ffd83d';ctx.font='bold 12px Arial';ctx.textAlign='left';
     ctx.fillText('🧱 BRICK LEGEND',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Tanks preview: white arena, blue tank, red tank, one slow shell in the air ----
+(function(){
+  const c=document.getElementById('c38'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const S=Math.sin;
+  function tank(x,y,ang,col,dark,barrels){
+    ctx.save();ctx.translate(x,y);
+    ctx.globalAlpha=.10;ctx.fillStyle='#141821';ctx.beginPath();ctx.ellipse(1.5,2.5,15,11,0,0,7);ctx.fill();ctx.globalAlpha=1;
+    ctx.save();ctx.rotate(ang);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#141821';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.rect(-14,-13,28,6);ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.rect(-14,7,28,6);ctx.fill();ctx.stroke();
+    ctx.fillStyle=col;ctx.beginPath();ctx.rect(-13,-9,26,18);ctx.fill();ctx.stroke();
+    ctx.strokeStyle=dark;ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(-8,8);ctx.stroke();
+    for(let i=0;i<barrels;i++){
+      const a=barrels===1?0:-0.22+(i/(barrels-1))*0.44;
+      ctx.save();ctx.rotate(a);
+      ctx.fillStyle='#fff';ctx.strokeStyle='#141821';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.rect(2,-2.6,20,5.2);ctx.fill();ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle=col;ctx.strokeStyle='#141821';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.arc(0,0,8,0,7);ctx.fill();ctx.stroke();
+    ctx.restore();ctx.restore();
+  }
+  function flag(x,gy,col,dark,hp){
+    ctx.save();ctx.translate(x,gy);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#141821';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.ellipse(0,0,11,4,0,0,7);ctx.fill();ctx.stroke();
+    ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(0,-1);ctx.lineTo(0,-32);ctx.stroke();
+    ctx.fillStyle=col;ctx.strokeStyle=dark;ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(1,-31);
+    for(let i=0;i<=6;i++){const u=i/6;ctx.lineTo(1+u*20,-31+S(t*2.2+u*3.4)*2*u);}
+    for(let i=6;i>=0;i--){const u=i/6;ctx.lineTo(1+u*20,-18+S(t*2.2+u*3.4+0.6)*2.4*u);}
+    ctx.closePath();ctx.fill();ctx.stroke();
+    for(let p=0;p<3;p++){ctx.fillStyle=p<hp?col:'#fff';ctx.strokeStyle='#141821';ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(-5,-9-p*5,2,0,7);ctx.fill();ctx.stroke();}
+    ctx.restore();
+  }
+  function draw(){
+    t+=0.02;
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle='#eef1f6';ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let x=24;x<w;x+=24){ctx.moveTo(x,0);ctx.lineTo(x,h);}
+    for(let y=24;y<h;y+=24){ctx.moveTo(0,y);ctx.lineTo(w,y);}
+    ctx.stroke();
+    ctx.strokeStyle='#e2e7ef';ctx.lineWidth=1.6;ctx.setLineDash([5,6]);
+    ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.stroke();ctx.setLineDash([]);
+    ctx.strokeStyle='#141821';ctx.lineWidth=2.4;ctx.strokeRect(1.2,1.2,w-2.4,h-2.4);
+    const gy=h*0.62;
+    flag(w*0.09,gy+26,'#1d6ef5','#0d49b0',3);
+    flag(w*0.93,gy+26,'#e0352b','#9c1d16',2);
+    // a wall, dropped a moment ago
+    ctx.save();ctx.translate(w*0.6,gy+34);ctx.rotate(0.35);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#141821';ctx.lineWidth=1.8;
+    ctx.beginPath();ctx.rect(-19,-4,38,8);ctx.fill();ctx.stroke();
+    ctx.strokeStyle='#c9cfdb';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(-6,-3.4);ctx.lineTo(-6,3.4);ctx.moveTo(6,-3.4);ctx.lineTo(6,3.4);ctx.stroke();
+    ctx.restore();
+    tank(w*0.26,gy+6,-0.12+S(t*0.7)*0.05,'#1d6ef5','#0d49b0',2);
+    tank(w*0.76,gy-16,Math.PI+S(t*0.9)*0.06,'#e0352b','#9c1d16',1);
+    // one slow shell, crossing
+    const sx=w*0.30+((t*22)%(w*0.42)), sy=gy+2;
+    ctx.strokeStyle='#bcd4fd';ctx.lineWidth=2.4;
+    ctx.beginPath();ctx.moveTo(sx-16,sy);ctx.lineTo(sx,sy);ctx.stroke();
+    ctx.save();ctx.translate(sx,sy);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#141821';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(6,0);ctx.lineTo(1,-3.4);ctx.lineTo(-4,-3.4);ctx.lineTo(-4,3.4);ctx.lineTo(1,3.4);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle='#1d6ef5';ctx.fillRect(-4,-3.4,2,6.8);
+    ctx.restore();
+    // wordmark, top-left (the plays badge owns top-right)
+    ctx.fillStyle='#1d6ef5';ctx.fillRect(0,0,74,22);
+    ctx.fillStyle='#fff';ctx.font='bold 12px Helvetica,Arial,sans-serif';ctx.textAlign='left';
+    ctx.fillText('TANKS',7,15);
     requestAnimationFrame(draw);
   }
   draw();
