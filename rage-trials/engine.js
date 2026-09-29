@@ -4425,6 +4425,203 @@ function stopActiveModes() {
   activeMode = null;
 }
 
+/* ===========================================================================
+ * THE BACK WALL  (Amendment 2026-09-29, CONTRACT section 14.9)
+ * ---------------------------------------------------------------------------
+ * Every trial gets a wall a couple of tiles behind its spawn. It is a real
+ * one-way barrier: walk back into it and it stops you dead, which is the whole
+ * of what it advertises. Lean on it - hold the back key against it for
+ * BACKWALL_PHASE_S - and you go straight through it, and the trial is skipped.
+ *
+ * It is one-way on purpose. It only pushes a player who is to the RIGHT of its
+ * face, so a level that legitimately travels leftward past this column later on
+ * is never blocked by it, and the wall can never trap anybody against geometry.
+ *
+ * Its height is a band around the spawn rather than the whole column, because
+ * trial 12 stacks its acts in bands at different rows and a full-height slab at
+ * the start column would cut through the ones above.
+ * ======================================================================== */
+var BACKWALL_W = 30;          // px, a shade under one tile so it reads as a slab
+var BACKWALL_UP = 7.5;        // tiles of wall above the spawn (a jump is ~3.2)
+var BACKWALL_DOWN = 3.5;      // tiles below, so you cannot duck under it
+var BACKWALL_PHASE_S = 0.6;   // how long you must lean on it before it lets go
+var backWall = null;
+
+function setupBackWall() {
+  /* Stand the wall wherever walking back ACTUALLY stops you. Most trials open
+   * into space behind the spawn, so we put our own slab there and it does the
+   * stopping. Trial 12 spawns a tile off its own boundary tile, and a slab
+   * behind that could never be touched, so there we dress the level's own wall
+   * instead and never add a second collider. */
+  var sx = spawnPoint.x, sy = spawnPoint.y;
+  var col = Math.floor(sx / TILE);
+  var rowFeet = Math.floor((sy + player.h - 2) / TILE);
+  var rowHead = Math.floor((sy + 2) / TILE);
+  var stopCol = -1;
+  for (var c = col - 1; c >= 0 && col - c <= 8; c--) {
+    if (tileSolidAt(c, rowFeet) || tileSolidAt(c, rowHead)) { stopCol = c; break; }
+  }
+  var hugging = stopCol >= 0 && (sx - (stopCol + 1) * TILE) < TILE * 1.45;
+  var x, w;
+  if (hugging) {
+    x = stopCol * TILE; w = TILE;                       // dress what is already there
+  } else {
+    w = BACKWALL_W;
+    x = Math.max(TILE * 0.25, sx - TILE * 2.2);
+  }
+  backWall = {
+    x: x, w: w,
+    y: sy - TILE * BACKWALL_UP,
+    h: TILE * (BACKWALL_UP + BACKWALL_DOWN),
+    own: !hugging,   // do we do the stopping, or does the level's own tile
+    press: 0,        // 0..BACKWALL_PHASE_S of leaning
+    phase: 0,        // >0 while dissolving, counts down
+    hit: false,      // has the player ever touched it (one-shot chatter)
+    seed: (RT.levelIndex || 1) * 7919
+  };
+}
+RT.backWall = function () { return backWall; };
+
+function backWallUpdate(dt) {
+  var w = backWall;
+  if (!w || levelWon || gameState !== 'play') return;
+  if (w.phase > 0) {
+    w.phase -= dt;
+    return;
+  }
+  var p = player;
+  var face = w.x + w.w;                       // the face you are stopped by
+  var overlapY = (p.y + p.h > w.y) && (p.y < w.y + w.h);
+  /* "against it" is a reach, not an overlap, so the version that dresses the
+   * level's own boundary tile still arms when you are pressed up to it. */
+  var against = overlapY && p.x < face + TILE * 0.8 && p.x + p.w > w.x - TILE * 0.2;
+
+  if (!against) { w.press = Math.max(0, w.press - dt * 2.5); return; }
+
+  /* only a player coming from the right is held: see the header */
+  if (p.x + p.w * 0.5 < w.x) { w.press = Math.max(0, w.press - dt * 2.5); return; }
+
+  if (w.own && p.x < face) {
+    p.x = face;
+    if (p.vx < 0) p.vx = 0;
+  }
+
+  /* "back" means whichever key actually walks you backwards right now, so a
+   * trench with reversed controls does not quietly disarm the wall. */
+  var back = player.controlsReversed ? input.right : input.left;
+  /* the chatter is for pressing INTO it, never for merely spawning near it */
+  if (back && !w.hit) {
+    w.hit = true;
+    RT.toast('NO GOING BACK', 1.3);
+    sfx('bump');
+  }
+  if (back) {
+    w.press += dt;
+    if ((RT.frame % 4) === 0) {
+      burst(face, p.y + p.h * 0.5, {
+        n: 2, colors: ['#cfd6e4', '#8d97ab'], speed: 70, life: 0.35, size: 2, gravity: 260
+      });
+    }
+    addShake(w.press * 2.2, 0.05);
+    if (w.press >= BACKWALL_PHASE_S) skipStageThroughWall();
+  } else {
+    w.press = Math.max(0, w.press - dt * 2.5);
+  }
+}
+
+/* going through is a real clear: the trial unlocks the next one exactly as the
+ * goal flag does, it just skips everything in between. */
+function skipStageThroughWall() {
+  var w = backWall;
+  if (!w || levelWon) return;
+  w.phase = 0.9;
+  w.press = 0;
+  sfx('warp');
+  flash('#ffffff', 0.3);
+  addShake(7, 0.35);
+  for (var i = 0; i < 3; i++) {
+    burst(w.x + w.w * 0.5, player.y + player.h * 0.5, {
+      n: 16, colors: ['#ffffff', '#cfd6e4', '#7fd0ff', '#b6a3ff'],
+      speed: 180 + i * 70, life: 0.9, size: 3, gravity: 120, spreadX: 6, spreadY: TILE * 2
+    });
+  }
+  ring(w.x + w.w * 0.5, player.y + player.h * 0.5, '#ffffff', 6, 90, 0.5);
+  RT.toast('STAGE SKIPPED', 2);
+  RT.emit('wallskip', RT.levelIndex);
+  winLevel();
+}
+
+function drawBackWall(g) {
+  var w = backWall;
+  if (!w || gameState !== 'play') return;
+  var t = w.press / BACKWALL_PHASE_S;                 // 0..1 lean
+  var dissolve = w.phase > 0 ? (1 - w.phase / 0.9) : 0;
+  g.save();
+  g.globalAlpha = w.phase > 0 ? Math.max(0, 1 - dissolve * 1.15) : 1;
+
+  /* the slab */
+  var grad = g.createLinearGradient(w.x, 0, w.x + w.w, 0);
+  grad.addColorStop(0, '#6f7787');
+  grad.addColorStop(0.45, '#98a1b3');
+  grad.addColorStop(1, '#5c6474');
+  g.fillStyle = grad;
+  g.fillRect(w.x, w.y, w.w, w.h);
+
+  /* courses, offset per row, with a wobble while you lean on it */
+  g.strokeStyle = 'rgba(38,44,56,0.55)';
+  g.lineWidth = 2;
+  var rows = Math.round(w.h / (TILE * 0.5));
+  for (var r = 0; r <= rows; r++) {
+    var y = w.y + r * (w.h / rows) + (t ? Math.sin((r + RT.frame * 0.35) * 1.7) * t * 1.6 : 0);
+    g.beginPath(); g.moveTo(w.x, y); g.lineTo(w.x + w.w, y); g.stroke();
+    var mx = w.x + ((r % 2) ? w.w * 0.5 : w.w * 0.25);
+    g.beginPath(); g.moveTo(mx, y); g.lineTo(mx, y + w.h / rows); g.stroke();
+  }
+
+  /* hazard chevrons down the face you walk into */
+  g.save();
+  g.beginPath(); g.rect(w.x, w.y, w.w, w.h); g.clip();
+  for (var c = -2; c < rows + 2; c++) {
+    g.fillStyle = (c % 2) ? 'rgba(255,210,63,0.85)' : 'rgba(30,34,44,0.85)';
+    var cy = w.y + c * 26;
+    g.beginPath();
+    g.moveTo(w.x + w.w - 9, cy);
+    g.lineTo(w.x + w.w, cy + 13);
+    g.lineTo(w.x + w.w, cy + 26);
+    g.lineTo(w.x + w.w - 9, cy + 13);
+    g.closePath(); g.fill();
+  }
+  g.restore();
+
+  /* cracks that open as you lean, then blow through */
+  if (t > 0.05 || dissolve > 0) {
+    var k = Math.max(t, dissolve);
+    g.strokeStyle = 'rgba(255,255,255,' + (0.35 + k * 0.5).toFixed(3) + ')';
+    g.lineWidth = 1 + k * 2;
+    for (var s = 0; s < 5; s++) {
+      var sy = w.y + w.h * (0.18 + s * 0.16);
+      g.beginPath();
+      g.moveTo(w.x + w.w * 0.5, sy);
+      var px = w.x + w.w * 0.5, py = sy;
+      for (var seg = 0; seg < 4; seg++) {
+        px += (((w.seed + s * 13 + seg * 7) % 9) - 4) * k * 1.6;
+        py += (((w.seed + s * 5 + seg * 11) % 7) - 3) * k * 2.2;
+        g.lineTo(px, py);
+      }
+      g.stroke();
+    }
+  }
+
+  /* a rim of light while it gives way */
+  if (dissolve > 0) {
+    g.globalAlpha = 1;
+    g.strokeStyle = 'rgba(255,255,255,' + (1 - dissolve).toFixed(3) + ')';
+    g.lineWidth = 3;
+    g.strokeRect(w.x - 1, w.y - 1, w.w + 2, w.h + 2);
+  }
+  g.restore();
+}
+
 function startLevel(n) {
   n = clamp(n | 0, 1, 99);
   var def = RT.LEVELS[n];
@@ -4494,6 +4691,7 @@ function startLevel(n) {
   player.x = spawnPoint.x;
   player.y = spawnPoint.y;
   player.jumpsLeft = 0;
+  setupBackWall();
   snapCamera();
 
   setScreen('play');
@@ -4919,6 +5117,7 @@ function fixedStep() {
   updateEntities(DT);
   carryPlayer();
   updatePlayer(DT);
+  if (!player.dead) backWallUpdate(DT);
   if (!player.dead) {
     entityTouches();
     hazardCheck();
@@ -4944,6 +5143,7 @@ function drawWorld(g) {
   }
   drawTileLayerStatic(g);
   drawTileLayerDynamic(g);
+  drawBackWall(g);
   drawEntityLayer(g, 'main');
   drawPlayer(g);
   drawParticles(g);

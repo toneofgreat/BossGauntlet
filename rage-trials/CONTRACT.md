@@ -721,3 +721,32 @@ exactly as documented and every track name it lists still exists. Everything bel
   AnalyserNode for three seconds, compare averages.
 - **A bar that does not add up is a silent bug**, so every pattern was checked: each voice's step
   count must divide by 16 (or by 12 for `mischief`). All 16 tracks pass.
+
+### Amendment 2026-09-29 — THE BACK WALL (engine.js section 14.9)
+
+Every trial now carries a wall a couple of tiles behind its spawn. It advertises exactly
+what it does and then betrays it: walking back into it **stops you**, and leaning on it
+takes you **through** it and **skips the trial**.
+
+- **Placement is derived, never authored.** `setupBackWall()` runs inside `startLevel()`
+  after the spawn is set. It scans up to 8 tiles left of the spawn column, at the player's
+  head and feet rows, for the first solid tile. If that solid is within 1.45 tiles of the
+  spawn the wall **dresses it** (`own:false`) and adds no second collider, which is trial
+  12's case; otherwise the wall is its own slab (`own:true`) 2.2 tiles behind the spawn and
+  does its own stopping. No level file changed and no level file may place one.
+- **One-way, and a band, not a column.** The slab only pushes a player whose centre is to
+  the RIGHT of it, so a route that legitimately travels leftward past that column later is
+  never blocked, and nobody can be crushed against geometry. Its height is 7.5 tiles above
+  the spawn and 3.5 below rather than the full column, because trial 12 stacks its acts in
+  bands at different rows and a full-height slab at the start column would cut through them.
+- **Arming is intent, not contact.** `press` grows only while the BACK key is held against
+  it (the key that actually walks you backwards, so a reversed-controls trench does not
+  disarm it) and decays at 2.5x when released. At `BACKWALL_PHASE_S` (0.6 s) it dissolves
+  and calls `winLevel()`: a skip is a real clear, it unlocks the next trial exactly as the
+  goal flag does. `RT.emit('wallskip', n)` fires alongside.
+- **New API:** `RT.backWall()` returns the live wall record (`x,y,w,h,own,press,phase`) or
+  null. Read-only for levels; it is the test seam.
+- **Gate:** `node rage-trials/tools/wallcheck.js` proves, for all 12 trials, that the wall
+  exists, that walking back is stopped by it, and that leaning skips the trial, plus that a
+  240-frame forward run never trips it. `tools/playtest.js all` is unchanged by it: still
+  12 ok with level07 the one open route.
