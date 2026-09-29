@@ -532,6 +532,10 @@ export function clear() {
   partsById.clear();
   dynamicIds.clear();
   lampLights.clear();
+  // InstancedMesh.dispose() only dispatches its `dispose` event, which is what frees the
+  // renderer's instanceMatrix/instanceColor GPU buffers, plus its morphTexture. The shared
+  // geometry and the cached material are untouched, so the cross-Place caches survive.
+  for (const m of instancedMeshes) { try { m.dispose(); } catch { /* already gone */ } }
   instancedMeshes.length = 0;
   colliderMotionMirror.clear();
   nextRuntimeSeq = 1;

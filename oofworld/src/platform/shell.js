@@ -98,6 +98,12 @@ const PLACES = [
     module: "../games/speed/game.js",   data: "../games/speed/place.json" },
   { slug: "battles",   hidden: false, name: "Battles",                  icon: "⚔️", portalColor: "#c0392b",
     module: "../games/battles/game.js", data: "../games/battles/place.json" },
+  // Spec 25 §18: landed hidden and flipped visible once validate was green (0 errors) and
+  // scenario:showdown passed every check but this machine's load-budget gate, which core,
+  // demo and battles all trip at clean HEAD too. buildPortals filters on
+  // portalColor && !hidden, so the Hub grows its arch and NEW! ribbon from this row.
+  { slug: "showdown", hidden: false, name: "Showdown",                 icon: "🏆", portalColor: "#9b59b6",
+    module: "../games/showdown/game.js", data: "../games/showdown/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];

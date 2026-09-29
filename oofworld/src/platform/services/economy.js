@@ -30,6 +30,15 @@ export const SOURCE_CAPS = Object.freeze({
   tycoon: 1200,
   bossfight: 700,
   speed: 1500,     // spec 24 §6/§11 — first-reach zone awards; max single 1500 (Big Bang)
+  // spec 25 §13.4. Sized to the worst HONEST minute, re-derived here rather than
+  // believed: the lobby obby's six first-clear rungs are 10 + 20 + 40 + 80 + 150 + 300 =
+  // 600 and all of them can land inside one rolling window, a round win pays 25, and two
+  // wins in a minute is impossible (a 240 s cap plus a 40 s intermission), so 600 + 25 =
+  // 625 is the ceiling and 700 covers 600 + 2 x 25 with headroom. Badge bonuses are not
+  // in that total: they are paid under the uncapped `badge` token above. Without this row
+  // the "*" fallback of 100 applies and a player clearing Dilly Impossible then `error`
+  // would watch their largest reward in the Place silently truncate.
+  showdown: 700,
 });
 
 const REASON_RE = /^[a-z][a-z0-9:._-]*$/;

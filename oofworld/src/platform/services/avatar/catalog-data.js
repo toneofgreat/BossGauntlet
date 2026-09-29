@@ -1619,6 +1619,159 @@ export const PLACE_REWARDS = [
       particles: null,
     },
   },
+  // ---- 2026-09-28: Showdown's two hats and the champion wings (spec 25 §10.1, §13.2) --
+  //
+  // All three are grantOnly with price null, per §3.2's pairing rule: nothing here is for
+  // sale in the Catalog. The hats are sold by Showdown's own kiosk, which calls
+  // economy.spend(1000 | 10000, "showdown:hat_...") and only then grants the row with
+  // grantItem(id, "showdown"), so the price lives in that Place's config.js and this file
+  // holds the appearance alone. That is also why the three rows have to exist HERE:
+  // grantItem answers { ok:false, reason:"unknown" } for a row that is missing, and that
+  // object IS TRUTHY, so without them a Place testing the result loosely would take
+  // 10,000 Oofbux and record a fedora that nobody is wearing.
+  //
+  // Showdown also reads ownership back with avatar.owns(id) so that an owned row is never
+  // a BUY target twice. These ids are therefore load-bearing and may never be renamed: a
+  // granted id is stored in the profile of every player who earned it.
+  {
+    // Absurdly heavy and entirely gold, which is the whole joke: a fat brim, a dark band
+    // and a tall crown, every prim in the `gold` material so it catches light from any
+    // angle, with one slow ring so it reads as a trophy rather than as a yellow box.
+    id: "hat_golden", name: "Golden Hat", type: "hat",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "showdown",
+    appearance: {
+      prims: [
+        { shape: "cylinder", size: [1, 0.08, 1], offset: [0, 0.04, 0], rotation: [0, 0, 0],
+          color: "#e0b53a", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "torus", size: [0.5, 0.06, 0], offset: [0, 0.08, 0], rotation: [0, 0, 0],
+          color: "#f7c948", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.64, 0.62, 0.64], offset: [0, 0.39, 0], rotation: [0, 0, 0],
+          color: "#f7c948", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.67, 0.14, 0.67], offset: [0, 0.2, 0], rotation: [0, 0, 0],
+          color: "#8c6a12", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "dome", size: [0.66, 0.24, 0.66], offset: [0, 0.68, 0], rotation: [0, 0, 0],
+          color: "#f7c948", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.3, 0.05, 0.3], offset: [0, 0.86, 0], rotation: [0, 0, 0],
+          color: "#e0b53a", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.16, 0.16, 0.06], offset: [0, 0.2, -0.34], rotation: [0, 0, 0],
+          color: "#8c6a12", material: "gold", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "diamond", size: [0.13, 0.17, 0.13], offset: [0, 0.2, -0.38], rotation: [0, 0, 0],
+          color: "#f2f4fa", material: "glass", transparency: 0.2,
+          spin: 0, bob: null, flicker: null },
+        { shape: "star", size: [0.2, 0.2, 0.05], offset: [0, 0.95, 0], rotation: [0, 0, 0],
+          color: "#fff4c8", material: "neon", transparency: 0,
+          spin: 45, bob: { amp: 0.04, hz: 0.5 }, flicker: null },
+        { shape: "ring", size: [1.18, 1.18, 0.05], offset: [0, 0.08, 0], rotation: [90, 0, 0],
+          color: "#f7c948", material: "gold", transparency: 0.4,
+          spin: 20, bob: null, flicker: null },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // "Every colour at once, cycling slowly" is what the kiosk promises, and §3.3 cannot
+    // animate a colour: a prim gets `spin`, `bob` and `flicker` and nothing else, and
+    // `color` is one hex read once when the rig builds the item. So the rainbow is
+    // AUTHORED rather than animated - seven hatband segments, one per colour, evenly
+    // spaced around the crown - and the slow cycle is two counter-spinning rings, which is
+    // motion the schema can actually express. The felt stays near-white so the seven read
+    // as colours instead of as a smudge.
+    //
+    // Each segment sits at radius 0.33 with its own yaw, so its face is tangent to the
+    // crown rather than flat on. The yaws are normalised into +/-180 because a box is
+    // symmetric under a half turn: 154.3 draws the same segment -205.7 would.
+    id: "hat_rainbow_fedora", name: "Rainbow Fedora", type: "hat",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "showdown",
+    appearance: {
+      prims: [
+        { shape: "cylinder", size: [1.18, 0.06, 1.18], offset: [0, 0.03, 0], rotation: [0, 0, 0],
+          color: "#f2f4fa", material: "plastic", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "torus", size: [0.59, 0.05, 0], offset: [0, 0.06, 0], rotation: [0, 0, 0],
+          color: "#c7cdd9", material: "plastic", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.68, 0.54, 0.68], offset: [0, 0.33, 0], rotation: [0, 0, 0],
+          color: "#f2f4fa", material: "plastic", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "dome", size: [0.68, 0.2, 0.68], offset: [0, 0.58, 0], rotation: [0, 0, 0],
+          color: "#e9edf5", material: "plastic", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [0.33, 0.15, 0], rotation: [0, 0, 0],
+          color: "#d94436", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [0.206, 0.15, 0.258], rotation: [0, -51.4, 0],
+          color: "#e8641b", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [-0.073, 0.15, 0.322], rotation: [0, -102.9, 0],
+          color: "#f7c948", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [-0.297, 0.15, 0.143], rotation: [0, -154.3, 0],
+          color: "#3ddc84", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [-0.297, 0.15, -0.143], rotation: [0, 154.3, 0],
+          color: "#35a3e0", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [-0.073, 0.15, -0.322], rotation: [0, 102.9, 0],
+          color: "#4b56d2", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.26, 0.15, 0.1], offset: [0.206, 0.15, -0.258], rotation: [0, 51.4, 0],
+          color: "#ff36c8", material: "neon", transparency: 0,
+          spin: 0, bob: null, flicker: null },
+        { shape: "ring", size: [1.34, 1.34, 0.05], offset: [0, 0.07, 0], rotation: [90, 0, 0],
+          color: "#ff36c8", material: "neon", transparency: 0.45,
+          spin: 24, bob: null, flicker: null },
+        { shape: "ring", size: [0.96, 0.96, 0.05], offset: [0, 0.62, 0], rotation: [90, 0, 0],
+          color: "#35e0e0", material: "neon", transparency: 0.45,
+          spin: -18, bob: null, flicker: null },
+        { shape: "star", size: [0.22, 0.22, 0.05], offset: [0, 0.16, -0.4], rotation: [0, 0, 0],
+          color: "#ffffff", material: "neon", transparency: 0,
+          spin: 60, bob: null, flicker: null },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // The 1,000-win reward, and the only half of "fly in any game" that survives a Place
+    // boundary: flight itself is Place-local (spec 25 §13.2), and this is the part that is
+    // worn everywhere.
+    //
+    // It is an `aura`, and that is forced rather than preferred. EQUIP_SLOTS is closed to
+    // face/hat/gear/aura/trail/shirt/pants and the rig builds exactly four accessory
+    // anchors - hat on the head, gear on the right ARM, shirt and pants on the torso.
+    // There is no back anchor, so a `wings` type would never equip or render at all, and a
+    // `gear` type would strap the wings to a hand. An aura is drawn by effects.js around
+    // the whole avatar and needs no new anchor.
+    //
+    // The id keeps a `wings_` prefix rather than the `aura_` one §3.3's table lists,
+    // because spec 25 §13.2 and that Place's frozen config.js both pin the exact string
+    // "wings_champion", and a granted id lives in the profile of everyone who earned it:
+    // this row may be re-skinned forever but never renamed. It still matches §3.2's id
+    // regex, and it is the one row in this file whose prefix is not its type.
+    //
+    // Shape, given that an aura is sprites and not geometry: two counter-sweeping arcs of
+    // gold-white motes at shoulder and head height, which is where a wing is looked for
+    // and which reads as a wingbeat from behind, over two slow ground rings and one
+    // breathing core above the head. 26 sprites plus the core, well under the Supernova
+    // aura's 46.
+    id: "wings_champion", name: "Champion Wings", type: "aura",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "showdown",
+    appearance: {
+      motion: "pulse", count: 0, rate: 0, colors: ["#fff4c8", "#f7c948", "#ffffff"],
+      size: [0.22,0.22], lifetime: 1.8, radius: 1.5, speed: 2.2, height: 0.12, bob: 0, wobble: 0,
+      rings: 2, core: true, coreSize: 0.85, coreHeight: 3.2, sub: null,
+      subs: [
+        {"motion":"orbit","spectrum":true,"count":14,"speed":-95,"radius":2,"height":2.6,"size":[0.3,0.3],"bob":0.45},
+        {"motion":"orbit","spectrum":true,"count":12,"speed":115,"radius":1.6,"height":3.2,"size":[0.24,0.24],"bob":0.35}
+      ],
+    },
+  },
   // region:place-rewards:end
 ];
 

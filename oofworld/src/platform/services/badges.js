@@ -130,6 +130,36 @@ export const BADGES = Object.freeze([
   B("battles.sword_thorn", "Gardener", "🌹", "Unlock Thornheart (5,000 kills)."),
   B("battles.sword_dummy", "Instructor", "🎯", "Unlock the Trainer's Cleaver (8,000 kills)."),
   B("battles.sword_meteor", "Skyfall", "☄️", "Unlock the Meteorbrand (12,500 kills)."),
+
+  // showdown (spec 25 §13.3), transcribed from that Place's own config.js BADGES table,
+  // whose comment names this exact append. Place code passes the bare suffix and
+  // createCtxApi prefixes it, so award("first-win") lands here as "showdown.first-win";
+  // an id missing from this array logs an unknown badge, returns false, and the badge
+  // never exists at all. Oofbux: these carry only the flat BADGE_AWARD_OOFBUX bonus,
+  // paid under the uncapped `badge` source token, so they never eat the Place's own
+  // SOURCE_CAPS.showdown window, and the Place neither pays nor toasts a second time.
+  //
+  // The win ladder is 1 / 10 / 100 / 1,000 because 1,000 lifetime wins is also what
+  // derives the flight unlock and the Catalog wings, so `wins-1000` and that unlock are
+  // the same milestone seen twice. `photo-finish` is deliberately a LAST-STANDING win
+  // under five seconds and not any win under five seconds: a round that ends at the
+  // 240 s cap always finishes with the clock at zero, so the other reading would score
+  // this "secret" badge on every single cap expiry, which is the most routine ending the
+  // Place has.
+  B("showdown.first-win", "First Showdown", "🏆", "Win your first round of Showdown."),
+  B("showdown.wins-10", "Still Standing", "🥇", "Win 10 rounds of Showdown."),
+  B("showdown.wins-100", "Centurion", "🎖️", "Win 100 rounds of Showdown."),
+  B("showdown.wins-1000", "Winged", "🕊️", "Win 1,000 rounds and earn your wings."),
+  B("showdown.axe-oath", "The Axe Oath", "🪓", "Spend 100 Fighting Points on the starting axe."),
+  B("showdown.win-forest", "Deep Wood", "🌳", "Win a round in the Giant Forest."),
+  B("showdown.win-city", "Street Level", "🏙️", "Win a round in the City."),
+  B("showdown.win-forgotten", "Older Streets", "🏛️", "Win a round in the Forgotten City."),
+  B("showdown.map-sweep", "Three Grounds", "🗺️", "Win a round on all three grounds."),
+  B("showdown.warden-breaker", "Warden Breaker", "👁️", "Break all three Rogue Wardens in one round."),
+  B("showdown.obby-six", "Six Stages Up", "🪜", "Clear all six stages of the lobby obby."),
+  B("showdown.error-handled", "Error Handled", "🧩", "Clear the error stage, the hardest in the lobby obby."),
+  B("showdown.untouched", "Untouched", "🛡️", "Win a round without taking a single hit.", true),
+  B("showdown.photo-finish", "Photo Finish", "⏱️", "Win with under five seconds left on the round clock.", true),
 ]);
 
 const defsById = new Map();
