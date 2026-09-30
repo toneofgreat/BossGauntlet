@@ -125,6 +125,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-toh canvas{width:100%;height:100%}
 .bg-oof{background:linear-gradient(180deg,#dceeff 0%,#9fd0f5 45%,#3f7f43 100%)}
 .bg-oof canvas{width:100%;height:100%}
+/* Magic card */
+.bg-mag{background:linear-gradient(160deg,#0b0a14 0%,#1d1a38 45%,#5a4a12 100%)}
+.bg-mag canvas{width:100%;height:100%}
 /* Tanks card */
 .bg-tnk{background:linear-gradient(135deg,#ffffff 0%,#f2f6fc 55%,#dbe7fd 100%)}
 .bg-tnk canvas{width:100%;height:100%}
@@ -135,6 +138,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="magic/index.html" class="card" data-launched="2026-09-30">
+    <div class="card-img bg-mag"><canvas id="c39"></canvas></div>
+    <div class="card-body">
+      <h2>MAGIC</h2>
+      <p>A <b>3D</b> school of sorcery, twenty-five chapters long. It starts at a mirror in the entrance hall where you build yourself out of skin, hair, eyes and robes &mdash; and every one of those has one silly option in it, so you can go to wizard school green, in a chicken suit, with a bird&rsquo;s nest on your head and one eye each colour. Then you click ENTER, a man in a shop hands you a wand, and you have a year. <b>The classes:</b> lifting feathers off desks; lighting a black staircase to find three lost keys; six ingredients into a cauldron in an order that turns the whole thing into a frog if you get it wrong; blocking bolts from six dummies that shoot back; burning a creeping vine off the greenhouse floor before it reaches the door; and a flying lesson &mdash; twelve hoops over the lawn, on a broom. Then <b>QUITTICH</b>, where you are the seeker and your entire job is to catch a walnut with wings that is faster than you and does not want to be caught. <b>Then it stops being school.</b> Three marks on a corridor wall lead to a locked door, and behind it is the man with no nose, who blocks everything you throw and can only be hit in the half second he is casting. Then transfiguration, then a duelling club where you shove a boy off the end of a stage while mending everything he breaks, then a flooded bathroom with eight sinks in it where exactly one tap has a snake scratched into the side of it. Down the pipe: <b>sixty feet of snake whose eyes kill you if you meet them</b> &mdash; put both out, then go for the mouth &mdash; and then a very polite boy who has been living inside a diary for fifty years, who cannot be hurt, only shut. <b>Then more school:</b> six bells you have to play back in order, a wilderness class where you track four creatures through the forest by their glowing footprints, and an exam where nine targets each accept exactly one spell and nothing else. Then Quittich again with <b>an iron ball that has been got at, and follows only you, all the way round the pitch</b>, and then a third time <b>in a thunderstorm</b>, with the wind shoving you two metres sideways and lightning close enough to see the grass by. And then something drags you up to a boarded-up house with two grown men in it, and the rat your friend has had in his pocket since the first week stands up, is a man, and goes straight down a hole in the floor. Outside there is a full moon, a black dog that takes your side, and something twice its size that wants to go through it to get to you. Then the cold thing with no face that every spell passes straight through, which is the one you need the <b>silver animal</b> for. Then home, to a dinner table, where an aunt says one thing too many and goes blue, then round, then out through the window and up, getting smaller. <b>Thirteen spells, a broom you never have to put down again, and YOU WIN &mdash; FOR NOW.</b> WASD and the mouse on a PC; a thumbstick and two big buttons on a phone. Every stone, robe, scale, flagstone and star in it is painted by the game while it loads &mdash; there is not a single picture file in the whole thing.</p>
+      <span class="tag" style="background:#1d1a38;color:#ffe9a8">3D &middot; 25 CHAPTERS &middot; 13 SPELLS &middot; A SCHOOL OF SORCERY</span>
+    </div>
+  </a>
   <a href="tanks.html" class="card" data-launched="2026-09-29">
     <div class="card-img bg-tnk"><canvas id="c38"></canvas></div>
     <div class="card-body">
@@ -2039,6 +2050,87 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
     ctx.fillStyle='rgba(10,20,40,.55)';ctx.fillRect(0,0,112,24);
     ctx.fillStyle='#ffd83d';ctx.font='bold 12px Arial';ctx.textAlign='left';
     ctx.fillText('🧱 BRICK LEGEND',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ---- Magic preview: the castle at night, and somebody late for a lesson ----
+(function(){
+  const c=document.getElementById('c39'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const S=Math.sin, C=Math.cos;
+  const stars=[];
+  for(let i=0;i<90;i++) stars.push({x:Math.random(),y:Math.random()*0.7,r:Math.random()*1.3+0.3,p:Math.random()*7});
+  function tower(x,bw,th,roof){
+    const gy=h*0.86;
+    ctx.fillStyle='#14121f';ctx.beginPath();ctx.rect(x-bw/2,gy-th,bw,th);ctx.fill();
+    ctx.fillStyle='#0d0b16';ctx.beginPath();
+    ctx.moveTo(x-bw/2-3,gy-th);ctx.lineTo(x+bw/2+3,gy-th);ctx.lineTo(x,gy-th-roof);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#ffca72';
+    for(let i=0;i<Math.max(2,(th/16)|0);i++){
+      const wy=gy-th+10+i*15;
+      if(wy>gy-6) break;
+      const on=((x*7+i*13)%5)>1;
+      if(on){ctx.globalAlpha=0.55+0.45*S(t*2+i+x);ctx.fillRect(x-4,wy,4,6);ctx.fillRect(x+2,wy,4,6);ctx.globalAlpha=1;}
+    }
+  }
+  function draw(){
+    t+=0.02;
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#05050e');g.addColorStop(.55,'#131132');g.addColorStop(1,'#2a2140');
+    ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+    stars.forEach(function(st){ctx.globalAlpha=0.35+0.65*Math.abs(S(t*1.4+st.p));ctx.fillStyle='#dfe6ff';ctx.beginPath();ctx.arc(st.x*w,st.y*h,st.r,0,7);ctx.fill();});
+    ctx.globalAlpha=1;
+    // the moon
+    const mx=w*0.78,my=h*0.2;
+    const mg=ctx.createRadialGradient(mx,my,2,mx,my,30);
+    mg.addColorStop(0,'rgba(255,248,220,.9)');mg.addColorStop(1,'rgba(255,248,220,0)');
+    ctx.fillStyle=mg;ctx.beginPath();ctx.arc(mx,my,30,0,7);ctx.fill();
+    ctx.fillStyle='#f6f0d8';ctx.beginPath();ctx.arc(mx,my,11,0,7);ctx.fill();
+    // the castle
+    tower(w*0.14,26,h*0.34,20);
+    tower(w*0.28,34,h*0.46,26);
+    tower(w*0.44,54,h*0.38,22);
+    tower(w*0.60,30,h*0.52,28);
+    tower(w*0.72,22,h*0.3,16);
+    ctx.fillStyle='#14121f';ctx.fillRect(0,h*0.86,w,h*0.14);
+    ctx.fillStyle='#0a0912';ctx.fillRect(0,h*0.86,w,3);
+    // somebody late for a lesson
+    const bx=((t*26)%(w+120))-60, by=h*0.34+S(t*1.7)*12;
+    ctx.save();ctx.translate(bx,by);ctx.rotate(-0.12+S(t*1.7)*0.06);
+    ctx.strokeStyle='#8a6a3a';ctx.lineWidth=2.6;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(-15,4);ctx.lineTo(16,0);ctx.stroke();
+    ctx.strokeStyle='#c9a227';ctx.lineWidth=1.2;
+    for(let i=0;i<7;i++){ctx.beginPath();ctx.moveTo(-15,4);ctx.lineTo(-26,1+i*1.4);ctx.stroke();}
+    ctx.fillStyle='#5b1220';
+    ctx.beginPath();ctx.moveTo(-7,2);ctx.lineTo(5,0);ctx.lineTo(4,-9);ctx.lineTo(-6,-8);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#e8c49a';ctx.beginPath();ctx.arc(1,-12,4,0,7);ctx.fill();
+    ctx.fillStyle='#5b1220';ctx.beginPath();
+    ctx.moveTo(-5,-14);ctx.lineTo(7,-14);ctx.lineTo(2,-26);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#c9a227';ctx.fillRect(-5,-15,12,2);
+    // the wand, and a spark on the end of it
+    ctx.strokeStyle='#d8c8a8';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(5,-6);ctx.lineTo(17,-13);ctx.stroke();
+    const sp=0.5+0.5*S(t*7);
+    const sg=ctx.createRadialGradient(18,-14,0,18,-14,9);
+    sg.addColorStop(0,'rgba(255,236,170,'+(0.85*sp+0.15)+')');sg.addColorStop(1,'rgba(255,236,170,0)');
+    ctx.fillStyle=sg;ctx.beginPath();ctx.arc(18,-14,9,0,7);ctx.fill();
+    ctx.restore();
+    // a trail of sparks behind
+    for(let i=1;i<9;i++){
+      const k=i/9, tx=bx-i*9, ty=by+S(t*1.7-k*1.4)*12+4;
+      ctx.globalAlpha=(1-k)*0.5;ctx.fillStyle='#ffe9a8';
+      ctx.beginPath();ctx.arc(tx,ty,(1-k)*2.2,0,7);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // wordmark, top-left (the plays badge owns top-right)
+    ctx.fillStyle='rgba(11,10,20,.78)';ctx.fillRect(0,0,86,24);
+    ctx.fillStyle='#ffe9a8';ctx.font='bold 13px Georgia,serif';ctx.textAlign='left';
+    ctx.fillText('MAGIC',7,16);
     requestAnimationFrame(draw);
   }
   draw();

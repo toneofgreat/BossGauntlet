@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>MAGIC</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230b0a14'/><path d='M6 26 L22 8' stroke='%23c9a227' stroke-width='3' stroke-linecap='round'/><circle cx='23' cy='7' r='3.4' fill='%23ffe9a8'/></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ink:#f3ece0; --dim:#a9a091; --gold:#c9a227; --gold-l:#ffe9a8;
+  --deep:#0b0a14; --deep2:#151327; --wine:#5b1220; --moss:#1e3a2a;
+}
+html,body{height:100%;overflow:hidden;background:#0b0a14}
+body{
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  color:var(--ink);-webkit-font-smoothing:antialiased;touch-action:none;user-select:none;
+}
+canvas{display:block}
+#gl{position:fixed;inset:0;width:100%;height:100%}
+
+/* a lens of darkness at the edges - cheap, and it reads as film */
+#vig{position:fixed;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,0) 48%,rgba(0,0,0,.55) 100%)}
+#grade{position:fixed;inset:0;pointer-events:none;z-index:3;mix-blend-mode:soft-light;opacity:.5;
+  background:linear-gradient(180deg,#2b3a6b 0%,rgba(0,0,0,0) 45%,#3a2a12 100%)}
+#flash{position:fixed;inset:0;pointer-events:none;z-index:9;background:#fff;opacity:0;transition:opacity .35s}
+
+.screen{position:fixed;inset:0;z-index:12;display:none;overflow:auto}
+.screen.show{display:block}
+.veil{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:28px 20px;
+  background:radial-gradient(ellipse at 50% 30%,rgba(28,24,48,.92) 0%,rgba(7,6,12,.97) 70%)}
+
+h1.title{font-size:clamp(46px,12vw,116px);letter-spacing:clamp(10px,3.4vw,30px);font-weight:400;
+  color:var(--gold-l);text-shadow:0 0 28px rgba(201,162,39,.55),0 6px 0 rgba(0,0,0,.5);margin-left:.18em}
+.kicker{font-size:12px;letter-spacing:6px;color:var(--dim);text-transform:uppercase}
+.lede{max-width:640px;text-align:center;line-height:1.7;color:#d8cfbe;font-size:16px}
+
+.btn{cursor:pointer;border:none;outline:none;font:inherit;font-size:18px;letter-spacing:4px;
+  background:linear-gradient(180deg,#c9a227,#8c6d12);color:#1a1405;font-weight:700;
+  padding:15px 44px;border-radius:3px;box-shadow:0 5px 0 #5c4708,0 10px 24px rgba(0,0,0,.5);
+  transition:transform .08s,box-shadow .12s,filter .12s}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 #5c4708}
+.btn.ghost{background:rgba(255,255,255,.05);color:var(--ink);box-shadow:0 0 0 1px rgba(201,162,39,.5) inset;font-weight:400}
+.btn.small{font-size:13px;letter-spacing:2px;padding:10px 20px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center}
+a.home{position:fixed;left:14px;top:12px;z-index:14;font-size:12px;letter-spacing:2px;color:#7d746a;text-decoration:none}
+a.home:hover{color:var(--gold)}
+
+/* ---------------- the mirror: making your wizard ---------------- */
+#make .veil{justify-content:flex-start;padding-top:18px}
+.makewrap{display:flex;gap:26px;align-items:stretch;width:min(1120px,96vw);flex-wrap:wrap;justify-content:center}
+.mirror{flex:1 1 360px;min-width:300px;max-width:520px;aspect-ratio:3/4;border-radius:200px 200px 14px 14px;
+  border:3px solid rgba(201,162,39,.55);box-shadow:0 0 60px rgba(201,162,39,.16) inset,0 18px 50px rgba(0,0,0,.6);
+  overflow:hidden;position:relative;background:#07060c}
+#mirrorCv{width:100%;height:100%;display:block}
+.mirror .plate{position:absolute;left:0;right:0;bottom:0;padding:8px;text-align:center;font-size:11px;
+  letter-spacing:4px;color:var(--dim);background:linear-gradient(0deg,rgba(0,0,0,.75),rgba(0,0,0,0))}
+.opts{flex:1 1 420px;min-width:300px;max-width:520px;display:flex;flex-direction:column;gap:12px}
+.opt{border:1px solid rgba(201,162,39,.25);border-radius:8px;padding:11px 13px;background:rgba(255,255,255,.025)}
+.opt h3{font-size:11px;letter-spacing:4px;color:var(--gold);font-weight:400;margin-bottom:9px;text-transform:uppercase}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:38px;height:38px;border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,.14);
+  transition:transform .1s,border-color .12s}
+.sw:hover{transform:scale(1.08)}
+.sw.on{border-color:var(--gold-l);box-shadow:0 0 0 3px rgba(201,162,39,.3)}
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{cursor:pointer;font:inherit;font-size:12px;letter-spacing:1.5px;color:var(--ink);padding:7px 12px;border-radius:20px;
+  border:1px solid rgba(201,162,39,.3);background:rgba(0,0,0,.25);transition:background .12s,border-color .12s}
+.chip:hover{border-color:var(--gold)}
+.chip.on{background:linear-gradient(180deg,#c9a227,#8c6d12);color:#1a1405;border-color:transparent;font-weight:700}
+.chip.silly{border-style:dashed}
+.chip.silly::after{content:" ?";opacity:.6}
+.namebox{font:inherit;font-size:19px;letter-spacing:3px;text-align:center;width:100%;color:var(--ink);
+  padding:10px;border:1px solid rgba(201,162,39,.3);border-radius:6px;background:rgba(0,0,0,.3);outline:none}
+.namebox:focus{border-color:var(--gold)}
+
+/* ---------------- chapter board ---------------- */
+.board{width:min(980px,96vw);display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.ch{border:1px solid rgba(201,162,39,.22);border-radius:7px;padding:10px 12px;background:rgba(255,255,255,.02);
+  cursor:pointer;text-align:left;font:inherit;color:var(--ink);transition:border-color .12s,transform .08s}
+.ch:hover{border-color:var(--gold)}
+.ch:active{transform:translateY(2px)}
+.ch b{display:block;font-size:13px;letter-spacing:1px}
+.ch i{display:block;font-style:normal;font-size:10px;letter-spacing:2px;color:var(--dim);margin-top:4px}
+.ch.done{border-color:rgba(90,160,110,.5)}
+.ch.done i{color:#8fce9f}
+.ch.now{border-color:var(--gold-l);box-shadow:0 0 22px rgba(201,162,39,.18)}
+.ch.locked{opacity:.34;cursor:not-allowed}
+.ch.locked:hover{border-color:rgba(201,162,39,.22)}
+
+/* ---------------- in play ---------------- */
+#hud{position:fixed;inset:0;z-index:5;pointer-events:none}
+#chapTag{position:absolute;left:16px;top:14px;font-size:11px;letter-spacing:4px;color:rgba(255,255,255,.55)}
+#goal{position:absolute;left:16px;top:34px;font-size:15px;letter-spacing:1px;color:var(--gold-l);max-width:44vw;
+  text-shadow:0 2px 8px #000}
+#tally{position:absolute;right:16px;top:14px;text-align:right;font-size:13px;letter-spacing:2px;color:#e6dcc8;text-shadow:0 2px 8px #000}
+#tally b{color:var(--gold-l)}
+#spellbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:8px}
+.slot{width:60px;height:60px;border-radius:9px;border:1px solid rgba(201,162,39,.35);background:rgba(8,7,14,.6);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:auto;cursor:pointer}
+.slot.on{border-color:var(--gold-l);box-shadow:0 0 18px rgba(201,162,39,.35);background:rgba(40,32,10,.7)}
+.slot .g{font-size:20px;line-height:1}
+.slot .n{font-size:8px;letter-spacing:1px;color:var(--dim)}
+.slot .k{position:absolute;margin-top:-52px;margin-left:44px;font-size:9px;color:var(--dim)}
+#castbar{position:absolute;left:50%;bottom:88px;transform:translateX(-50%);width:200px;height:5px;border-radius:3px;
+  background:rgba(255,255,255,.12);overflow:hidden;display:none}
+#castbar i{display:block;height:100%;width:0;background:var(--gold-l)}
+#say{position:absolute;left:50%;bottom:104px;transform:translateX(-50%);width:min(760px,92vw);
+  background:rgba(6,5,11,.86);border:1px solid rgba(201,162,39,.3);border-radius:9px;padding:14px 18px;display:none;
+  pointer-events:auto;cursor:pointer}
+#say .who{font-size:11px;letter-spacing:4px;color:var(--gold);margin-bottom:5px}
+#say .what{font-size:17px;line-height:1.55;color:#eee4d2}
+#say .more{position:absolute;right:12px;bottom:6px;font-size:10px;letter-spacing:2px;color:var(--dim)}
+#toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:30px;letter-spacing:8px;
+  color:var(--gold-l);text-shadow:0 0 24px rgba(201,162,39,.6),0 4px 12px #000;opacity:0;transition:opacity .25s;text-align:center}
+#hurt{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;transition:opacity .25s;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,0) 40%,rgba(150,10,10,.6) 100%)}
+#hearts{position:absolute;right:16px;top:38px;display:flex;gap:5px}
+.heart{width:17px;height:17px;background:#c0392b;clip-path:polygon(50% 100%,0 35%,15% 5%,50% 25%,85% 5%,100% 35%);
+  box-shadow:0 0 8px rgba(0,0,0,.7)}
+.heart.off{background:#3a3a44}
+
+/* touch controls */
+.tc{position:absolute;pointer-events:auto;display:none}
+body.touch .tc{display:block}
+#stick{left:16px;bottom:16px;width:132px;height:132px;border-radius:50%;border:1px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.2)}
+#nub{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
+  background:rgba(201,162,39,.5)}
+#castBtn{right:16px;bottom:22px;width:96px;height:96px;border-radius:50%;border:1px solid rgba(201,162,39,.6);
+  background:radial-gradient(circle at 40% 35%,rgba(255,233,168,.5),rgba(140,109,18,.4));color:#fff;
+  font:inherit;font-size:12px;letter-spacing:2px}
+#jumpBtn{right:124px;bottom:44px;width:72px;height:72px;border-radius:50%;border:1px solid rgba(255,255,255,.25);
+  background:rgba(0,0,0,.3);color:#fff;font:inherit;font-size:11px;letter-spacing:2px}
+#pauseBtn{right:14px;bottom:auto;top:12px;width:40px;height:40px;border-radius:7px;border:1px solid rgba(255,255,255,.22);
+  background:rgba(0,0,0,.35);color:#fff;font-size:15px;display:block;pointer-events:auto;position:absolute}
+#kbhint{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);font-size:10px;letter-spacing:2px;
+  color:rgba(255,255,255,.3);white-space:nowrap}
+body.touch #kbhint{display:none}
+
+/* ---------------- interstitials ---------------- */
+.cardbox{width:min(720px,94vw);text-align:center;display:flex;flex-direction:column;gap:18px;align-items:center}
+.cardbox h2{font-size:clamp(28px,6vw,52px);letter-spacing:8px;color:var(--gold-l);font-weight:400}
+.cardbox p{font-size:16px;line-height:1.7;color:#d8cfbe}
+.learned{border:1px solid rgba(201,162,39,.4);border-radius:10px;padding:14px 20px;background:rgba(201,162,39,.07)}
+.learned .g{font-size:34px}
+.learned b{display:block;font-size:19px;letter-spacing:5px;color:var(--gold-l);margin-top:4px}
+.learned span{display:block;font-size:12px;color:var(--dim);letter-spacing:1px;margin-top:5px}
+#loading{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:#0b0a14;
+  flex-direction:column;gap:14px}
+#loading .l{font-size:12px;letter-spacing:8px;color:var(--gold)}
+.spin{width:36px;height:36px;border-radius:50%;border:2px solid rgba(201,162,39,.25);border-top-color:var(--gold-l);
+  animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.err{max-width:680px;color:#ff9c8f;font-size:13px;line-height:1.6;text-align:center;padding:20px}
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div id="grade"></div>
+<div id="vig"></div>
+<div id="flash"></div>
+<div id="hurt"></div>
+
+<!-- ============================== HUD ============================== -->
+<div id="hud">
+  <div id="chapTag">&nbsp;</div>
+  <div id="goal">&nbsp;</div>
+  <div id="tally">&nbsp;</div>
+  <div id="hearts"></div>
+  <div id="spellbar"></div>
+  <div id="castbar"><i></i></div>
+  <div id="say"><div class="who"></div><div class="what"></div><div class="more">CLICK / SPACE</div></div>
+  <div id="toast"></div>
+  <button class="tc" id="pauseBtn">II</button>
+  <div class="tc" id="stick"><div id="nub"></div></div>
+  <button class="tc" id="jumpBtn">UP</button>
+  <button class="tc" id="castBtn">CAST</button>
+  <div id="kbhint">WASD MOVE &middot; MOUSE LOOK &middot; CLICK CAST &middot; 1-6 PICK SPELL &middot; SHIFT RUN &middot; SPACE JUMP &middot; ESC MENU</div>
+</div>
+
+<!-- ============================== TITLE ============================== -->
+<div id="titleScreen" class="screen show">
+  <a class="home" href="../index.html">&larr; PLATYFY</a>
+  <div class="veil">
+    <div class="kicker">A school of sorcery, and the year it all went wrong</div>
+    <h1 class="title">MAGIC</h1>
+    <p class="lede">You will be given a wand, twenty-five chapters, thirteen spells and a broom.
+      There is a man with no nose looking for you, a snake under the school, a boy who lives in a book,
+      and a rat who is not a rat. Somewhere in there you have to pass Potions.</p>
+    <div class="row">
+      <button class="btn" id="beginBtn">BEGIN</button>
+      <button class="btn ghost small" id="continueBtn">CONTINUE</button>
+    </div>
+    <div class="kicker" id="saveNote">&nbsp;</div>
+  </div>
+</div>
+
+<!-- ============================== CHARACTER ============================== -->
+<div id="make" class="screen">
+  <div class="veil">
+    <div class="kicker">The mirror in the entrance hall</div>
+    <div class="makewrap">
+      <div class="mirror"><canvas id="mirrorCv"></canvas><div class="plate" id="mirrorPlate">TURN WITH THE MOUSE</div></div>
+      <div class="opts" id="optList"></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="enterBtn">ENTER</button>
+      <button class="btn ghost small" id="diceBtn">SURPRISE ME</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== CHAPTER BOARD ============================== -->
+<div id="boardScreen" class="screen">
+  <div class="veil">
+    <div class="kicker" id="boardKick">YOUR YEAR SO FAR</div>
+    <h1 class="title" style="font-size:clamp(28px,7vw,60px)">THE YEAR</h1>
+    <div class="board" id="board"></div>
+    <div class="row">
+      <button class="btn" id="nextChBtn">NEXT CHAPTER</button>
+      <button class="btn ghost small" id="mirrorBtn">THE MIRROR</button>
+      <button class="btn ghost small" id="wipeBtn">START THE YEAR AGAIN</button>
+    </div>
+    <div class="kicker" id="boardNote">&nbsp;</div>
+  </div>
+</div>
+
+<!-- ============================== BETWEEN CHAPTERS ============================== -->
+<div id="cardScreen" class="screen">
+  <div class="veil">
+    <div class="cardbox">
+      <div class="kicker" id="cardKick">CHAPTER</div>
+      <h2 id="cardTitle">TITLE</h2>
+      <p id="cardText"></p>
+      <div class="learned" id="cardLearn" style="display:none"><div class="g"></div><b></b><span></span></div>
+      <div class="row">
+        <button class="btn" id="cardGo">GO</button>
+        <button class="btn ghost small" id="cardBoard">THE YEAR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== PAUSE ============================== -->
+<div id="pauseScreen" class="screen">
+  <div class="veil">
+    <h2 style="font-size:40px;letter-spacing:12px;color:var(--gold-l)">PAUSED</h2>
+    <div class="row">
+      <button class="btn" id="resumeBtn">BACK TO IT</button>
+      <button class="btn ghost small" id="retryBtn">START THE CHAPTER AGAIN</button>
+      <button class="btn ghost small" id="quitBtn">THE YEAR</button>
+    </div>
+    <div class="kicker" id="pauseHint">&nbsp;</div>
+  </div>
+</div>
+
+<div id="loading"><div class="spin"></div><div class="l">LIGHTING THE CANDLES</div></div>
+
+<script type="module">
+  const boot = async () => {
+    try {
+      const m = await import('./src/game.js');
+      await m.start();
+      document.getElementById('loading').style.display = 'none';
+    } catch (e) {
+      document.getElementById('loading').innerHTML =
+        '<div class="err"><b>The candles would not light.</b><br><br>' + String(e && e.stack || e) + '</div>';
+      throw e;
+    }
+  };
+  boot();
+</script>
+</body>
+</html>
