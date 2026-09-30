@@ -227,9 +227,10 @@ var W = 1600, H = 900;                 // logical arena; the canvas scales to fi
 var TUNE = {
   tankR: 22,                           // collision radius
   tankW: 50, tankH: 35, barrel: 40,
-  playerSpeed: 205,
+  playerSpeed: 205,                    // speed 1.0; the shop multiplies this
   botSpeed: 128,                       // "slower than you"
   skilledSpeed: 205,
+  bossSpeed: 410,                      // speed 2.0: twice what you start with
   turnRate: 7.5,                       // rad/s the hull swings toward travel
   shellSpeed: 275,                     // slow on purpose: everything is dodgeable
   shellR: 7,
@@ -254,6 +255,9 @@ var RATE_LEVELS = [3.0, 2.8, 2.6, 2.4, 2.2, 2.0, 1.8, 1.6, 1.4, 1.2, 1.0, 0.8, 0
 var DMG_LEVELS = [1, 1.5, 2, 2.5, 3];
 var SHOOTER_LEVELS = [1, 2, 3, 4, 10];
 var SHOOTER_COSTS = [0, 5, 10, 20, 100];
+/* how fast you drive: 1 is where you start, 2 is what the boss does, 2.5 is past it */
+var SPEED_LEVELS = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.5];
+var SPEED_COSTS  = [0, 1,   2,   3,   4,   5,   7,   9,   11,  22,  33, 99];
 function rateCost(level) { return level; }          // level here is 1-based current level
 function dmgCost(level) { return level; }
 
@@ -275,7 +279,7 @@ var END_LEVELS = [
 
 /* ================================================================ SAVE ==== */
 var SKEY = "tanks.v1";
-var SAVE = { coins: 0, rate: 1, dmg: 1, shooters: 1, endLevel: 1, endBeaten: false, boss: false, bossBeaten: false };
+var SAVE = { coins: 0, rate: 1, dmg: 1, shooters: 1, speed: 1, endLevel: 1, endBeaten: false, boss: false, bossBeaten: false };
 function loadSave() {
   try {
     var s = JSON.parse(localStorage.getItem(SKEY));
@@ -286,12 +290,14 @@ function loadSave() {
   SAVE.rate = clamp(SAVE.rate | 0, 1, RATE_LEVELS.length);
   SAVE.dmg = clamp(SAVE.dmg | 0, 1, DMG_LEVELS.length);
   SAVE.shooters = clamp(SAVE.shooters | 0, 1, SHOOTER_LEVELS.length);
+  SAVE.speed = clamp(SAVE.speed | 0, 1, SPEED_LEVELS.length);
   SAVE.endLevel = clamp(SAVE.endLevel | 0, 1, END_LEVELS.length);
 }
 function saveNow() { try { localStorage.setItem(SKEY, JSON.stringify(SAVE)); } catch (e) {} }
 function myCooldown() { return RATE_LEVELS[SAVE.rate - 1]; }
 function myDamage() { return DMG_LEVELS[SAVE.dmg - 1]; }
 function myShooters() { return SHOOTER_LEVELS[SAVE.shooters - 1]; }
+function mySpeed() { return SPEED_LEVELS[SAVE.speed - 1]; }
 
 /* =============================================================== AUDIO ==== */
 var AU = {
@@ -387,7 +393,7 @@ var G = null;
 function makeTank(team, kind, x, y, opts) {
   opts = opts || {};
   var isYou = kind === "you";
-  var speed = isYou ? TUNE.playerSpeed : (kind === "skilled" ? TUNE.skilledSpeed : kind === "boss" ? 96 : TUNE.botSpeed);
+  var speed = isYou ? TUNE.playerSpeed * mySpeed() : (kind === "skilled" ? TUNE.skilledSpeed : kind === "boss" ? TUNE.bossSpeed : TUNE.botSpeed);
   return {
     team: team, kind: kind, boss: kind === "boss",
     x: x, y: y, vx: 0, vy: 0,
@@ -756,7 +762,8 @@ function aiTank(t, dt) {
 
   var skilled = t.kind === "skilled" || t.boss;
   var d = Math.hypot(target.x - t.x, target.y - t.y);
-  var want = t.boss ? 300 : skilled ? 380 : 420;
+  var want = t.boss ? (G.bossPhase === 1 ? 130 : G.bossPhase === 2 ? 430 : 300)   // charging means closing in, not speeding up
+            : skilled ? 380 : 420;
 
   /* ---- aim ---- */
   var aimAt = skilled ? leadAim(t, target, TUNE.shellSpeed) : angTo(t.x, t.y, target.x, target.y);
@@ -823,7 +830,7 @@ function bossBrain(b, dt) {
       say("IT IS DIGGING IN", 1.2);
     }
   }
-  b.speed = G.bossPhase === 1 ? 210 : 96;
+  b.speed = TUNE.bossSpeed;            // always twice your starting speed
   aiTank(b, dt);
 }
 
@@ -1405,8 +1412,9 @@ function buildModes() {
     "", function () { playRound("end", SAVE.endLevel); }));
   if (SAVE.boss) {
     list.appendChild(modeButton(GLYPH.boss, "THE TANK BOSS",
-      SAVE.bossBeaten ? "Beaten once. Do it again · lose and you start it over."
-                      : "A new arena · lose once and you start it over.", "boss", function () { playRound("boss"); }));
+      SAVE.bossBeaten ? "Skilled, speed 2, ten barrels at the end · beaten once, do it again"
+                      : "A new arena · a skilled tank at speed 2 · lose once and you start it over",
+      "boss", function () { playRound("boss"); }));
   } else {
     list.appendChild(modeButton(GLYPH.lock, "LOCKED", "Beat end mode to find out", "locked", null));
   }
@@ -1471,6 +1479,14 @@ function buildShop() {
     cost: rateCost(SAVE.rate),
     next: SAVE.rate < RATE_LEVELS.length ? RATE_LEVELS[SAVE.rate] + "s" : "",
     buy: function () { SAVE.rate++; }
+  }));
+  list.appendChild(upgradeCard({
+    name: "SPEED", level: SAVE.speed, levels: SPEED_LEVELS.length,
+    now: "You drive at speed " + mySpeed() + "."
+       + (mySpeed() < 2 ? " The tank boss drives at 2." : mySpeed() === 2 ? " Level with the tank boss." : " Faster than the tank boss."),
+    cost: SPEED_COSTS[SAVE.speed],
+    next: SAVE.speed < SPEED_LEVELS.length ? "SPEED " + SPEED_LEVELS[SAVE.speed] : "",
+    buy: function () { SAVE.speed++; }
   }));
   list.appendChild(upgradeCard({
     name: "SHOOTERS", level: SAVE.shooters, levels: SHOOTER_LEVELS.length,

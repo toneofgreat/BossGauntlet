@@ -205,6 +205,53 @@ function serve() {
   ok(ladders.rate[0] === 3 && ladders.rate[1] === 2.8 && ladders.rate[2] === 2.6 && ladders.rate[25] === 0,
     'reload runs 3.0 down to nothing', ladders.rate.slice(0, 4).join(',') + ' ... ' + ladders.rate.slice(-4).join(','));
 
+  const speed = await page.evaluate(() => {
+    const T = window.__tanks, S = T.save, out = {};
+    const base = [];
+    S.speed = 1;
+    T.start('bot'); T.setPaused(true);
+    out.playerBase = T.g().you.speed;
+    for (let l = 1; l <= 12; l++) { S.speed = l; T.start('bot'); T.setPaused(true); base.push(+(T.g().you.speed / out.playerBase).toFixed(2)); }
+    S.speed = 1;
+    out.ladder = base;
+    // the price of each step up
+    S.coins = 9999;
+    const costs = [];
+    for (let l = 1; l <= 11; l++) {
+      S.speed = l;
+      const before = S.coins;
+      document.getElementById('shopBtn').click();
+      const card = [...document.querySelectorAll('#shopList .up')].find((u) => u.querySelector('b').textContent === 'SPEED');
+      card.querySelector('.buy .btn').click();
+      costs.push(before - S.coins);
+    }
+    out.costs = costs;
+    out.maxedAt = S.speed;
+    S.speed = 1; S.coins = 0;
+    // and the boss
+    T.start('boss'); T.setPaused(true);
+    const b = T.g().foes[0];
+    out.bossSpeed = b.speed;
+    out.bossVsYou = +(b.speed / out.playerBase).toFixed(2);
+    // it dodges like a skilled tank: same test as the bots
+    T.start('boss'); T.setPaused(true);
+    const G = T.g();
+    const boss = G.foes[0];
+    G.flagRed.hp = 0; G.flagRed.down = true;
+    boss.x = 1150; boss.y = 450; boss.vx = 0; boss.vy = 0;
+    G.shells.push({ x: 650, y: 450, a: 0, vx: 275, vy: 0, team: 'blue', dmg: 1, life: 7, trail: [] });
+    for (let i = 0; i < 130 && boss.alive; i++) T.step(1);
+    out.bossDodged = boss.alive;
+    return out;
+  });
+  ok(JSON.stringify(speed.ladder) === '[1,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2,2.5]',
+    'speed goes 1 up to 2.5', speed.ladder.join(','));
+  ok(JSON.stringify(speed.costs) === '[1,2,3,4,5,7,9,11,22,33,99]',
+    'and costs 1,2,3,4,5,7,9,11,22,33,99', speed.costs.join(','));
+  ok(speed.maxedAt === 12, 'eleven steps takes you to the top', 'level ' + speed.maxedAt);
+  ok(speed.bossVsYou === 2, 'the tank boss drives at twice your starting speed', speed.bossSpeed + ' vs ' + speed.playerBase);
+  ok(speed.bossDodged, 'and it dodges a shell the way a skilled tank does');
+
   const buying = await page.evaluate(() => {
     const T = window.__tanks, S = T.save;
     S.dmg = 1; S.rate = 1; S.shooters = 1; S.coins = 0;
