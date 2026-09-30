@@ -1401,10 +1401,12 @@ function buildModes() {
   list.appendChild(modeButton(GLYPH.skilled, "SKILLED BOT",
     "Leads its shots, dodges yours, actually tries to win", "", function () { playRound("skilled"); }));
   list.appendChild(modeButton(GLYPH.end, "END MODE",
-    "Ten rungs · you are on " + SAVE.endLevel + " · one coin a win", "", function () { playRound("end", SAVE.endLevel); }));
+    "Ten rungs · you are on " + SAVE.endLevel + " · one coin a win · lose once and it all starts again",
+    "", function () { playRound("end", SAVE.endLevel); }));
   if (SAVE.boss) {
     list.appendChild(modeButton(GLYPH.boss, "THE TANK BOSS",
-      SAVE.bossBeaten ? "Beaten once. Do it again." : "A new arena. Good luck.", "boss", function () { playRound("boss"); }));
+      SAVE.bossBeaten ? "Beaten once. Do it again · lose and you start it over."
+                      : "A new arena · lose once and you start it over.", "boss", function () { playRound("boss"); }));
   } else {
     list.appendChild(modeButton(GLYPH.lock, "LOCKED", "Beat end mode to find out", "locked", null));
   }
@@ -1494,12 +1496,20 @@ function playRound(mode, level) {
   G.state = "play";
   refreshPips();
   $("hudMsg").textContent = G.msg;
+  $("deskHint").innerHTML = harshMode(mode)
+    ? "WASD MOVE &middot; MOUSE AIM &middot; CLICK OR SPACE FIRE &middot; E WALL &middot; ESC GIVES UP, AND THERE ARE NO RETRIES"
+    : "WASD MOVE &middot; MOUSE AIM &middot; CLICK OR SPACE FIRE &middot; E WALL &middot; ESC QUITS";
 }
+
+/* End mode and the boss do not hand out second chances: lose once and the run
+ * starts over from the bottom and you are put back on the main menu. */
+function harshMode(mode) { return mode === "end" || mode === "boss"; }
+var resultHome = false;
 
 function showResult() {
   G.state = "result";
   var won = G.won, mode = G.mode, level = G.level;
-  var reward = 0, unlocked = false;
+  var reward = 0, unlocked = false, wiped = false;
   if (won) {
     if (mode === "end") {
       reward = 1;
@@ -1515,7 +1525,12 @@ function showResult() {
     }
     SAVE.coins += reward;
     saveNow();
+  } else if (harshMode(mode)) {
+    wiped = mode === "end" && SAVE.endLevel > 1;
+    if (mode === "end") SAVE.endLevel = 1;       // all the way back down the ladder
+    saveNow();
   }
+  resultHome = !won && harshMode(mode);
   $("resTitle").textContent = won ? "YOU WIN" : "YOU LOSE";
   $("resTitle").className = won ? "win" : "lose";
 
@@ -1525,16 +1540,19 @@ function showResult() {
       ? (unlocked ? "Ten out of ten. The locked one is not locked any more."
                   : level === END_LEVELS.length ? "The tenth rung again. Still ten bots, still beaten."
                   : "Rung " + level + " down. Next up: " + END_LEVELS[Math.min(level, END_LEVELS.length - 1)].label + ".")
-      : "Rung " + level + " held. " + END_LEVELS[level - 1].label + " is still standing.";
+      : "Rung " + level + " held. " + END_LEVELS[level - 1].label + " is still standing, and there are no retries: "
+        + (wiped ? "end mode goes all the way back to rung one." : "end mode starts again at rung one.");
   } else if (mode === "boss") {
-    text = won ? "The big one is scrap." : "The big one is still rolling.";
+    text = won ? "The big one is scrap." : "The big one is still rolling. Start it again from the top.";
   } else {
     text = won ? "Flag down, tank down. Clean round." : "Your flag fell and then so did you.";
   }
   $("resText").textContent = text;
   $("resReward").innerHTML = reward
     ? "+" + reward + (reward === 1 ? " COIN" : " COINS") + " &middot; YOU HAVE " + SAVE.coins
-    : (won ? "NO COIN &middot; COINS COME FROM END MODE" : "&nbsp;");
+    : resultHome
+      ? (mode === "end" ? "NO RETRIES &middot; BACK TO RUNG ONE" : "NO RETRIES")
+      : (won ? "NO COIN &middot; COINS COME FROM END MODE" : "&nbsp;");
   if (reward) AU.sfx("coin");
 
   var lad = $("resLadder");
@@ -1549,7 +1567,7 @@ function showResult() {
       lad.appendChild(d);
     }
   }
-  var nextBtn = $("resNext");
+  var nextBtn = $("resNext"), menuBtn = $("resMenu");
   if (mode === "end" && won && !(level === END_LEVELS.length)) nextBtn.textContent = "RUNG " + SAVE.endLevel;
   else nextBtn.textContent = won ? "AGAIN" : "TRY AGAIN";
   nextBtn.onclick = function () {
@@ -1557,6 +1575,11 @@ function showResult() {
     if (mode === "end") playRound("end", won ? SAVE.endLevel : level);
     else playRound(mode);
   };
+  // no way back into the round: the only button out is the main menu
+  nextBtn.style.display = resultHome ? "none" : "";
+  $("resShop").style.display = resultHome ? "none" : "";
+  menuBtn.className = resultHome ? "btn" : "btn ghost small";
+  menuBtn.textContent = resultHome ? "MAIN MENU" : "MENU";
   buildModes();
   show("result");
 }
@@ -1567,7 +1590,7 @@ function bindInput() {
     var k = e.key.toLowerCase();
     IN.keys[k] = true;
     if (k === " " || k.indexOf("arrow") === 0) e.preventDefault();
-    if (k === "escape" && $("game").classList.contains("show")) { quitToModes(); }
+    if (k === "escape" && $("game").classList.contains("show")) { giveUp(); }
     if (k === "p" && $("game").classList.contains("show")) togglePause();
   });
   window.addEventListener("keyup", function (e) { IN.keys[e.key.toLowerCase()] = false; });
@@ -1669,6 +1692,22 @@ function quitToModes() {
   buildModes();
   show("modes");
 }
+function goMainMenu() {
+  paused = false;
+  buildModes();
+  show("menu");
+}
+/* walking out of an end-mode round or a boss counts as losing it */
+function giveUp() {
+  if (G && harshMode(G.mode) && (G.state === "play" || G.state === "over")) {
+    paused = false;
+    G.won = false;
+    AU.sfx("lose");
+    showResult();
+    return;
+  }
+  quitToModes();
+}
 
 /* ================================================================ MENU ==== */
 function bindMenu() {
@@ -1686,7 +1725,7 @@ function bindMenu() {
   $("codesBack").addEventListener("click", function (e) { e.preventDefault(); AU.sfx("ui"); buildModes(); show("modes"); });
   $("codeGo").addEventListener("click", tryCode);
   $("codeInput").addEventListener("keydown", function (e) { if (e.key === "Enter") tryCode(); });
-  $("resMenu").addEventListener("click", function () { AU.sfx("ui"); quitToModes(); });
+  $("resMenu").addEventListener("click", function () { AU.sfx("ui"); if (resultHome) goMainMenu(); else quitToModes(); });
   $("resShop").addEventListener("click", function () { AU.sfx("ui"); buildShop(); show("shop"); });
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", function () { setTimeout(resize, 120); });
@@ -1759,6 +1798,7 @@ window.__tanks = {
   aimAt: function (x, y) { IN.usedMouse = true; IN.mx = x; IN.my = y; },
   fire: function () { IN.firePressed = true; },
   coins: function (n) { SAVE.coins = n; saveNow(); buildShop(); buildModes(); },
+  giveUp: function () { giveUp(); },
   screen: function () { for (var i = 0; i < SCREENS.length; i++) if ($(SCREENS[i]).classList.contains("show")) return SCREENS[i]; return "?"; }
 };
 </script>

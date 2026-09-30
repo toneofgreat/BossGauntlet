@@ -298,6 +298,76 @@ function serve() {
   ok(beatTen.boss === true && beatTen.beaten === true, 'beating rung ten unlocks the locked one');
   ok(beatTen.rows.indexOf('THE TANK BOSS') === 3, 'and the sign turns into the tank boss', beatTen.rows.join(' | '));
 
+  /* ---------------------------------------------------------- no retries -- */
+  console.log('\n-- losing');
+  const losing = await page.evaluate(() => {
+    const T = window.__tanks, S = T.save, out = {};
+    function loseIn(mode, level) {
+      T.start(mode, level); T.setPaused(true);
+      const G = T.g();
+      G.flagBlue.hp = 0; G.flagBlue.down = true;
+      G.you.alive = false;                                   // and down you go
+      for (let i = 0; i < 300 && T.screen() === 'game'; i++) T.step(1);
+      const nextBtn = document.getElementById('resNext');
+      const menuBtn = document.getElementById('resMenu');
+      return {
+        screen: T.screen(),
+        title: document.getElementById('resTitle').textContent,
+        retry: getComputedStyle(nextBtn).display !== 'none',
+        shop: getComputedStyle(document.getElementById('resShop')).display !== 'none',
+        menuLabel: menuBtn.textContent,
+        text: document.getElementById('resText').textContent,
+        reward: document.getElementById('resReward').textContent
+      };
+    }
+    // end mode, high up the ladder
+    S.endLevel = 7; S.endBeaten = false; S.boss = true; S.coins = 4;
+    out.end = loseIn('end', 7);
+    out.endLevelAfter = S.endLevel;
+    out.coinsKept = S.coins;
+    document.getElementById('resMenu').click();
+    out.endLandedOn = T.screen();
+    out.ladderRowNow = document.getElementById('modeList') ? true : false;
+    // and it is really persisted, not just in memory
+    out.stored = JSON.parse(localStorage.getItem('tanks.v1')).endLevel;
+    // the boss
+    S.bossBeaten = false;
+    out.boss = loseIn('boss');
+    out.bossBeatenAfter = S.bossBeaten;
+    document.getElementById('resMenu').click();
+    out.bossLandedOn = T.screen();
+    // a plain bot is still just practice
+    S.endLevel = 5;
+    out.bot = loseIn('bot');
+    out.endLevelAfterBot = S.endLevel;
+    document.getElementById('resMenu').click();
+    out.botLandedOn = T.screen();
+    // walking out of an end round counts as losing it
+    S.endLevel = 6;
+    T.start('end', 6); T.setPaused(true); T.step(10);
+    T.giveUp();
+    out.gaveUpScreen = T.screen();
+    out.gaveUpLevel = S.endLevel;
+    out.gaveUpRetry = getComputedStyle(document.getElementById('resNext')).display !== 'none';
+    document.getElementById('resMenu').click();
+    return out;
+  });
+  ok(losing.end.title === 'YOU LOSE' && losing.endLevelAfter === 1,
+    'losing rung seven drops you back to rung one', 'endLevel ' + losing.endLevelAfter);
+  ok(losing.stored === 1, 'and that is written to the save, not just held in memory', losing.stored);
+  ok(losing.end.retry === false && losing.end.shop === false, 'no retry button on the way out');
+  ok(losing.end.menuLabel === 'MAIN MENU' && losing.endLandedOn === 'menu',
+    'the only way out is the main menu', losing.endLandedOn);
+  ok(/no retries/i.test(losing.end.text) && /NO RETRIES/.test(losing.end.reward), 'and it says so', losing.end.reward);
+  ok(losing.coinsKept === 4, 'coins you already earned are yours', losing.coinsKept + ' kept');
+  ok(losing.boss.retry === false && losing.boss.menuLabel === 'MAIN MENU' && losing.bossLandedOn === 'menu',
+    'losing to the boss is the same: no retry, straight to the main menu');
+  ok(losing.bossBeatenAfter === false, 'and a loss never marks the boss beaten');
+  ok(losing.bot.retry === true && losing.botLandedOn === 'modes' && losing.endLevelAfterBot === 5,
+    'losing to a practice bot still lets you try again and costs nothing', 'endLevel ' + losing.endLevelAfterBot);
+  ok(losing.gaveUpScreen === 'result' && losing.gaveUpLevel === 1 && losing.gaveUpRetry === false,
+    'quitting an end-mode round mid-fight counts as losing it', 'endLevel ' + losing.gaveUpLevel);
+
   /* ------------------------------------------------------------- codes -- */
   console.log('\n-- codes');
   await page.evaluate(() => { localStorage.clear(); });
