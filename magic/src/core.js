@@ -3,6 +3,8 @@
    not a chapter and not a piece of scenery lives here.
    ========================================================================= */
 import * as THREE from '../vendor/three.module.js';
+import { FX } from './fx.js';
+export { FX };
 
 export const $ = (id) => document.getElementById(id);
 export const TAU = Math.PI * 2;
@@ -28,12 +30,17 @@ export const R = {
     this.dpr = Math.min(small ? 1.25 : 2, window.devicePixelRatio || 1);
     this.renderer.setPixelRatio(this.dpr);
     this.renderer.shadowMap.enabled = !small;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.small = small;
+    this.renderer.shadowMap.type = small ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.camera = new THREE.PerspectiveCamera(58, 1, 0.08, 900);
+    // the post chain does its own tone mapping, so the renderer must not also
+    // do it: three only applies tone mapping when it draws to the canvas, and
+    // with post on, the canvas is a fullscreen quad
+    FX.init(this.renderer, small);
+    if (FX.on) this.renderer.toneMapping = THREE.NoToneMapping;
+    this.camera = new THREE.PerspectiveCamera(56, 1, 0.08, 900);
     this.clock = new THREE.Clock();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -43,6 +50,7 @@ export const R = {
     const w = window.innerWidth, h = window.innerHeight;
     this.width = w; this.height = h;
     this.renderer.setSize(w, h, false);
+    FX.setSize(w, h, this.dpr);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   },
@@ -58,7 +66,17 @@ export const R = {
       if (this.shakeT <= 0) this.shake = 0;
     }
   },
-  render() { if (this.scene) this.renderer.render(this.scene, this.camera); },
+  render(dt) { if (this.scene) FX.render(this.renderer, this.scene, this.camera, dt || 0.016); },
+  /* a hand holding the camera: never quite still, and worse when frightened */
+  breathe(dt, stress) {
+    this.bt = (this.bt || 0) + dt;
+    const s = 0.004 + (stress || 0) * 0.02;
+    const c = this.camera;
+    c.position.y += Math.sin(this.bt * 1.6) * s;
+    c.position.x += Math.sin(this.bt * 0.87 + 1.3) * s * 0.9;
+    c.position.z += Math.sin(this.bt * 0.71 + 2.2) * s * 0.7;
+    c.rotation.z += Math.sin(this.bt * 0.53) * 0.0035 + (stress || 0) * Math.sin(this.bt * 6.1) * 0.005;
+  },
   dispose(obj) {
     obj.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
@@ -229,9 +247,44 @@ export const AU = {
     src.connect(f); f.connect(g); g.connect(o.bus || this.master);
     src.start(t0); src.stop(t0 + dur + 0.03);
   },
+  /* noise with a filter that moves: whispering, breathing, dragging */
+  hiss(o) {
+    if (!this.ctx || !this.on) return;
+    const c = this.ctx, t0 = c.currentTime + (o.at || 0), dur = o.dur || 1.2;
+    const n = Math.max(1, (c.sampleRate * dur) | 0), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.sin((i / n) * Math.PI);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = 'bandpass';
+    f.Q.value = o.q || 6;
+    f.frequency.setValueAtTime(o.f || 600, t0);
+    f.frequency.linearRampToValueAtTime(o.f2 || 1500, t0 + dur);
+    const g = c.createGain();
+    const lvl = o.g === undefined ? 0.07 : o.g;
+    g.gain.setValueAtTime(lvl, t0);
+    g.gain.setValueAtTime(lvl, t0 + dur * 0.8);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(g); g.connect(o.bus || this.master);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
   sfx(name) {
     if (!this.ctx || !this.on) return;
     switch (name) {
+      case 'whisper': this.hiss({ f: 380, f2: 1700, dur: 1.5, g: 0.05, q: 9 });
+        this.hiss({ f: 900, f2: 300, dur: 1.3, g: 0.035, q: 12, at: 0.35 }); break;
+      case 'breath': this.hiss({ f: 260, f2: 900, dur: 0.9, g: 0.06, q: 3 }); break;
+      case 'creak': this.tone({ f: 118, f2: 96, dur: 1.1, type: 'sawtooth', g: 0.05, atk: 0.35 });
+        this.noise({ f: 1500, dur: 0.9, g: 0.04, filter: 'bandpass', q: 14, curve: 0.3 }); break;
+      case 'drip': this.tone({ f: 1500, f2: 420, dur: 0.16, type: 'sine', g: 0.14 });
+        this.tone({ f: 620, f2: 240, dur: 0.3, type: 'sine', g: 0.06, at: 0.02 }); break;
+      case 'heart': this.tone({ f: 58, f2: 34, dur: 0.22, type: 'sine', g: 0.34, atk: 0.006 });
+        this.tone({ f: 48, f2: 28, dur: 0.3, type: 'sine', g: 0.2, at: 0.21, atk: 0.006 }); break;
+      case 'scream': this.hiss({ f: 700, f2: 2600, dur: 1.9, g: 0.05, q: 11 });
+        this.tone({ f: 420, f2: 880, dur: 1.7, type: 'sawtooth', g: 0.05, atk: 0.5 }); break;
+      case 'bone': this.noise({ f: 2200, dur: 0.22, g: 0.13, filter: 'bandpass', q: 4, curve: 2.2 });
+        this.noise({ f: 700, dur: 0.3, g: 0.08, filter: 'lowpass' }); break;
+      case 'rumble': this.noise({ f: 62, dur: 3.2, g: 0.3, filter: 'lowpass', curve: 0.25 }); break;
+      case 'growl': this.tone({ f: 82, f2: 62, dur: 1.5, type: 'sawtooth', g: 0.16, atk: 0.2 });
+        this.hiss({ f: 200, f2: 520, dur: 1.4, g: 0.05, q: 4 }); break;
       case 'cast': this.tone({ f: 620, f2: 1500, dur: 0.3, type: 'triangle', g: 0.16 });
         this.noise({ f: 2600, dur: 0.22, g: 0.1, filter: 'highpass' }); break;
       case 'zap': this.tone({ f: 900, f2: 180, dur: 0.26, type: 'sawtooth', g: 0.17 });
@@ -275,26 +328,92 @@ export const AU = {
     const c = this.ctx, out = this.musicGain;
     out.gain.cancelScheduledValues(c.currentTime);
     out.gain.setTargetAtTime(vol === undefined ? 0.16 : vol, c.currentTime, 1.2);
+    // minor, and where it is not minor it is one semitone off being it
     const CHORDS = {
-      school: [[220, 277, 330], [196, 247, 294], [175, 220, 262], [196, 247, 330]],
-      dark: [[110, 131, 165], [104, 124, 156], [98, 117, 147], [110, 139, 165]],
-      flight: [[262, 330, 392], [294, 370, 440], [330, 415, 494], [294, 370, 466]],
-      sad: [[147, 175, 220], [131, 165, 196], [117, 147, 175], [131, 156, 196]],
-      win: [[262, 330, 392], [294, 349, 440], [330, 392, 494], [349, 440, 523]]
+      school: [[220, 262, 330], [196, 233, 294], [175, 208, 262], [185, 220, 277]],
+      dark: [[98, 116, 139], [92, 110, 131], [87, 104, 123], [98, 117, 138]],
+      flight: [[247, 294, 370], [220, 262, 330], [262, 311, 392], [233, 277, 349]],
+      sad: [[131, 156, 196], [117, 139, 175], [110, 131, 165], [116, 138, 174]],
+      win: [[262, 311, 392], [294, 349, 440], [311, 370, 466], [349, 415, 523]],
+      dread: [[73, 87, 104], [69, 82, 98], [65, 78, 92], [69, 73, 98]]
     };
     const prog = CHORDS[kind] || CHORDS.school;
+    const dark = kind === 'dark' || kind === 'sad' || kind === 'dread';
     let i = 0;
     const step = () => {
       const ch = prog[i % prog.length]; i++;
       ch.forEach((f, k) => {
-        this.tone({ f: f / 2, dur: 3.4, type: k === 0 ? 'triangle' : 'sine', g: 0.05 - k * 0.008, atk: 0.9, bus: out });
+        this.tone({ f: f / 2, dur: 4.6, type: k === 0 ? 'triangle' : 'sine', g: 0.048 - k * 0.008, atk: 1.4, bus: out });
       });
+      // a fifth above, a hair out of tune: the sound of something not right
+      if (dark) this.tone({ f: ch[0] * 1.497, dur: 4.2, type: 'sine', g: 0.016, atk: 1.8, bus: out });
     };
     step();
-    this.music = setInterval(step, 3200);
+    this.music = setInterval(step, 4200);
+    this.startDrone(dark ? 41 : 55, dark ? 0.1 : 0.05);
+    if (dark) this.startSpooks();
+  },
+  /* a sub-bass bed that never resolves: the floor under the music */
+  startDrone(f, g) {
+    this.stopDrone();
+    if (!this.ctx) return;
+    const c = this.ctx, bus = c.createGain();
+    bus.gain.value = 0; bus.connect(this.master);
+    bus.gain.setTargetAtTime(g === undefined ? 0.08 : g, c.currentTime, 2.5);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 190; lp.Q.value = 0.6;
+    lp.connect(bus);
+    const oscs = [];
+    [0, 0.31, -0.22].forEach((det, i) => {
+      const o = c.createOscillator();
+      o.type = i === 0 ? 'sawtooth' : 'triangle';
+      o.frequency.value = f + det;
+      const g2 = c.createGain(); g2.gain.value = i === 0 ? 0.5 : 0.28;
+      o.connect(g2); g2.connect(lp);
+      o.start();
+      oscs.push(o);
+    });
+    // a very slow swell through the filter, so it breathes
+    const lfo = c.createOscillator(); lfo.frequency.value = 0.06;
+    const lg = c.createGain(); lg.gain.value = 26;
+    lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
+    oscs.push(lfo);
+    this.drone = { oscs, bus };
+  },
+  stopDrone() {
+    if (!this.drone) return;
+    const d = this.drone; this.drone = null;
+    try {
+      d.bus.gain.setTargetAtTime(0, this.ctx.currentTime, 0.6);
+      setTimeout(() => d.oscs.forEach((o) => { try { o.stop(); } catch (e) {} }), 1600);
+    } catch (e) {}
+  },
+  /* every so often, something in the room that is not you */
+  startSpooks() {
+    this.stopSpooks();
+    const fire = () => {
+      const r = Math.random();
+      this.sfx(r < 0.42 ? 'whisper' : r < 0.66 ? 'creak' : r < 0.86 ? 'drip' : 'breath');
+      this.spookT = setTimeout(fire, 9000 + Math.random() * 22000);
+    };
+    this.spookT = setTimeout(fire, 5000 + Math.random() * 9000);
+  },
+  stopSpooks() { if (this.spookT) { clearTimeout(this.spookT); this.spookT = null; } },
+  /* the heart, while there is not much of you left */
+  heartbeat(on, rate) {
+    if (!this.ctx) return;
+    if (!on) { if (this.heartT) { clearInterval(this.heartT); this.heartT = null; this.heartMs = 0; } return; }
+    const ms = Math.round(60000 / (rate || 92));
+    if (this.heartT && this.heartMs === ms) return;
+    if (this.heartT) clearInterval(this.heartT);
+    this.heartMs = ms;
+    this.sfx('heart');
+    this.heartT = setInterval(() => this.sfx('heart'), ms);
   },
   stopMusic() {
     if (this.music) { clearInterval(this.music); this.music = null; }
+    this.stopDrone();
+    this.stopSpooks();
+    this.heartbeat(false);
     if (this.musicGain) this.musicGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.5);
   },
   amb: null,
@@ -311,13 +430,13 @@ export const AU = {
     const f = c.createBiquadFilter();
     const g = c.createGain();
     const spec = {
-      hall: { type: 'lowpass', freq: 320, gain: 0.05 },
-      wind: { type: 'bandpass', freq: 640, gain: 0.10 },
-      storm: { type: 'lowpass', freq: 900, gain: 0.22 },
-      cave: { type: 'lowpass', freq: 200, gain: 0.09 },
+      hall: { type: 'lowpass', freq: 260, gain: 0.07 },
+      wind: { type: 'bandpass', freq: 520, gain: 0.13 },
+      storm: { type: 'lowpass', freq: 800, gain: 0.26 },
+      cave: { type: 'lowpass', freq: 165, gain: 0.13 },
       crowd: { type: 'bandpass', freq: 900, gain: 0.13 },
-      forest: { type: 'highpass', freq: 1800, gain: 0.05 }
-    }[kind] || { type: 'lowpass', freq: 400, gain: 0.05 };
+      forest: { type: 'highpass', freq: 1500, gain: 0.07 }
+    }[kind] || { type: 'lowpass', freq: 400, gain: 0.06 };
     f.type = spec.type; f.frequency.value = spec.freq; f.Q.value = 0.7;
     g.gain.value = 0;
     g.gain.setTargetAtTime(spec.gain, c.currentTime, 1.0);
@@ -344,7 +463,10 @@ export const UI = {
   hearts(n, max) {
     let h = '';
     for (let i = 0; i < (max || 0); i++) h += '<div class="heart' + (i < n ? '' : ' off') + '"></div>';
-    $('hearts').innerHTML = h;
+    const el = $('hearts');
+    el.innerHTML = h;
+    // two left and the hearts start beating, in the corner of your eye
+    el.classList.toggle('low', max > 0 && n > 0 && n <= 2);
   },
   toast(text, secs) {
     const el = $('toast');
@@ -367,6 +489,9 @@ export const UI = {
     const h = $('hurt');
     h.style.transition = 'none'; h.style.opacity = '1';
     requestAnimationFrame(() => { h.style.transition = 'opacity .5s'; h.style.opacity = '0'; });
+    FX.bleed(0.95);
+    R.kick(0.09, 0.22);
+    AU.sfx('heart');
   },
   castBar(frac) {
     const b = $('castbar');

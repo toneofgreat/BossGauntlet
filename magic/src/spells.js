@@ -249,9 +249,9 @@ export class Caster {
     // the wand light
     const wl = this.ctx.player.wand.userData.light;
     const tip = this.ctx.player.wand.userData.tip;
-    const want = this.lightOn ? 9 : 0.0;
+    const want = this.lightOn ? 20 : 0.0;
     wl.intensity = lerp(wl.intensity, want, 1 - Math.pow(0.001, dt));
-    wl.distance = 16;
+    wl.distance = 26;
     tip.material = this.lightOn ? GLOW_ON : GLOW_OFF;
   }
   shieldUp() { return !!this.shield; }

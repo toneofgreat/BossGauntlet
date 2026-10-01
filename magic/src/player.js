@@ -49,6 +49,12 @@ export function makePlayer(world, look, opts) {
 
   const root = new THREE.Group();
   root.add(av);
+  // a hand-width of moonlight that follows you: without it the hero is a black
+  // smudge in half the chapters, and the dark stops being frightening and
+  // starts being annoying
+  const me = new THREE.PointLight(0x9fb4e0, 2.6, 6.5, 2);
+  me.position.set(0, 1.5, 0.35);
+  root.add(me);
   const broom = buildBroom();
   broom.visible = false;
   root.add(broom);
@@ -177,9 +183,11 @@ export function updateWalk(p, dt, world, o) {
   const run = IN.running() ? 1.65 : 1;
   const sp = (o.speed || 4.4) * run;
   // movement is relative to where the camera is looking
+  // the camera sits at +(sin yaw, cos yaw) behind you, so "away from the camera"
+  // is -(sin yaw, cos yaw) and screen-right is (cos yaw, -sin yaw). mv.y is -1 for W.
   const fx = Math.sin(CAM.yaw), fz = Math.cos(CAM.yaw);
-  let wx = -mv.x * fz - mv.y * fx;
-  let wz = mv.x * fx - mv.y * fz;
+  let wx = mv.x * fz + mv.y * fx;
+  let wz = mv.y * fz - mv.x * fx;
   const m = Math.hypot(wx, wz);
   const moving = m > 0.02;
   if (moving) { wx /= m; wz /= m; }
@@ -264,14 +272,14 @@ export function updateFly(p, dt, world, o) {
   p.yaw = angWrap(CAM.yaw + Math.PI);
   const targetPitch = clamp(-CAM.pitch, -0.9, 0.9);
   p.pitch = damp(p.pitch, targetPitch, 5, dt);
-  const bank = damp(p.bank || 0, mv.x * 0.9, 5, dt);
+  const bank = damp(p.bank || 0, -mv.x * 0.9, 5, dt);
   p.bank = bank;
 
   const dirX = Math.sin(p.yaw) * Math.cos(p.pitch);
   const dirZ = Math.cos(p.yaw) * Math.cos(p.pitch);
   const dirY = Math.sin(p.pitch);
   // a bit of strafe so you can sidestep a bludger
-  const sx = Math.cos(p.yaw), sz = -Math.sin(p.yaw);
+  const sx = -Math.cos(p.yaw), sz = Math.sin(p.yaw);
   p.vel.x = damp(p.vel.x, dirX * p.flySpeed + sx * mv.x * 8, 4, dt);
   p.vel.z = damp(p.vel.z, dirZ * p.flySpeed + sz * mv.x * 8, 4, dt);
   p.vel.y = damp(p.vel.y, dirY * p.flySpeed, 4, dt);

@@ -3,18 +3,52 @@
    of chapters, and the runner that plays one.
    ========================================================================= */
 import * as THREE from '../vendor/three.module.js';
-import { $, R, IN, AU, UI, SAVE, showScreen, clamp, lerp, rnd, TAU, damp } from './core.js';
+import { $, R, IN, AU, UI, SAVE, FX, showScreen, clamp, lerp, rnd, TAU, damp } from './core.js';
 import { OPTIONS, buildAvatar, buildWand, poseIdle } from './avatar.js';
-import { newWorld } from './world.js';
+import { newWorld, buildTitleSet } from './world.js';
 import { makePlayer, updateWalk, updateFly, updateCamera, CAM, wandTip, aimDir, mountBroom, dismount } from './player.js';
 import { Caster, SPELLS, SPELL_ORDER } from './spells.js';
 import { CHAPTERS } from './chapters.js';
 
 let state = 'title';          // title | mirror | board | card | play | paused
+let eyeLight = null;
 let world = null, player = null, caster = null, ctx = null, mode = null, chapterIdx = 0;
 let paused = false;
 let ending = false;
 let endTimer = null;
+
+/* ========================================= the set behind all the menus = */
+const MENU = { scene: null, world: null, t: 0 };
+
+function menuScene() {
+  if (MENU.scene) return MENU.scene;
+  const sc = new THREE.Scene();
+  const w = newWorld();
+  buildTitleSet(w);
+  sc.add(w.group);
+  sc.fog = w.fog;
+  sc.background = w.bg;
+  MENU.scene = sc; MENU.world = w;
+  return sc;
+}
+/* put the menu set back on screen: after a chapter, and at the start */
+function showMenuSet() {
+  R.setScene(menuScene());
+  FX.dread = 0.22;
+  if (AU.ctx && !AU.music) AU.setMusic('dread', 0.13);
+}
+function updateMenuSet(dt) {
+  if (!MENU.world) return;
+  MENU.t += dt;
+  const t = MENU.t;
+  // a slow crawl towards the gate, drifting side to side, never arriving
+  const a = 0.16 + Math.sin(t * 0.045) * 0.22;
+  const r = 13.5 + Math.sin(t * 0.06) * 2.2;
+  R.camera.position.set(Math.sin(a) * r, 2.7 + Math.sin(t * 0.13) * 0.4, Math.cos(a) * r);
+  R.camera.lookAt(Math.sin(a) * 1.5, 5.6 + Math.sin(t * 0.09) * 0.5, 0);
+  R.breathe(dt, 0.12);
+  MENU.world.update.forEach((f) => f(dt, R.elapsed));
+}
 
 /* ============================================================= the mirror = */
 const MIR = { renderer: null, scene: null, cam: null, av: null, yaw: 0.35, drag: false, lx: 0, spin: 0 };
@@ -26,32 +60,58 @@ function mirrorInit() {
   MIR.renderer.shadowMap.enabled = true;
   MIR.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   MIR.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  MIR.renderer.toneMappingExposure = 0.92;
   MIR.renderer.outputColorSpace = THREE.SRGBColorSpace;
   MIR.scene = new THREE.Scene();
-  MIR.scene.background = new THREE.Color(0x0a0912);
+  MIR.scene.background = new THREE.Color(0x04040a);
+  MIR.scene.fog = new THREE.Fog(0x04040a, 3.5, 11);
   MIR.cam = new THREE.PerspectiveCamera(32, 0.75, 0.1, 60);
   MIR.cam.position.set(0, 1.35, 4.6);
   MIR.cam.lookAt(0, 1.05, 0);
-  const key = new THREE.SpotLight(0xffe0b0, 40, 14, 0.7, 0.5, 1.6);
-  key.position.set(2.4, 4.4, 3.2);
+  // one candle, low and to the side: it is the only friendly thing in here
+  const key = new THREE.SpotLight(0xffbe76, 26, 12, 0.72, 0.62, 1.7);
+  key.position.set(1.9, 2.5, 2.6);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   MIR.scene.add(key, key.target);
-  const rim = new THREE.PointLight(0x6f9fff, 14, 12, 2);
-  rim.position.set(-2.6, 2.2, -2.2);
+  MIR.key = key;
+  const rim = new THREE.PointLight(0x4a6ea8, 7, 10, 2);
+  rim.position.set(-2.4, 2.6, -2.4);
   MIR.scene.add(rim);
-  MIR.scene.add(new THREE.AmbientLight(0x394060, 1.4));
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(2.2, 40),
-    new THREE.MeshStandardMaterial({ color: 0x1a1726, roughness: 0.4, metalness: 0.3 }));
+  MIR.scene.add(new THREE.AmbientLight(0x161a2a, 0.75));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(2.4, 40),
+    new THREE.MeshStandardMaterial({ color: 0x0c0b12, roughness: 0.22, metalness: 0.55 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   MIR.scene.add(floor);
-  // a few motes so it feels like a room
+  // two candle flames on stands, either side, out at the edge of the glass
+  MIR.flames = [];
+  [-0.92, 0.92].forEach((x) => {
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 1.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x14131a, roughness: 0.55, metalness: 0.6 }));
+    st.position.set(x, 0.75, 1.15);
+    MIR.scene.add(st);
+    const wax = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, 0.34, 8),
+      new THREE.MeshStandardMaterial({ color: 0xd8cdb4, roughness: 0.85 }));
+    wax.position.set(x, 1.66, 1.15);
+    MIR.scene.add(wax);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 7),
+      new THREE.MeshBasicMaterial({ color: 0xffdf9a, fog: false }));
+    fl.position.set(x, 1.9, 1.15);
+    MIR.scene.add(fl);
+    const li = new THREE.PointLight(0xffb060, 4.5, 6, 2);
+    li.position.set(x, 1.95, 1.15);
+    MIR.scene.add(li);
+    MIR.flames.push({ fl, li, ph: Math.random() * 9 });
+  });
+  // dust, hanging in the cold
   const g = new THREE.BufferGeometry();
-  const pos = new Float32Array(120 * 3);
-  for (let i = 0; i < 120; i++) { pos[i * 3] = rnd(-1.6, 1.6); pos[i * 3 + 1] = rnd(0.2, 3); pos[i * 3 + 2] = rnd(-1.6, 1.6); }
+  const pos = new Float32Array(140 * 3);
+  for (let i = 0; i < 140; i++) { pos[i * 3] = rnd(-1.8, 1.8); pos[i * 3 + 1] = rnd(0.2, 3); pos[i * 3 + 2] = rnd(-1.8, 1.8); }
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  MIR.scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffd9a0, size: 0.03, transparent: true, opacity: 0.7 })));
+  MIR.scene.add(new THREE.Points(g, new THREE.PointsMaterial({
+    color: 0xc8cddc, size: 0.028, transparent: true, opacity: 0.5, depthWrite: false
+  })));
 
   const cvEl = cv;
   const down = (x) => { MIR.drag = true; MIR.lx = x; };
@@ -199,6 +259,7 @@ function openCard(i, outro) {
     $('cardGo').textContent = 'TRY AGAIN';
   }
   state = 'card';
+  if (!world) showMenuSet();
   showScreen('cardScreen');
 }
 
@@ -209,7 +270,7 @@ function teardown() {
     R.dispose(world.group);
     if (R.scene) R.scene.remove(world.group);
   }
-  world = null; player = null; caster = null; ctx = null; mode = null;
+  world = null; player = null; caster = null; ctx = null; mode = null; eyeLight = null;
   UI.clearSay();
   UI.tally('');
   UI.hearts(0, 0);
@@ -217,6 +278,9 @@ function teardown() {
   UI.spellbar([], -1);
   AU.stopMusic();
   AU.stopAmbience();
+  FX.dread = 0.22;
+  FX.hurt = 0;
+  showMenuSet();
 }
 
 let activeSpell = 0;
@@ -232,6 +296,8 @@ function startChapter(i) {
   R.setScene(scene);
   world = newWorld();
   scene.add(world.group);
+  eyeLight = new THREE.PointLight(0x93a8c4, 7, 26, 2);
+  scene.add(eyeLight);
 
   ctx = {
     world, chapter: ch, targets: [], t: 0,
@@ -350,6 +416,12 @@ function frame() {
       MIR.av.rotation.y = MIR.yaw;
       poseIdle(MIR.av, R.elapsed);
     }
+    if (MIR.flames) MIR.flames.forEach((f) => {
+      const k = 1 + Math.sin(R.elapsed * 9 + f.ph) * 0.16 + Math.sin(R.elapsed * 23 + f.ph) * 0.08;
+      f.fl.scale.set(1, k, 1);
+      f.li.intensity = 4.2 * k;
+    });
+    if (MIR.key) MIR.key.intensity = 24 + Math.sin(R.elapsed * 7.3) * 2.2;
     mirrorSize();
     MIR.renderer.render(MIR.scene, MIR.cam);
     IN.endFrame();
@@ -380,18 +452,32 @@ function frame() {
     if (mode && mode.update) mode.update(dt);
     if (CHAPTERS[chapterIdx].hp) UI.hearts(player.hp, player.maxHp);
     R.applyShake(dt);
+    if (eyeLight) eyeLight.position.copy(R.camera.position);
+    // how frightened the picture is: the chapter's own floor, plus how close
+    // you are to the end of yourself
+    const ch2 = CHAPTERS[chapterIdx];
+    const frac = player.maxHp ? clamp(player.hp / player.maxHp, 0, 1) : 1;
+    const floorD = ch2.dread === undefined
+      ? (ch2.music === 'dark' ? 0.3 : ch2.music === 'sad' ? 0.22 : 0.08) : ch2.dread;
+    FX.dread = damp(FX.dread, clamp(floorD + (1 - frac) * 0.75, 0, 1), 1.6, dt);
+    R.breathe(dt, (1 - frac) * 0.8);
+    if (ch2.hp) AU.heartbeat(frac <= 0.45 && player.hp > 0, 72 + (1 - frac) * 48);
   } else if (state === 'play' && paused && world) {
     // frozen, but keep the candles moving so it does not look dead
     world.update.forEach((f) => f(0, R.elapsed));
   }
 
+  if (state === 'title' || state === 'board' || state === 'card') updateMenuSet(dt);
+
   UI.tickToast(dt);
-  R.render();
+  R.render(dt);
   IN.endFrame();
 }
 
 /* =============================================================== wiring = */
 function wire() {
+  const menuMusic = () => { AU.init(); AU.resume(); if (!AU.music) AU.setMusic('dread', 0.13); };
+  ['click', 'touchstart', 'keydown'].forEach((e) => window.addEventListener(e, menuMusic, { once: true }));
   $('beginBtn').addEventListener('click', () => {
     AU.init(); AU.resume(); AU.sfx('ui');
     state = 'mirror';
@@ -494,10 +580,8 @@ export async function start() {
   refreshTitle();
   state = 'title';
   showScreen('titleScreen');
-  // a dark scene behind the title, so the page is never an empty black box
-  const s = new THREE.Scene();
-  s.background = new THREE.Color(0x07060c);
-  R.setScene(s);
+  showMenuSet();
+  AU.init();
   R.clock.start();
   requestAnimationFrame(frame);
 
@@ -513,6 +597,7 @@ export async function start() {
     mirror() { state = 'mirror'; showScreen('make'); buildOptionsUI(); mirrorRefresh(); mirrorSize(); },
     setLook(l) { Object.assign(SAVE.data.look, l); SAVE.save(); if (state === 'mirror') { buildOptionsUI(); mirrorRefresh(); } },
     ctx: () => ctx,
+    cam: () => R.camera,
     player: () => player,
     mode: () => mode,
     world: () => world,

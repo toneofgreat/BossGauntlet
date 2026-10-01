@@ -64,10 +64,21 @@ function serve() {
   await page.screenshot({ path: OUT + 'mg-mirror.png' });
 
   for (const s of SHOTS) {
+    if (s.screen) {                       // a menu, not a chapter
+      await page.evaluate((sh) => {
+        const M = window.__magic;
+        if (sh.screen === 'board') { M.save().done = sh.done || []; M.board(); }
+      }, s);
+      await new Promise((r) => setTimeout(r, 900));
+      await page.screenshot({ path: OUT + 'mg-' + s.name + '.png' });
+      console.log('shot', s.name);
+      continue;
+    }
     await page.evaluate((sh) => {
       const M = window.__magic;
       M.go(sh.i);
       M.skipTalk();
+      if (sh.light) { M.pickSpell('light'); M.castFwd(); }   // as a player would, in the dark
       M.step(sh.steps || 60);
       if (sh.tp) M.tp(sh.tp[0], sh.tp[1], sh.tp[2]);
       if (sh.look) M.faceAt(sh.look[0], sh.look[1], sh.look[2]);

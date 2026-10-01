@@ -63,7 +63,15 @@ export function buildDarkLord() {
   g.add(wand);
   const tip = mesh(new THREE.SphereGeometry(0.03, 8, 6), glow(0x66ff88, 2), 0.78, 1.42, 0.32);
   g.add(tip);
-  g.userData = { head, tip, eyes: head.children.filter((c) => c.material && c.material.emissive) };
+  // his own magic, coming up off him: it under-lights the face and makes him
+  // visible across a black room without lighting the room
+  const own = new THREE.PointLight(0x64ff9a, 7, 11, 2);
+  own.position.set(0, 0.7, 0.3);
+  g.add(own);
+  const halo = new THREE.PointLight(0xff3a3a, 2.6, 5, 2);
+  halo.position.set(0, 2.5, 0.25);
+  g.add(halo);
+  g.userData = { head, tip, own, halo, eyes: head.children.filter((c) => c.material && c.material.emissive) };
   g.traverse((m) => { if (m.isMesh) { m.castShadow = true; } });
   return g;
 }
@@ -109,7 +117,10 @@ export function buildSnake(len) {
   head.add(tongue);
   head.position.set(0, 1.6, 1.4);
   g.add(head);
-  g.userData = { segs, head, tongue, n };
+  const lamp = new THREE.PointLight(0xffd23a, 5, 14, 2);
+  lamp.position.set(0, 0.4, 1.2);
+  head.add(lamp);
+  g.userData = { segs, head, tongue, n, lamp };
   g.traverse((m) => { if (m.isMesh) { m.castShadow = true; } });
   return g;
 }
@@ -263,7 +274,10 @@ export function buildManWolf() {
   });
   head.position.set(0, 2.5, 0.1);
   g.add(head);
-  g.userData = { head, legs, arms, jaw };
+  const eyeglow = new THREE.PointLight(0xffe07a, 3.4, 9, 2);
+  eyeglow.position.set(0, 0, 0.3);
+  head.add(eyeglow);
+  g.userData = { head, legs, arms, jaw, eyeglow };
   g.traverse((m) => { if (m.isMesh) { m.castShadow = true; } });
   return g;
 }
