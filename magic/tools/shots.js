@@ -79,6 +79,7 @@ function serve() {
       M.go(sh.i);
       M.skipTalk();
       if (sh.light) { M.pickSpell('light'); M.castFwd(); }   // as a player would, in the dark
+      if (sh.talk !== undefined) { M.goTo(sh.talk); M.step(4); M.talk(); }   // walk up and say hello
       M.step(sh.steps || 60);
       if (sh.tp) M.tp(sh.tp[0], sh.tp[1], sh.tp[2]);
       if (sh.look) M.faceAt(sh.look[0], sh.look[1], sh.look[2]);

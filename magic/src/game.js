@@ -8,10 +8,12 @@ import { OPTIONS, buildAvatar, buildWand, poseIdle } from './avatar.js';
 import { newWorld, buildTitleSet } from './world.js';
 import { makePlayer, updateWalk, updateFly, updateCamera, CAM, wandTip, aimDir, mountBroom, dismount } from './player.js';
 import { Caster, SPELLS, SPELL_ORDER } from './spells.js';
+import { populate } from './folk.js';
 import { CHAPTERS } from './chapters.js';
 
 let state = 'title';          // title | mirror | board | card | play | paused
 let eyeLight = null;
+let folk = null;
 let world = null, player = null, caster = null, ctx = null, mode = null, chapterIdx = 0;
 let paused = false;
 let ending = false;
@@ -270,6 +272,8 @@ function teardown() {
     R.dispose(world.group);
     if (R.scene) R.scene.remove(world.group);
   }
+  if (folk) folk.clear();
+  folk = null;
   world = null; player = null; caster = null; ctx = null; mode = null; eyeLight = null;
   UI.clearSay();
   UI.tally('');
@@ -327,6 +331,10 @@ function startChapter(i) {
   player.hp = player.maxHp = ch.hp || 5;
   CAM.reset(world.spawnYaw || 0);
 
+  // the people standing about in this chapter, and where they can stand
+  folk = populate(ctx);
+  ctx.folk = folk;
+
   mode = built.update ? built : (built.mode || null);
   ctx.mode = mode;
 
@@ -336,8 +344,7 @@ function startChapter(i) {
   spellList = [];
   SPELL_ORDER.forEach((id) => { if (pool.indexOf(id) >= 0 && SPELLS[id]) spellList.push(id); });
   activeSpell = 0;
-  UI.spellbar(spellList.map((s) => SPELLS[s]), 0);
-  wireSlots();
+  UI.spellbar(spellList.map((s) => SPELLS[s]), 0, setSpell);
 
   UI.chapter('CHAPTER ' + (i + 1) + ' · ' + ch.title, ch.goal || '');
   if (ch.hp) UI.hearts(player.hp, player.maxHp);
@@ -350,16 +357,12 @@ function startChapter(i) {
   paused = false;
   showScreen(null);
 }
-function wireSlots() {
-  $('spellbar').querySelectorAll('.slot').forEach((el) => {
-    el.onclick = (e) => {
-      activeSpell = +el.dataset.i;
-      UI.spellbar(spellList.map((s) => SPELLS[s]), activeSpell);
-      wireSlots();
-      AU.sfx('ui');
-      e.stopPropagation();
-    };
-  });
+/* clicked, tapped or typed: it all comes through here */
+function setSpell(i) {
+  if (!spellList[i] || i === activeSpell) return;
+  activeSpell = i;
+  UI.spellbar(spellList.map((s) => SPELLS[s]), activeSpell);
+  AU.init(); AU.resume(); AU.sfx('ui');
 }
 
 function finish(won, msg) {
@@ -432,12 +435,7 @@ function frame() {
     ctx.t += dt;
     if (IN.takeCast()) tryCast();
     for (let k = 1; k <= 9; k++) {
-      if (IN.down[String(k)] && spellList[k - 1]) {
-        activeSpell = k - 1;
-        UI.spellbar(spellList.map((s) => SPELLS[s]), activeSpell);
-        wireSlots();
-        AU.sfx('ui');
-      }
+      if (IN.down[String(k)] && spellList[k - 1]) setSpell(k - 1);
     }
     const opt = CHAPTERS[chapterIdx].walkOpts || {};
     if (player.mode === 'fly') {
@@ -453,6 +451,10 @@ function frame() {
     if (CHAPTERS[chapterIdx].hp) UI.hearts(player.hp, player.maxHp);
     R.applyShake(dt);
     if (eyeLight) eyeLight.position.copy(R.camera.position);
+    if (folk) {
+      folk.update(dt);
+      if (IN.down.e) folk.talk();
+    }
     // how frightened the picture is: the chapter's own floor, plus how close
     // you are to the end of yourself
     const ch2 = CHAPTERS[chapterIdx];
@@ -556,6 +558,10 @@ function wire() {
     if (paused) { showScreen('pauseScreen'); $('pauseHint').textContent = CHAPTERS[chapterIdx].goal || ''; }
     else showScreen(null);
   };
+  const talkEl = $('talk');
+  const doTalk = (e) => { e.preventDefault(); e.stopPropagation(); if (folk) folk.talk(); };
+  talkEl.addEventListener('click', doTalk);
+  talkEl.addEventListener('touchstart', doTalk, { passive: false });
   $('pauseBtn').addEventListener('click', (e) => { togglePause(); e.stopPropagation(); });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') togglePause();
@@ -604,6 +610,7 @@ export async function start() {
     caster: () => caster,
     spells: () => spellList,
     pickSpell(id) { const i = spellList.indexOf(id); if (i >= 0) { activeSpell = i; UI.spellbar(spellList.map((s) => SPELLS[s]), i); } return i >= 0; },
+    tapSpell(i) { setSpell(i); return activeSpell; },
     castAt(x, y, z) {
       if (!caster || !player) return false;
       const from = wandTip(player, new THREE.Vector3());
@@ -637,9 +644,23 @@ export async function start() {
           caster.update(dt);
           world.update.forEach((f) => f(dt, R.elapsed));
           if (mode && mode.update) mode.update(dt);
+          if (folk) folk.update(dt);
         }
       }
     },
+    folk() { return folk ? folk.people.map((f) => ({ name: f.data.name, kind: f.kind, said: f.said,
+      lines: (f.data.lines || []).length, more: (f.data.more || []).length,
+      at: [Math.round(f.g.position.x), Math.round(f.g.position.y), Math.round(f.g.position.z)] })) : []; },
+    goTo(i) {
+      if (!folk || !folk.people[i] || !player) return false;
+      const f = folk.people[i], p = f.g.position;
+      const a = Math.atan2(player.pos.x - p.x, player.pos.z - p.z);
+      this.tp(p.x + Math.sin(a) * 1.15, p.y, p.z + Math.cos(a) * 1.15);
+      this.faceAt(p.x, p.y + 1.5, p.z);
+      return true;
+    },
+    nearFolk() { const n = folk && folk.near(); return n ? n.data.name : null; },
+    talk() { return folk ? folk.talk() : false; },
     say() { return UI.talking(); },
     advance() { UI.advance(); },
     skipTalk() { let n = 0; while (UI.talking() && n < 60) { UI.advance(); n++; } return n; },

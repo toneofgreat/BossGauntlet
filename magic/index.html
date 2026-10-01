@@ -155,14 +155,36 @@ a.home:hover{color:var(--ember-l)}
   text-shadow:0 2px 10px #000,0 0 22px rgba(0,0,0,.8)}
 #tally{position:absolute;right:16px;top:14px;text-align:right;font-size:13px;letter-spacing:2px;color:#ddd4c0;text-shadow:0 2px 8px #000}
 #tally b{color:var(--ember-l);font-weight:400}
-#spellbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:7px}
-.slot{width:58px;height:58px;border-radius:3px;border:1px solid rgba(214,205,186,.16);
+#spellbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:7px;transition:opacity .2s}
+#spellbar.away{opacity:0;pointer-events:none}      /* out of the way while somebody talks */
+.slot{position:relative;width:58px;height:58px;border-radius:3px;border:1px solid rgba(214,205,186,.16);
   background:linear-gradient(180deg,rgba(20,20,26,.72),rgba(6,6,10,.78));
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:auto;cursor:pointer;
-  box-shadow:0 3px 10px rgba(0,0,0,.6);transition:border-color .12s,box-shadow .15s}
+  box-shadow:0 3px 10px rgba(0,0,0,.6);transition:border-color .12s,box-shadow .15s,transform .12s}
 .slot.on{border-color:rgba(232,180,106,.75);box-shadow:0 0 22px rgba(184,118,44,.35),0 0 0 1px rgba(184,118,44,.2) inset}
 .slot .g{font-size:19px;line-height:1;filter:saturate(.8)}
 .slot .n{font-size:7.5px;letter-spacing:1px;color:var(--ash)}
+.slot .k{position:absolute;top:3px;right:5px;margin:0;font-size:8px;letter-spacing:0;color:var(--dim)}
+
+/* ---- on a phone the strip scrolls, and every slot is a tap target. It sits
+   clear of the stick and the buttons: above them in portrait, between them in
+   landscape. A touch that starts in here never reaches the camera. ---- */
+body.touch #spellbar{left:0;right:0;bottom:148px;transform:none;width:100%;
+  justify-content:flex-start;gap:6px;padding:0 10px;
+  overflow-x:auto;overflow-y:hidden;pointer-events:auto;touch-action:pan-x;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 20px,#000 calc(100% - 20px),transparent 100%);
+          mask-image:linear-gradient(90deg,transparent 0,#000 20px,#000 calc(100% - 20px),transparent 100%)}
+body.touch #spellbar::-webkit-scrollbar{display:none}
+body.touch .slot{flex:0 0 auto;width:54px;height:54px}
+body.touch .slot:first-child{margin-left:auto}      /* centred when they fit, */
+body.touch .slot:last-child{margin-right:auto}      /* scrollable when they do not */
+body.touch .slot .k{display:none}
+body.touch .slot.on{transform:translateY(-5px)}
+body.touch .slot .g{font-size:21px}
+@media (orientation:landscape){
+  body.touch #spellbar{bottom:20px;left:160px;right:208px;width:auto;padding:0}
+}
 .slot.on .n{color:var(--ember-l)}
 #castbar{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);width:200px;height:3px;
   background:rgba(0,0,0,.6);overflow:hidden;display:none;box-shadow:0 0 0 1px rgba(214,205,186,.12)}
@@ -181,6 +203,22 @@ a.home:hover{color:var(--ember-l)}
   opacity:0;transition:opacity .25s;text-align:center;width:90vw}
 #hurt{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;transition:opacity .25s;
   background:radial-gradient(ellipse at center,rgba(0,0,0,0) 38%,rgba(120,8,8,.34) 100%)}
+/* somebody is close enough to talk to */
+#talk{position:absolute;left:50%;bottom:92px;transform:translateX(-50%) translateY(6px);
+  display:none;flex-direction:column;align-items:center;gap:2px;
+  font:inherit;color:var(--bone);cursor:pointer;pointer-events:auto;
+  padding:8px 18px;border-radius:2px;border:1px solid rgba(232,180,106,.45);
+  background:linear-gradient(180deg,rgba(18,18,24,.82),rgba(6,6,10,.88));
+  box-shadow:0 0 26px rgba(184,118,44,.18),0 6px 18px rgba(0,0,0,.6);
+  opacity:0;transition:opacity .18s,transform .18s}
+#talk.show{display:flex;opacity:1;transform:translateX(-50%) translateY(0)}
+#talk b{font-size:14px;letter-spacing:3px;font-weight:400;color:#f0e8d6}
+#talk i{font-style:normal;font-size:9px;letter-spacing:3px;color:var(--ember-l);opacity:.9}
+body.touch #talk{bottom:212px;padding:12px 26px}
+body.touch #talk i{font-size:0}                  /* there is no E on a phone */
+body.touch #talk i::after{content:"TAP TO TALK";font-size:11px;letter-spacing:3px}
+@media (orientation:landscape){ body.touch #talk{bottom:86px} }
+
 #hearts{position:absolute;right:16px;top:38px;display:flex;gap:5px}
 .heart{width:16px;height:16px;background:#8e1b16;clip-path:polygon(50% 100%,0 35%,15% 5%,50% 25%,85% 5%,100% 35%);
   box-shadow:0 0 10px rgba(0,0,0,.8)}
@@ -250,6 +288,7 @@ body.touch #kbhint{display:none}
   <div id="castbar"><i></i></div>
   <div id="say"><div class="who"></div><div class="what"></div><div class="more">CLICK / SPACE</div></div>
   <div id="toast"></div>
+  <button id="talk"><b></b><i>E &middot; TALK</i></button>
   <button class="tc" id="pauseBtn">II</button>
   <div class="tc" id="stick"><div id="nub"></div></div>
   <button class="tc" id="jumpBtn">UP</button>

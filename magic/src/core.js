@@ -134,7 +134,9 @@ export const IN = {
     const rest = () => { stickEl.style.left = '16px'; stickEl.style.top = 'auto'; stickEl.style.bottom = '16px'; nub.style.transform = 'translate(0,0)'; };
     const inMenu = (e) => {
       const t = e.target;
-      return !!(t && t.closest && t.closest('.screen'));
+      // a menu, the spell strip, or any of the on-screen buttons: not the world
+      return !!(t && t.closest && (t.closest('.screen') || t.closest('#spellbar') ||
+        t.closest('#talk') || t.closest('.tc')));
     };
     const onStart = (e) => {
       if (inMenu(e)) return;
@@ -513,12 +515,14 @@ export const UI = {
     const el = $('say');
     if (this._i >= this._lines.length) {
       el.style.display = 'none';
+      $('spellbar').classList.remove('away');
       const r = this._sayResolve; this._sayResolve = null; this._lines = null;
       if (r) r();
       return;
     }
     const [who, what] = this._lines[this._i];
     el.style.display = 'block';
+    $('spellbar').classList.add('away');
     el.querySelector('.who').textContent = who || '';
     el.querySelector('.what').textContent = what;
     el.querySelector('.more').textContent = this._i === this._lines.length - 1 ? 'CLICK TO GO ON' : 'CLICK / SPACE';
@@ -533,16 +537,34 @@ export const UI = {
   talking() { return !!this._lines; },
   clearSay() {
     $('say').style.display = 'none';
+    $('spellbar').classList.remove('away');
     const r = this._sayResolve;
     this._sayResolve = null; this._lines = null;
     if (r) r();
   },
-  spellbar(spells, activeIdx) {
+  /* spellbar(list, active, onPick) - the picker is remembered, so every later
+     redraw keeps working. A phone never sees the click: the world swallows the
+     touch to drive the camera, so each slot listens for touchstart itself. */
+  _onPick: null,
+  spellbar(spells, activeIdx, onPick) {
     const bar = $('spellbar');
+    if (onPick) this._onPick = onPick;
     if (!spells || !spells.length) { bar.innerHTML = ''; return; }
     bar.innerHTML = spells.map((s, i) =>
       '<div class="slot' + (i === activeIdx ? ' on' : '') + '" data-i="' + i + '">' +
-      '<div class="g">' + s.glyph + '</div><div class="n">' + s.name + '</div></div>').join('');
+      '<div class="g">' + s.glyph + '</div><div class="n">' + s.name + '</div>' +
+      (i < 9 ? '<div class="k">' + (i + 1) + '</div>' : '') + '</div>').join('');
+    const fire = (i) => { if (this._onPick) this._onPick(i); };
+    bar.querySelectorAll('.slot').forEach((el) => {
+      const i = +el.dataset.i;
+      el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); fire(i); });
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); fire(i); }, { passive: false });
+    });
+    // with thirteen spells the strip scrolls on a phone: keep the chosen one in sight
+    const on = bar.querySelector('.slot.on');
+    if (on && bar.scrollWidth > bar.clientWidth + 4 && on.scrollIntoView) {
+      try { on.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (e) {}
+    }
   }
 };
 $('say').addEventListener('click', () => UI.advance());
