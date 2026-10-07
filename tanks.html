@@ -158,6 +158,15 @@ a.home:hover{color:var(--blue)}
   </div>
 </div>
 
+<!-- ============================ BULLETS ============================ -->
+<div id="bullets" class="screen">
+  <a class="home" href="#" id="bulletsBack">&larr; BACK</a>
+  <div class="mid">
+    <div class="sub">THE SHOP &middot; <span id="bulletCoins">0</span> COINS</div>
+    <div class="shop" id="bulletList"></div>
+  </div>
+</div>
+
 <!-- ============================ CODES ============================ -->
 <div id="codes" class="screen">
   <a class="home" href="#" id="codesBack">&larr; BACK</a>
@@ -231,6 +240,8 @@ var TUNE = {
   botSpeed: 128,                       // "slower than you"
   skilledSpeed: 205,
   bossSpeed: 410,                      // speed 2.0: twice what you start with
+  lordSpeed: 455,                      // the dark lord is faster than the tank boss
+  curveRate: 0.85,                     // rad/s a forest shell bends
   turnRate: 7.5,                       // rad/s the hull swings toward travel
   shellSpeed: 275,                     // slow on purpose: everything is dodgeable
   shellR: 7,
@@ -261,6 +272,42 @@ var SPEED_COSTS  = [0, 1,   2,   3,   4,   5,   7,   9,   11,  22,  33, 99];
 function rateCost(level) { return level; }          // level here is 1-based current level
 function dmgCost(level) { return level; }
 
+/* ------------------------------------------------------------ THE FOREST --
+ * Rebirth is the end of the white arena. You hand it in, for good, and come out
+ * the other side in a wood where every shell you fire bends. Six rungs, and the
+ * last one is not a tank.
+ */
+var FOREST_LEVELS = [
+  { n: 1, label: "A CURVED BOT",            coins: 1,  foes: [{ kind: "bot", curve: 1 }] },
+  { n: 2, label: "A SKILLED CURVE TANK",    coins: 1,  foes: [{ kind: "skilled", curve: 1 }] },
+  { n: 3, label: "A SPEEDY CURVED BOT",     coins: 1,  foes: [{ kind: "bot", curve: 1, fast: 1 }] },
+  { n: 4, label: "SKILLED, SPEEDY, CURVED", coins: 2,  foes: [{ kind: "skilled", curve: 1, fast: 1 }] },
+  { n: 5, label: "TEN CURVED SHOTS",        coins: 4,  foes: [{ kind: "skilled", curve: 1, shooters: 10 }] },
+  { n: 6, label: "THE DARK LORD",           coins: 15, foes: [{ kind: "lord", curve: 1, shooters: 12 }] }
+];
+/* how fast a curved shell travels: 1 is what you arrive with */
+var BSPEED_LEVELS = [1, 1.2, 1.4, 1.6, 1.8, 2];
+var BSPEED_COSTS  = [0, 2,   4,   10,  18,  45];
+/* and how big it is */
+var BSIZE_LEVELS  = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2];
+var BSIZE_COSTS   = [0, 5,   10,  15,  20,  25,  30,  40,  60,  80,  100];
+var SHOP_COST = 10;
+/* one of these at a time, and only in the forest */
+var BULLETS = [
+  { id: "rng", name: "RNG BULLET", cost: 10,
+    blurb: "One shot in ten comes out gold and takes double off whatever it lands on.",
+    note: "10% chance &middot; 2x damage" },
+  { id: "flash", name: "FLASH BULLET", cost: 25,
+    blurb: "Normal damage, no manners. It is across the arena before the other tank has finished turning.",
+    note: "very fast &middot; barely bends" },
+  { id: "cannon", name: "CANNON", cost: 30,
+    blurb: "Bolted to the floor. You cannot move an inch with this loaded, and it one-shots anything it hits - except the dark lord, who is not impressed.",
+    note: "one shot kills &middot; you cannot move" },
+  { id: "void", name: "VOID BULLET", cost: 500,
+    blurb: "Opens a hole in the wood. It swallows their flag and gives it back as yours, then spits a new one of theirs out in the middle, in the open, where you can reach it. Whatever it hits is stunned for 20.2 seconds and thrown backwards.",
+    note: "once a round &middot; forest only" }
+];
+
 /* the ten rungs of END MODE */
 var END_LEVELS = [
   { n: 1,  label: "A BOT",              foes: [{ kind: "bot" }] },
@@ -279,7 +326,8 @@ var END_LEVELS = [
 
 /* ================================================================ SAVE ==== */
 var SKEY = "tanks.v1";
-var SAVE = { coins: 0, rate: 1, dmg: 1, shooters: 1, speed: 1, endLevel: 1, endBeaten: false, boss: false, bossBeaten: false };
+var SAVE = { coins: 0, rate: 1, dmg: 1, shooters: 1, speed: 1, endLevel: 1, endBeaten: false, boss: false, bossBeaten: false,
+             zone: 1, fLevel: 1, fBeaten: false, fWins: 0, bspeed: 1, bsize: 1, shopOpen: false, owned: "", equip: "" };
 function loadSave() {
   try {
     var s = JSON.parse(localStorage.getItem(SKEY));
@@ -292,12 +340,33 @@ function loadSave() {
   SAVE.shooters = clamp(SAVE.shooters | 0, 1, SHOOTER_LEVELS.length);
   SAVE.speed = clamp(SAVE.speed | 0, 1, SPEED_LEVELS.length);
   SAVE.endLevel = clamp(SAVE.endLevel | 0, 1, END_LEVELS.length);
+  SAVE.zone = clamp(SAVE.zone | 0, 1, 2);
+  SAVE.fLevel = clamp(SAVE.fLevel | 0, 1, FOREST_LEVELS.length);
+  SAVE.bspeed = clamp(SAVE.bspeed | 0, 1, BSPEED_LEVELS.length);
+  SAVE.bsize = clamp(SAVE.bsize | 0, 1, BSIZE_LEVELS.length);
+  if (typeof SAVE.owned !== "string") SAVE.owned = "";
+  if (SAVE.equip && !owns(SAVE.equip)) SAVE.equip = "";
 }
+/* owned bullets live as a comma string, so the old save loader copies them */
+function owns(id) { return ("," + SAVE.owned + ",").indexOf("," + id + ",") >= 0; }
+function own(id) { if (!owns(id)) SAVE.owned = SAVE.owned ? SAVE.owned + "," + id : id; }
 function saveNow() { try { localStorage.setItem(SKEY, JSON.stringify(SAVE)); } catch (e) {} }
 function myCooldown() { return RATE_LEVELS[SAVE.rate - 1]; }
 function myDamage() { return DMG_LEVELS[SAVE.dmg - 1]; }
 function myShooters() { return SHOOTER_LEVELS[SAVE.shooters - 1]; }
 function mySpeed() { return SPEED_LEVELS[SAVE.speed - 1]; }
+function myBulletSpeed() { return BSPEED_LEVELS[SAVE.bspeed - 1]; }
+function myBulletSize() { return BSIZE_LEVELS[SAVE.bsize - 1]; }
+function inForest() { return SAVE.zone >= 2; }
+function roundZone() { return G ? G.zone : SAVE.zone; }
+function roundForest() { return roundZone() >= 2; }
+/* every upgrade in the white arena bought: the rebirth door opens */
+function allMaxed() {
+  return SAVE.rate >= RATE_LEVELS.length && SAVE.dmg >= DMG_LEVELS.length &&
+         SAVE.shooters >= SHOOTER_LEVELS.length && SAVE.speed >= SPEED_LEVELS.length;
+}
+function equipped() { return SAVE.shopOpen && SAVE.equip && owns(SAVE.equip) ? SAVE.equip : ""; }
+function forestReward(level) { return FOREST_LEVELS[clamp(level - 1, 0, FOREST_LEVELS.length - 1)].coins; }
 
 /* =============================================================== AUDIO ==== */
 var AU = {
@@ -363,6 +432,23 @@ var AU = {
       case "ui": this.tone({ f: 520, dur: 0.07, type: "sine", g: 0.12 }); break;
       case "boss": this.tone({ f: 80, f2: 40, dur: 1.2, type: "sawtooth", g: 0.3 });
                    this.tone({ f: 120, f2: 60, dur: 1.0, type: "square", g: 0.16, at: 0.06 }); break;
+      case "lord": this.tone({ f: 58, f2: 34, dur: 1.6, type: "sawtooth", g: 0.26 });
+                   this.tone({ f: 87, f2: 51, dur: 1.4, type: "square", g: 0.12, at: 0.05 });
+                   this.noise({ f: 180, dur: 1.2, g: 0.14, filter: "lowpass" }); break;
+      case "lordfire": this.tone({ f: 320, f2: 90, dur: 0.4, type: "sawtooth", g: 0.2 });
+                   this.noise({ f: 2200, dur: 0.3, g: 0.12, filter: "highpass" }); break;
+      case "block": this.tone({ f: 1200, f2: 2400, dur: 0.22, type: "sine", g: 0.22 });
+                   this.tone({ f: 800, f2: 1600, dur: 0.3, type: "triangle", g: 0.14, at: 0.02 });
+                   this.noise({ f: 3000, dur: 0.2, g: 0.1, filter: "highpass" }); break;
+      case "tp": this.tone({ f: 900, f2: 60, dur: 0.35, type: "sine", g: 0.2 });
+                 this.tone({ f: 60, f2: 900, dur: 0.35, type: "sine", g: 0.16, at: 0.3 }); break;
+      case "void": this.tone({ f: 40, f2: 22, dur: 1.8, type: "sine", g: 0.3 });
+                   this.noise({ f: 90, dur: 1.6, g: 0.2, filter: "lowpass" }); break;
+      case "voidhit": this.tone({ f: 30, f2: 18, dur: 2.6, type: "sine", g: 0.34 });
+                   this.tone({ f: 420, f2: 40, dur: 1.2, type: "sawtooth", g: 0.16 });
+                   this.noise({ f: 140, dur: 2.2, g: 0.22, filter: "lowpass" }); break;
+      case "rebirth": [262, 330, 392, 523, 659, 784, 1046].forEach(function (f, i) {
+                   AU.tone({ f: f, dur: 0.8, type: "triangle", g: 0.2, at: i * 0.11 }); }); break;
     }
   }
 };
@@ -393,17 +479,25 @@ var G = null;
 function makeTank(team, kind, x, y, opts) {
   opts = opts || {};
   var isYou = kind === "you";
-  var speed = isYou ? TUNE.playerSpeed * mySpeed() : (kind === "skilled" ? TUNE.skilledSpeed : kind === "boss" ? TUNE.bossSpeed : TUNE.botSpeed);
+  var speed = isYou ? TUNE.playerSpeed * mySpeed()
+            : (kind === "skilled" ? TUNE.skilledSpeed
+            : kind === "boss" ? TUNE.bossSpeed
+            : kind === "lord" ? TUNE.lordSpeed : TUNE.botSpeed);
+  if (opts.fast) speed *= 1.75;                     // "speedy", in the forest sense
+  // a cannon is bolted down
+  if (isYou && equipped() === "cannon" && inForest()) speed = 0;
   return {
-    team: team, kind: kind, boss: kind === "boss",
+    team: team, kind: kind, boss: kind === "boss", lord: kind === "lord",
+    curves: !!opts.curve || (isYou && inForest()),
+    curveSign: 1, stun: 0, blockT: 0, blockCd: 0, tp: 0, phase: 0, phaseT: 2.5, spin: 0,
     x: x, y: y, vx: 0, vy: 0,
     hull: team === "blue" ? 0 : Math.PI,
     turret: team === "blue" ? 0 : Math.PI,
-    r: kind === "boss" ? 40 : TUNE.tankR,
-    scale: kind === "boss" ? 1.85 : 1,
+    r: kind === "boss" ? 40 : kind === "lord" ? 44 : TUNE.tankR,
+    scale: kind === "boss" ? 1.85 : kind === "lord" ? 2 : 1,
     speed: speed,
     cd: 0,
-    fire: isYou ? myCooldown() : (kind === "skilled" ? TUNE.skilledFire : kind === "boss" ? 1.5 : TUNE.botFire),
+    fire: isYou ? myCooldown() : (kind === "skilled" ? TUNE.skilledFire : kind === "boss" ? 1.5 : kind === "lord" ? 1.0 : TUNE.botFire),
     shooters: opts.shooters || (isYou ? myShooters() : 1),
     dmg: isYou ? myDamage() : 1,
     wallCd: 0,
@@ -414,11 +508,37 @@ function makeTank(team, kind, x, y, opts) {
   };
 }
 
-function makeFlag(team, x, y) {
-  return { team: team, x: x, y: y, hp: TUNE.flagHp, max: TUNE.flagHp, wave: rnd(0, TAU), hitT: 0, down: false };
+function makeFlag(team, x, y, hp) {
+  hp = hp || TUNE.flagHp;
+  return { team: team, x: x, y: y, hp: hp, max: hp, wave: rnd(0, TAU), hitT: 0, down: false, born: 0 };
 }
+/* there are usually two flags. The void bullet makes three, and one of them
+ * changes sides, so everything below counts rather than assumes. */
+function flagsOf(team) {
+  var out = [];
+  for (var i = 0; i < G.flags.length; i++) if (G.flags[i].team === team && !G.flags[i].down) out.push(G.flags[i]);
+  return out;
+}
+function teamExposed(team) { return flagsOf(team).length === 0; }
 
-function arenaPillars(mode) {
+function arenaPillars(mode, level) {
+  if (mode === "forest") {
+    var p = [];
+    if (level === FOREST_LEVELS.length) {
+      // the dark lord's clearing: six stones round a ring, and two more inside
+      for (var i = 0; i < 6; i++) {
+        var a = (i / 6) * TAU + 0.3;
+        p.push({ x: W / 2 + Math.cos(a) * 420 - 30, y: H / 2 + Math.sin(a) * 250 - 70, w: 60, h: 150, tree: 0 });
+      }
+      p.push({ x: W / 2 - 150, y: H / 2 - 40, w: 46, h: 110, tree: 0 });
+      p.push({ x: W / 2 + 104, y: H / 2 - 40, w: 46, h: 110, tree: 0 });
+      return p;
+    }
+    // trees, scattered but never in front of a spawn
+    var seeds = [[520, 190], [700, 640], [980, 220], [1120, 610], [820, 400], [420, 700], [1250, 330]];
+    for (var k = 0; k < seeds.length; k++) p.push({ x: seeds[k][0], y: seeds[k][1], w: 54, h: 54, tree: 1 });
+    return p;
+  }
   if (mode !== "boss") return [];
   // the boss arena is the only one with permanent cover
   var p = [], cx = W / 2, cy = H / 2;
@@ -435,6 +555,7 @@ function startRound(mode, levelIndex) {
   if (mode === "bot") foes = [{ kind: "bot" }];
   else if (mode === "skilled") foes = [{ kind: "skilled" }];
   else if (mode === "boss") foes = [{ kind: "boss", shooters: 4 }];
+  else if (mode === "forest") foes = FOREST_LEVELS[(levelIndex || 1) - 1].foes;
   else foes = END_LEVELS[(levelIndex || 1) - 1].foes;
 
   var you = makeTank("blue", "you", 230, H / 2);
@@ -445,20 +566,30 @@ function startRound(mode, levelIndex) {
     var span = Math.min(560, 90 * (n - 1));
     var y = H / 2 + (n === 1 ? 0 : (i / (n - 1) - 0.5) * span);
     var x = W - 230 - (i % 3) * 60;
-    reds.push(makeTank("red", f.kind, x, clamp(y, 120, H - 120), { shooters: f.shooters }));
+    reds.push(makeTank("red", f.kind, x, clamp(y, 120, H - 120),
+      { shooters: f.shooters, curve: f.curve, fast: f.fast }));
   }
+  var lord = foes.length === 1 && foes[0].kind === "lord";
 
   G = {
     mode: mode, level: levelIndex || 1,
     you: you, foes: reds,
     flagBlue: makeFlag("blue", 110, H / 2),
-    flagRed: makeFlag("red", W - 110, H / 2),
+    flagRed: (function () { var f = makeFlag("red", W - 110, H / 2, lord ? 6 : 0); f.guarded = lord; return f; })(),
     shells: [], walls: [], parts: [], marks: [], rings: [],
-    pillars: arenaPillars(mode),
+    pillars: arenaPillars(mode, levelIndex || 1),
     t: 0, state: "intro", overT: 0, won: false,
     shake: 0, msg: "", msgT: 0, guard: TUNE.spawnGuard,
-    bossPhase: 0, bossTimer: 0
+    bossPhase: 0, bossTimer: 0,
+    zone: mode === "forest" ? 2 : 1, lord: lord,
+    voidUsed: false, hole: null, flies: [], glow: 0
   };
+  G.flags = [G.flagBlue, G.flagRed];
+  if (G.zone === 2) {
+    for (var fy = 0; fy < 46; fy++) {
+      G.flies.push({ x: rnd(40, W - 40), y: rnd(40, H - 40), ph: rnd(0, TAU), sp: rnd(0.2, 0.7), r: rnd(1.4, 3) });
+    }
+  }
   hudLevelText();
   say(mode === "boss" ? "THE BOSS" : "GO", 1.1);
 }
@@ -471,27 +602,92 @@ function tanksOf(team) {
   for (var i = 0; i < G.foes.length; i++) if (G.foes[i].alive) out.push(G.foes[i]);
   return out;
 }
-function flagOf(team) { return team === "blue" ? G.flagBlue : G.flagRed; }
-function foeFlagOf(team) { return team === "blue" ? G.flagRed : G.flagBlue; }
+function flagOf(team) {
+  var up = flagsOf(team);
+  return up.length ? up[0] : (team === "blue" ? G.flagBlue : G.flagRed);
+}
+/* what an enemy tank should be shooting at: their nearest standing flag */
+function foeFlagOf(team, from) {
+  var up = flagsOf(team === "blue" ? "red" : "blue");
+  if (!up.length) return team === "blue" ? G.flagRed : G.flagBlue;
+  if (!from) return up[0];
+  var best = up[0], bd = Infinity;
+  for (var i = 0; i < up.length; i++) {
+    var d = dist2(from.x, from.y, up[i].x, up[i].y);
+    if (d < bd) { bd = d; best = up[i]; }
+  }
+  return best;
+}
 
 /* ------------------------------------------------------------- shooting -- */
+/* one shell, with everything the forest can do to it bolted on */
+function pushShell(t, a, opt) {
+  opt = opt || {};
+  var you = t.kind === "you";
+  var sp = TUNE.shellSpeed * (opt.speed || 1);
+  var r = TUNE.shellR * (opt.size || 1);
+  var dmg = t.dmg * (opt.dmg || 1);
+  var curve = opt.curve || 0;
+  if (you && roundForest()) {
+    sp *= myBulletSpeed();
+    r *= myBulletSize();
+  }
+  var out = a + (opt.lean || 0);                     // the barrel kicks it sideways
+  var mx = t.x + Math.cos(out) * (TUNE.barrel * t.scale + 6);
+  var my = t.y + Math.sin(out) * (TUNE.barrel * t.scale + 6);
+  G.shells.push({
+    x: mx, y: my, a: out,
+    vx: Math.cos(out) * sp, vy: Math.sin(out) * sp, sp: sp,
+    team: t.team, dmg: dmg, life: TUNE.shellLife, trail: [],
+    r: r, curve: curve, home: opt.home || 0, kind: opt.kind || "",
+    col: opt.col || "", born: G.t,
+    tx: opt.lean ? t.x + Math.cos(a) * 820 : 0,      // where it is trying to end up
+    ty: opt.lean ? t.y + Math.sin(a) * 820 : 0
+  });
+  return G.shells[G.shells.length - 1];
+}
+
 function fireTank(t) {
   if (!t.alive || t.cd > 0 || G.state !== "play") return false;
+  if (t.stun > 0) return false;
   t.cd = t.fire;
   var n = t.shooters, base = t.turret;
   var spread = n === 2 ? 0.16 : n === 3 ? 0.3 : n === 4 ? 0.44 : 0;
+  var you = t.kind === "you";
+  var eq = you && roundForest() ? equipped() : "";
+  if (eq === "void" && roundZone() !== 2) eq = "";   // the hole only opens in the wood
+  /* what kind of shell is this one */
+  var opt = { curve: 0 };
+  if (t.curves) {
+    if (you) {
+      // it leaves the barrel half a radian off to one side and bends back onto
+      // the line you were pointing down: a banana that still lands. The side
+      // swaps every shot, so you can go round either edge of a wall.
+      var side = (t.curveSign = -t.curveSign);
+      opt.lean = 0.5 * side;
+      opt.curve = -TUNE.curveRate * side;
+      opt.bend = 1;
+    } else {
+      opt.curve = TUNE.curveRate;
+      opt.home = 1;                                   // theirs lean towards you
+    }
+  }
+  if (eq === "flash") { opt.speed = 3.2; opt.curve *= 0.3; opt.kind = "flash"; }
+  else if (eq === "cannon") { opt.speed = 0.85; opt.size = 2.1; opt.kind = "cannon"; opt.dmg = 3; }
+  else if (eq === "rng" && Math.random() < 0.1) { opt.dmg = 2; opt.size = 1.3; opt.kind = "gold"; }
+  else if (eq === "void" && !G.voidUsed) {
+    G.voidUsed = true;
+    opt.kind = "void"; opt.size = 2.6; opt.speed = 0.7; opt.dmg = 0;
+    AU.sfx("void");
+    say("THE HOLE IS OPEN", 1.6);
+  }
   for (var i = 0; i < n; i++) {
     var a;
     if (n >= 10) a = base + (i / n) * TAU;                    // the full blast goes everywhere
     else if (n === 1) a = base;
     else a = base - spread / 2 + (i / (n - 1)) * spread;
-    var mx = t.x + Math.cos(a) * (TUNE.barrel * t.scale + 6);
-    var my = t.y + Math.sin(a) * (TUNE.barrel * t.scale + 6);
-    G.shells.push({
-      x: mx, y: my, a: a,
-      vx: Math.cos(a) * TUNE.shellSpeed, vy: Math.sin(a) * TUNE.shellSpeed,
-      team: t.team, dmg: t.dmg, life: TUNE.shellLife, trail: []
-    });
+    if (opt.kind === "void" && i > 0) break;                  // one hole is plenty
+    pushShell(t, a, opt);
   }
   // muzzle flash and a shove
   for (var p = 0; p < 7; p++) {
@@ -565,6 +761,12 @@ function pushOutOfBox(t, r) {
 }
 
 function damageFlag(flag, amount) {
+  if (flag.icd > 0) {                       // still ringing from the last one
+    flag.hitT = 0.08;
+    AU.sfx("hitwall");
+    return;
+  }
+  if (flag.guarded) flag.icd = 0.55;
   if (flag.down) return;
   flag.hp -= amount;
   flag.hitT = TUNE.hitFlash;
@@ -620,12 +822,13 @@ function shellHits(s) {
     return true;
   }
   // flags
-  var fl = [G.flagBlue, G.flagRed];
-  for (var f = 0; f < fl.length; f++) {
-    var flag = fl[f];
+  var sr = s.r || TUNE.shellR;
+  for (var f = 0; f < G.flags.length; f++) {
+    var flag = G.flags[f];
     if (flag.down || flag.team === s.team) continue;
-    if (dist2(s.x, s.y, flag.x, flag.y - 34) < 44 * 44) {
-      damageFlag(flag, s.dmg);
+    if (dist2(s.x, s.y, flag.x, flag.y - 34) < (44 + sr) * (44 + sr)) {
+      if (s.kind === "void") { voidBlast(s, null, flag); return true; }
+      damageFlag(flag, s.kind === "cannon" ? 99 : s.dmg);
       burstAt(s.x, s.y, flag.team === "blue" ? "#1d6ef5" : "#e0352b");
       return true;
     }
@@ -635,9 +838,23 @@ function shellHits(s) {
   for (var t = 0; t < all.length; t++) {
     var tk = all[t];
     if (!tk.alive || tk.team === s.team) continue;
-    if (dist2(s.x, s.y, tk.x, tk.y) < (tk.r + TUNE.shellR) * (tk.r + TUNE.shellR)) {
-      var exposed = flagOf(tk.team).down;
-      if (exposed) {
+    if (dist2(s.x, s.y, tk.x, tk.y) < (tk.r + sr) * (tk.r + sr)) {
+      if (s.kind === "void") { voidBlast(s, tk, null); return true; }
+      // the dark lord throws up a blue wall whenever it feels like it
+      if (tk.lord && tk.blockCd <= 0 && Math.random() < (G.flagRed.hp <= 2 ? 0.45 : 0.34)) {
+        tk.blockT = 0.45; tk.blockCd = 0.5;
+        AU.sfx("block");
+        blockBurst(s.x, s.y, tk);
+        G.shake = Math.max(G.shake, 4);
+        return true;
+      }
+      if (tk.lord && tk.icd > 0) { tk.hitT = 0.08; return true; }
+      if (tk.lord) tk.icd = 0.4;
+      var exposed = teamExposed(tk.team);
+      if (s.kind === "cannon" && !tk.lord) {
+        killTank(tk);                                   // through armour, flag or no flag
+        burstAt(s.x, s.y, "#ffcf4a");
+      } else if (exposed) {
         killTank(tk);
       } else {
         tk.hitT = TUNE.hitFlash;
@@ -651,6 +868,63 @@ function shellHits(s) {
   return false;
 }
 
+/* --------------------------------------------------------- the void shot -
+ * It takes their flag and hands it back wearing your colours, then coughs a
+ * new one of theirs out in the middle of the wood where there is no cover.
+ * Whatever it hit is stunned for twenty and a bit seconds and thrown. */
+function voidBlast(s, tank, flag) {
+  var x = s.x, y = s.y;
+  G.hole = { x: x, y: y, t: 0, life: 2.6, r: 0 };
+  G.shake = Math.max(G.shake, 22);
+  AU.sfx("voidhit");
+  for (var i = 0; i < 90; i++) {
+    var a = rnd(0, TAU), d = rnd(40, 420);
+    G.parts.push({ x: x + Math.cos(a) * d, y: y + Math.sin(a) * d,
+      vx: -Math.cos(a) * rnd(160, 460), vy: -Math.sin(a) * rnd(160, 460),
+      life: rnd(0.4, 1.1), max: 1.1, col: i % 3 ? "#7b2fd0" : "#07040c", r: rnd(2, 5.5),
+      curve: rnd(-5, 5), grav: 0 });
+  }
+  G.rings.push({ x: x, y: y, r: 10, max: 420, life: 0.9, t: 0.9, col: "#a05cff" });
+  // their flag changes hands
+  var theirs = flagsOf(s.team === "blue" ? "red" : "blue");
+  if (theirs.length) {
+    var f = theirs[0];
+    f.team = s.team;
+    f.hp = f.max;
+    f.down = false;
+    f.hitT = 0.4;
+    for (var p = 0; p < 40; p++) {
+      G.parts.push({ x: f.x, y: f.y - 40, vx: rnd(-240, 240), vy: rnd(-300, 60),
+        life: rnd(0.3, 0.8), max: 0.8, col: p % 2 ? "#a05cff" : "#1d6ef5", r: rnd(2, 4), curve: rnd(-4, 4) });
+    }
+    // and a new one of theirs lands in the middle
+    var spat = makeFlag(s.team === "blue" ? "red" : "blue", W / 2, H / 2);
+    spat.born = G.t;
+    G.flags.push(spat);
+    if (spat.team === "red") G.flagRed = spat; else G.flagBlue = spat;
+    G.rings.push({ x: W / 2, y: H / 2, r: 6, max: 260, life: 0.7, t: 0.7, col: "#e0352b" });
+    say("THEIR FLAG IS IN THE OPEN", 2.2);
+  }
+  if (tank) {
+    tank.stun = 20.2;
+    var a2 = Math.atan2(s.vy, s.vx);
+    tank.vx = Math.cos(a2) * 1500;
+    tank.vy = Math.sin(a2) * 1500;
+    tank.hitT = 0.6;
+  }
+  refreshPips();
+}
+
+function blockBurst(x, y, tk) {
+  G.rings.push({ x: tk.x, y: tk.y, r: tk.r + 6, max: tk.r + 120, life: 0.45, t: 0.45, col: "#4fd8ff" });
+  G.rings.push({ x: x, y: y, r: 4, max: 90, life: 0.3, t: 0.3, col: "#bff0ff" });
+  for (var i = 0; i < 26; i++) {
+    var a = rnd(0, TAU);
+    G.parts.push({ x: x, y: y, vx: Math.cos(a) * rnd(80, 420), vy: Math.sin(a) * rnd(80, 420),
+      life: rnd(0.2, 0.55), max: 0.55, col: i % 2 ? "#4fd8ff" : "#ffffff", r: rnd(1.6, 4), curve: rnd(-6, 6), grav: 0 });
+  }
+}
+
 function burstAt(x, y, col) {
   for (var i = 0; i < 9; i++) {
     G.parts.push({ x: x, y: y, vx: rnd(-170, 170), vy: rnd(-170, 170),
@@ -662,6 +936,7 @@ function burstAt(x, y, col) {
 
 /* =============================================================== UPDATE === */
 function moveTank(t, dt, ax, ay) {
+  if (t.stun > 0) return;
   var sp = t.speed;
   var tvx = ax * sp, tvy = ay * sp;
   var k = 1 - Math.pow(0.0009, dt);           // snappy but not instant
@@ -755,12 +1030,12 @@ function incomingShell(t, reach) {
 function aiTank(t, dt) {
   var ai = t.ai;
   ai.t += dt;
-  var myFlag = flagOf(t.team), theirFlag = foeFlagOf(t.team);
-  var hunting = theirFlag.down;                       // their flag is gone: go for the tank
+  var myFlag = flagOf(t.team), theirFlag = foeFlagOf(t.team, t);
+  var hunting = teamExposed(t.team === "blue" ? "red" : "blue");   // no flags left: go for the tank
   var target = hunting ? G.you : { x: theirFlag.x, y: theirFlag.y - 34, vx: 0, vy: 0 };
   if (hunting && !G.you.alive) return;
 
-  var skilled = t.kind === "skilled" || t.boss;
+  var skilled = t.kind === "skilled" || t.boss || t.lord;
   var d = Math.hypot(target.x - t.x, target.y - t.y);
   var want = t.boss ? (G.bossPhase === 1 ? 130 : G.bossPhase === 2 ? 430 : 300)   // charging means closing in, not speeding up
             : skilled ? 380 : 420;
@@ -834,6 +1109,190 @@ function bossBrain(b, dt) {
   aiTank(b, dt);
 }
 
+/* ===========================================================================
+   THE DARK LORD. Not a tank: a thing in a tank's shape, in a wood, with a ring
+   of stones round it. It blocks about a third of what you throw at it with a
+   wall of blue light, it leans its shots at you as they fly, and every so often
+   - not often - it folds up and opens again somewhere else.
+
+   Five things it does, in no fixed order:
+     SPIRAL  a slow rotating stream, which fills the clearing
+     FAN     sixteen curved shots at once, all leaning your way
+     ORBS    four fat slow seekers that have to be driven round or shot out
+     HUNT    it closes on you at full speed, firing singles
+     RITUAL  it stands over its own flag and pulls every shell on screen in
+   and underneath all of it, it is faster than anything else in the game.
+   ========================================================================= */
+function lordFire(b, a, opt) {
+  opt = opt || {};
+  opt.col = opt.col || "#a05cff";
+  var sh = pushShell(b, a, opt);
+  for (var i = 0; i < 3; i++) {
+    G.parts.push({ x: sh.x, y: sh.y, vx: Math.cos(a) * rnd(40, 160), vy: Math.sin(a) * rnd(40, 160),
+      life: rnd(0.2, 0.5), max: 0.5, col: i % 2 ? "#7b2fd0" : "#07040c", r: rnd(2, 4.5), curve: rnd(-6, 6), grav: 0 });
+  }
+  return sh;
+}
+
+function lordTeleport(b) {
+  var you = G.you;
+  for (var i = 0; i < 46; i++) {                 // fold up
+    var a = rnd(0, TAU), d = rnd(20, 180);
+    G.parts.push({ x: b.x + Math.cos(a) * d, y: b.y + Math.sin(a) * d,
+      vx: -Math.cos(a) * rnd(120, 400), vy: -Math.sin(a) * rnd(120, 400),
+      life: rnd(0.2, 0.5), max: 0.5, col: i % 2 ? "#a05cff" : "#07040c", r: rnd(2, 5), curve: rnd(-7, 7), grav: 0 });
+  }
+  G.rings.push({ x: b.x, y: b.y, r: 120, max: 10, life: 0.3, t: 0.3, col: "#a05cff" });
+  // somewhere it can see you from, but not on top of you
+  var ta = rnd(0, TAU), tr = rnd(320, 520);
+  b.x = clamp(you.x + Math.cos(ta) * tr, 120, W - 120);
+  b.y = clamp(you.y + Math.sin(ta) * tr, 120, H - 120);
+  b.tp = 0.45;
+  for (var k = 0; k < 46; k++) {                 // open again
+    var a2 = rnd(0, TAU);
+    G.parts.push({ x: b.x, y: b.y, vx: Math.cos(a2) * rnd(120, 460), vy: Math.sin(a2) * rnd(120, 460),
+      life: rnd(0.25, 0.7), max: 0.7, col: k % 2 ? "#a05cff" : "#07040c", r: rnd(2, 5), curve: rnd(-7, 7), grav: 0 });
+  }
+  G.rings.push({ x: b.x, y: b.y, r: 8, max: 200, life: 0.5, t: 0.5, col: "#c79bff" });
+  G.shake = Math.max(G.shake, 10);
+  AU.sfx("tp");
+}
+
+function lordBrain(b, dt) {
+  var you = G.you;
+  var myFlag = flagOf("red");
+  var hurt = myFlag.down ? 0 : myFlag.hp;
+  var rage = myFlag.down ? 3 : hurt <= 2 ? 2 : hurt <= 4 ? 1 : 0;   // it gets worse as you win
+  b.speed = TUNE.lordSpeed + rage * 40;
+  b.fire = 1.0 - rage * 0.16;
+  if (b.tp > 0) b.tp -= dt;
+
+  /* ---- it does not stay put for long ---- */
+  b.tpT = (b.tpT == null ? rnd(7, 11) : b.tpT) - dt;
+  var cornered = dist2(b.x, b.y, you.x, you.y) < 230 * 230;
+  if (b.tpT <= 0 || (cornered && b.tpSafe <= 0)) {
+    lordTeleport(b);
+    b.tpT = rnd(9, 14) - rage;                 // not often, and never twice in a row
+    b.tpSafe = 6;
+  }
+  if (b.tpSafe > 0) b.tpSafe -= dt;
+
+  /* ---- which of the five it is doing ---- */
+  b.phaseT -= dt;
+  if (b.phaseT <= 0) {
+    if (!b.bag || !b.bag.length) {           // all five, shuffled, then all five again
+      b.bag = [0, 1, 2, 3, 4];
+      for (var sIx = b.bag.length - 1; sIx > 0; sIx--) {
+        var jIx = (Math.random() * (sIx + 1)) | 0, tmpIx = b.bag[sIx];
+        b.bag[sIx] = b.bag[jIx]; b.bag[jIx] = tmpIx;
+      }
+      if (b.bag[0] === b.phase) b.bag.push(b.bag.shift());
+    }
+    b.phase = b.bag.shift();
+    b.phaseT = b.phase === 0 ? 4.2 : b.phase === 2 ? 3.4 : b.phase === 4 ? 3.0 : 4.6;
+    b.sub = 0;
+    if (b.phase === 0) say("IT IS TURNING", 1.1);
+    if (b.phase === 1) say("ALL AT ONCE", 1.1);
+    if (b.phase === 2) say("IT HAS SENT SOMETHING", 1.2);
+    if (b.phase === 3) say("IT IS COMING", 1.2);
+    if (b.phase === 4) say("IT IS CALLING THEM BACK", 1.2);
+    AU.sfx("lord");
+  }
+
+  var toYou = angTo(b.x, b.y, you.x, you.y);
+  var d = Math.hypot(you.x - b.x, you.y - b.y);
+  var ax = 0, ay = 0;
+
+  if (b.phase === 0) {
+    /* SPIRAL: it turns on the spot and lays down a wall of shots */
+    b.spin += dt * 2.3;
+    b.turret = b.spin;
+    b.sub -= dt;
+    if (b.sub <= 0 && G.guard <= 0) {
+      b.sub = 0.2 - rage * 0.02;
+      lordFire(b, b.spin, { curve: 0.7, home: 0, speed: 0.95 });
+      lordFire(b, b.spin + Math.PI, { curve: 0.7, home: 0, speed: 0.95 });
+    }
+    ax = Math.cos(toYou + Math.PI) * 0.4; ay = Math.sin(toYou + Math.PI) * 0.4;
+  } else if (b.phase === 1) {
+    /* FAN: one enormous volley, then it stands there and lets you come */
+    b.turret += clamp(angDiff(b.turret, toYou), -4 * dt, 4 * dt);
+    b.sub -= dt;
+    if (b.sub <= 0 && G.guard <= 0) {
+      b.sub = 2.1 - rage * 0.3;
+      var n = 12 + rage * 2;
+      for (var i = 0; i < n; i++) {
+        var a = toYou - 0.9 + (i / (n - 1)) * 1.8;
+        lordFire(b, a, { curve: (i % 2 ? 1 : -1) * 0.8, home: 1, speed: 1.05 });
+      }
+      G.shake = Math.max(G.shake, 7);
+      AU.sfx("lordfire");
+    }
+    ax = Math.cos(toYou + Math.PI / 2) * 0.7; ay = Math.sin(toYou + Math.PI / 2) * 0.7;
+  } else if (b.phase === 2) {
+    /* ORBS: fat, slow, and they do not give up */
+    b.turret += clamp(angDiff(b.turret, toYou), -3 * dt, 3 * dt);
+    b.sub -= dt;
+    if (b.sub <= 0 && G.guard <= 0) {
+      b.sub = 1.6;
+      for (var k = 0; k < 3 + rage; k++) {
+        lordFire(b, toYou + rnd(-1.2, 1.2), { curve: 1.2, home: 1, speed: 0.42, size: 2.4, col: "#c79bff" });
+      }
+      AU.sfx("lordfire");
+    }
+    ax = Math.cos(toYou + Math.PI) * 0.5; ay = Math.sin(toYou + Math.PI) * 0.5;
+  } else if (b.phase === 3) {
+    /* HUNT: straight at you, fast, firing singles */
+    b.turret += clamp(angDiff(b.turret, leadAim(b, you, TUNE.shellSpeed)), -5 * dt, 5 * dt);
+    if (b.cd <= 0 && G.guard <= 0) {
+      b.cd = 0.34;
+      lordFire(b, b.turret, { curve: (Math.random() < 0.5 ? 1 : -1) * 0.9, home: 1, speed: 1.3 });
+    }
+    if (d > 180) { ax = Math.cos(toYou); ay = Math.sin(toYou); }
+    else { ax = Math.cos(toYou + 2.2); ay = Math.sin(toYou + 2.2); }
+  } else {
+    /* RITUAL: it stands on its flag and drags every shell on screen towards it,
+       which is the one window where you can get close and hit the flag */
+    var fx = myFlag.x, fy = myFlag.y;
+    var fd = Math.hypot(fx - b.x, fy - b.y);
+    if (fd > 70) { var fa = angTo(b.x, b.y, fx, fy); ax = Math.cos(fa); ay = Math.sin(fa); }
+    b.spin += dt * 4;
+    b.turret = b.spin;
+    for (var sIdx = 0; sIdx < G.shells.length; sIdx++) {
+      var sh = G.shells[sIdx];
+      if (sh.team !== "blue") continue;
+      var pa = angTo(sh.x, sh.y, b.x, b.y);
+      sh.a = sh.a + clamp(angDiff(sh.a, pa), -1.6 * dt, 1.6 * dt);
+      var sp2 = sh.sp || Math.hypot(sh.vx, sh.vy);
+      sh.vx = Math.cos(sh.a) * sp2; sh.vy = Math.sin(sh.a) * sp2;
+    }
+    if ((G.t * 60 | 0) % 2 === 0) {
+      var ra = rnd(0, TAU);
+      G.parts.push({ x: b.x + Math.cos(ra) * 260, y: b.y + Math.sin(ra) * 260,
+        vx: -Math.cos(ra) * 320, vy: -Math.sin(ra) * 320, life: 0.8, max: 0.8,
+        col: "#7b2fd0", r: rnd(2, 4), curve: rnd(-5, 5), grav: 0 });
+    }
+  }
+
+  /* dodging, because it is also simply a very good tank */
+  var inc = incomingShell(b, 420);
+  if (inc && b.phase !== 4) {
+    var sa = Math.atan2(inc.vy, inc.vx);
+    var side = angDiff(sa, angTo(inc.x, inc.y, b.x, b.y)) > 0 ? 1 : -1;
+    ax = Math.cos(sa + side * Math.PI / 2); ay = Math.sin(sa + side * Math.PI / 2);
+  }
+  var m = Math.hypot(ax, ay);
+  if (m > 1) { ax /= m; ay /= m; }
+  moveTank(b, dt, ax, ay);
+
+  /* it leaves a trail of itself behind */
+  if ((G.t * 60 | 0) % 2 === 0) {
+    G.parts.push({ x: b.x + rnd(-26, 26), y: b.y + rnd(-26, 26), vx: rnd(-30, 30), vy: rnd(-40, 10),
+      life: rnd(0.3, 0.9), max: 0.9, col: Math.random() < 0.5 ? "#07040c" : "#7b2fd0",
+      r: rnd(2, 6), curve: rnd(-4, 4), grav: 0 });
+  }
+}
+
 function updateWorld(dt) {
   G.t += dt;
   if (G.guard > 0) G.guard -= dt;
@@ -850,7 +1309,8 @@ function updateWorld(dt) {
     if (IN.aim.active) aimA = angTo(you.x, you.y, IN.aim.x, IN.aim.y);
     else if (IN.usedMouse) aimA = angTo(you.x, you.y, IN.mx, IN.my);
     if (aimA === null) {
-      var tgt = G.flagRed.down ? nearestFoe(you) : { x: G.flagRed.x, y: G.flagRed.y - 34 };
+      var rf = flagsOf("red")[0];
+      var tgt = rf ? { x: rf.x, y: rf.y - 34 } : nearestFoe(you);
       if (tgt) aimA = angTo(you.x, you.y, tgt.x, tgt.y);
     }
     if (aimA !== null) {
@@ -868,13 +1328,25 @@ function updateWorld(dt) {
     if (!f.alive) continue;
     if (G.state !== "play") continue;
     if (G.guard > 0) { f.cd = Math.max(f.cd, 0.4); continue; }
-    if (f.boss) bossBrain(f, dt); else aiTank(f, dt);
+    if (f.lord) lordBrain(f, dt); else if (f.boss) bossBrain(f, dt); else aiTank(f, dt);
   }
 
   /* ---- cooldowns ---- */
   var all = [you].concat(G.foes);
   for (var c = 0; c < all.length; c++) {
     var t = all[c];
+    if (t.stun > 0) {
+      t.stun -= dt;
+      t.x = clamp(t.x + t.vx * dt, 60, W - 60);
+      t.y = clamp(t.y + t.vy * dt, 60, H - 60);
+      t.vx *= 0.9; t.vy *= 0.9;
+      t.spin = (t.spin || 0) + dt * 6;
+      if ((G.t * 60 | 0) % 3 === 0) G.parts.push({ x: t.x + rnd(-20, 20), y: t.y + rnd(-20, 20),
+        vx: rnd(-40, 40), vy: rnd(-60, 0), life: rnd(0.3, 0.7), max: 0.7, col: "#7b2fd0", r: rnd(2, 4), curve: rnd(-4, 4), grav: 0 });
+    }
+    if (t.blockT > 0) t.blockT -= dt;
+    if (t.icd > 0) t.icd -= dt;
+    if (t.blockCd > 0) t.blockCd -= dt;
     if (t.cd > 0) t.cd = Math.max(0, t.cd - dt);
     if (t.wallCd > 0) t.wallCd = Math.max(0, t.wallCd - dt);
     if (t.hitT > 0) t.hitT -= dt;
@@ -885,7 +1357,29 @@ function updateWorld(dt) {
     var sh = G.shells[s];
     sh.life -= dt;
     sh.trail.push(sh.x, sh.y);
-    if (sh.trail.length > 16) sh.trail.splice(0, 2);
+    if (sh.trail.length > (sh.kind === "void" ? 30 : 16)) sh.trail.splice(0, 2);
+    /* a curved shell turns as it flies; a homing one leans towards you, but
+     * only for the first second and a half, so it can still be out-driven */
+    if (sh.curve) {
+      var cv = sh.curve;
+      var age = TUNE.shellLife - sh.life;
+      if (sh.home && G.you.alive && age < 1.6) {
+        var want = angTo(sh.x, sh.y, G.you.x, G.you.y);
+        cv = clamp(angDiff(sh.a, want) * 2.4, -1.5, 1.5);
+      } else if (sh.tx && age < 2.2) {
+        var w2 = angTo(sh.x, sh.y, sh.tx, sh.ty);
+        cv = clamp(angDiff(sh.a, w2) * 3.2, -1.9, 1.9);
+      }
+      sh.a += cv * dt;
+      var spd = sh.sp || Math.hypot(sh.vx, sh.vy);
+      sh.vx = Math.cos(sh.a) * spd;
+      sh.vy = Math.sin(sh.a) * spd;
+      if (G.zone === 2 && (G.t * 60 | 0) % 2 === 0) {
+        G.parts.push({ x: sh.x, y: sh.y, vx: rnd(-20, 20), vy: rnd(-20, 20),
+          life: rnd(0.2, 0.5), max: 0.5, r: rnd(1.4, 3), curve: rnd(-5, 5), grav: 0,
+          col: sh.kind === "void" ? "#07040c" : sh.team === "blue" ? "#6fa8ff" : "#8b3fd8" });
+      }
+    }
     sh.x += sh.vx * dt;
     sh.y += sh.vy * dt;
     var out = sh.x < 8 || sh.x > W - 8 || sh.y < 8 || sh.y > H - 8;
@@ -909,8 +1403,19 @@ function updateWorld(dt) {
     var pt = G.parts[p];
     pt.life -= dt;
     if (pt.life <= 0) { G.parts.splice(p, 1); continue; }
+    if (pt.curve) {                       // the forest's own motes bend as they go
+      var pa = Math.atan2(pt.vy, pt.vx) + pt.curve * dt;
+      var pm = Math.hypot(pt.vx, pt.vy);
+      pt.vx = Math.cos(pa) * pm; pt.vy = Math.sin(pa) * pm;
+    }
     pt.x += pt.vx * dt; pt.y += pt.vy * dt;
-    pt.vx *= 0.96; pt.vy = pt.vy * 0.96 + 140 * dt;
+    pt.vx *= 0.96;
+    pt.vy = pt.vy * 0.96 + (pt.grav === 0 ? 0 : 140) * dt;
+    if (G.hole) {                          // and everything leans into the hole
+      var hx = G.hole.x - pt.x, hy = G.hole.y - pt.y;
+      var hd = Math.hypot(hx, hy) || 1;
+      if (hd < 520) { pt.vx += (hx / hd) * 900 * dt; pt.vy += (hy / hd) * 900 * dt; }
+    }
   }
   for (var r = G.rings.length - 1; r >= 0; r--) {
     var rg = G.rings[r];
@@ -924,9 +1429,16 @@ function updateWorld(dt) {
       if (G.marks[m].life <= 0) G.marks.splice(m, 1);
     }
   }
-  G.flagBlue.wave += dt * 2.2; G.flagRed.wave += dt * 2.2;
-  if (G.flagBlue.hitT > 0) G.flagBlue.hitT -= dt;
-  if (G.flagRed.hitT > 0) G.flagRed.hitT -= dt;
+  for (var fw = 0; fw < G.flags.length; fw++) {
+    G.flags[fw].wave += dt * 2.2;
+    if (G.flags[fw].hitT > 0) G.flags[fw].hitT -= dt;
+    if (G.flags[fw].icd > 0) G.flags[fw].icd -= dt;
+  }
+  if (G.hole) {
+    G.hole.t += dt;
+    G.hole.r = lerp(G.hole.r, 120, 1 - Math.pow(0.004, dt));
+    if (G.hole.t > G.hole.life) G.hole = null;
+  }
 
   /* ---- is it over ---- */
   if (G.state === "play") {
@@ -982,14 +1494,21 @@ function toWorld(px, py) {
   return { x: (px * VIEW.dpr - VIEW.ox) / VIEW.scale, y: (py * VIEW.dpr - VIEW.oy) / VIEW.scale };
 }
 
-function teamCol(team) { return team === "blue" ? "#1d6ef5" : "#e0352b"; }
-function teamDark(team) { return team === "blue" ? "#0d49b0" : "#9c1d16"; }
+function teamCol(team) {
+  if (team === "red" && G && G.zone === 2) return G.lord ? "#7b2fd0" : "#2f7a46";
+  return team === "blue" ? "#1d6ef5" : "#e0352b";
+}
+function teamDark(team) {
+  if (team === "red" && G && G.zone === 2) return G.lord ? "#3d1470" : "#17502b";
+  return team === "blue" ? "#0d49b0" : "#9c1d16";
+}
 function box(x, y, w, h, r) {
   g.beginPath();
   if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h);
 }
 
 function drawArena() {
+  if (G.zone === 2) { drawWood(); return; }
   g.fillStyle = "#ffffff";
   g.fillRect(0, 0, W, H);
   // a very quiet grid, so movement reads without colouring the arena
@@ -1028,9 +1547,299 @@ function drawArena() {
   g.beginPath(); g.arc(W - 230, H / 2, 64, 0, TAU); g.stroke();
 }
 
+/* the forest floor: black-green, fog in the hollows, a ring of old stones for
+   the last rung, and fireflies that are probably fireflies */
+function drawWood() {
+  var lord = G.lord;
+  var g1 = g.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, 1000);
+  if (lord) { g1.addColorStop(0, "#1a0b2a"); g1.addColorStop(0.5, "#0d0618"); g1.addColorStop(1, "#05020a"); }
+  else { g1.addColorStop(0, "#132a1c"); g1.addColorStop(0.55, "#0b1a12"); g1.addColorStop(1, "#060f0a"); }
+  g.fillStyle = g1;
+  g.fillRect(0, 0, W, H);
+
+  // undergrowth: short strokes, denser at the edges
+  g.strokeStyle = lord ? "rgba(120,60,190,.1)" : "rgba(90,170,110,.09)";
+  g.lineWidth = 3;
+  g.beginPath();
+  for (var i = 0; i < 150; i++) {
+    var px = ((i * 137.5) % W), py = ((i * 311.7) % H);
+    var edge = Math.min(px, W - px, py, H - py);
+    if (edge > 300 && i % 3) continue;
+    g.moveTo(px, py); g.lineTo(px + ((i % 5) - 2) * 4, py - 12 - (i % 9));
+  }
+  g.stroke();
+
+  // the ring in the middle
+  g.strokeStyle = lord ? "rgba(160,92,255,.5)" : "rgba(120,200,150,.22)";
+  g.lineWidth = lord ? 5 : 3;
+  g.beginPath(); g.arc(W / 2, H / 2, 150, 0, TAU); g.stroke();
+  if (lord) {
+    var pul = 0.5 + Math.sin(G.t * 1.6) * 0.5;
+    g.globalAlpha = 0.25 + pul * 0.4;
+    g.strokeStyle = "#a05cff"; g.lineWidth = 2;
+    g.beginPath(); g.arc(W / 2, H / 2, 150 + pul * 26, 0, TAU); g.stroke();
+    // runes round the ring
+    for (var r = 0; r < 12; r++) {
+      var ra = (r / 12) * TAU + G.t * 0.12;
+      var rx = W / 2 + Math.cos(ra) * 150, ry = H / 2 + Math.sin(ra) * 150;
+      g.save(); g.translate(rx, ry); g.rotate(ra);
+      g.globalAlpha = 0.5 + pul * 0.4;
+      g.fillStyle = "#c79bff";
+      g.fillRect(-3, -14, 6, 10); g.fillRect(-9, -2, 18, 4);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+  }
+
+  // mist in bands
+  for (var m = 0; m < 5; m++) {
+    var my = (m * 190 + (G.t * 9) % 190) % (H + 160) - 80;
+    var gr = g.createLinearGradient(0, my - 60, 0, my + 60);
+    gr.addColorStop(0, "rgba(255,255,255,0)");
+    gr.addColorStop(0.5, lord ? "rgba(150,110,210,.05)" : "rgba(190,230,205,.055)");
+    gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr;
+    g.fillRect(0, my - 60, W, 120);
+  }
+
+  // fireflies
+  for (var f = 0; f < G.flies.length; f++) {
+    var fl = G.flies[f];
+    var a2 = 0.25 + 0.75 * Math.abs(Math.sin(G.t * fl.sp + fl.ph));
+    g.globalAlpha = a2 * 0.8;
+    g.fillStyle = lord ? "#b06cff" : "#bff07a";
+    g.beginPath();
+    g.arc(fl.x + Math.sin(G.t * 0.4 + fl.ph) * 16, fl.y + Math.cos(G.t * 0.33 + fl.ph) * 12, fl.r, 0, TAU);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+
+  // boundary: a wall of trunks
+  g.strokeStyle = lord ? "#1d0f30" : "#0a1710";
+  g.lineWidth = 6;
+  g.strokeRect(3, 3, W - 6, H - 6);
+  g.fillStyle = lord ? "#140826" : "#081108";
+  for (var tI = 0; tI < 42; tI++) {
+    var tw = 26 + (tI % 4) * 9;
+    var tx = (tI * 193) % (W - 40);
+    g.fillRect(tx, 0, tw, 26 + (tI % 5) * 7);
+    g.fillRect((tx + 97) % (W - 40), H - (24 + (tI % 4) * 9), tw, 24 + (tI % 4) * 9);
+  }
+  for (var tJ = 0; tJ < 22; tJ++) {
+    var th = 30 + (tJ % 4) * 11;
+    var ty = (tJ * 171) % (H - 40);
+    g.fillRect(0, ty, 22 + (tJ % 3) * 8, th);
+    g.fillRect(W - (20 + (tJ % 3) * 9), (ty + 61) % (H - 40), 20 + (tJ % 3) * 9, th);
+  }
+
+  // spawn pads
+  g.lineWidth = 3;
+  g.strokeStyle = "rgba(109,168,255,.35)";
+  g.beginPath(); g.arc(230, H / 2, 64, 0, TAU); g.stroke();
+  g.strokeStyle = lord ? "rgba(160,92,255,.45)" : "rgba(224,53,43,.3)";
+  g.beginPath(); g.arc(W - 230, H / 2, 64, 0, TAU); g.stroke();
+}
+
+/* the black hole the void bullet leaves behind */
+function drawHole() {
+  if (!G.hole) return;
+  var h = G.hole, k = clamp(1 - h.t / h.life, 0, 1);
+  g.save();
+  g.translate(h.x, h.y);
+  g.rotate(G.t * 2.2);
+  var rr = h.r * k;
+  var gr = g.createRadialGradient(0, 0, rr * 0.2, 0, 0, rr * 3.2);
+  gr.addColorStop(0, "rgba(0,0,0,1)");
+  gr.addColorStop(0.42, "rgba(20,4,40,.92)");
+  gr.addColorStop(0.72, "rgba(123,47,208,.35)");
+  gr.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = gr;
+  g.beginPath(); g.arc(0, 0, rr * 3.2, 0, TAU); g.fill();
+  g.fillStyle = "#000000";
+  g.beginPath(); g.arc(0, 0, rr, 0, TAU); g.fill();
+  g.strokeStyle = "rgba(199,155,255,.9)"; g.lineWidth = 3;
+  for (var i = 0; i < 3; i++) {
+    g.globalAlpha = 0.8 * k;
+    g.beginPath();
+    g.ellipse(0, 0, rr * (1.5 + i * 0.5), rr * (0.4 + i * 0.16), i * 0.7, 0, TAU);
+    g.stroke();
+  }
+  g.restore();
+}
+
+/* ------------------------------------------------------- THE DARK LORD -- */
+function drawLord(t) {
+  var s = t.scale, pul = 0.5 + Math.sin(G.t * 3) * 0.5;
+  g.save();
+  g.translate(t.x, t.y);
+  g.globalAlpha = t.tp > 0 ? clamp(1 - t.tp / 0.45, 0.1, 1) : 1;
+
+  // the shadow it casts is bigger than it is
+  g.save();
+  g.globalAlpha *= 0.5;
+  var sg = g.createRadialGradient(0, 0, 10, 0, 0, 150);
+  sg.addColorStop(0, "rgba(10,0,20,.8)"); sg.addColorStop(1, "rgba(10,0,20,0)");
+  g.fillStyle = sg;
+  g.beginPath(); g.arc(0, 0, 150, 0, TAU); g.fill();
+  g.restore();
+
+  // two rings of runes, turning against each other
+  for (var ring = 0; ring < 2; ring++) {
+    g.save();
+    g.rotate(G.t * (ring ? -0.5 : 0.8));
+    g.strokeStyle = ring ? "rgba(123,47,208,.75)" : "rgba(199,155,255,.6)";
+    g.lineWidth = ring ? 4 : 2;
+    var rr = ring ? 78 : 96;
+    g.beginPath(); g.arc(0, 0, rr, 0, TAU); g.stroke();
+    for (var i = 0; i < (ring ? 8 : 14); i++) {
+      var a = (i / (ring ? 8 : 14)) * TAU;
+      g.beginPath();
+      g.moveTo(Math.cos(a) * (rr - 9), Math.sin(a) * (rr - 9));
+      g.lineTo(Math.cos(a) * (rr + 9), Math.sin(a) * (rr + 9));
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  // hull: a black hexagon with a purple edge
+  g.save();
+  g.rotate(t.hull);
+  g.beginPath();
+  for (var h = 0; h < 6; h++) {
+    var ha = (h / 6) * TAU;
+    var hx = Math.cos(ha) * 42 * s * 0.6, hy = Math.sin(ha) * 34 * s * 0.6;
+    if (h === 0) g.moveTo(hx, hy); else g.lineTo(hx, hy);
+  }
+  g.closePath();
+  g.fillStyle = t.hitT > 0 ? "#3a1060" : "#0a0412";
+  g.fill();
+  g.strokeStyle = "#7b2fd0"; g.lineWidth = 4; g.stroke();
+  g.strokeStyle = "rgba(199,155,255," + (0.3 + pul * 0.5) + ")"; g.lineWidth = 2; g.stroke();
+  // plating
+  g.strokeStyle = "rgba(160,92,255,.35)"; g.lineWidth = 2;
+  for (var pl = -1; pl <= 1; pl++) {
+    g.beginPath(); g.moveTo(-24 * s * 0.6, pl * 9 * s * 0.6); g.lineTo(24 * s * 0.6, pl * 9 * s * 0.6); g.stroke();
+  }
+  g.restore();
+
+  // the barrel, and the core it is fed from
+  g.save();
+  g.rotate(t.turret);
+  g.fillStyle = "#05010a";
+  g.fillRect(0, -7 * s * 0.7, 54 * s * 0.7, 14 * s * 0.7);
+  g.strokeStyle = "#7b2fd0"; g.lineWidth = 3;
+  g.strokeRect(0, -7 * s * 0.7, 54 * s * 0.7, 14 * s * 0.7);
+  var mg = g.createRadialGradient(54 * s * 0.7, 0, 1, 54 * s * 0.7, 0, 22);
+  mg.addColorStop(0, "rgba(199,155,255,.9)"); mg.addColorStop(1, "rgba(160,92,255,0)");
+  g.fillStyle = mg;
+  g.beginPath(); g.arc(54 * s * 0.7, 0, 22, 0, TAU); g.fill();
+  g.restore();
+
+  // the eye
+  var eg = g.createRadialGradient(0, 0, 2, 0, 0, 34 + pul * 10);
+  eg.addColorStop(0, "#ffffff");
+  eg.addColorStop(0.25, "#c79bff");
+  eg.addColorStop(0.7, "rgba(123,47,208,.55)");
+  eg.addColorStop(1, "rgba(123,47,208,0)");
+  g.fillStyle = eg;
+  g.beginPath(); g.arc(0, 0, 34 + pul * 10, 0, TAU); g.fill();
+  g.fillStyle = "#07040c";
+  g.beginPath(); g.ellipse(0, 0, 9, 16 - pul * 5, 0, 0, TAU); g.fill();
+
+  // three shards, orbiting
+  for (var sh = 0; sh < 3; sh++) {
+    var sa = G.t * 1.4 + (sh / 3) * TAU;
+    var sx = Math.cos(sa) * 108, sy = Math.sin(sa) * 108 * 0.7;
+    g.save();
+    g.translate(sx, sy);
+    g.rotate(sa * 2);
+    g.fillStyle = "#1a0b2a";
+    g.strokeStyle = "#a05cff"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, -13); g.lineTo(8, 0); g.lineTo(0, 13); g.lineTo(-8, 0); g.closePath();
+    g.fill(); g.stroke();
+    g.restore();
+  }
+
+  // the wall of blue light, when it decides it has had enough of your shells
+  if (t.blockT > 0) {
+    var bk = clamp(t.blockT / 0.45, 0, 1);
+    g.globalAlpha = bk;
+    g.strokeStyle = "#4fd8ff"; g.lineWidth = 6;
+    g.beginPath();
+    for (var b2 = 0; b2 <= 6; b2++) {
+      var ba = (b2 / 6) * TAU + G.t * 3;
+      var bx = Math.cos(ba) * 104, by = Math.sin(ba) * 104;
+      if (b2 === 0) g.moveTo(bx, by); else g.lineTo(bx, by);
+    }
+    g.stroke();
+    g.globalAlpha = bk * 0.18;
+    g.fillStyle = "#4fd8ff";
+    g.fill();
+    g.globalAlpha = bk * 0.55;
+    g.strokeStyle = "#dffbff"; g.lineWidth = 1.5;
+    for (var l = 0; l < 6; l++) {
+      var la = (l / 6) * TAU + G.t * 3;
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(la) * 104, Math.sin(la) * 104); g.stroke();
+    }
+    // the rim is where the light is
+    g.globalAlpha = bk;
+    g.strokeStyle = "rgba(223,251,255,.9)"; g.lineWidth = 2;
+    g.beginPath();
+    for (var b3 = 0; b3 <= 6; b3++) {
+      var b3a = (b3 / 6) * TAU + G.t * 3;
+      var b3x = Math.cos(b3a) * 112, b3y = Math.sin(b3a) * 112;
+      if (b3 === 0) g.moveTo(b3x, b3y); else g.lineTo(b3x, b3y);
+    }
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+  g.restore();
+
+  // name plate, because it has earned one
+  g.save();
+  g.globalAlpha = 0.9;
+  g.fillStyle = "#c79bff";
+  g.font = "700 20px ui-sans-serif,system-ui,sans-serif";
+  g.textAlign = "center";
+  g.fillText("THE DARK LORD", t.x, t.y - 128);
+  g.restore();
+}
+
 function drawPillars() {
   for (var i = 0; i < G.pillars.length; i++) {
     var p = G.pillars[i];
+    if (p.tree) {
+      // a trunk, seen from above, with a canopy over it
+      g.fillStyle = "rgba(4,10,6,.55)";
+      g.beginPath(); g.arc(p.x + p.w / 2 + 6, p.y + p.h / 2 + 8, p.w * 1.5, 0, TAU); g.fill();
+      g.fillStyle = "#15351f";
+      g.beginPath(); g.arc(p.x + p.w / 2, p.y + p.h / 2, p.w * 1.35, 0, TAU); g.fill();
+      g.fillStyle = "#1d4a2b";
+      g.beginPath(); g.arc(p.x + p.w / 2 - 6, p.y + p.h / 2 - 6, p.w * 0.95, 0, TAU); g.fill();
+      g.fillStyle = "#2a1a10";
+      g.beginPath(); g.arc(p.x + p.w / 2, p.y + p.h / 2, p.w * 0.36, 0, TAU); g.fill();
+      continue;
+    }
+    if (G.zone === 2) {
+      // a standing stone: wider at the base, chipped at the top, lit from within
+      var cx2 = p.x + p.w / 2, top = p.y, bot = p.y + p.h;
+      g.fillStyle = "rgba(2,0,6,.5)";
+      g.beginPath(); g.ellipse(cx2 + 6, bot - 4, p.w * 0.8, 12, 0, 0, TAU); g.fill();
+      g.beginPath();
+      g.moveTo(p.x + 6, bot); g.lineTo(p.x - 2, top + 22); g.lineTo(cx2 - 8, top);
+      g.lineTo(cx2 + 10, top + 6); g.lineTo(p.x + p.w + 2, top + 26); g.lineTo(p.x + p.w - 5, bot);
+      g.closePath();
+      g.fillStyle = "#170d24"; g.fill();
+      g.strokeStyle = "#6a3aa8"; g.lineWidth = 3; g.stroke();
+      var gl = 0.3 + Math.sin(G.t * 1.5 + p.x) * 0.25;
+      g.strokeStyle = "rgba(199,155,255," + gl + ")"; g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(cx2 - 9, top + 40); g.lineTo(cx2 + 9, top + 40);
+      g.moveTo(cx2, top + 34); g.lineTo(cx2, top + 62);
+      g.moveTo(cx2 - 7, top + 74); g.lineTo(cx2 + 7, top + 86);
+      g.stroke();
+      continue;
+    }
     g.fillStyle = "#ffffff";
     g.fillRect(p.x, p.y, p.w, p.h);
     g.strokeStyle = "#141821"; g.lineWidth = 5;
@@ -1151,6 +1960,7 @@ function drawFlag(f) {
 
 function drawTank(t) {
   if (!t.alive) return;
+  if (t.lord) { drawLord(t); return; }
   var col = teamCol(t.team), dark = teamDark(t.team);
   var flash = t.hitT > 0;
   var s = t.scale, i, a;
@@ -1228,7 +2038,7 @@ function drawTank(t) {
     g.beginPath(); g.arc(0, 0, 54, 0, TAU); g.stroke();
     g.restore();
   }
-  if (flagOf(t.team).down) {                    // no flag, no armour
+  if (teamExposed(t.team)) {                    // no flag, no armour
     g.save();
     g.globalAlpha = 0.6;
     g.strokeStyle = "#141821"; g.lineWidth = 2;
@@ -1261,12 +2071,44 @@ function drawAimLine() {
   g.moveTo(you.x + Math.cos(a) * 46, you.y + Math.sin(a) * 46);
   g.lineTo(you.x + Math.cos(a) * 700, you.y + Math.sin(a) * 700);
   g.stroke();
+  /* in the wood, trace where the banana actually goes - both sides of it, since
+     the next shot swaps */
+  if (roundForest()) {
+    g.setLineDash([]);
+    var sp = TUNE.shellSpeed * myBulletSpeed();
+    var tx = you.x + Math.cos(a) * 820, ty = you.y + Math.sin(a) * 820;
+    for (var side = -1; side <= 1; side += 2) {
+      var next = side === you.curveSign * -1;
+      g.globalAlpha = next ? 0.5 : 0.16;
+      g.lineWidth = next ? 3 : 2;
+      var px = you.x + Math.cos(a + 0.5 * side) * 46;
+      var py = you.y + Math.sin(a + 0.5 * side) * 46;
+      var pa = a + 0.5 * side, dt2 = 1 / 30;
+      g.beginPath(); g.moveTo(px, py);
+      for (var i = 0; i < 44; i++) {
+        var cv = -TUNE.curveRate * side;
+        if (i * dt2 < 2.2) cv = clamp(angDiff(pa, angTo(px, py, tx, ty)) * 3.2, -1.9, 1.9);
+        pa += cv * dt2;
+        px += Math.cos(pa) * sp * dt2;
+        py += Math.sin(pa) * sp * dt2;
+        if (px < 0 || px > W || py < 0 || py > H) break;
+        g.lineTo(px, py);
+      }
+      g.stroke();
+    }
+  }
   g.restore();
 }
 
 function drawShell(s) {
-  g.strokeStyle = s.team === "blue" ? "#bcd4fd" : "#f8cdc9";
-  g.lineWidth = 4;
+  var scale = (s.r || TUNE.shellR) / TUNE.shellR;
+  if (s.kind === "void") { drawVoidShell(s); return; }
+  g.strokeStyle = s.col ? "rgba(160,92,255,.55)"
+    : s.kind === "gold" ? "rgba(255,207,74,.75)"
+    : s.kind === "flash" ? "rgba(120,240,255,.8)"
+    : s.team === "blue" ? "#bcd4fd"
+    : (G.zone === 2 ? "rgba(122,214,150,.75)" : "#f8cdc9");
+  g.lineWidth = 4 * scale;
   g.beginPath();
   for (var i = 0; i < s.trail.length; i += 2) {
     if (i === 0) g.moveTo(s.trail[i], s.trail[i + 1]); else g.lineTo(s.trail[i], s.trail[i + 1]);
@@ -1276,15 +2118,54 @@ function drawShell(s) {
   g.save();
   g.translate(s.x, s.y);
   g.rotate(s.a);
-  g.fillStyle = "#ffffff";
-  g.strokeStyle = "#141821";
+  g.scale(scale, scale);
+  if (s.col) {                                     // the dark lord's magic
+    var lg = g.createRadialGradient(0, 0, 1, 0, 0, 20);
+    lg.addColorStop(0, "#ffffff"); lg.addColorStop(0.3, s.col);
+    lg.addColorStop(1, "rgba(123,47,208,0)");
+    g.fillStyle = lg;
+    g.beginPath(); g.arc(0, 0, 20, 0, TAU); g.fill();
+    g.fillStyle = "#07040c";
+    g.beginPath(); g.arc(0, 0, 5, 0, TAU); g.fill();
+    g.strokeStyle = s.col; g.lineWidth = 2;
+    g.beginPath(); g.arc(0, 0, 9 + Math.sin(G.t * 12) * 2, 0, TAU); g.stroke();
+    g.restore();
+    return;
+  }
+  g.fillStyle = s.kind === "gold" ? "#ffcf4a" : s.kind === "flash" ? "#9ff4ff" : "#ffffff";
+  g.strokeStyle = s.kind === "cannon" ? "#6b4a00" : "#141821";
   g.lineWidth = 3;
   g.beginPath();
   g.moveTo(10, 0); g.lineTo(2, -6); g.lineTo(-8, -6); g.lineTo(-8, 6); g.lineTo(2, 6);
   g.closePath();
   g.fill(); g.stroke();
-  g.fillStyle = teamCol(s.team);
+  g.fillStyle = s.kind === "gold" ? "#b8860b" : s.kind === "cannon" ? "#2a2a2a" : teamCol(s.team);
   g.fillRect(-8, -6, 4, 12);
+  if (s.kind === "gold" || s.kind === "flash") {
+    g.globalAlpha = 0.5 + Math.sin(G.t * 20) * 0.3;
+    g.strokeStyle = s.kind === "gold" ? "#ffe9a8" : "#dffbff";
+    g.lineWidth = 2;
+    g.beginPath(); g.arc(0, 0, 13, 0, TAU); g.stroke();
+  }
+  g.restore();
+}
+
+function drawVoidShell(s) {
+  g.save();
+  g.translate(s.x, s.y);
+  g.rotate(G.t * 5);
+  var r = s.r || 18;
+  var vg = g.createRadialGradient(0, 0, 1, 0, 0, r * 3);
+  vg.addColorStop(0, "#000000");
+  vg.addColorStop(0.5, "rgba(26,11,42,.9)");
+  vg.addColorStop(1, "rgba(123,47,208,0)");
+  g.fillStyle = vg;
+  g.beginPath(); g.arc(0, 0, r * 3, 0, TAU); g.fill();
+  g.fillStyle = "#000000";
+  g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+  g.strokeStyle = "rgba(199,155,255,.9)"; g.lineWidth = 2;
+  g.beginPath(); g.ellipse(0, 0, r * 2, r * 0.7, 0, 0, TAU); g.stroke();
+  g.beginPath(); g.ellipse(0, 0, r * 2, r * 0.7, 1.1, 0, TAU); g.stroke();
   g.restore();
 }
 
@@ -1339,9 +2220,9 @@ function drawFrame() {
   g.beginPath(); g.rect(0, 0, W, H); g.clip();
   drawArena();
   drawMarks();
+  drawHole();
   drawPillars();
-  drawFlag(G.flagBlue);
-  drawFlag(G.flagRed);
+  for (var df = 0; df < G.flags.length; df++) drawFlag(G.flags[df]);
   for (var w = 0; w < G.walls.length; w++) drawWall(G.walls[w]);
   drawAimLine();
   drawTank(G.you);
@@ -1366,10 +2247,13 @@ function pipRow(el, hp, max) {
 }
 function refreshPips() {
   if (!G) return;
-  pipRow($("pipsYou"), G.flagBlue.hp, G.flagBlue.max);
-  pipRow($("pipsFoe"), G.flagRed.hp, G.flagRed.max);
+  var mine = flagsOf("blue"), theirs = flagsOf("red");
+  var a = mine.length ? mine[0] : G.flagBlue, b = theirs.length ? theirs[0] : G.flagRed;
+  pipRow($("pipsYou"), a.down ? 0 : a.hp, a.max);
+  pipRow($("pipsFoe"), b.down ? 0 : b.hp, b.max);
 }
 function modeName(mode, level) {
+  if (mode === "forest") return "THE FOREST " + level + "/" + FOREST_LEVELS.length + " \u00b7 " + FOREST_LEVELS[level - 1].label;
   if (mode === "bot") return "A BOT";
   if (mode === "skilled") return "A SKILLED BOT";
   if (mode === "boss") return "THE TANK BOSS";
@@ -1378,7 +2262,7 @@ function modeName(mode, level) {
 function hudLevelText() { $("hudLv").textContent = modeName(G.mode, G.level); }
 
 /* ============================================================== SCREENS === */
-var SCREENS = ["menu", "modes", "shop", "codes", "game", "result"];
+var SCREENS = ["menu", "modes", "shop", "bullets", "codes", "game", "result"];
 function show(id) {
   for (var i = 0; i < SCREENS.length; i++) $(SCREENS[i]).classList.toggle("show", SCREENS[i] === id);
   if (id !== "game") { IN.keys = {}; IN.mouseDown = false; IN.fireHeld = false; IN.stick.active = false; IN.aim.active = false; }
@@ -1389,6 +2273,9 @@ var GLYPH = {
   skilled: '<svg viewBox="0 0 44 44"><rect x="6" y="20" width="26" height="12" rx="3" fill="#fff" stroke="#e0352b" stroke-width="3"/><rect x="14" y="12" width="12" height="9" rx="2" fill="#e0352b"/><rect x="25" y="14" width="14" height="4" fill="#e0352b"/><path d="M8 10 L12 4 L16 10 Z" fill="#e0352b"/><path d="M34 10 L38 4 L42 10 Z" fill="#e0352b"/></svg>',
   end: '<svg viewBox="0 0 44 44"><rect x="5" y="30" width="7" height="9" fill="#1d6ef5"/><rect x="14" y="24" width="7" height="15" fill="#1d6ef5"/><rect x="23" y="16" width="7" height="23" fill="#1d6ef5"/><rect x="32" y="6" width="7" height="33" fill="#1d6ef5"/></svg>',
   lock: '<svg viewBox="0 0 44 44"><rect x="11" y="19" width="22" height="18" rx="3" fill="#fff" stroke="#c9cfdb" stroke-width="3"/><path d="M16 19 v-5 a6 6 0 0 1 12 0 v5" fill="none" stroke="#c9cfdb" stroke-width="3"/><circle cx="22" cy="27" r="3" fill="#c9cfdb"/></svg>',
+  forest: '<svg viewBox="0 0 44 44"><path d="M22 4 L34 22 H10 Z" fill="#2f7a46"/><path d="M22 14 L36 34 H8 Z" fill="#1d4a2b"/><rect x="19" y="32" width="6" height="8" fill="#2a1a10"/></svg>',
+  lord: '<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="16" fill="#0a0412" stroke="#7b2fd0" stroke-width="3"/><circle cx="22" cy="22" r="6" fill="#c79bff"/><path d="M22 2 v6 M22 36 v6 M2 22 h6 M36 22 h6" stroke="#a05cff" stroke-width="3"/></svg>',
+  bullet: '<svg viewBox="0 0 44 44"><path d="M8 22 C18 8 30 8 38 22 C30 36 18 36 8 22 Z" fill="#fff" stroke="#1d6ef5" stroke-width="3"/><circle cx="24" cy="22" r="5" fill="#1d6ef5"/></svg>',
   boss: '<svg viewBox="0 0 44 44"><rect x="5" y="18" width="34" height="16" rx="4" fill="#e0352b" stroke="#9c1d16" stroke-width="3"/><rect x="15" y="8" width="14" height="11" rx="2" fill="#9c1d16"/><rect x="27" y="10" width="15" height="5" fill="#9c1d16"/><rect x="2" y="10" width="15" height="5" fill="#9c1d16"/></svg>'
 };
 
@@ -1403,6 +2290,24 @@ function modeButton(glyph, title, sub, cls, onClick) {
 function buildModes() {
   var list = $("modeList");
   list.innerHTML = "";
+  if (inForest()) {
+    // the white arena is gone. It was traded in.
+    var lv = SAVE.fLevel, L = FOREST_LEVELS[lv - 1];
+    list.appendChild(modeButton(lv === FOREST_LEVELS.length ? GLYPH.lord : GLYPH.forest, "THE FOREST",
+      "Endless &middot; rung " + lv + " of " + FOREST_LEVELS.length + " &middot; " + L.label +
+      " &middot; " + L.coins + (L.coins === 1 ? " coin" : " coins") +
+      (SAVE.fBeaten ? " &middot; cleared " + SAVE.fWins + "x" : ""),
+      "", function () { playRound("forest", SAVE.fLevel); }));
+    if (SAVE.shopOpen) {
+      var eq = equipped();
+      var nm = "";
+      for (var bi = 0; bi < BULLETS.length; bi++) if (BULLETS[bi].id === eq) nm = BULLETS[bi].name;
+      list.appendChild(modeButton(GLYPH.bullet, "THE SHOP",
+        eq ? "Loaded: " + nm : "Buy a bullet and load it &middot; one a round", "", function () { buildBullets(); show("bullets"); }));
+    }
+    $("coinCount").textContent = SAVE.coins;
+    return;
+  }
   list.appendChild(modeButton(GLYPH.bot, "PLAY A BOT",
     "Slower than you, and slow on the trigger", "", function () { playRound("bot"); }));
   list.appendChild(modeButton(GLYPH.skilled, "SKILLED BOT",
@@ -1417,6 +2322,11 @@ function buildModes() {
       "boss", function () { playRound("boss"); }));
   } else {
     list.appendChild(modeButton(GLYPH.lock, "LOCKED", "Beat end mode to find out", "locked", null));
+  }
+  if (allMaxed()) {
+    list.appendChild(modeButton(GLYPH.forest, "REBIRTH",
+      "Every upgrade is bought. Hand the white arena in and walk into the wood &middot; in UPGRADES",
+      "", function () { buildShop(); show("shop"); }));
   }
   $("coinCount").textContent = SAVE.coins;
 }
@@ -1462,10 +2372,123 @@ function upgradeCard(o) {
   return wrap;
 }
 
+var rebirthArmed = false;
+function rebirthCard() {
+  var wrap = document.createElement("div");
+  wrap.className = "up";
+  wrap.innerHTML =
+    '<div class="head"><b>REBIRTH</b><span>ONCE</span></div>' +
+    '<div class="now">Every upgrade in the white arena is bought. You can hand the whole thing in - the bots, the ten rungs, the tank boss, all of it, for good - and come out in a wood where everything you fire bends. You keep your coins and your tank. There is no way back.</div>' +
+    '<div class="bar"><i style="width:100%"></i></div><div class="buy"></div>';
+  var buy = wrap.querySelector(".buy");
+  var b = document.createElement("button");
+  b.className = "btn small";
+  b.textContent = rebirthArmed ? "YES. BURN IT." : "REBIRTH";
+  b.addEventListener("click", function () {
+    if (!rebirthArmed) { rebirthArmed = true; AU.sfx("deny"); buildShop(); return; }
+    doRebirth();
+  });
+  buy.appendChild(b);
+  var p = document.createElement("span");
+  p.className = "pill";
+  p.textContent = rebirthArmed ? "THERE IS NO WAY BACK" : "THE WHITE ARENA GOES";
+  buy.appendChild(p);
+  return wrap;
+}
+function doRebirth() {
+  SAVE.zone = 2;
+  SAVE.fLevel = 1;
+  rebirthArmed = false;
+  saveNow();
+  AU.sfx("rebirth");
+  buildShop();
+  buildModes();
+  show("modes");
+}
+
+function buildBullets() {
+  $("bulletCoins").textContent = SAVE.coins;
+  var list = $("bulletList");
+  list.innerHTML = "";
+  for (var i = 0; i < BULLETS.length; i++) {
+    (function (B) {
+      var have = owns(B.id), on = SAVE.equip === B.id;
+      var wrap = document.createElement("div");
+      wrap.className = "up";
+      wrap.innerHTML =
+        '<div class="head"><b>' + B.name + '</b><span>' + (have ? (on ? "LOADED" : "OWNED") : B.cost + " COINS") + '</span></div>' +
+        '<div class="now">' + B.blurb + '</div>' +
+        '<div class="bar"><i style="width:' + (have ? 100 : 0) + '%"></i></div>' +
+        '<div class="buy"></div>';
+      var buy = wrap.querySelector(".buy");
+      var btn = document.createElement("button");
+      if (!have) {
+        btn.className = "btn small" + (SAVE.coins >= B.cost ? "" : " ghost");
+        btn.textContent = "BUY &middot; " + B.cost;
+        btn.innerHTML = "BUY &middot; " + B.cost + " COINS";
+        if (SAVE.coins < B.cost) btn.disabled = true;
+        btn.addEventListener("click", function () {
+          if (SAVE.coins < B.cost) { AU.sfx("deny"); return; }
+          SAVE.coins -= B.cost;
+          own(B.id);
+          if (!SAVE.equip) SAVE.equip = B.id;
+          saveNow(); AU.sfx("buy"); buildBullets(); buildModes();
+        });
+      } else {
+        btn.className = "btn small" + (on ? "" : " ghost");
+        btn.textContent = on ? "UNLOAD" : "LOAD IT";
+        btn.addEventListener("click", function () {
+          SAVE.equip = on ? "" : B.id;        // only ever one at a time
+          saveNow(); AU.sfx("ui"); buildBullets(); buildModes();
+        });
+      }
+      buy.appendChild(btn);
+      var p = document.createElement("span");
+      p.className = "pill";
+      p.innerHTML = B.note;
+      buy.appendChild(p);
+      list.appendChild(wrap);
+    })(BULLETS[i]);
+  }
+  var note = document.createElement("div");
+  note.className = "tiny";
+  note.textContent = "ONE BULLET AT A TIME \u00b7 IT LASTS THE WHOLE ROUND";
+  list.appendChild(note);
+}
+
 function buildShop() {
   $("shopCoins").textContent = SAVE.coins;
   var list = $("shopList");
   list.innerHTML = "";
+  if (inForest()) {
+    list.appendChild(upgradeCard({
+      name: "CURVE SPEED", level: SAVE.bspeed, levels: BSPEED_LEVELS.length,
+      now: "Your shells bend across the wood at speed " + myBulletSpeed() + ".",
+      cost: BSPEED_COSTS[SAVE.bspeed],
+      next: SAVE.bspeed < BSPEED_LEVELS.length ? "SPEED " + BSPEED_LEVELS[SAVE.bspeed] : "",
+      buy: function () { SAVE.bspeed++; }
+    }));
+    list.appendChild(upgradeCard({
+      name: "SHELL SIZE", level: SAVE.bsize, levels: BSIZE_LEVELS.length,
+      now: "Your shells are size " + myBulletSize() + ". Bigger is harder to miss with.",
+      cost: BSIZE_COSTS[SAVE.bsize],
+      next: SAVE.bsize < BSIZE_LEVELS.length ? "SIZE " + BSIZE_LEVELS[SAVE.bsize] : "",
+      buy: function () { SAVE.bsize++; }
+    }));
+    list.appendChild(upgradeCard({
+      name: "THE SHOP", level: SAVE.shopOpen ? 2 : 1, levels: 2,
+      now: SAVE.shopOpen ? "Open. Four kinds of bullet, one loaded at a time."
+                         : "There is somebody in the wood who sells bullets. Ten coins and he will open the shutter.",
+      cost: SHOP_COST,
+      next: "FOUR BULLETS",
+      buy: function () { SAVE.shopOpen = true; }
+    }));
+    var fnote = document.createElement("div");
+    fnote.className = "tiny";
+    fnote.textContent = "COINS COME FROM THE FOREST \u00b7 FIFTEEN FOR THE DARK LORD";
+    list.appendChild(fnote);
+    return;
+  }
   list.appendChild(upgradeCard({
     name: "DAMAGE", level: SAVE.dmg, levels: DMG_LEVELS.length,
     now: "Each shell takes " + myDamage() + " off a flag. A flag has 3.",
@@ -1495,6 +2518,7 @@ function buildShop() {
     next: SAVE.shooters < SHOOTER_LEVELS.length ? SHOOTER_LEVELS[SAVE.shooters] + " BARRELS" : "",
     buy: function () { SAVE.shooters++; }
   }));
+  if (allMaxed()) list.appendChild(rebirthCard());
   var note = document.createElement("div");
   note.className = "tiny";
   note.textContent = "COINS COME FROM END MODE · ONE A WIN";
@@ -1519,7 +2543,7 @@ function playRound(mode, level) {
 
 /* End mode and the boss do not hand out second chances: lose once and the run
  * starts over from the bottom and you are put back on the main menu. */
-function harshMode(mode) { return mode === "end" || mode === "boss"; }
+function harshMode(mode) { return mode === "end" || mode === "boss" || mode === "forest"; }
 var resultHome = false;
 
 function showResult() {
@@ -1538,12 +2562,20 @@ function showResult() {
     } else if (mode === "boss") {
       reward = SAVE.bossBeaten ? 3 : 10;
       SAVE.bossBeaten = true;
+    } else if (mode === "forest") {
+      reward = forestReward(level);
+      if (level === FOREST_LEVELS.length) {       // endless: the wood starts again
+        SAVE.fBeaten = true;
+        SAVE.fWins++;
+        SAVE.fLevel = 1;
+      } else if (level === SAVE.fLevel) SAVE.fLevel = level + 1;
     }
     SAVE.coins += reward;
     saveNow();
   } else if (harshMode(mode)) {
-    wiped = mode === "end" && SAVE.endLevel > 1;
+    wiped = (mode === "end" && SAVE.endLevel > 1) || (mode === "forest" && SAVE.fLevel > 1);
     if (mode === "end") SAVE.endLevel = 1;       // all the way back down the ladder
+    if (mode === "forest") SAVE.fLevel = 1;
     saveNow();
   }
   resultHome = !won && harshMode(mode);
@@ -1558,6 +2590,12 @@ function showResult() {
                   : "Rung " + level + " down. Next up: " + END_LEVELS[Math.min(level, END_LEVELS.length - 1)].label + ".")
       : "Rung " + level + " held. " + END_LEVELS[level - 1].label + " is still standing, and there are no retries: "
         + (wiped ? "end mode goes all the way back to rung one." : "end mode starts again at rung one.");
+  } else if (mode === "forest") {
+    text = won
+      ? (level === FOREST_LEVELS.length
+          ? "The dark lord came apart in the ring of stones. The wood is quiet, and it starts again at the bottom."
+          : "Rung " + level + " of the wood. Next: " + FOREST_LEVELS[level].label + ".")
+      : "Rung " + level + " held. " + FOREST_LEVELS[level - 1].label + " is still out there, and there are no retries: the wood starts again at rung one.";
   } else if (mode === "boss") {
     text = won ? "The big one is scrap." : "The big one is still rolling. Start it again from the top.";
   } else {
@@ -1573,7 +2611,15 @@ function showResult() {
 
   var lad = $("resLadder");
   lad.innerHTML = "";
-  lad.style.display = mode === "end" ? "grid" : "none";
+  lad.style.display = (mode === "end" || mode === "forest") ? "grid" : "none";
+  if (mode === "forest") {
+    for (var fi = 1; fi <= FOREST_LEVELS.length; fi++) {
+      var fd = document.createElement("div");
+      fd.className = "rung" + (fi < SAVE.fLevel || SAVE.fBeaten ? " done" : "") + (fi === SAVE.fLevel ? " now" : "");
+      fd.textContent = fi;
+      lad.appendChild(fd);
+    }
+  }
   if (mode === "end") {
     for (var i = 1; i <= END_LEVELS.length; i++) {
       var d = document.createElement("div");
@@ -1585,10 +2631,12 @@ function showResult() {
   }
   var nextBtn = $("resNext"), menuBtn = $("resMenu");
   if (mode === "end" && won && !(level === END_LEVELS.length)) nextBtn.textContent = "RUNG " + SAVE.endLevel;
+  else if (mode === "forest" && won) nextBtn.textContent = "RUNG " + SAVE.fLevel;
   else nextBtn.textContent = won ? "AGAIN" : "TRY AGAIN";
   nextBtn.onclick = function () {
     AU.sfx("ui");
     if (mode === "end") playRound("end", won ? SAVE.endLevel : level);
+    else if (mode === "forest") playRound("forest", won ? SAVE.fLevel : level);
     else playRound(mode);
   };
   // no way back into the round: the only button out is the main menu
@@ -1735,6 +2783,7 @@ function bindMenu() {
   $("backHome").addEventListener("click", function (e) { e.preventDefault(); AU.sfx("ui"); show("menu"); });
   $("shopBtn").addEventListener("click", function () { AU.sfx("ui"); buildShop(); show("shop"); });
   $("shopBack").addEventListener("click", function (e) { e.preventDefault(); AU.sfx("ui"); buildModes(); show("modes"); });
+  $("bulletsBack").addEventListener("click", function (e) { e.preventDefault(); AU.sfx("ui"); buildModes(); show("modes"); });
   $("codesBtn").addEventListener("click", function () {
     AU.sfx("ui"); $("codeNote").innerHTML = "&nbsp;"; $("codeInput").value = ""; show("codes");
   });
@@ -1814,6 +2863,14 @@ window.__tanks = {
   aimAt: function (x, y) { IN.usedMouse = true; IN.mx = x; IN.my = y; },
   fire: function () { IN.firePressed = true; },
   coins: function (n) { SAVE.coins = n; saveNow(); buildShop(); buildModes(); },
+  rebirth: function () { doRebirth(); },
+  buy: function (id) { own(id); SAVE.shopOpen = true; saveNow(); },
+  equip: function (id) { SAVE.equip = id || ""; saveNow(); },
+  maxOut: function () {
+    SAVE.rate = RATE_LEVELS.length; SAVE.dmg = DMG_LEVELS.length;
+    SAVE.shooters = SHOOTER_LEVELS.length; SAVE.speed = SPEED_LEVELS.length;
+    saveNow(); buildShop(); buildModes();
+  },
   giveUp: function () { giveUp(); },
   screen: function () { for (var i = 0; i < SCREENS.length; i++) if ($(SCREENS[i]).classList.contains("show")) return SCREENS[i]; return "?"; }
 };

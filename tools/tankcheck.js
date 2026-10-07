@@ -547,6 +547,335 @@ function serve() {
   const aim2 = await phone.evaluate(() => window.__tanks.g().you.turret);
   ok(Math.abs(aim2 - aim) > 0.05, 'touching the right half aims the turret', aim.toFixed(2) + ' -> ' + aim2.toFixed(2));
 
+  /* =================================================== REBIRTH AND THE WOOD */
+  console.log('\n-- rebirth');
+  await page.evaluate(() => { localStorage.clear(); });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => window.__tanks, { timeout: 15000 });
+
+  const beforeRb = await page.evaluate(() => {
+    document.getElementById('playBtn').click();
+    const txt = document.getElementById('modeList').textContent;
+    document.getElementById('shopBtn').click();
+    return { modes: txt, shop: document.getElementById('shopList').textContent, zone: window.__tanks.save.zone };
+  });
+  ok(beforeRb.modes.indexOf('REBIRTH') < 0, 'no rebirth until every upgrade is bought');
+  ok(beforeRb.shop.indexOf('REBIRTH') < 0, 'and no rebirth card in the upgrades either');
+
+  const armed = await page.evaluate(() => {
+    window.__tanks.maxOut();
+    const shop = document.getElementById('shopList').textContent;
+    // the first press only arms it
+    const cards = document.querySelectorAll('#shopList .up');
+    const last = cards[cards.length - 1];
+    const btn = last.querySelector('button');
+    const first = btn.textContent;
+    btn.click();
+    const second = document.querySelectorAll('#shopList .up button')[document.querySelectorAll('#shopList .up button').length - 1].textContent;
+    return { shop: shop, first: first, second: second, zone: window.__tanks.save.zone };
+  });
+  ok(armed.shop.indexOf('REBIRTH') >= 0, 'with everything maxed the rebirth card is there');
+  ok(/REBIRTH/.test(armed.first) && /BURN/.test(armed.second), 'it takes two presses', armed.first + ' -> ' + armed.second);
+  ok(armed.zone === 1, 'one press does not send you');
+
+  const after = await page.evaluate(() => {
+    const btns = document.querySelectorAll('#shopList .up button');
+    btns[btns.length - 1].click();                    // the second press
+    const T = window.__tanks;
+    return { zone: T.save.zone, screen: T.screen(), modes: document.getElementById('modeList').textContent, fLevel: T.save.fLevel };
+  });
+  ok(after.zone === 2, 'the second press takes you to the wood', 'zone ' + after.zone);
+  ok(after.modes.indexOf('THE FOREST') >= 0, 'the forest is the game now');
+  ok(after.modes.indexOf('END MODE') < 0 && after.modes.indexOf('PLAY A BOT') < 0 && after.modes.indexOf('TANK BOSS') < 0,
+    'and the white arena is gone for good');
+  ok(after.fLevel === 1, 'you start at the bottom of the wood');
+
+  console.log('\n-- the six rungs');
+  const rungs = await page.evaluate(() => {
+    const T = window.__tanks, out = [];
+    for (let i = 1; i <= 6; i++) {
+      T.start('forest', i); T.setPaused(true);
+      const G = T.g();
+      out.push({
+        n: i, kind: G.foes[0].kind, curves: !!G.foes[0].curves, fast: Math.round(G.foes[0].speed),
+        shooters: G.foes[0].shooters, flagHp: G.flagRed.max, zone: G.zone, lord: !!G.lord,
+        label: document.getElementById('hudLv').textContent
+      });
+    }
+    return out;
+  });
+  ok(rungs.every((r) => r.curves), 'every rung in the wood curves its shots');
+  ok(rungs[0].kind === 'bot' && rungs[1].kind === 'skilled', 'a bot, then a skilled one');
+  ok(rungs[2].fast > rungs[0].fast && rungs[3].fast > rungs[1].fast, 'the speedy ones are faster',
+    rungs[0].fast + ' -> ' + rungs[2].fast);
+  ok(rungs[4].shooters === 10, 'rung five fires ten curved shots', rungs[4].shooters);
+  ok(rungs[5].kind === 'lord' && rungs[5].lord, 'rung six is the dark lord');
+  ok(rungs[5].flagHp === 6, 'and it guards a six-hit flag', rungs[5].flagHp);
+
+  console.log('\n-- curved shells and the two upgrades');
+  const curve = await page.evaluate(() => {
+    const T = window.__tanks;
+    T.start('forest', 1); T.setPaused(true);
+    const G = T.g();
+    const mine = () => { const m = G.shells.filter((s) => s.team === 'blue'); return m[m.length - 1]; };
+    G.guard = 0; G.you.cd = 0; G.you.turret = 0;
+    T.fire(); T.step(1);
+    const s1 = mine();
+    const a0 = s1.a;
+    T.step(40);
+    const a1 = s1.a;
+    G.you.cd = 0; T.fire(); T.step(1);
+    const s2 = mine();
+    return { bend: a1 - a0, sign1: Math.sign(s1.curve), sign2: Math.sign(s2.curve) };
+  });
+  ok(Math.abs(curve.bend) > 0.3, 'your shells bend as they fly', curve.bend.toFixed(2) + ' rad');
+  ok(curve.sign1 === -curve.sign2, 'and they alternate, so you can bend round either side');
+
+  const ups = await page.evaluate(() => {
+    const T = window.__tanks, S = T.save;
+    S.bspeed = 2; S.bsize = 2;                       // 1.2 speed, 1.1 size
+    T.start('forest', 1); T.setPaused(true);
+    const G = T.g();
+    G.guard = 0; G.you.cd = 0;
+    T.fire(); T.step(1);
+    const mine1 = G.shells.filter((x) => x.team === 'blue');
+    const s = mine1[mine1.length - 1];
+    S.bspeed = 6; S.bsize = 11;                      // 2.0 and 2.0
+    T.start('forest', 1); T.setPaused(true);
+    const G2 = T.g();
+    G2.guard = 0; G2.you.cd = 0;
+    T.fire(); T.step(1);
+    const mine2 = G2.shells.filter((x) => x.team === 'blue');
+    const s2 = mine2[mine2.length - 1];
+    S.bspeed = 1; S.bsize = 1;
+    return { sp2: s.sp, r2: s.r, spMax: s2.sp, rMax: s2.r };
+  });
+  ok(Math.abs(ups.sp2 / 275 - 1.2) < 0.01, 'curve speed 2 is 1.2x', (ups.sp2 / 275).toFixed(2));
+  ok(Math.abs(ups.r2 / 7 - 1.1) < 0.01, 'shell size 2 is 1.1x', (ups.r2 / 7).toFixed(2));
+  ok(Math.abs(ups.spMax / 275 - 2) < 0.01 && Math.abs(ups.rMax / 7 - 2) < 0.01, 'and the top of both ladders is 2x');
+
+  console.log('\n-- the shop');
+  const fshop = await page.evaluate(() => {
+    const T = window.__tanks;
+    T.coins(1000);
+    document.getElementById('shopBtn').click();
+    const before = document.getElementById('shopList').textContent;
+    const cards = document.querySelectorAll('#shopList .up');
+    cards[2].querySelector('button').click();        // THE SHOP, ten coins
+    document.getElementById('shopBack').click();
+    const modes = document.getElementById('modeList').textContent;
+    return { before: before, open: T.save.shopOpen, coins: T.save.coins, modes: modes };
+  });
+  ok(fshop.before.indexOf('CURVE SPEED') >= 0 && fshop.before.indexOf('SHELL SIZE') >= 0,
+    'the wood sells curve speed and shell size');
+  ok(fshop.open === true && fshop.coins === 990, 'the shop costs ten coins', fshop.coins + ' left');
+  ok(fshop.modes.indexOf('THE SHOP') >= 0, 'and then there is a shop on the mode screen');
+
+  const prices = await page.evaluate(() => {
+    const names = [];
+    document.querySelectorAll('#modeList button')[1].click();
+    document.querySelectorAll('#bulletList .up').forEach((c) => names.push(c.textContent));
+    return names.join(' | ');
+  });
+  ok(/RNG BULLET/.test(prices) && /10 COINS/.test(prices), 'the rng bullet is ten');
+  ok(/FLASH BULLET/.test(prices) && /25 COINS/.test(prices), 'the flash bullet is twenty-five');
+  ok(/CANNON/.test(prices) && /30 COINS/.test(prices), 'the cannon is thirty');
+  ok(/VOID BULLET/.test(prices) && /500 COINS/.test(prices), 'and the void bullet is five hundred');
+
+  const bullets = await page.evaluate(() => {
+    const T = window.__tanks;
+    const out = {};
+    const mine = (G) => { const m = G.shells.filter((s) => s.team === 'blue'); return m[m.length - 1]; };
+    // flash: same damage, much faster
+    T.buy('flash'); T.equip('flash');
+    T.start('forest', 1); T.setPaused(true);
+    let G = T.g(); G.guard = 0; G.you.cd = 0; T.fire(); T.step(1);
+    let sh = mine(G);
+    out.flashSp = sh.sp; out.flashDmg = sh.dmg;
+    T.equip('');
+    T.start('forest', 1); T.setPaused(true);
+    G = T.g(); G.guard = 0; G.you.cd = 0; T.fire(); T.step(1);
+    out.plainDmg = mine(G).dmg;
+    // cannon: bolted down, kills in one
+    T.buy('cannon'); T.equip('cannon');
+    T.start('forest', 1); T.setPaused(true);
+    G = T.g(); G.guard = 0;
+    out.cannonSpeed = G.you.speed;
+    G.you.cd = 0; G.you.turret = 0; T.fire(); T.step(1);
+    const cs = mine(G);
+    const foe = G.foes[0];
+    cs.x = foe.x - 2; cs.y = foe.y;                    // put it on a foe whose flag still stands
+    T.step(2);
+    out.cannonKilled = !foe.alive;
+    out.flagUp = !G.flagRed.down;
+    // and the dark lord shrugs it off
+    T.start('forest', 6); T.setPaused(true);
+    G = T.g(); G.guard = 0;
+    const lord = G.foes[0];
+    lord.blockCd = 999;                                // no blocking, to isolate the cannon
+    G.you.cd = 0; T.fire(); T.step(1);
+    const cs2 = mine(G);
+    cs2.x = lord.x - 2; cs2.y = lord.y;
+    T.step(2);
+    out.lordSurvived = lord.alive;
+    // rng: about one in ten is gold
+    T.buy('rng'); T.equip('rng');
+    T.start('forest', 1); T.setPaused(true);
+    G = T.g(); G.guard = 0;
+    let gold = 0, fired = 0;
+    for (let i = 0; i < 300; i++) {
+      G.you.cd = 0; T.fire(); T.step(1);
+      const m = mine(G);
+      if (m) { if (m.kind === 'gold') gold++; fired++; m.life = 0; }   // bin it and go again
+      T.step(1);
+    }
+    out.gold = gold; out.fired = fired;
+    return out;
+  });
+  ok(bullets.flashSp > 275 * 3, 'the flash bullet is very fast', Math.round(bullets.flashSp) + ' px/s');
+  ok(bullets.flashDmg === bullets.plainDmg, 'and does normal damage', bullets.flashDmg + ' vs ' + bullets.plainDmg);
+  ok(bullets.cannonSpeed === 0, 'the cannon bolts you to the floor', bullets.cannonSpeed);
+  ok(bullets.cannonKilled && bullets.flagUp, 'and one-shots a tank with its flag still up');
+  ok(bullets.lordSurvived, 'but the dark lord is not impressed by it');
+  ok(bullets.gold > bullets.fired * 0.05 && bullets.gold < bullets.fired * 0.17,
+    'the rng bullet is gold about one time in ten', bullets.gold + '/' + bullets.fired);
+
+  console.log('\n-- the void bullet');
+  const voidTest = await page.evaluate(() => {
+    const T = window.__tanks;
+    T.buy('void'); T.equip('void');
+    T.start('forest', 1); T.setPaused(true);
+    const G = T.g();
+    G.guard = 0;
+    const foe = G.foes[0];
+    G.you.cd = 0; G.you.turret = 0; T.fire(); T.step(1);
+    const mine = () => { const m = G.shells.filter((s) => s.team === 'blue'); return m[m.length - 1]; };
+    const vs = mine();
+    const kind = vs.kind;
+    vs.x = foe.x - 4; vs.y = foe.y;
+    T.step(2);
+    const blues = G.flags.filter((f) => f.team === 'blue' && !f.down).length;
+    const reds = G.flags.filter((f) => f.team === 'red' && !f.down).length;
+    const mid = G.flags.filter((f) => f.team === 'red' && Math.abs(f.x - 800) < 2 && Math.abs(f.y - 450) < 2).length;
+    // a second shot in the same round is an ordinary shell
+    G.you.cd = 0; T.fire(); T.step(1);
+    const ag = mine();
+    const again = ag ? ag.kind : 'plain';
+    return { kind: kind, blues: blues, reds: reds, mid: mid, stun: foe.stun, flags: G.flags.length,
+             hole: !!G.hole, again: again, moved: foe.vx !== 0 || foe.vy !== 0 };
+  });
+  ok(voidTest.kind === 'void', 'the void bullet comes out of the barrel');
+  ok(voidTest.hole, 'and opens a hole');
+  ok(voidTest.blues === 2, 'their flag comes back as yours: you have one on both sides', voidTest.blues);
+  ok(voidTest.reds === 1 && voidTest.mid === 1, 'and theirs is spat out in the middle');
+  ok(Math.abs(voidTest.stun - 20.2) < 0.2, 'what it hits is stunned for 20.2 seconds', voidTest.stun.toFixed(1));
+  ok(voidTest.moved, 'and thrown backwards');
+  ok(voidTest.again !== 'void', 'only one hole a round', voidTest.again || 'plain');
+
+  const voidElsewhere = await page.evaluate(() => {
+    const T = window.__tanks;
+    T.start('end', 1); T.setPaused(true);          // not the wood
+    const G = T.g();
+    G.guard = 0; G.you.cd = 0; T.fire(); T.step(1);
+    const m = G.shells.filter((s) => s.team === 'blue');
+    return m.length ? (m[m.length - 1].kind || 'plain') : 'none';
+  });
+  ok(voidElsewhere !== 'void', 'outside the wood it is just a shell', voidElsewhere);
+
+  console.log('\n-- the dark lord');
+  const lord = await page.evaluate(() => {
+    const T = window.__tanks;
+    T.equip('');
+    T.start('forest', 6); T.setPaused(true);
+    const G = T.g();
+    G.guard = 0;
+    const b = G.foes[0];
+    const startX = b.x, startY = b.y;
+    let blocked = 0, tps = 0, phases = {}, shots = 0, maxAir = 0;
+    let lastX = b.x, lastY = b.y;
+    for (let i = 0; i < 60 * 30; i++) {            // thirty seconds of it
+      const bt = b.blockT;
+      // keep feeding it shells so the block can show itself
+      if (i % 20 === 0) {
+        G.you.cd = 0;
+        G.you.turret = Math.atan2(b.y - G.you.y, b.x - G.you.x);
+        T.fire();
+        T.step(1);
+        const m = G.shells.filter((s) => s.team === 'blue');
+        const sh = m[m.length - 1];
+        if (sh) { sh.x = b.x - 6; sh.y = b.y; shots++; }   // put it on the hull
+      }
+      T.step(1);
+      // keep its flag topped up: if it dies the round ends and it stops thinking
+      G.flags.forEach(function (f) { if (f.team === 'red') { f.hp = f.max; f.down = false; f.icd = 0; } });
+      b.alive = true; G.state = 'play';          // it is being studied, not fought
+      if (b.blockT > bt && b.blockT > 0.3) blocked++;
+      phases[b.phase] = (phases[b.phase] || 0) + 1;
+      const air = G.shells.filter((x) => x.team === 'red').length;
+      if (air > maxAir) maxAir = air;
+      if (Math.hypot(b.x - lastX, b.y - lastY) > 250) tps++;   // a jump, not a drive
+      lastX = b.x; lastY = b.y;
+    }
+    return { blocked: blocked, shots: shots, tps: tps, phases: Object.keys(phases).length,
+             shells: maxAir, alive: b.alive,
+             speed: Math.round(b.speed), moved: Math.hypot(b.x - startX, b.y - startY) };
+  });
+  ok(lord.blocked > 0, 'the dark lord blocks shots', lord.blocked + '/' + lord.shots);
+  ok(lord.blocked < lord.shots, 'but not all of them');
+  ok(lord.tps >= 1 && lord.tps <= 6, 'it teleports, but not constantly', lord.tps + ' in 30s');
+  ok(lord.phases === 5, 'it runs through all five of its abilities', lord.phases + ' of 5 seen');
+  ok(lord.shells > 10, 'and it fills the clearing with magic', lord.shells + ' shots in the air');
+  ok(lord.speed >= 455, 'it is faster than the tank boss', lord.speed + ' vs 410');
+
+  const beatable = await page.evaluate(() => {
+    const T = window.__tanks, S = T.save;
+    S.rate = 20; S.dmg = 5; S.shooters = 3; S.speed = 11; S.bspeed = 6; S.bsize = 11;
+    T.equip('');
+    T.start('forest', 6); T.setPaused(true);
+    const G = T.g();
+    G.guard = 0;
+    let flagDown = -1, killed = -1;
+    for (let i = 0; i < 60 * 150; i++) {
+      const b = G.foes[0];
+      if (!b.alive) { killed = i / 60; break; }
+      // a very good player: keep away, aim at whatever is worth hitting
+      const tgt = G.flagRed.down ? b : { x: G.flagRed.x, y: G.flagRed.y - 34 };
+      const a = Math.atan2(tgt.y - G.you.y, tgt.x - G.you.x);
+      G.you.turret = a;
+      G.you.cd = 0;
+      T.fire();
+      // and keeps moving
+      G.you.x = 300 + Math.sin(i / 70) * 180;
+      G.you.y = 450 + Math.cos(i / 55) * 300;
+      G.you.alive = true;
+      if (G.flagRed.down && flagDown < 0) flagDown = i / 60;
+      T.step(1);
+    }
+    return { flagDown: flagDown, killed: killed };
+  });
+  ok(beatable.flagDown > 0, 'its flag can be brought down', beatable.flagDown.toFixed(1) + 's');
+  ok(beatable.killed > 0, 'and then it can be killed', beatable.killed.toFixed(1) + 's');
+  ok(beatable.flagDown > 6, 'and its flag holds out even against a tank that never misses', beatable.flagDown.toFixed(1) + 's');
+
+  console.log('\n-- what the wood pays');
+  const pay = await page.evaluate(async () => {
+    const T = window.__tanks, S = T.save;
+    const want = [1, 1, 1, 2, 4, 15], got = [];
+    for (let lv = 1; lv <= 6; lv++) {
+      T.coins(0);
+      S.fLevel = lv;
+      T.start('forest', lv); T.setPaused(true);
+      const G = T.g();
+      G.guard = 0;
+      G.foes.forEach((f) => { f.alive = false; });
+      for (let i = 0; i < 130; i++) T.step(1);          // let the result screen come up
+      got.push(T.save.coins);
+    }
+    return { want: want, got: got, after: S.fLevel, beaten: S.fBeaten };
+  });
+  ok(pay.got.join(',') === pay.want.join(','), 'one, one, one, two, four, and fifteen for the dark lord', pay.got.join(','));
+  ok(pay.after === 1 && pay.beaten, 'and after the dark lord the wood starts again', 'rung ' + pay.after);
+
   /* --------------------------------------------------------- pictures --- */
   await page.bringToFront();
   await page.evaluate(() => {
@@ -566,13 +895,13 @@ function serve() {
   });
   await page.evaluate(() => { window.__tanks.setPaused(true); });
   await new Promise((r) => setTimeout(r, 300));
-  await page.screenshot({ path: 'C:/Users/krist/AppData/Local/Temp/claude/C--Users-krist-Desktop-BossGauntlet/15141b96-bc16-46c1-8edf-c2f5905dde88/scratchpad/shot-game.png' });
+  await page.screenshot({ path: 'C:/Users/krist/AppData/Local/Temp/claude/C--Users-krist-Desktop-BossGauntlet/beb213ac-1143-495a-9509-80efdca634eb/scratchpad/shot-game.png' });
   await page.evaluate(() => { window.__tanks.setPaused(false); document.getElementById('resMenu').click(); });
   await new Promise((r) => setTimeout(r, 200));
-  await page.screenshot({ path: 'C:/Users/krist/AppData/Local/Temp/claude/C--Users-krist-Desktop-BossGauntlet/15141b96-bc16-46c1-8edf-c2f5905dde88/scratchpad/shot-modes.png' });
+  await page.screenshot({ path: 'C:/Users/krist/AppData/Local/Temp/claude/C--Users-krist-Desktop-BossGauntlet/beb213ac-1143-495a-9509-80efdca634eb/scratchpad/shot-modes.png' });
   await page.evaluate(() => { document.getElementById('shopBtn').click(); });
   await new Promise((r) => setTimeout(r, 200));
-  await page.screenshot({ path: 'C:/Users/krist/AppData/Local/Temp/claude/C--Users-krist-Desktop-BossGauntlet/15141b96-bc16-46c1-8edf-c2f5905dde88/scratchpad/shot-shop.png' });
+  await page.screenshot({ path: 'C:/Users/krist/AppData/Local/Temp/claude/C--Users-krist-Desktop-BossGauntlet/beb213ac-1143-495a-9509-80efdca634eb/scratchpad/shot-shop.png' });
 
   console.log('\n-- errors');
   ok(errors.length === 0, 'no page errors on the desktop run', errors.slice(0, 3).join(' | '));
