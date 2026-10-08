@@ -436,6 +436,45 @@ function serve() {
   const badCode = await page.evaluate(() => document.getElementById('codeNote').textContent);
   ok(/NOT A CODE/.test(badCode), 'and a wrong code says so', badCode);
 
+  /* the long one: it opens the next zone along, without buying out this one */
+  const box = await page.evaluate(() => +document.getElementById('codeInput').maxLength);
+  ok(box >= 17, 'the code box takes all seventeen digits', box);
+  await page.evaluate(() => { document.getElementById('codeInput').value = ''; });
+  await page.type('#codeInput', '12345678987654321');
+  const typed = await page.evaluate(() => document.getElementById('codeInput').value);
+  ok(typed === '12345678987654321', 'and none of them are cut off', typed.length + ' digits');
+  await page.click('#codeGo');
+  const zoned = await page.evaluate(() => {
+    document.getElementById('codesBack').click();
+    return {
+      note: document.getElementById('codeNote').textContent,
+      zone: window.__tanks.save.zone,
+      stored: JSON.parse(localStorage.getItem('tanks.v1')).zone,
+      modes: document.getElementById('modeList').textContent,
+      maxed: window.__tanks.save.rate                     // it is a skip, not a handout
+    };
+  });
+  ok(zoned.zone === 2 && zoned.stored === 2, 'the long code opens the forest without the rebirth', 'zone ' + zoned.zone);
+  ok(/IS OPEN/.test(zoned.note), 'and says so', zoned.note.slice(0, 40));
+  ok(zoned.modes.indexOf('THE FOREST') >= 0 && zoned.modes.indexOf('END MODE') < 0,
+    'the mode screen is the wood now');
+  ok(zoned.maxed === 1, 'it does not buy your upgrades for you', 'reload level ' + zoned.maxed);
+
+  /* and from the forest there is nowhere further to go, yet */
+  await page.click('#codesBtn');
+  await page.evaluate(() => { document.getElementById('codeInput').value = ''; });
+  await page.type('#codeInput', '12345678987654321');
+  await page.click('#codeGo');
+  const again = await page.evaluate(() => ({
+    note: document.getElementById('codeNote').textContent,
+    zone: window.__tanks.save.zone
+  }));
+  ok(again.zone === 2, 'using it again does not break the save', 'zone ' + again.zone);
+  ok(/NOTHING PAST IT/.test(again.note), 'it says there is nothing past the forest yet', again.note.slice(0, 48));
+  await page.evaluate(() => { document.getElementById('codesBack').click(); localStorage.clear(); });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => window.__tanks);
+
   /* -------------------------------------------------------- skill gap --- */
   console.log('\n-- the bots');
   const gap = await page.evaluate(() => {
