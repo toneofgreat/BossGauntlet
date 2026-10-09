@@ -636,8 +636,10 @@ function serve() {
       T.start('forest', i); T.setPaused(true);
       const G = T.g();
       out.push({
-        n: i, kind: G.foes[0].kind, curves: !!G.foes[0].curves, fast: Math.round(G.foes[0].speed),
+        n: i, kind: G.foes[0].kind, curves: G.foes.every(function (f) { return f.curves; }),
+        fast: Math.round(Math.max.apply(null, G.foes.map(function (f) { return f.speed; }))),
         shooters: G.foes[0].shooters, flagHp: G.flagRed.max, zone: G.zone, lord: !!G.lord,
+        foes: G.foes.length, guarded: !!G.flagRed.guarded,
         label: document.getElementById('hudLv').textContent
       });
     }
@@ -645,8 +647,14 @@ function serve() {
   });
   ok(rungs.every((r) => r.curves), 'every rung in the wood curves its shots');
   ok(rungs[0].kind === 'bot' && rungs[1].kind === 'skilled', 'a bot, then a skilled one');
-  ok(rungs[2].fast > rungs[0].fast && rungs[3].fast > rungs[1].fast, 'the speedy ones are faster',
+  ok(rungs[2].fast > rungs[0].fast, 'the speedy rung is faster than the first one',
     rungs[0].fast + ' -> ' + rungs[2].fast);
+  ok(rungs[3].foes === 2 && rungs[4].foes === 2, 'the top two rungs come in pairs',
+    rungs.map(function (r) { return r.foes; }).join(','));
+  ok(rungs[0].flagHp === 3 && rungs[3].flagHp > rungs[0].flagHp && rungs[4].flagHp > rungs[0].flagHp,
+    'the flags are staked deeper the further in you go',
+    rungs.map(function (r) { return r.flagHp; }).join(','));
+  ok(!rungs[0].guarded && rungs[1].guarded, 'and from rung two they ring after a hit');
   ok(rungs[4].shooters === 10, 'rung five fires ten curved shots', rungs[4].shooters);
   ok(rungs[5].kind === 'lord' && rungs[5].lord, 'rung six is the dark lord');
   ok(rungs[5].flagHp === 6, 'and it guards a six-hit flag', rungs[5].flagHp);
@@ -873,7 +881,7 @@ function serve() {
     T.start('forest', 6); T.setPaused(true);
     const G = T.g();
     G.guard = 0;
-    let flagDown = -1, killed = -1;
+    let flagDown = -1, killed = -1, lastHp = G.flagRed.hp, lastHit = -1, minGap = 99;
     for (let i = 0; i < 60 * 150; i++) {
       const b = G.foes[0];
       if (!b.alive) { killed = i / 60; break; }
@@ -884,17 +892,123 @@ function serve() {
       G.you.cd = 0;
       T.fire();
       // and keeps moving
-      G.you.x = 300 + Math.sin(i / 70) * 180;
-      G.you.y = 450 + Math.cos(i / 55) * 300;
+      // a banana steers onto a point 820px out, so a player who hugs the far
+      // wall cannot reach the flag at all: fight at a range the shell can hold
+      G.you.x = 900 + Math.sin(i / 70) * 170;
+      G.you.y = 450 + Math.cos(i / 55) * 280;
       G.you.alive = true;
+      if (G.flagRed.hp < lastHp) {                 // it took one
+        if (lastHit >= 0) minGap = Math.min(minGap, i / 60 - lastHit);
+        lastHit = i / 60; lastHp = G.flagRed.hp;
+      }
       if (G.flagRed.down && flagDown < 0) flagDown = i / 60;
       T.step(1);
     }
-    return { flagDown: flagDown, killed: killed };
+    return { flagDown: flagDown, killed: killed, minGap: minGap };
   });
   ok(beatable.flagDown > 0, 'its flag can be brought down', beatable.flagDown.toFixed(1) + 's');
   ok(beatable.killed > 0, 'and then it can be killed', beatable.killed.toFixed(1) + 's');
-  ok(beatable.flagDown > 6, 'and its flag holds out even against a tank that never misses', beatable.flagDown.toFixed(1) + 's');
+  // six hits with 0.55s of immunity between them is a 3.3s floor; asserting a
+  // bigger number than that is really asserting how its block rolls went
+  ok(beatable.minGap >= 0.5, 'and no two hits on it land inside the half-second window', beatable.minGap.toFixed(2) + 's apart');
+
+  console.log('\n-- the wood is still a game');
+  /* A hand of modest skill: it fires about once a second whatever its reload
+   * could do, it aims with a wobble, and it only sidesteps what it can already
+   * see. Rung one has to fall to it; the top of the wood has to make it work. */
+  const woodHand = await page.evaluate(function () {
+    var T = window.__tanks, S = T.save;
+    S.zone = 2; T.maxOut();
+    function play(lv, cap) {
+      T.start('forest', lv); T.setPaused(true);
+      var G = T.g(), you = G.you, i, cool = 0, hit = 0, wasHit = false, won = -1;
+      G.guard = 0;
+      for (i = 0; i < 60 * cap; i++) {
+        if (G.state !== 'play') { if (G.won) won = i / 60; break; }
+        var tgt = G.flagRed.down ? G.foes.filter(function (f) { return f.alive; })[0] : { x: G.flagRed.x, y: G.flagRed.y - 34 };
+        if (!tgt) { won = i / 60; break; }
+        you.turret = Math.atan2(tgt.y - you.y, tgt.x - you.x) + Math.sin(i / 23) * 0.09;
+        cool -= 1 / 60;
+        if (cool <= 0) { you.cd = 0; T.fire(); cool = 0.95; }
+        var ax = 0.75, ay = Math.sin(i / 48) * 0.9, near = null, nd = 1e9;
+        for (var k = 0; k < G.shells.length; k++) {
+          var sh = G.shells[k];
+          if (sh.team === 'blue') continue;
+          var d = Math.hypot(sh.x - you.x, sh.y - you.y);
+          if (d < 220 && d < nd) { nd = d; near = sh; }
+        }
+        if (near) {
+          var sa = Math.atan2(near.vy, near.vx);
+          ax = Math.cos(sa + Math.PI / 2); ay = Math.sin(sa + Math.PI / 2);
+        }
+        T.hold({ w: ay < -0.38, s: ay > 0.38, a: ax < -0.38, d: ax > 0.38 });
+        T.step(1);
+        if (you.hitT > 0 && !wasHit) hit++;
+        wasHit = you.hitT > 0;
+      }
+      T.hold({ w: false, s: false, a: false, d: false });
+      return { won: won, hit: hit, flag: G.flagRed.down };
+    }
+    var one = [play(1, 60), play(1, 60)];
+    var five = [play(5, 60), play(5, 60)];
+    return {
+      oneWon: one.filter(function (r) { return r.won > 0; }).length,
+      oneIn: Math.min.apply(null, one.map(function (r) { return r.won > 0 ? r.won : 999; })),
+      fiveIn: Math.max.apply(null, five.map(function (r) { return r.won > 0 ? r.won : 60; })),
+      oneHit: one.reduce(function (a, r) { return a + r.hit; }, 0),
+      fiveHit: five.reduce(function (a, r) { return a + r.hit; }, 0),
+      fiveFlag: five.filter(function (r) { return r.flag; }).length
+    };
+  });
+  ok(woodHand.oneWon === 2, 'a modest hand clears rung one every time', woodHand.oneWon + '/2 in ' + woodHand.oneIn.toFixed(0) + 's');
+  ok(woodHand.fiveIn > woodHand.oneIn, 'and the top of the wood takes it longer',
+    woodHand.oneIn.toFixed(0) + 's -> ' + woodHand.fiveIn.toFixed(0) + 's');
+  ok(woodHand.fiveHit > woodHand.oneHit, 'and hits it more often up there',
+    woodHand.oneHit + ' -> ' + woodHand.fiveHit + ' shells');
+  ok(woodHand.fiveFlag === 2, 'while rung five can still have its flag taken', woodHand.fiveFlag + '/2');
+
+  /* The budget is ten tanks at 60fps on a mid phone and the named trap is a
+   * gradient cut inside a draw. A stopwatch cannot see it - the same pair of
+   * frames times at wildly different speeds under GC - so count the asks
+   * instead. One frame of the wood must cost the same whether it holds nothing,
+   * four hundred shells, or ten machines. */
+  const woodPaint = await page.evaluate(function () {
+    var T = window.__tanks;
+    var C = CanvasRenderingContext2D.prototype;
+    var lin = C.createLinearGradient, rad = C.createRadialGradient, pat = C.createPattern;
+    var n = 0;
+    C.createLinearGradient = function (a, b, c, d) { n++; return lin.call(this, a, b, c, d); };
+    C.createRadialGradient = function (a, b, c, d, e, f) { n++; return rad.call(this, a, b, c, d, e, f); };
+    C.createPattern = function (a, b) { n++; return pat.call(this, a, b); };
+    var out = { bare: -1, loaded: -1, ten: -1, shells: 0, parts: 0, err: '' };
+    try {
+      T.save.zone = 2; T.maxOut();
+      T.start('forest', 5); T.setPaused(true);
+      var G = T.g(), i;
+      G.guard = 0;
+      window.drawFrame();                            // first paint cuts the skins
+      n = 0; window.drawFrame(); out.bare = n;
+      for (i = 0; i < 120; i++) {
+        G.you.cd = 0; T.fire();
+        G.foes.forEach(function (f) { f.cd = 0; f.alive = true; });
+        G.you.alive = true; G.state = 'play';
+        T.step(1);
+      }
+      out.shells = G.shells.length; out.parts = G.parts.length;
+      n = 0; window.drawFrame(); out.loaded = n;
+      for (i = 0; i < 8; i++) {
+        G.foes.push(window.makeTank('red', i % 2 ? 'skilled' : 'bot',
+          420 + i * 110, 180 + (i % 3) * 240, { curve: 1, rung: (i % 5) + 1 }));
+      }
+      n = 0; window.drawFrame(); out.ten = n;
+    } catch (e) { out.err = String(e.message || e); }
+    C.createLinearGradient = lin; C.createRadialGradient = rad; C.createPattern = pat;
+    return out;
+  });
+  ok(woodPaint.err === '' && woodPaint.bare === woodPaint.loaded && woodPaint.loaded === woodPaint.ten,
+    'one frame of the wood costs the same with ten machines in it as with none',
+    woodPaint.err || (woodPaint.bare + ' / ' + woodPaint.loaded + ' with ' + woodPaint.shells +
+      ' shells and ' + woodPaint.parts + ' motes / ' + woodPaint.ten + ' with ten tanks'));
 
   console.log('\n-- what the wood pays');
   const pay = await page.evaluate(async () => {

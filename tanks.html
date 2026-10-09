@@ -278,13 +278,33 @@ function dmgCost(level) { return level; }
  * last one is not a tank.
  */
 var FOREST_LEVELS = [
-  { n: 1, label: "A CURVED BOT",            coins: 1,  foes: [{ kind: "bot", curve: 1 }] },
-  { n: 2, label: "A SKILLED CURVE TANK",    coins: 1,  foes: [{ kind: "skilled", curve: 1 }] },
-  { n: 3, label: "A SPEEDY CURVED BOT",     coins: 1,  foes: [{ kind: "bot", curve: 1, fast: 1 }] },
-  { n: 4, label: "SKILLED, SPEEDY, CURVED", coins: 2,  foes: [{ kind: "skilled", curve: 1, fast: 1 }] },
-  { n: 5, label: "TEN CURVED SHOTS",        coins: 4,  foes: [{ kind: "skilled", curve: 1, shooters: 10 }] },
-  { n: 6, label: "THE DARK LORD",           coins: 15, foes: [{ kind: "lord", curve: 1, shooters: 12 }] }
+  { n: 1, label: "IT USES THE TREES",      coins: 1,  flagHp: 3, foes: [{ kind: "bot",     curve: 1, rung: 1 }] },
+  { n: 2, label: "IT WAITS, THEN LEADS",   coins: 1,  flagHp: 4, foes: [{ kind: "skilled", curve: 1, rung: 2, fire: 2.8 }] },
+  { n: 3, label: "IT MOVES WHEN YOU FIRE", coins: 1,  flagHp: 5, foes: [{ kind: "bot",     curve: 1, rung: 3, fire: 3.2, fast: 1 }] },
+  { n: 4, label: "ONE STAYS HOME",         coins: 2,  flagHp: 6, foes: [
+      { kind: "skilled", curve: 1, rung: 4, fire: 2.6, shooters: 2 },
+      { kind: "bot",     curve: 1, rung: 3, fire: 3.0, fast: 1 }] },
+  { n: 5, label: "TEN SHOTS, AND A RUNNER", coins: 4, flagHp: 6, foes: [
+      { kind: "skilled", curve: 1, rung: 5, fire: 2.4, shooters: 10 },
+      { kind: "skilled", curve: 1, rung: 3, fire: 2.6, fast: 1 }] },
+  { n: 6, label: "THE DARK LORD",          coins: 15, foes: [{ kind: "lord", curve: 1, shooters: 12 }] }
 ];
+/* how fast each rung throws, as a multiple of TUNE.shellSpeed. A brain that
+ * leads a moving target has to ask for this and not the stock speed, or it
+ * aims a fast shell at ground you have already run past. */
+var FOREST_SHOT_SP = [0.9, 1.3, 1.1, 1.15, 0.85];
+function shotSpeed(t) { return TUNE.shellSpeed * (FOREST_SHOT_SP[(t.rung || 0) - 1] || 1); }
+
+/* where the trees stand, one row per rung. Rung 1 is the shipped seven and is
+ * left exactly alone: the first rung has to stay winnable. Rung 5 builds its
+ * own ring in arenaPillars, and rung 6 has its stones. */
+var FOREST_TREES = [
+  [[520, 190], [700, 640], [980, 220], [1120, 610], [820, 400], [420, 700], [1250, 330]],
+  [[600, 170], [660, 250], [1000, 600], [1060, 520], [820, 400]],
+  [[520, 140], [1060, 690], [800, 420]],
+  [[1150, 250], [1150, 620], [1290, 120], [1290, 730], [900, 420], [640, 260], [640, 620]]
+];
+
 /* how fast a curved shell travels: 1 is what you arrive with */
 var BSPEED_LEVELS = [1, 1.2, 1.4, 1.6, 1.8, 2];
 var BSPEED_COSTS  = [0, 2,   4,   10,  18,  45];
@@ -493,6 +513,7 @@ function makeTank(team, kind, x, y, opts) {
   return {
     team: team, kind: kind, boss: kind === "boss", lord: kind === "lord",
     curves: !!opts.curve || (isYou && inForest()),
+    rung: opts.rung || 0,                           // which rung of the wood built it; 0 is not the wood
     curveSign: 1, stun: 0, blockT: 0, blockCd: 0, tp: 0, phase: 0, phaseT: 2.5, spin: 0,
     x: x, y: y, vx: 0, vy: 0,
     hull: team === "blue" ? 0 : Math.PI,
@@ -501,7 +522,7 @@ function makeTank(team, kind, x, y, opts) {
     scale: kind === "boss" ? 1.85 : kind === "lord" ? 2 : 1,
     speed: speed,
     cd: 0,
-    fire: isYou ? myCooldown() : (kind === "skilled" ? TUNE.skilledFire : kind === "boss" ? 1.5 : kind === "lord" ? 1.0 : TUNE.botFire),
+    fire: isYou ? myCooldown() : opts.fire || (kind === "skilled" ? TUNE.skilledFire : kind === "boss" ? 1.5 : kind === "lord" ? 1.0 : TUNE.botFire),
     shooters: opts.shooters || (isYou ? myShooters() : 1),
     dmg: isYou ? myDamage() : 1,
     wallCd: 0,
@@ -538,8 +559,16 @@ function arenaPillars(mode, level) {
       p.push({ x: W / 2 + 104, y: H / 2 - 40, w: 46, h: 110, tree: 0 });
       return p;
     }
-    // trees, scattered but never in front of a spawn
-    var seeds = [[520, 190], [700, 640], [980, 220], [1120, 610], [820, 400], [420, 700], [1250, 330]];
+    if (level === FOREST_LEVELS.length - 1) {
+      // a carousel: the pinwheel needs something for you to run round
+      for (var ri = 0; ri < 8; ri++) {
+        var ra = (ri / 8) * TAU + 0.2;
+        p.push({ x: W / 2 + Math.cos(ra) * 300 - 27, y: H / 2 + Math.sin(ra) * 210 - 27, w: 54, h: 54, tree: 1 });
+      }
+      return p;
+    }
+    // trees, scattered but never in front of a spawn, and a different wood per rung
+    var seeds = FOREST_TREES[(level || 1) - 1] || FOREST_TREES[0];
     for (var k = 0; k < seeds.length; k++) p.push({ x: seeds[k][0], y: seeds[k][1], w: 54, h: 54, tree: 1 });
     return p;
   }
@@ -571,15 +600,21 @@ function startRound(mode, levelIndex) {
     var y = H / 2 + (n === 1 ? 0 : (i / (n - 1) - 0.5) * span);
     var x = W - 230 - (i % 3) * 60;
     reds.push(makeTank("red", f.kind, x, clamp(y, 120, H - 120),
-      { shooters: f.shooters, curve: f.curve, fast: f.fast }));
+      { shooters: f.shooters, curve: f.curve, fast: f.fast, rung: f.rung, fire: f.fire }));
   }
   var lord = foes.length === 1 && foes[0].kind === "lord";
+  // the wood's flags are staked deeper the further in you go, and from rung two
+  // they ring for half a second after a hit, so a no-cooldown gun cannot simply
+  // delete one before the tank guarding it has moved
+  var fRow = mode === "forest" ? FOREST_LEVELS[(levelIndex || 1) - 1] : null;
+  var fHp = lord ? 6 : (fRow && fRow.flagHp) || 0;
+  var fGuard = lord || (fRow && (levelIndex || 1) >= 2);
 
   G = {
     mode: mode, level: levelIndex || 1,
     you: you, foes: reds,
     flagBlue: makeFlag("blue", 110, H / 2),
-    flagRed: (function () { var f = makeFlag("red", W - 110, H / 2, lord ? 6 : 0); f.guarded = lord; return f; })(),
+    flagRed: (function () { var f = makeFlag("red", W - 110, H / 2, fHp); f.guarded = fGuard; return f; })(),
     shells: [], walls: [], parts: [], marks: [], rings: [],
     pillars: arenaPillars(mode, levelIndex || 1),
     t: 0, state: "intro", overT: 0, won: false,
@@ -651,6 +686,39 @@ function pushShell(t, a, opt) {
   return G.shells[G.shells.length - 1];
 }
 
+/* what comes out of each rung of the wood. A forest tank is never tougher - it
+ * dies to one shell once its flag is down, like everything else - so the rungs
+ * differ in what they throw, not in what they can take. Called once a volley,
+ * after fireTank has set the shared foe defaults. */
+function forestShot(t, opt) {
+  var b = t.rung, side;
+  opt.speed = FOREST_SHOT_SP[b - 1] || 1;
+  if (b === 1) {
+    // bent wide enough to read and slow enough to walk away from: this one is
+    // only here to teach the bend
+    opt.curve = TUNE.curveRate * 0.8;
+  } else if (b === 2) {
+    // no homing, on purpose. It leans out and steers back onto a point on the
+    // ground 820px down the line it led you to - the same banana you fire - so
+    // it is committed the moment it leaves the barrel, and turning beats it
+    side = (t.curveSign = -t.curveSign);
+    opt.home = 0;
+    opt.lean = 0.18 * side;
+    opt.curve = -TUNE.curveRate * 0.45 * side;
+    opt.size = 1.45;
+  } else if (b === 5) {
+    // ten at once, all bending the same way, and the way swaps every volley: a
+    // pinwheel you walk out of by going round with it. Not homing - this one is
+    // a place to be out of, not a shot to dodge
+    side = (t.curveSign = -t.curveSign);
+    opt.home = 0;
+    opt.curve = TUNE.curveRate * 1.45 * side;
+    opt.size = 0.9;
+  }
+  // 3 and 4 keep the bend the wood already has. Tightening it only makes a
+  // spent shell loiter closer to you, which is pressure with nothing to read.
+}
+
 function fireTank(t) {
   if (!t.alive || t.cd > 0 || G.state !== "play") return false;
   if (t.stun > 0) return false;
@@ -674,6 +742,7 @@ function fireTank(t) {
     } else {
       opt.curve = TUNE.curveRate;
       opt.home = 1;                                   // theirs lean towards you
+      if (t.rung) forestShot(t, opt);                 // and each rung throws its own shape
     }
   }
   if (eq === "flash") { opt.speed = 3.2; opt.curve *= 0.3; opt.kind = "flash"; }
@@ -801,6 +870,7 @@ function killTank(t) {
       life: rnd(0.4, 1.1), max: 1.1, col: i % 3 ? (t.team === "blue" ? "#1d6ef5" : "#e0352b") : "#141821", r: rnd(2, 5) });
   }
   G.rings.push({ x: t.x, y: t.y, r: 8, max: 200, life: 0.5, t: 0.5, col: t.team === "blue" ? "#1d6ef5" : "#e0352b" });
+  if (G.zone === 2 && !t.lord && t.kind !== "you") forestDeath(t);
   G.marks.push({ x: t.x, y: t.y, r: 34, life: 999, max: 999, wreck: true, a: t.hull, team: t.team });
 }
 
@@ -1045,7 +1115,9 @@ function aiTank(t, dt) {
             : skilled ? 380 : 420;
 
   /* ---- aim ---- */
-  var aimAt = skilled ? leadAim(t, target, TUNE.shellSpeed) : angTo(t.x, t.y, target.x, target.y);
+  // lead with the speed this one really throws at, not the stock speed: a rung
+  // with a faster shell would otherwise aim at ground you have already run past
+  var aimAt = skilled ? leadAim(t, target, shotSpeed(t)) : angTo(t.x, t.y, target.x, target.y);
   if (!skilled) aimAt += Math.sin(ai.t * 1.3) * 0.1;              // the plain bot wobbles
   var turn = (skilled ? 3.4 : 1.9) * dt;
   t.turret += clamp(angDiff(t.turret, aimAt), -turn, turn);
@@ -1297,6 +1369,540 @@ function lordBrain(b, dt) {
   }
 }
 
+/* the one thing each rung does on top of thinking: a wall, dust, a tell before
+ * a shot. Acts only - the driving and the aiming belong to aiTank - and it runs
+ * after the brain so t.turret has settled and can be borrowed and put back. */
+/* ----------------------------------------------------------- the wood AI -
+ * Rungs 1 to 5 think with forestBrain instead of aiTank. None of them is
+ * tougher than a white-arena tank - a tank whose own flag still stands is
+ * already invulnerable, so hit points were never a lever here. All of the
+ * difficulty is in what they know:
+ *   - a banana shell is not where its heading says it is, so they fly yours
+ *     forward before they step out of the way;
+ *   - their own shells chase you for 1.6s and then spiral, so the only honest
+ *     way to pick an angle is to fly that forward too;
+ *   - and because their shells chase YOU, the only way one of them ever
+ *     reaches your flag is for you to be standing next to it. So they herd.
+ * Each of those has a counter you already own: still be moving at 1.6s, fight
+ * forward and away from your own flag, bend one round the trunk, wall the lane
+ * they are herding you down, and the cannon kills through a standing flag.
+ */
+
+/* one row per rung, 1..5. rung 1 is dim on purpose: it barely looks ahead,
+ * never spends a wall, and still cannot hold its aim steady.
+ *   sight    px it notices a shell at all. This is what caps its reaction to
+ *            a flash shell, which outruns the look-ahead gate below
+ *   look     s of flight it can read ahead on a shell
+ *   dsteps   how many steps it flies one while reading it
+ *   dodge    0..1 how much of its drive the escape replaces
+ *   cover    0..1 pull towards a trunk while it reloads
+ *   aggro    0..1 how far it closes when you are empty or loafing
+ *   herd     0..1 how hard it works to keep you between it and your own flag
+ *   lead     multiplier on flight time when it aims at you (overlead > 1)
+ *   wob      rad of aim wobble
+ *   turn     rad/s the turret swings
+ *   tol      rad of alignment it will fire at
+ *   patience s it will hold a loaded gun for a better shot
+ *   hold     s before it loses patience and fires the best it has
+ *   wall     rolls per second it looks for a wall worth building
+ *   guard    0..1 how far out it will come home to defend its own flag
+ *   stand    px it likes between itself and you
+ *   cand     candidate angles the shot oracle flies
+ *   steps     55px hops the oracle flies each one; under 8 and it cannot see
+ *            as far as it stands, so it never scores and always waits out hold
+ *   sep      px it keeps off its own team mates
+ */
+var FOREST_AI = [
+  { sight: 300, look: 0.30, dsteps: 3, dodge: 0.26, cover: 0.20, aggro: 0.18, herd: 0.00, lead: 0.15,
+    wob: 0.10, turn: 2.1, tol: 0.26, patience: 0.15, hold: 0.60, wall: 0.00, guard: 0.35,
+    stand: 430, cand: 1, steps: 8, sep: 0 },
+  { sight: 430, look: 1.30, dsteps: 7, dodge: 0.70, cover: 0.45, aggro: 0.40, herd: 0.35, lead: 1.00,
+    wob: 0.05, turn: 3.2, tol: 0.14, patience: 0.45, hold: 1.6, wall: 0.35, guard: 0.60,
+    stand: 380, cand: 3, steps: 8, sep: 120 },
+  { sight: 430, look: 0.80, dsteps: 5, dodge: 0.55, cover: 0.35, aggro: 0.60, herd: 0.25, lead: 0.75,
+    wob: 0.07, turn: 2.8, tol: 0.20, patience: 0.25, hold: 1.2, wall: 0.20, guard: 0.50,
+    stand: 400, cand: 3, steps: 8, sep: 120 },
+  { sight: 540, look: 1.55, dsteps: 8, dodge: 0.85, cover: 0.60, aggro: 0.75, herd: 0.70, lead: 1.25,
+    wob: 0.03, turn: 3.8, tol: 0.10, patience: 0.60, hold: 1.9, wall: 0.60, guard: 0.75,
+    stand: 360, cand: 5, steps: 10, sep: 150 },
+  { sight: 660, look: 1.85, dsteps: 9, dodge: 1.00, cover: 0.75, aggro: 0.90, herd: 1.00, lead: 1.45,
+    wob: 0.00, turn: 4.4, tol: 0.08, patience: 0.70, hold: 2.2, wall: 0.80, guard: 0.90,
+    stand: 320, cand: 5, steps: 12, sep: 170 }
+];
+var FB_OFF = [0, 0.26, -0.26, 0.6, -0.6];       // the angles the oracle tries, in order
+var FB_T = { x: 0, y: 0, a: 0, tt: 0, miss: 0 };  // the moment a shell gets closest
+var FB_P = { x: 0, y: 0 };                        // the spot behind a trunk
+/* the shortlist of shells worth flying forward, length = the hard cap on
+ * flights per tank per frame. Fixed and reused so nothing allocates. */
+var FB_Q = [null, null, null, null, null, null, null, null];
+var FB_QD = [0, 0, 0, 0, 0, 0, 0, 0];
+
+function forestW(lv) { return FOREST_AI[clamp((lv || 1) - 1, 0, FOREST_AI.length - 1) | 0]; }
+
+/* its scratchpad. It hangs off the tank, not off a closure, because the test
+ * harness steps the world by hand and nothing may depend on a drawn frame. */
+function fbState(t) {
+  var s = t.ai.fb;
+  if (!s) {
+    s = t.ai.fb = { still: 0, shotT: 0, aim: t.turret, score: 0, pick: 0, think: 0,
+                    flip: rnd(0.5, 1.5), side: pick([-1, 1]), role: 0, roleT: 0,
+                    panic: 0, wallT: rnd(0.5, 2) };
+  }
+  return s;
+}
+
+/* a point against every wall and trunk. circleBox allocates a point object per
+ * call and this runs a few dozen times a frame, so it is spelled out here. */
+function fbSolid(px, py, rad, rects) {
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i];
+    var dx = px - r.x, dy = py - r.y, lx = dx, ly = dy;
+    if (r.a) {                                  // walls are rotated, trunks never are
+      var c = Math.cos(r.a), sn = Math.sin(r.a);
+      lx = dx * c + dy * sn; ly = dy * c - dx * sn;
+    }
+    var qx = clamp(lx, -r.hw, r.hw), qy = clamp(ly, -r.hh, r.hh);
+    var ex = lx - qx, ey = ly - qy;
+    if (ex * ex + ey * ey <= rad * rad) return true;
+  }
+  return false;
+}
+
+/* is that way out even open, or is it a trunk and then the fence */
+function fbRoom(t, a, rects) {
+  var x = t.x + Math.cos(a) * 112, y = t.y + Math.sin(a) * 112;
+  if (x < 74 || x > W - 74 || y < 74 || y > H - 74) return false;
+  return !fbSolid(x, y, t.r + 2, rects);
+}
+
+/* squared distance from a point to a segment. A shell flown in 55px steps
+ * would otherwise stride straight over a flag without noticing it. */
+function fbSegD2(px, py, ax, ay, bx, by) {
+  var vx = bx - ax, vy = by - ay;
+  var len = vx * vx + vy * vy;
+  var u = len > 0.0001 ? ((px - ax) * vx + (py - ay) * vy) / len : 0;
+  u = clamp(u, 0, 1);
+  return dist2(px, py, ax + vx * u, ay + vy * u);
+}
+
+/* where a shell will BE, not where it is pointing. This mirrors the curve
+ * block in updateWorld step for step; if that changes, change this. It
+ * measures against where the tank will be if it keeps driving, so a tank does
+ * not jink out of a shell it is already outrunning. */
+function fbPredict(sh, t, hz, steps) {
+  var sp = sh.sp || Math.hypot(sh.vx, sh.vy);
+  if (sp < 1) return 1e9;
+  var x = sh.x, y = sh.y, a = Math.atan2(sh.vy, sh.vx);
+  var age = TUNE.shellLife - (sh.life || 0);
+  var h = hz / steps, best = 1e9;
+  for (var i = 1; i <= steps; i++) {
+    var c = sh.curve || 0;
+    if (c) {
+      if (sh.home && G.you.alive && age < 1.6) c = clamp(angDiff(a, angTo(x, y, G.you.x, G.you.y)) * 2.4, -1.5, 1.5);
+      else if (sh.tx && age < 2.2) c = clamp(angDiff(a, angTo(x, y, sh.tx, sh.ty)) * 3.2, -1.9, 1.9);
+      a += c * h;
+    }
+    x += Math.cos(a) * sp * h;
+    y += Math.sin(a) * sp * h;
+    age += h;
+    var tm = i * h;
+    var d = dist2(x, y, t.x + t.vx * tm, t.y + t.vy * tm);
+    if (d < best) { best = d; FB_T.x = x; FB_T.y = y; FB_T.a = a; FB_T.tt = tm; }
+  }
+  FB_T.miss = best;
+  return best;
+}
+
+/* the shell that will arrive soonest, judged on where it is going to be.
+ * Three squared gates shortlist the nearest eight first, because flying a
+ * shell forward is the whole cost of this brain and a maxed player can have
+ * two hundred in the air. A real rung has one or two, so the cap never bites
+ * where it would change anything. */
+function fbThreat(t, w) {
+  var hit = t.r + 26, sight2 = w.sight * w.sight, cap = FB_Q.length;
+  var i, j, n = 0;
+  for (i = 0; i < G.shells.length; i++) {
+    var sh = G.shells[i];
+    if (sh.team === t.team) continue;
+    var dx = t.x - sh.x, dy = t.y - sh.y;
+    var d2 = dx * dx + dy * dy;
+    if (d2 > sight2) continue;                                // it does not see that far
+    var sp = sh.sp || Math.hypot(sh.vx, sh.vy);
+    if (sp < 1) continue;
+    var reach = sp * w.look + hit + 12;
+    if (d2 > reach * reach) continue;                         // it cannot get here in time
+    if (dx * sh.vx + dy * sh.vy <= 0 && d2 > 48400) continue; // leaving, and too far to turn back
+    if (n < cap) j = n++; else if (d2 < FB_QD[cap - 1]) j = cap - 1; else continue;
+    while (j > 0 && FB_QD[j - 1] > d2) { FB_QD[j] = FB_QD[j - 1]; FB_Q[j] = FB_Q[j - 1]; j--; }
+    FB_QD[j] = d2; FB_Q[j] = sh;
+  }
+  var best = null, bt = 1e9, bx = 0, by = 0, ba = 0, bm = 0;
+  for (i = 0; i < n; i++) {
+    var st = FB_QD[i] > 160000 && w.dsteps > 4 ? 4 : w.dsteps; // the far ones get a rougher flight
+    if (fbPredict(FB_Q[i], t, w.look, st) > hit * hit) continue;
+    if (FB_T.tt < bt) { bt = FB_T.tt; best = FB_Q[i]; bx = FB_T.x; by = FB_T.y; ba = FB_T.a; bm = FB_T.miss; }
+  }
+  if (best) { FB_T.x = bx; FB_T.y = by; FB_T.a = ba; FB_T.tt = bt; FB_T.miss = bm; }
+  return best;
+}
+
+/* the far side of the most useful trunk, measured from where you are standing.
+ * It only wants this while it reloads: a tank behind a trunk cannot shoot
+ * either, so hiding then costs it nothing and costs you a shot. */
+function fbCover(t, px, py, rects) {
+  var bs = -1e9, bx = 0, by = 0, got = false;
+  for (var i = 0; i < G.pillars.length; i++) {
+    var p = G.pillars[i];
+    var cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+    var a = angTo(px, py, cx, cy);
+    var off = (p.w > p.h ? p.w : p.h) * 0.5 + t.r + 24;
+    var x = cx + Math.cos(a) * off, y = cy + Math.sin(a) * off;
+    if (x < 80 || x > W - 80 || y < 80 || y > H - 80) continue;
+    if (fbSolid(x, y, t.r, rects)) continue;
+    // near to it, and still near enough to you to be a threat when it steps out
+    var sc = -Math.hypot(x - t.x, y - t.y) - Math.abs(Math.hypot(x - px, y - py) - 380) * 0.6;
+    if (sc > bs) { bs = sc; bx = x; by = y; got = true; }
+  }
+  if (got) { FB_P.x = bx; FB_P.y = by; }
+  return got;
+}
+
+/* fly the shot before taking it. Their shells chase you for 1.6s and then
+ * spiral at curveRate, so the angle one leaves on says very little about
+ * where it ends up, and a shot that ends in a trunk is a wasted reload.
+ * Bigger is better, and 500 or more means it really lands. */
+function fbShotScore(t, a, steps, rects, flag, kill) {
+  var sp = TUNE.shellSpeed, h = 0.2;
+  var x = t.x + Math.cos(a) * (TUNE.barrel * t.scale + 6);
+  var y = t.y + Math.sin(a) * (TUNE.barrel * t.scale + 6);
+  var ang = a, age = 0, near = 1e9;
+  var fr = (44 + TUNE.shellR) * (44 + TUNE.shellR);
+  var yr = (G.you.r + TUNE.shellR) * (G.you.r + TUNE.shellR);
+  for (var i = 0; i < steps; i++) {
+    if (t.curves) {                             // a straight shell in the wood is still possible
+      var c = TUNE.curveRate;
+      if (G.you.alive && age < 1.6) c = clamp(angDiff(ang, angTo(x, y, G.you.x, G.you.y)) * 2.4, -1.5, 1.5);
+      ang += c * h;
+    }
+    var nx = x + Math.cos(ang) * sp * h, ny = y + Math.sin(ang) * sp * h;
+    if (nx < 8 || nx > W - 8 || ny < 8 || ny > H - 8) break;
+    // solid first, because shellHits tests walls before flags and tanks. The
+    // midpoint as well as the end: a hop is 55px, a trunk is 54 and a wall is
+    // 20 thick, so endpoints alone stride clean over either - including over a
+    // wall this tank has just put 78px in front of its own barrel.
+    if (fbSolid((x + nx) * 0.5, (y + ny) * 0.5, TUNE.shellR, rects)) break;
+    if (fbSolid(nx, ny, TUNE.shellR, rects)) break;
+    if (flag) {
+      var fd = fbSegD2(flag.x, flag.y - 34, x, y, nx, ny);
+      if (fd < fr) return 1000 - i * 12;                 // sooner is better
+      if (fd < near) near = fd;
+    }
+    if (G.you.alive && fbSegD2(G.you.x, G.you.y, x, y, nx, ny) < yr) {
+      // while your flag stands your hull simply eats it, so that is pressure,
+      // not damage, and it is worth far less than a shot on the flag
+      return kill ? 1000 - i * 12 : 70 - i;
+    }
+    x = nx; y = ny; age += h;
+  }
+  // even a near miss tells it where it ought to be standing
+  if (near < 1e9) return clamp(90 - Math.sqrt(near) * 0.14, 0, 90);
+  return 0;
+}
+
+/* pick the angle, with a nudge towards the one it picked last so it does not
+ * flap between two equally good ones and never finish turning to either */
+function fbPickShot(t, w, rects, base, flag, kill) {
+  var s = t.ai.fb;
+  var bestA = base, bestS = -1, bestI = 0, bestRaw = 0;
+  for (var i = 0; i < w.cand; i++) {
+    var raw = fbShotScore(t, base + FB_OFF[i], w.steps, rects, flag, kill);
+    var sc = i === s.pick ? raw + 24 : raw;        // and a nudge to the one it had
+    if (sc > bestS) { bestS = sc; bestRaw = raw; bestA = base + FB_OFF[i]; bestI = i; }
+  }
+  s.aim = bestA; s.score = bestRaw; s.pick = bestI;
+}
+
+/* who does what, so that two tanks on one rung are not one tank twice */
+function fbRole(t) {
+  var rank = 0, d = dist2(t.x, t.y, G.you.x, G.you.y);
+  for (var i = 0; i < G.foes.length; i++) {
+    var o = G.foes[i];
+    if (o === t || !o.alive) continue;
+    if (dist2(o.x, o.y, G.you.x, G.you.y) < d) rank++;
+  }
+  return rank;
+}
+
+/* the same rung, with its own flag down. One shell kills it now, so it stops
+ * playing position and plays to stay alive - which is exactly what made the
+ * white arena's skilled bot hard to finish off. Memoised on the row, so this
+ * allocates once per rung per page load and never in a frame. */
+function fbNaked(w) {
+  if (!w.naked) {
+    w.naked = {
+      // scaled off its own row, not up to a shared floor: a dim rung has to stay
+      // dim when it is cornered, or rung one turns into the best dodger in the wood
+      sight: w.sight * 1.3, look: w.look * 1.35, dsteps: w.dsteps,
+      dodge: Math.min(1, w.dodge * 1.55 + 0.08), cover: Math.min(1, w.cover * 1.3),
+      aggro: w.aggro * 0.45, herd: 0,
+      lead: w.lead, wob: w.wob, turn: w.turn * 1.1, tol: w.tol,
+      patience: w.patience * 0.5, hold: w.hold * 0.6, wall: Math.min(1, w.wall * 1.4),
+      guard: 0, stand: w.stand + 60, cand: w.cand, steps: w.steps, sep: w.sep
+    };
+    w.naked.naked = w.naked;                    // asking twice gives the same object
+  }
+  return w.naked;
+}
+
+function forestBrain(t, dt) {
+  if (t.stun > 0) return;                       // the void has it; it is tumbling
+  var you = G.you;
+  if (!you.alive) return;
+  var ai = t.ai, s = fbState(t), w = forestW(G.level);
+  ai.t += dt;
+  var rects = wallRects();                      // once a frame: it allocates
+  var kill = teamExposed(you.team);             // your flag is down, so a hit on you counts
+  var myUp = flagsOf(t.team);
+  var myFlag = myUp.length ? myUp[0] : null;
+  if (!myFlag) w = fbNaked(w);                  // mortal: dodge everything, guard nothing
+  var pen = kill ? null : foeFlagOf(t.team, you);   // the flag it wants you pinned against
+  var dYou = Math.hypot(you.x - t.x, you.y - t.y);
+
+  /* ---- what it has noticed about you ---- */
+  if (Math.hypot(you.vx, you.vy) < 34) s.still += dt; else s.still = 0;
+  var empty = you.fire > 0.25 && you.cd > you.fire * 0.4;   // you just fired: walk in
+  s.roleT -= dt;
+  if (s.roleT <= 0) { s.roleT = 1.1; s.role = fbRole(t); }
+
+  /* ---- aim ----
+   * inside 440px its shell owns you, because that is 1.6s of homing. Past
+   * that the homing runs out mid-flight and the shot is a bet on the spiral,
+   * so it leans on your flag instead. */
+  var homing = dYou < 1.6 * TUNE.shellSpeed;
+  var fl = clamp(dYou / TUNE.shellSpeed, 0, 1.6) * w.lead;
+  var lx = clamp(you.x + you.vx * fl, 50, W - 50);
+  var ly = clamp(you.y + you.vy * fl, 50, H - 50);
+  var base = (kill || homing || !pen) ? angTo(t.x, t.y, lx, ly)
+           : angTo(t.x, t.y, pen.x, pen.y - 34);
+  if (w.wob) base += Math.sin(ai.t * 1.3) * w.wob;
+  // the oracle is dear, so it re-decides twelve times a second, not sixty
+  s.think -= dt;
+  if (t.cd > 0) { s.aim = base; s.score = 0; s.think = 0; }
+  else if (t.shooters >= 10) s.aim = base;
+  else if (s.think <= 0) { s.think = 0.08; fbPickShot(t, w, rects, base, kill ? null : pen, kill); }
+  var turn = w.turn * dt;
+  t.turret += clamp(angDiff(t.turret, s.aim), -turn, turn);
+
+  /* ---- where it wants to stand ---- */
+  var stand = w.stand;
+  if (empty) stand -= 150 * w.aggro;
+  else if (you.cd <= 0) stand += 70 * w.aggro;        // you are loaded: give it room
+  if (s.still > 0.6) stand -= 130 * w.aggro;          // standing still is an invitation
+  if (!myFlag) stand += 170;                          // its own flag is gone: it is mortal now
+  if (s.role === 1) stand += 230;                     // one leans on you, the next swings wide
+  stand = clamp(stand, 170, 640);
+
+  /* their shells chase YOU, so the only way one ever reaches your flag is for
+   * you to be standing beside it. It comes at you from the far side and
+   * leaves the way home as the easy way out. */
+  var sx, sy;
+  var ca = angTo(you.x, you.y, t.x, t.y);
+  if (pen && w.herd > 0) {
+    var pa = angTo(pen.x, pen.y, you.x, you.y);
+    if (s.role === 1) pa += Math.PI * 0.55;           // the wide one takes the other shoulder
+    ca = pa + angDiff(pa, ca) * (1 - w.herd);
+  }
+  sx = you.x + Math.cos(ca) * stand;
+  sy = you.y + Math.sin(ca) * stand;
+
+  /* ---- camping ----
+   * their shells chase YOU, so a shot taken from the far side of your flag
+   * goes through the flag on its way to you. Stand next to it and that is
+   * where it will go and stand. The counter is to not stand there. */
+  if (w.herd > 0 && pen && Math.hypot(you.x - pen.x, you.y - pen.y) < (s.still > 1.1 ? 320 : 200)) {
+    var fa = angTo(you.x, you.y, pen.x, pen.y - 34);
+    sx = clamp(pen.x + Math.cos(fa) * 170, 80, W - 80);
+    sy = clamp(pen.y - 34 + Math.sin(fa) * 170, 80, H - 80);
+  }
+
+  /* ---- its own flag ----
+   * it is invulnerable while that flag stands, which makes its own hull the
+   * one real wall it owns. If you are closing on the flag it comes home and
+   * parks in the way, because every shell it eats there is a shell wasted. */
+  var guarding = false;
+  if (myFlag && w.guard > 0) {
+    var dpf = Math.hypot(you.x - myFlag.x, you.y - myFlag.y);
+    if ((dpf < 200 + 460 * w.guard && dpf < Math.hypot(t.x - myFlag.x, t.y - myFlag.y) + 320) ||
+        (s.role >= 2)) {                              // and in a pack somebody always stays home
+      guarding = true;
+      var ga = angTo(myFlag.x, myFlag.y - 34, you.x, you.y);
+      var off = clamp(dpf * 0.45, 70, 190);
+      sx = myFlag.x + Math.cos(ga) * off;
+      sy = myFlag.y - 34 + Math.sin(ga) * off;
+    }
+  }
+
+  /* ---- drive ---- */
+  var ax = 0, ay = 0;
+  var dsx = sx - t.x, dsy = sy - t.y;
+  var dm = Math.hypot(dsx, dsy);
+  if (dm > 26) { ax = dsx / dm; ay = dsy / dm; }
+  s.flip -= dt;
+  if (s.flip <= 0) { s.flip = rnd(0.9, 2); if (Math.random() < 0.6) s.side *= -1; }
+  var cross = (guarding ? 0.35 : 0.8) * (t.cd <= 0 && s.score <= 0 ? 1.5 : 1);  // no lane: go find one
+  var pr = angTo(t.x, t.y, you.x, you.y) + Math.PI / 2;
+  ax += Math.cos(pr) * s.side * cross;
+  ay += Math.sin(pr) * s.side * cross;
+
+  /* ---- the wood ---- */
+  if (w.cover > 0 && t.cd > t.fire * 0.35 && !guarding && fbCover(t, you.x, you.y, rects)) {
+    var cdx = FB_P.x - t.x, cdy = FB_P.y - t.y;
+    var cm = Math.hypot(cdx, cdy) || 1;
+    ax = lerp(ax, cdx / cm, w.cover);
+    ay = lerp(ay, cdy / cm, w.cover);
+  }
+
+  /* ---- keep off its own team mates ---- */
+  if (w.sep > 0) {
+    for (var k = 0; k < G.foes.length; k++) {
+      var o = G.foes[k];
+      if (o === t || !o.alive) continue;
+      var odx = t.x - o.x, ody = t.y - o.y;
+      var od2 = odx * odx + ody * ody;
+      if (od2 > 1 && od2 < w.sep * w.sep) {
+        var om = Math.sqrt(od2);
+        ax += (odx / om) * 0.6; ay += (ody / om) * 0.6;
+      }
+    }
+  }
+
+  /* ---- dodge ----
+   * your shells leave the barrel half a radian off and bend back onto your aim
+   * line, so sidestepping the heading one has NOW walks straight into it. */
+  if (s.panic > 0) s.panic -= dt;
+  var th = fbThreat(t, w);
+  if (th) {
+    var side = angDiff(FB_T.a, angTo(FB_T.x, FB_T.y, t.x, t.y)) > 0 ? 1 : -1;
+    var esc = FB_T.a + side * Math.PI / 2;
+    if (!fbRoom(t, esc, rects)) {
+      esc -= side * Math.PI;                          // then the other way
+      // and if both shoulders are a trunk, run downrange with it. FB_T.a is
+      // where the shell is going, so FB_T.a + PI would be into its face.
+      if (!fbRoom(t, esc, rects)) { esc = FB_T.a; s.panic = 0.5; }
+    }
+    var urg = FB_T.tt < 0.7 ? 1 : 0.55;               // drift early, commit late
+    ax = lerp(ax, Math.cos(esc), w.dodge * urg);
+    ay = lerp(ay, Math.sin(esc), w.dodge * urg);
+    // cornered, with something arriving: that is what the wall is for. The
+    // bearing is the shell itself, the way aiTank does it - FB_T is where it
+    // gets closest, which is already all but on the hull.
+    if (s.panic > 0 && w.wall > 0 && t.wallCd <= 0 && FB_T.tt < 0.4) {
+      var keep = t.turret;
+      t.turret = angTo(t.x, t.y, th.x, th.y);
+      if (buildWall(t)) { s.think = 0; s.score = 0; }
+      t.turret = keep;
+    }
+  }
+
+  /* ---- the wall it has been sitting on ----
+   * twenty seconds, the same as yours. buildWall only ever lands one 78px
+   * straight down the barrel and a wall has one hit point, so a fence across
+   * its own firing lane is a fence its own next shell deletes. Both cases
+   * below put it on a shoulder instead, and throw away the angle it had
+   * picked so it does not fire a stale one into fresh concrete. */
+  s.wallT -= dt;
+  if (t.wallCd <= 0 && w.wall > 0 && s.wallT <= 0 && Math.random() < w.wall * dt * 2.2) {
+    s.wallT = 1.6;
+    var toYou = angTo(t.x, t.y, you.x, you.y);
+    var laid = false, kp = t.turret;
+    if (guarding && t.cd > t.fire * 0.4 && dYou > 110) {
+      t.turret = toYou + s.side * 1.1;                // across one shoulder of your run-up
+      laid = buildWall(t);
+    } else if (Math.hypot(you.vx, you.vy) > 60) {
+      var run = Math.atan2(you.vy, you.vx);
+      var wx = you.x + Math.cos(run) * 150, wy = you.y + Math.sin(run) * 150;
+      // and only while you are driving across its view, for the same reason
+      if (Math.hypot(wx - t.x, wy - t.y) < TUNE.wallGap + 70 &&
+          Math.abs(angDiff(angTo(t.x, t.y, wx, wy), toYou)) > 0.7) {
+        t.turret = angTo(t.x, t.y, wx, wy);
+        laid = buildWall(t);
+      }
+    }
+    t.turret = kp;
+    if (laid) { s.think = 0; s.score = 0; } else s.wallT = 0.4;
+  }
+
+  var m = Math.hypot(ax, ay);
+  if (m > 1) { ax /= m; ay /= m; }
+  moveTank(t, dt, ax, ay);
+
+  /* ---- shoot ---- */
+  if (t.cd > 0) s.shotT = 0;
+  else {
+    s.shotT += dt;
+    var fired = false;
+    if (t.shooters >= 10) {
+      // ten shells that all turn towards you: worth everything from close,
+      // and nothing at all from the far side of the wood
+      if (dYou < 300 + 260 * w.aggro || (pen && Math.hypot(you.x - pen.x, you.y - pen.y) < 260)
+          || s.shotT > w.hold * 2) fired = fireTank(t);
+    } else if (Math.abs(angDiff(t.turret, s.aim)) < w.tol) {
+      if (s.score >= 500 || (s.score >= 40 && s.shotT > w.patience) || s.shotT > w.hold) fired = fireTank(t);
+    }
+    if (fired) s.shotT = 0;
+  }
+}
+
+function forestTrick(t, dt) {
+  var r = t.rung, frame = (G.t * 60 | 0);
+
+  if (r === 2) {
+    // loaded and pointing at you is the tell, not nearly-reloaded: this one sits
+    // on a live round until you run straight, so the warning has to last as long
+    // as the wait does
+    if (t.cd <= 0 && G.you.alive && frame % 4 === 0 &&
+        Math.abs(angDiff(t.turret, angTo(t.x, t.y, G.you.x, G.you.y))) < 0.4) {
+      var ma = t.turret, md = TUNE.barrel + 8;
+      G.parts.push({ x: t.x + Math.cos(ma) * md, y: t.y + Math.sin(ma) * md,
+        vx: Math.cos(ma) * rnd(20, 70), vy: Math.sin(ma) * rnd(20, 70),
+        life: rnd(0.2, 0.4), max: 0.4, col: "#ffd56a", r: rnd(1.6, 3), curve: rnd(-3, 3), grav: 0 });
+    }
+  } else if (r === 3) {
+    // mud off the tracks, so a child can see when it is at full tilt
+    if (frame % 3 === 0 && t.vx * t.vx + t.vy * t.vy > 170 * 170) {
+      var ba = t.hull + Math.PI;
+      G.parts.push({ x: t.x + Math.cos(ba) * 18 + rnd(-8, 8), y: t.y + Math.sin(ba) * 18 + rnd(-8, 8),
+        vx: Math.cos(ba) * rnd(30, 110), vy: Math.sin(ba) * rnd(30, 110),
+        life: rnd(0.25, 0.6), max: 0.6, col: frame % 6 === 0 ? "#4a3b26" : "#2b2317",
+        r: rnd(2, 4.5), grav: 0 });
+    }
+  } else if (r === 4) {
+    // the keeper screens the flag, not itself. buildWall only ever lands one
+    // 78px along the turret, so it points at the flag and the wall drops in the
+    // mouth: your line to the flag runs through it, and the line the keeper
+    // itself shoots down, which faces the other way, stays clear
+    var mine = flagsOf(t.team)[0];
+    if (mine && t.wallCd <= 0) {
+      var fy = mine.y - 34, fd = dist2(t.x, t.y, mine.x, fy);
+      if (fd > 90 * 90 && fd < 300 * 300) {
+        var keep = t.turret;
+        t.turret = angTo(t.x, t.y, mine.x, fy);
+        buildWall(t);
+        t.turret = keep;
+      }
+    }
+  } else if (r === 5) {
+    // the ring winds up before it goes out
+    if (t.cd > 0 && t.cd < 0.45 && frame % 2 === 0) {
+      var sa = rnd(0, TAU);
+      G.parts.push({ x: t.x + Math.cos(sa) * 34, y: t.y + Math.sin(sa) * 34,
+        vx: Math.cos(sa) * 90, vy: Math.sin(sa) * 90,
+        life: rnd(0.15, 0.35), max: 0.35, col: "#9ff0b4", r: rnd(1.4, 2.8),
+        curve: rnd(-6, 6), grav: 0 });
+    }
+  }
+}
+
 function updateWorld(dt) {
   G.t += dt;
   if (G.guard > 0) G.guard -= dt;
@@ -1332,7 +1938,8 @@ function updateWorld(dt) {
     if (!f.alive) continue;
     if (G.state !== "play") continue;
     if (G.guard > 0) { f.cd = Math.max(f.cd, 0.4); continue; }
-    if (f.lord) lordBrain(f, dt); else if (f.boss) bossBrain(f, dt); else aiTank(f, dt);
+    if (f.lord) lordBrain(f, dt); else if (f.boss) bossBrain(f, dt); else if (G.zone === 2) forestBrain(f, dt); else aiTank(f, dt);
+    if (f.rung && f.alive) forestTrick(f, dt);
   }
 
   /* ---- cooldowns ---- */
@@ -1809,6 +2416,485 @@ function drawLord(t) {
   g.restore();
 }
 
+/* ===========================================================================
+   THE WOOD'S MACHINES. Five rungs, five silhouettes: a squat crawler, a lean
+   stalker on a spotter mast, a swept runner trailing exhaust, a pale courser
+   that is both, and the ten-barrelled drum. Paths and flat fills only - the
+   gradients are cut ONCE, into FSKIN, because five tanks wearing this much
+   detail cannot afford a createLinearGradient each per frame.
+   Two numbers are held to the stock tank on purpose: every barrel's muzzle
+   brake sits at 40..48, so the shell - which pushShell always births 46px out
+   - leaves the gun at the gun's mouth; and no body is drawn much past 30px,
+   because the hit circle is only 22 and a machine drawn wider than the stock
+   one would look like it was eating shells that miss.
+   ========================================================================= */
+
+var FSKIN = null;
+var FFORMS = ["", "crawler", "stalker", "runner", "courser", "drum"];
+var FDASH = [6, 7];                                 // hoisted: setLineDash copies it
+
+/* which machine a forest tank is. a tank that knows its own rung says so;
+   otherwise "fast" is not kept on the tank - only the speed it was built with
+   remembers it - so read it back off the speed */
+function forestForm(t) {
+  var named = FFORMS[t.rung | 0];                   // undefined|0 is 0, which is ""
+  if (named) return named;
+  if (t.shooters >= 10) return "drum";
+  var base = t.kind === "skilled" ? TUNE.skilledSpeed : TUNE.botSpeed;
+  var fast = t.fast !== undefined ? !!t.fast : t.speed > base * 1.3;
+  if (fast) return t.kind === "skilled" ? "courser" : "runner";
+  return t.kind === "skilled" ? "stalker" : "crawler";
+}
+
+function forestSkins() {
+  // a canvas gradient is painted in whatever user space is current at fill
+  // time, so these are cut once in tank-local coordinates and then ride the
+  // translate/rotate of whichever tank is being drawn.
+  // bx + bar is always 44: the brake lands on 40..48, where the shell is born
+  var defs = {
+    crawler: { bw: 54, bh: 40, nose: 2, tw: 12, tc: 21, tl: 54,
+      bx: 8, bar: 36, bore: 13, mr: 17, ridge: 4, mast: 0, exh: 0, drum: 0,
+      lit: "#7c9152", plate: "#46562f", deep: "#1a2212", rim: "#0c1109", moss: "#7bbb45",
+      mud: "#4a3a22", sap: "#ffcf4a", bark: "#6b5130" },
+    stalker: { bw: 52, bh: 28, nose: 3, tw: 10, tc: 17, tl: 52,
+      bx: 2, bar: 42, bore: 7, mr: 12, ridge: 2, mast: 1, exh: 0, drum: 0,
+      lit: "#5e9387", plate: "#2b5049", deep: "#0e1f1d", rim: "#071412", moss: "#56b396",
+      mud: "#2f3a2a", sap: "#5fe8d0", bark: "#4a6b5a" },
+    runner: { bw: 48, bh: 26, nose: 5, tw: 9, tc: 15, tl: 58,
+      bx: 6, bar: 38, bore: 10, mr: 14, ridge: 3, mast: 0, exh: 1, drum: 0,
+      lit: "#a2673a", plate: "#5a3722", deep: "#1c1108", rim: "#120a04", moss: "#90a03f",
+      mud: "#5a4324", sap: "#ff8a30", bark: "#8a5a31" },
+    courser: { bw: 50, bh: 27, nose: 4, tw: 9, tc: 15, tl: 56,
+      bx: 2, bar: 42, bore: 8, mr: 13, ridge: 3, mast: 1, exh: 1, drum: 0,
+      lit: "#d3cfb4", plate: "#86836a", deep: "#262619", rim: "#15150e", moss: "#a7bd94",
+      mud: "#4b4634", sap: "#9fe8ff", bark: "#ddd8bf" },
+    drum: { bw: 50, bh: 50, nose: 0, tw: 11, tc: 20, tl: 38,
+      bx: 0, bar: 0, bore: 0, mr: 19, ridge: 0, mast: 0, exh: 0, drum: 1,
+      lit: "#4c7a56", plate: "#233a28", deep: "#0a1009", rim: "#050a05", moss: "#4f9a5a",
+      mud: "#33301c", sap: "#c8ff3a", bark: "#3e5544" }
+  };
+  var out = { ctx: g };
+  for (var k in defs) {
+    var d = defs[k];
+    d.my = d.drum ? -d.bh / 2 + 9 : -d.bh / 2 + 1;        // where the moss sits
+    // lit along the top edge, deep at the bottom: it has to come off a dark floor
+    var lg = g.createLinearGradient(0, -d.bh / 2 - 3, 0, d.bh / 2 + 2);
+    lg.addColorStop(0, d.lit); lg.addColorStop(0.42, d.plate); lg.addColorStop(1, d.deep);
+    d.hullG = lg;
+    var mg = g.createLinearGradient(0, d.my - 2, 0, d.my + 12);
+    mg.addColorStop(0, d.moss); mg.addColorStop(0.3, d.moss); mg.addColorStop(1, "rgba(0,0,0,0)");
+    d.mossG = mg;
+    var sg = g.createRadialGradient(0, 0, 1, 0, 0, 30);
+    sg.addColorStop(0, "#ffffff"); sg.addColorStop(0.35, d.sap); sg.addColorStop(1, "rgba(0,0,0,0)");
+    d.sapG = sg;
+    // both tracks share one gradient, so the far one is darker for free
+    var tg = g.createLinearGradient(0, -d.tc - d.tw / 2, 0, d.tc + d.tw / 2);
+    tg.addColorStop(0, "#2c3529"); tg.addColorStop(0.5, "#141a12"); tg.addColorStop(1, "#070b06");
+    d.trackG = tg;
+    var bg = g.createLinearGradient(0, -d.bore / 2 - 2, 0, d.bore / 2 + 1);
+    bg.addColorStop(0, d.plate); bg.addColorStop(0.5, d.deep); bg.addColorStop(1, "#070b06");
+    d.barG = bg;
+    var ng = g.createRadialGradient(-5, -5, 1, 0, 0, 20);
+    ng.addColorStop(0, d.lit); ng.addColorStop(0.5, d.plate); ng.addColorStop(1, d.deep);
+    d.mantG = ng;
+    out[k] = d;
+  }
+  return out;
+}
+
+/* path only, the way box() is: the caller fills and strokes */
+function forestHull(d, form) {
+  var hw = d.bw / 2, hh = d.bh / 2, nz = d.nose;
+  g.beginPath();
+  if (form === "drum") { g.arc(0, 0, hw - 1, 0, TAU); return; }
+  if (form === "crawler") {
+    g.moveTo(hw, -hh + 9); g.lineTo(hw + nz, -2); g.lineTo(hw + nz, 2); g.lineTo(hw, hh - 9);
+    g.lineTo(-hw + 6, hh); g.lineTo(-hw - 1, hh - 8);
+    g.lineTo(-hw - 1, -hh + 8); g.lineTo(-hw + 6, -hh);
+    g.closePath(); return;
+  }
+  if (form === "stalker") {
+    g.moveTo(hw + nz, 0); g.lineTo(hw - 7, -hh); g.lineTo(-hw + 9, -hh); g.lineTo(-hw - 2, -hh + 7);
+    g.lineTo(-hw - 2, hh - 7); g.lineTo(-hw + 9, hh); g.lineTo(hw - 7, hh);
+    g.closePath(); return;
+  }
+  // runner and courser: a raked wedge with the rear corners drawn out into fins
+  g.moveTo(hw + nz, 0); g.lineTo(hw - 5, -hh + 2); g.lineTo(-hw + 13, -hh);
+  g.lineTo(-hw - 4, -hh - 5); g.lineTo(-hw - 3, -hh + 8);
+  g.lineTo(-hw - 3, hh - 8); g.lineTo(-hw - 4, hh + 5); g.lineTo(-hw + 13, hh);
+  g.lineTo(hw - 5, hh - 2);
+  g.closePath();
+}
+
+function drawForestTank(t) {
+  if (!FSKIN || FSKIN.ctx !== g) FSKIN = forestSkins();
+  var form = forestForm(t), d = FSKIN[form];
+  var hw = d.bw / 2, hh = d.bh / 2;
+  // a cosmetic seed, set once: scratches and moss must not crawl about per frame
+  if (t.fseed === undefined) t.fseed = 1 + Math.abs((t.x * 13.7 + t.y * 7.3) | 0) % 977;
+  var sd = t.fseed;
+  var hit = t.hitT > 0 ? clamp(t.hitT / TUNE.hitFlash, 0, 1) : 0;
+  var load = t.fire > 0 ? clamp(1 - t.cd / t.fire, 0, 1) : 1;
+  var tell = load > 0.86 ? (load - 0.86) / 0.14 : 0;
+  var stun = t.stun > 0;
+  var bare = teamExposed(t.team);                 // flag down: the armour is gone
+  var foe = G.you;
+  var aim = angTo(t.x, t.y, foe.x, foe.y);
+  // "it has seen you" is the turret coming onto you, which is also the warning
+  var seen = t.alert !== undefined ? clamp(t.alert, 0, 1)
+           : clamp(1 - Math.abs(angDiff(t.turret, aim)) / 0.55, 0, 1);
+  if (stun || !foe.alive) seen = 0;               // last word: an alert must not light a corpse
+  var i, x, a, ca, sa, ty, mx, my, gx, gy, rx, ry, ph;
+
+  g.save();
+  g.translate(t.x, t.y);
+
+  // the mud it is standing in, and its lamp on the floor: both are ground, so
+  // they go down before the tumble and the buzz
+  g.globalAlpha = 0.38;
+  g.fillStyle = "#040804";
+  g.beginPath(); g.ellipse(4, 6, hw * 1.1, hh * 1.1, 0, 0, TAU); g.fill();
+  g.globalAlpha = 1;
+
+  // wide and dim while it hunts, narrow and bright once it has you, which is
+  // the cue to stop standing still
+  if (seen > 0.02) {
+    g.save();
+    g.rotate(t.turret);
+    g.fillStyle = d.sap;
+    var spread2 = 48 - seen * 28;
+    g.globalAlpha = 0.04 + seen * 0.05;           // the spill
+    g.beginPath();
+    g.moveTo(12, 0); g.lineTo(168, -spread2); g.lineTo(168, spread2);
+    g.closePath(); g.fill();
+    g.globalAlpha = 0.04 + seen * 0.12;           // and the beam inside it
+    g.beginPath();
+    g.moveTo(12, 0); g.lineTo(126, -spread2 * 0.45); g.lineTo(126, spread2 * 0.45);
+    g.closePath(); g.fill();
+    g.restore();
+  }
+
+  if (stun) g.rotate(t.spin || 0);                // the void left it tumbling
+  if (hit) g.translate(Math.sin(G.t * 90) * 3 * hit, Math.cos(G.t * 78) * 2.4 * hit);
+
+  /* ---- running gear ---- */
+  g.save();
+  g.rotate(t.hull);
+  var tl = d.tl, ty0 = d.tc;
+  var off = (t.tread * 0.7) % 10;                 // tread resets at 16, so this sweeps a whole period
+  for (i = 0; i < 2; i++) {
+    ty = (i ? 1 : -1) * ty0;
+    g.fillStyle = d.trackG;
+    box(-tl / 2, ty - d.tw / 2, tl, d.tw, 4);
+    g.fill();
+    g.strokeStyle = d.rim; g.lineWidth = 3; g.stroke();
+  }
+  // cleats, both tracks in one path, crawling on t.tread
+  g.strokeStyle = "#49503f"; g.lineWidth = 3;
+  g.beginPath();
+  for (x = -tl / 2 + off; x < tl / 2; x += 10) {
+    g.moveTo(x, -ty0 - d.tw / 2 + 2); g.lineTo(x, -ty0 + d.tw / 2 - 2);
+    g.moveTo(x, ty0 - d.tw / 2 + 2); g.lineTo(x, ty0 + d.tw / 2 - 2);
+  }
+  g.stroke();
+  // mud, on the same 10px lattice as the cleats so it travels with them: one
+  // clod leaving the front as another arrives at the back does not show
+  g.fillStyle = d.mud;
+  g.beginPath();
+  for (i = 0; i < 6; i++) {
+    mx = -tl / 2 + ((off + i * 10) % tl);
+    my = (i % 2 ? ty0 : -ty0) + ((i % 3) - 1) * 2;
+    g.moveTo(mx + 3, my); g.arc(mx, my, 2.6 + (i % 2), 0, TAU);
+  }
+  g.fill();
+
+  /* ---- hull: plate bolted over bark ---- */
+  forestHull(d, form);
+  g.fillStyle = d.hullG;
+  g.fill();
+  g.strokeStyle = d.rim; g.lineWidth = 4; g.stroke();
+  g.globalAlpha = 0.3;                            // a thin rim light, or it sinks into the floor
+  g.strokeStyle = d.lit; g.lineWidth = 1.5; g.stroke();
+  g.globalAlpha = 1;
+  if (hit) { g.globalAlpha = hit * 0.55; g.fillStyle = "#ffffff"; g.fill(); g.globalAlpha = 1; }
+
+  // ribs: bark bands across the crawler, a spine down the lean ones, rings on the drum
+  g.strokeStyle = "rgba(0,0,0,.5)"; g.lineWidth = 3;
+  g.beginPath();
+  if (d.drum) {
+    g.moveTo(hw - 7, 0); g.arc(0, 0, hw - 7, 0, TAU);
+    g.moveTo(hw - 14, 0); g.arc(0, 0, hw - 14, 0, TAU);
+  } else if (form === "crawler") {
+    for (i = 0; i < d.ridge; i++) {
+      x = -hw + 8 + i * ((d.bw - 14) / (d.ridge - 1));
+      g.moveTo(x, -hh + 5); g.lineTo(x, hh - 5);
+    }
+  } else {
+    g.moveTo(-hw + 8, -5); g.lineTo(hw - 10, -3);
+    g.moveTo(-hw + 8, 5); g.lineTo(hw - 10, 3);
+    if (d.ridge > 2) { g.moveTo(-hw + 2, -hh + 4); g.lineTo(-hw + 18, hh - 4); }
+  }
+  g.stroke();
+
+  // moss down the shaded side
+  var m0 = d.drum ? -d.bw * 0.26 : -hw + 9, m1 = d.drum ? d.bw * 0.26 : hw - 10;
+  g.fillStyle = d.mossG;
+  g.beginPath();
+  g.moveTo(m0, d.my - 1);
+  for (i = 0; i <= 6; i++) {
+    x = m0 + (m1 - m0) * (i / 6);
+    g.lineTo(x, d.my + 6 + Math.sin(i * 2.1 + sd) * 3.5);
+  }
+  g.lineTo(m1, d.my - 1);
+  g.closePath();
+  g.fill();
+
+  // rivets, all of them in one path
+  g.globalAlpha = 0.5;
+  g.fillStyle = d.lit;
+  g.beginPath();
+  for (i = 0; i < 8; i++) {
+    a = (i / 8) * TAU + 0.4;
+    rx = Math.cos(a) * (hw - 8); ry = Math.sin(a) * (hh - 7);
+    g.moveTo(rx + 1.3, ry); g.arc(rx, ry, 1.3, 0, TAU);
+  }
+  g.fill();
+  g.globalAlpha = 1;
+
+  // scratches where shells have been; one with its flag down wears more. both
+  // ends are pulled in from the plate edge so none of them hangs off the hull
+  g.strokeStyle = "rgba(230,236,230,.3)"; g.lineWidth = 2;
+  g.beginPath();
+  for (i = 0; i < (bare ? 5 : 3); i++) {
+    gx = -hw + 10 + ((sd * (i + 3) * 37) % (d.bw - 30));
+    gy = -hh + 9 + ((sd * (i + 7) * 53) % (d.bh - 22));
+    g.moveTo(gx, gy); g.lineTo(gx + 5 + i, gy - 4 + i * 2);
+  }
+  g.stroke();
+
+  // sap in the seams: dim between shots, hot when it is loaded, flaring when hit
+  g.globalAlpha = stun ? 0.05 : clamp((0.14 + load * 0.46 + hit * 0.45 + (bare ? 0.2 : 0)) *
+    (0.78 + Math.sin(G.t * 2.4 + sd) * 0.22), 0, 1);
+  g.strokeStyle = d.sap; g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(-hw + 9, 0); g.lineTo(hw - 11, 0);
+  g.moveTo(hw - 17, -hh + 7); g.lineTo(hw - 8, -2);
+  g.moveTo(hw - 17, hh - 7); g.lineTo(hw - 8, 2);
+  if (bare) { g.moveTo(-hw + 12, -hh + 5); g.lineTo(-hw + 4, hh - 5); }      // a split plate
+  g.stroke();
+  g.globalAlpha = 1;
+
+  if (d.exh) {
+    // stacks at the back, and the smoke they leave when it is really running
+    g.fillStyle = "#15150f";
+    g.beginPath();
+    g.moveTo(-hw + 2, -9); g.arc(-hw - 2, -9, 4, 0, TAU);
+    g.moveTo(-hw + 2, 9); g.arc(-hw - 2, 9, 4, 0, TAU);
+    g.fill();
+    var sm = (Math.abs(t.vx) + Math.abs(t.vy)) > 40 ? 1 : 0.4;
+    g.fillStyle = "#8a9a84";
+    for (i = 0; i < 3; i++) {
+      ph = (G.t * (1.5 + sm) + i * 0.34) % 1;
+      g.globalAlpha = (1 - ph) * 0.26 * sm;
+      g.beginPath(); g.arc(-hw - 6 - ph * 36, (i % 2 ? 9 : -9) + ph * 5, 3 + ph * 10, 0, TAU); g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+
+  if (d.mast) {
+    // a spotter on a mast: it finds you before the gun comes round
+    g.strokeStyle = d.rim; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(-hw + 17, -hh + 3); g.lineTo(-hw + 11, -hh - 13); g.stroke();
+    g.save();
+    g.translate(-hw + 11, -hh - 13);
+    g.rotate(aim - t.hull);
+    g.fillStyle = "#0b100a";
+    g.beginPath(); g.arc(0, 0, 7, 0, TAU); g.fill();
+    g.strokeStyle = d.rim; g.lineWidth = 2; g.stroke();
+    g.globalAlpha = 0.35 + seen * 0.65;
+    g.fillStyle = seen > 0.6 ? "#ffffff" : d.sap;
+    g.beginPath(); g.moveTo(2, -5); g.lineTo(9, 0); g.lineTo(2, 5); g.closePath(); g.fill();
+    g.restore();
+  }
+  g.restore();
+
+  if (!d.drum) {
+    /* ---- gun ---- */
+    g.save();
+    g.rotate(t.turret);
+    if (!stun) {                                  // the breech lights as it loads
+      g.globalAlpha = 0.1 + load * 0.4;
+      g.fillStyle = d.sapG;
+      g.beginPath(); g.arc(0, 0, 30, 0, TAU); g.fill();
+      g.globalAlpha = 1;
+    }
+    var rec = -5 * (1 - load) * (1 - load);       // still rocking back from the last shot
+    // one barrel per shooter, on fireTank's own spread table
+    var nb = t.shooters > 4 ? 4 : t.shooters;
+    var spr = nb === 2 ? 0.16 : nb === 3 ? 0.3 : nb === 4 ? 0.44 : 0;
+    for (i = 0; i < nb; i++) {
+      g.save();
+      g.rotate(nb === 1 ? 0 : -spr / 2 + (i / (nb - 1)) * spr);
+      g.fillStyle = d.barG;
+      box(rec + d.bx, -d.bore / 2, d.bar, d.bore, 3);
+      g.fill();
+      g.strokeStyle = d.rim; g.lineWidth = 3.5; g.stroke();
+      g.globalAlpha = 0.75;                       // a bark sleeve at the breech
+      g.fillStyle = d.bark;
+      box(rec + d.bx + 1, -d.bore / 2 - 1, 13, d.bore + 2, 3);
+      g.fill();
+      g.globalAlpha = 1;
+      g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(rec + d.bx + d.bar * 0.5, -d.bore / 2); g.lineTo(rec + d.bx + d.bar * 0.5, d.bore / 2);
+      g.moveTo(rec + d.bx + d.bar * 0.78, -d.bore / 2); g.lineTo(rec + d.bx + d.bar * 0.78, d.bore / 2);
+      g.stroke();
+      g.fillStyle = "#0a0f08";                    // the brake, where the stock tank wears it
+      box(rec + 40, -d.bore / 2 - 2, 8, d.bore + 4, 2);
+      g.fill();
+      g.strokeStyle = d.rim; g.lineWidth = 2.5; g.stroke();
+      if (!stun) {                                // the bore lights where the shell is born
+        g.globalAlpha = 0.25 + tell * 0.75;
+        g.fillStyle = tell > 0.5 ? "#ffffff" : d.sap;
+        g.beginPath(); g.arc(rec + 46, 0, 2 + tell * 2.6, 0, TAU); g.fill();
+        g.globalAlpha = 1;
+      }
+      g.restore();
+    }
+    g.fillStyle = d.mantG;
+    g.beginPath(); g.arc(0, 0, d.mr, 0, TAU); g.fill();
+    g.strokeStyle = d.rim; g.lineWidth = 4; g.stroke();
+    g.strokeStyle = "rgba(0,0,0,.5)"; g.lineWidth = 2;
+    g.beginPath(); g.arc(-2, 0, d.mr * 0.45, 0, TAU); g.stroke();
+    g.globalAlpha = 0.3 + seen * 0.7;             // the hatch lamp
+    g.fillStyle = seen > 0.6 ? "#ffffff" : d.sap;
+    g.beginPath(); g.arc(d.mr * 0.5, 0, 2.4 + seen * 1.4, 0, TAU); g.fill();
+    g.globalAlpha = 1;
+    if (tell > 0 && !stun) {                      // four marks closing on the shot
+      g.globalAlpha = 0.35 + tell * 0.5;
+      g.strokeStyle = "#ffffff"; g.lineWidth = 2.5;
+      var tr = d.mr + 7 + (1 - tell) * 11;
+      g.beginPath();
+      for (i = 0; i < 4; i++) {
+        a = (i / 4) * TAU + G.t * 2.2;
+        g.moveTo(Math.cos(a) * tr, Math.sin(a) * tr);
+        g.arc(0, 0, tr, a, a + 0.85);
+      }
+      g.stroke();
+      g.globalAlpha = 1;
+    }
+    g.restore();
+  } else {
+    /* ---- the drum: ten stubby barrels on a collar that winds up as it loads
+       and then holds dead still for the last of it. that stillness is the only
+       tell it has, so nothing else may turn the collar - and the wind-up is a
+       whole number of barrel pitches, so the snap back at the shot never shows */
+    var ez = load < 0.85 ? (load / 0.85) * (load / 0.85) : 1;
+    g.save();
+    g.rotate(t.turret + ez * (TAU / 10) * 12);
+    g.fillStyle = "#101c12";
+    g.beginPath();
+    for (i = 0; i < 10; i++) {
+      a = (i / 10) * TAU;
+      ca = Math.cos(a); sa = Math.sin(a);
+      // the four corners worked out by hand, so all ten are one path
+      g.moveTo(ca * 19 + sa * 4, sa * 19 - ca * 4);
+      g.lineTo(ca * 35 + sa * 4, sa * 35 - ca * 4);
+      g.lineTo(ca * 35 - sa * 4, sa * 35 + ca * 4);
+      g.lineTo(ca * 19 - sa * 4, sa * 19 + ca * 4);
+      g.closePath();
+    }
+    g.fill();
+    g.strokeStyle = d.rim; g.lineWidth = 3; g.stroke();
+    g.globalAlpha = stun ? 0.05 : 0.2 + load * 0.7;
+    g.fillStyle = tell > 0.5 ? "#ffffff" : d.sap;
+    g.beginPath();
+    for (i = 0; i < 10; i++) {
+      a = (i / 10) * TAU;
+      rx = Math.cos(a) * 34; ry = Math.sin(a) * 34;
+      g.moveTo(rx + 2.3, ry); g.arc(rx, ry, 2.3, 0, TAU);
+    }
+    g.fill();
+    g.globalAlpha = 1;
+    g.restore();
+    g.fillStyle = d.mantG;
+    g.beginPath(); g.arc(0, 0, d.mr, 0, TAU); g.fill();
+    g.strokeStyle = d.rim; g.lineWidth = 4; g.stroke();
+    if (!stun) {
+      g.globalAlpha = 0.12 + load * 0.45;
+      g.fillStyle = d.sapG;
+      g.beginPath(); g.arc(0, 0, 30, 0, TAU); g.fill();
+      g.globalAlpha = 1;
+    }
+    g.save();
+    g.rotate(t.turret);
+    g.fillStyle = "#060905";
+    g.beginPath(); g.ellipse(0, 0, 13, 9, 0, 0, TAU); g.fill();
+    g.globalAlpha = stun ? 0.1 : 0.45 + seen * 0.55;
+    g.fillStyle = seen > 0.6 ? "#ffffff" : d.sap;
+    g.beginPath(); g.ellipse(0, 0, 11 + load * 2, 2.2 + load * 1.8, 0, 0, TAU); g.fill();
+    g.globalAlpha = 1;
+    g.restore();
+    if (tell > 0 && !stun) {
+      g.globalAlpha = 0.35 + tell * 0.5;
+      g.strokeStyle = "#ffffff"; g.lineWidth = 2.5;
+      var tr2 = 42 + (1 - tell) * 14;
+      g.beginPath();
+      for (i = 0; i < 4; i++) {
+        a = (i / 4) * TAU + G.t * 2.2;
+        g.moveTo(Math.cos(a) * tr2, Math.sin(a) * tr2);
+        g.arc(0, 0, tr2, a, a + 0.85);
+      }
+      g.stroke();
+      g.globalAlpha = 1;
+    }
+  }
+
+  // no flag left, no armour: this is the moment it can actually be killed
+  if (bare) {
+    g.save();
+    g.globalAlpha = 0.5 + Math.sin(G.t * 5) * 0.2;
+    g.strokeStyle = d.sap; g.lineWidth = 2;
+    g.setLineDash(FDASH);
+    g.beginPath(); g.arc(0, 0, t.r + 12, 0, TAU); g.stroke();
+    g.restore();
+  }
+  g.restore();
+}
+
+/* a forest machine coming apart: bark, mud, and the sap it was running on */
+function forestDeath(t) {
+  var d = FSKIN ? FSKIN[forestForm(t)] : null;
+  var sap = d ? d.sap : "#bff07a", bark = d ? d.bark : "#5a4326", mud = d ? d.mud : "#3b2f1c";
+  var i, a;
+  for (i = 0; i < 14; i++) {                      // splinters, and these fall
+    a = rnd(0, TAU);
+    G.parts.push({ x: t.x + rnd(-14, 14), y: t.y + rnd(-12, 12),
+      vx: Math.cos(a) * rnd(90, 420), vy: Math.sin(a) * rnd(90, 420) - 60,
+      life: rnd(0.45, 1.2), max: 1.2, col: i % 3 ? bark : "#2a1a10", r: rnd(2, 5) });
+  }
+  for (i = 0; i < 8; i++) {                       // clods off the tracks
+    a = rnd(0, TAU);
+    G.parts.push({ x: t.x + rnd(-18, 18), y: t.y + rnd(-16, 16),
+      vx: Math.cos(a) * rnd(40, 170), vy: Math.sin(a) * rnd(40, 170),
+      life: rnd(0.5, 1), max: 1, col: mud, r: rnd(3, 6) });
+  }
+  for (i = 0; i < 16; i++) {                      // sap, which floats and bends
+    a = rnd(0, TAU);
+    G.parts.push({ x: t.x, y: t.y,
+      vx: Math.cos(a) * rnd(70, 330), vy: Math.sin(a) * rnd(70, 330),
+      life: rnd(0.4, 1), max: 1, col: i % 2 ? sap : "#ffffff", r: rnd(1.6, 4),
+      curve: rnd(-6, 6), grav: 0 });
+  }
+  for (i = 0; i < 6; i++) {                       // and the smoke it leaves standing
+    G.parts.push({ x: t.x + rnd(-10, 10), y: t.y + rnd(-10, 10),
+      vx: rnd(-26, 26), vy: rnd(-70, -26),
+      life: rnd(0.9, 1.6), max: 1.6, col: "#7f8f7a", r: rnd(5, 11), grav: 0 });
+  }
+  G.rings.push({ x: t.x, y: t.y, r: 10, max: 210, life: 0.55, t: 0.55, col: sap });
+  G.rings.push({ x: t.x, y: t.y, r: 4, max: 90, life: 0.3, t: 0.3, col: "#ffffff" });
+}
+
 function drawPillars() {
   for (var i = 0; i < G.pillars.length; i++) {
     var p = G.pillars[i];
@@ -1965,6 +3051,7 @@ function drawFlag(f) {
 function drawTank(t) {
   if (!t.alive) return;
   if (t.lord) { drawLord(t); return; }
+  if (G.zone === 2 && t.kind !== "you") { drawForestTank(t); return; }
   var col = teamCol(t.team), dark = teamDark(t.team);
   var flash = t.hitT > 0;
   var s = t.scale, i, a;
