@@ -125,6 +125,9 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 .bg-toh canvas{width:100%;height:100%}
 .bg-oof{background:linear-gradient(180deg,#dceeff 0%,#9fd0f5 45%,#3f7f43 100%)}
 .bg-oof canvas{width:100%;height:100%}
+/* Doombringer Tower card */
+.bg-dbt{background:linear-gradient(180deg,#120406 0%,#3a0a0a 55%,#ff5a1a 100%)}
+.bg-dbt canvas{width:100%;height:100%}
 /* Flowers vs Bees card */
 .bg-fvb{background:linear-gradient(180deg,#7cc8ff 0%,#cdeeff 40%,#69b93c 41%,#4e9a2c 100%)}
 .bg-fvb canvas{width:100%;height:100%}
@@ -141,6 +144,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="doombringer/index.html" class="card" data-launched="2026-10-24">
+    <div class="card-img bg-dbt"><canvas id="c41"></canvas></div>
+    <div class="card-body">
+      <h2>DOOMBRINGER TOWER</h2>
+      <p>A <b>3D</b> tycoon fourteen floors tall, and at the top of it a man in black armour with a red sword who has been waiting for you the whole time. Stand on a green pad to buy a dropper; its ore falls onto a moving conveyor, through the blue upgrader gates that multiply it, and into the collector, and that is your money. Every dropper levels up ten times and looks better each time &mdash; metal, then glass, then neon, then rings, then fire, then a crown. Beat the obby at the back of each floor to reach the pad that unlocks the next one: <b>Green Meadow, Yellow Plains, Red Rampage</b> (a raised deck, three spiral mini-obbies and a wall of charts), and then you <b>rebirth</b> &mdash; lose everything, keep a x4 income multiplier &mdash; and the tower opens up: a <b>Black Void</b> whose droppers grow orbiting shards, a <b>Purple Palace</b> with six hundred buttons on the wall that each buy one decoration, two blue floors where every dropper moves differently (orbits, teleports, hangs upside down, breathes), a <b>Light Blue Battle Deck</b> with five Undertale-style bosses you fight in a white box &mdash; bones, beams, rain, rings, spears, homing orbs and a MERCY heart that hits for 8% &mdash; to win their droppers, a <b>White Aura Heaven</b>, a <b>Gray Meme Market</b> where everything costs eight times as much, a <b>Danger Red</b> floor where the droppers throw fireballs at you over a lava lake, a <b>Rainbow Party</b>, and <b>Purple-Pink Paradise</b>: twelve hundred more buttons, three harder bosses, Lights Out, a twelve-step Simon, and a vault whose code is written on three other floors. Five rebirths gets you to <b>The Summit</b>: four portal bosses for Boss Points, a sword forge that goes Wooden &rarr; Brass &rarr; Iron &rarr; Nunchucks &rarr; Lava Bucket Nunchucks &rarr; Laser Gun, and the <b>DOOMBRINGER</b> &mdash; three phases of sword waves, a spinning cyclone, bombs and falling stars, a flying hammer that ends in a ground-slam, lava buckets and nunchuck dashes &mdash; and you go in with a wooden sword. Fifteen weapons, fourteen secret badges, forty-two achievements, a song for every floor and boss. Saves in your browser. WASD + mouse on a PC; joystick and buttons on a phone.</p>
+      <span class="tag" style="background:#ff3a1a;color:#fff">3D TYCOON &middot; 14 FLOORS &middot; 13 BOSSES &middot; 5 REBIRTHS</span>
+    </div>
+  </a>
   <a href="flowers-vs-bees.html" class="card" data-launched="2026-10-24">
     <div class="card-img bg-fvb"><canvas id="c40"></canvas></div>
     <div class="card-body">
@@ -2363,6 +2374,46 @@ tycoonPreview('c31',{sky:['#1a0a14','#0a0a12'],floor:'#2a1a20',ore:['#9a8a6a','#
     ctx.fillStyle='rgba(58,10,42,.55)';ctx.fillRect(0,0,104,24);
     ctx.fillStyle='#ff9ad4';ctx.font='bold 12px Arial';ctx.textAlign='left';
     ctx.fillText('RAGE TRIALS',6,16);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+// ---- Doombringer Tower preview: the tower climbing into a burning sky ----
+(function(){
+  const c=document.getElementById('c41'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  const FL=['#4cc850','#f5cd32','#c82828','#141418','#8232c8','#1e46d2','#3278e6','#78bef5','#f0f0f5','#828287','#960000','#ff64c8','#c846be','#3c3c46'];
+  const embers=[];for(let i=0;i<40;i++)embers.push({x:Math.random(),y:Math.random(),s:Math.random()*0.6+0.4});
+  function draw(){
+    t+=0.016;
+    ctx.clearRect(0,0,w,h);
+    // embers rising
+    for(const e of embers){e.y-=0.002*e.s;if(e.y<0)e.y=1;ctx.fillStyle=`rgba(255,${120+e.s*100|0},40,${0.6*e.s})`;ctx.fillRect(e.x*w,e.y*h,2,2);}
+    // the tower
+    const tw=w*0.26,tx=w*0.38,fh=(h-40)/14;
+    for(let i=0;i<14;i++){
+      const y=h-(i+1)*fh;
+      ctx.fillStyle=FL[i];ctx.fillRect(tx,y,tw,fh-1);
+      ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(tx,y+fh-3,tw,2);
+      // tiny droppers + ore
+      for(let k=0;k<4;k++){const dx=tx+6+k*(tw-12)/4;ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fillRect(dx,y+2,4,3);
+        const oy=((t*1.2+k*0.3+i*0.17)%1)*(fh-7);ctx.fillStyle='#ffe28a';ctx.fillRect(dx+1,y+5+oy,2,2);}
+    }
+    // summit portal
+    const py=h-14*fh-2;ctx.fillStyle='#ff3a1a';ctx.globalAlpha=0.6+0.4*Math.sin(t*4);ctx.fillRect(tx+tw/2-6,py-12,12,12);ctx.globalAlpha=1;
+    // the Doombringer, looming
+    const dx=w*0.8,dy=h*0.55+Math.sin(t*1.5)*4;
+    ctx.fillStyle='#1c1a20';ctx.fillRect(dx-14,dy-10,28,30);ctx.fillRect(dx-10,dy-28,20,18);
+    ctx.fillStyle='#3c0a0a';ctx.beginPath();ctx.moveTo(dx-9,dy-28);ctx.lineTo(dx-14,dy-40);ctx.lineTo(dx-5,dy-28);ctx.moveTo(dx+9,dy-28);ctx.lineTo(dx+14,dy-40);ctx.lineTo(dx+5,dy-28);ctx.fill();
+    ctx.fillStyle='#ff2014';ctx.fillRect(dx-7,dy-21,5,2);ctx.fillRect(dx+2,dy-21,5,2);ctx.fillRect(dx-3,dy-4,6,6);
+    ctx.save();ctx.translate(dx+16,dy-2);ctx.rotate(-0.6+Math.sin(t*2)*0.25);ctx.fillStyle='#ff2014';ctx.shadowColor='#f00';ctx.shadowBlur=10;ctx.fillRect(-2,-34,4,34);ctx.restore();
+    // wordmark, top-left, over a scrim (badge owns top-right)
+    ctx.fillStyle='rgba(40,4,4,.6)';ctx.fillRect(0,0,160,24);
+    ctx.fillStyle='#ff6a3a';ctx.font='bold 12px Arial';ctx.textAlign='left';
+    ctx.fillText('DOOMBRINGER TOWER',6,16);
     requestAnimationFrame(draw);
   }
   draw();
