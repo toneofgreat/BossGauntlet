@@ -1,0 +1,3718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Flowers vs Bees</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#2a3a1a;font-family:Fredoka,'Fredoka One',system-ui,sans-serif;font-weight:600;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+#cv{position:fixed;left:0;top:0;display:block;cursor:pointer}
+.btn{font-family:inherit;font-weight:700;border:3px solid rgb(40,30,10);border-radius:10px;color:#fff;cursor:pointer;background:rgb(120,200,80);text-shadow:0 2px 0 rgba(0,0,0,.35);line-height:1.05;transition:filter .1s,transform .1s}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:scale(.96)}
+.green{background:rgb(110,200,80)!important}.tan{background:rgb(200,150,70)!important}.orange{background:rgb(220,160,60)!important}.blue{background:rgb(120,140,220)!important}
+/* ---- HUD ---- */
+.hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+.hud>*{pointer-events:auto}
+.seedbar{position:absolute;left:8px;top:6px;height:104px;display:flex;gap:6px;align-items:center;padding:0 6px;background:rgb(130,85,40);border:4px solid rgb(70,40,15);border-radius:12px;transform-origin:0 0}
+.sunbox{width:78px;height:92px;flex:none;background:rgb(250,235,180);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sunico{font-size:38px;line-height:46px}
+.sunnum{font-size:28px;color:rgb(60,40,10);line-height:32px}
+.sunbox.flash{animation:sunflash .3s 2}
+@keyframes sunflash{50%{background:rgb(255,80,80)}}
+.sunnum.pop{animation:sunpop .16s}
+@keyframes sunpop{50%{color:rgb(255,160,0);transform:scale(1.2)}}
+.card{position:relative;width:72px;height:92px;flex:none;background:rgb(245,235,200);border:3px solid rgb(120,80,30);border-radius:8px;overflow:hidden;cursor:pointer;font-size:11px;transition:transform .1s}
+.card.bee{background:rgb(255,235,190)}
+.card .band{position:absolute;left:4%;top:4%;width:92%;height:58%;background:rgb(150,215,110);border-radius:6px;overflow:hidden}
+.card.bee .band{background:rgb(255,210,120)}
+.card .band img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+.card .nm{position:absolute;top:63%;left:2%;width:96%;text-align:center;color:rgb(70,45,20);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1em;line-height:1.35em}
+.card .cost{position:absolute;top:80%;left:0;width:100%;text-align:center;color:rgb(40,30,10);font-size:1.25em;line-height:1.3em}
+.card .shade{position:absolute;left:0;top:0;width:100%;height:0;background:rgba(0,0,0,.5);z-index:5;pointer-events:none}
+.card.off::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.33);z-index:4;pointer-events:none}
+.card.sel{border-color:#fff;box-shadow:0 0 0 3px #ffe060,0 0 14px #ffe060;transform:translateY(-4px)}
+.card.locked{cursor:default}
+.card:hover{transform:translateY(-2px)}
+.shovel{width:70px;height:70px;flex:none;background:rgb(170,140,90);font-size:26px}
+.shovel span{font-size:11px}
+.shovel.on{background:rgb(255,230,120);color:rgb(80,50,10)}
+.hudright{position:absolute;right:8px;top:8px;display:flex;gap:8px;transform-origin:100% 0}
+.hudright .speed{width:80px;height:56px;background:rgb(200,160,60);font-size:20px}
+.hudright .pause{width:56px;height:56px;background:rgb(110,150,220);font-size:24px}
+.prog{position:absolute;right:12px;bottom:12px;width:250px;transform-origin:100% 100%;pointer-events:none!important}
+.proglbl{position:absolute;right:0;bottom:34px;text-align:right;font-size:17px;text-shadow:0 2px 2px rgba(0,0,0,.6);margin-bottom:6px;white-space:nowrap}
+.track{position:relative;height:24px;background:rgb(60,40,20);border:3px solid rgb(30,20,10);border-radius:12px}
+.track .fill{height:100%;width:0;background:rgb(130,220,70);border-radius:10px}
+.track .flag{position:absolute;top:-14px;font-size:20px}
+.announce{position:absolute;left:0;right:0;top:36%;text-align:center;font-size:clamp(26px,6.5vw,76px);font-weight:700;opacity:0;transition:opacity .4s;pointer-events:none!important;text-shadow:0 0 2px #280000,3px 3px 0 #280000,-3px 3px 0 #280000,3px -3px 0 #280000,-3px -3px 0 #280000;padding:0 4%}
+.announce.show{animation:annpop .25s cubic-bezier(.3,1.6,.6,1)}
+@keyframes annpop{from{transform:scale(.6)}to{transform:scale(1)}}
+.hint{position:absolute;left:12%;right:12%;bottom:84px;text-align:center;font-size:clamp(15px,2.3vw,22px);color:rgb(255,255,200);text-shadow:0 2px 3px #000,0 0 6px #000;pointer-events:none!important;display:none}
+.belt{position:absolute;left:8px;top:6px;width:88px;background:rgb(70,60,55) repeating-linear-gradient(to bottom,rgb(95,85,80) 0 6px,transparent 6px 60px);border:4px solid rgb(30,25,20);border-radius:12px;overflow:hidden;transform-origin:0 0}
+.belt .card{position:absolute;left:4px}
+.bossbar{position:absolute;left:50%;top:120px;width:42%;height:30px;transform:translateX(-50%);background:rgb(40,10,40);border:3px solid rgb(255,200,40);border-radius:10px;overflow:hidden;pointer-events:none!important}
+.bfill{height:100%;width:100%;background:rgb(200,40,160);transition:width .15s}
+.blbl{position:absolute;inset:0;text-align:center;font-size:17px;line-height:24px;text-shadow:0 2px 0 #000;white-space:nowrap}
+.queensay{position:absolute;left:50%;transform:translateX(-50%);width:min(560px,70%);min-height:44px;padding:8px 12px;background:rgba(20,0,25,.88);color:rgb(255,220,80);font-family:'Courier New',monospace;font-weight:700;font-size:clamp(13px,1.8vw,18px);border:3px solid rgb(255,60,160);border-radius:10px;text-align:center;pointer-events:none!important}
+.startbtn{position:absolute;left:50%;bottom:140px;transform:translateX(-50%);width:200px;height:64px;background:rgb(230,80,60)!important;font-size:26px}
+.flash{position:absolute;inset:0;background:rgb(180,230,255);animation:fadeout .8s forwards;pointer-events:none!important}
+@keyframes fadeout{from{opacity:.7}to{opacity:0}}
+.ovwrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:40}
+.overlay{width:420px;flex:none;background:rgb(120,80,40);border:5px solid rgb(60,35,10);border-radius:16px;padding:14px 20px 20px;text-align:center}
+.otitle{font-size:44px;color:rgb(255,240,200);text-shadow:0 3px 0 rgba(0,0,0,.4)}
+.osub{font-size:21px;color:rgb(255,230,180);margin:4px 0 14px}
+.orow{display:flex;gap:12px;margin-top:10px}
+.overlay .btn{height:52px;font-size:21px;flex:1}
+.overlay .wide{width:100%;display:block;margin-top:10px}
+/* ---- Menus ---- */
+.menu{position:fixed;inset:0;z-index:10;overflow:hidden;background:linear-gradient(to bottom,rgb(120,200,255) 0%,rgb(190,235,255) 55%,rgb(110,190,70) 56%,rgb(70,140,45) 100%)}
+.mbee{position:absolute;left:-8%;font-size:40px;animation:fly linear infinite}
+@keyframes fly{from{left:-8%}to{left:110%}}
+.mflower{position:absolute;bottom:14px;font-size:44px}
+.mroot{position:absolute;left:50%;top:50%;width:980px;height:660px;transform-origin:50% 50%}
+.panel{position:absolute;background:rgb(140,95,50);border:5px solid rgb(70,45,20);border-radius:16px}
+.mlabel{position:absolute;text-align:center;white-space:nowrap;overflow:hidden;color:#fff;text-shadow:0 2px 2px rgba(0,0,0,.45)}
+.mlabel.title{color:rgb(255,230,60);text-shadow:0 0 3px rgb(110,60,10),3px 3px 0 rgb(110,60,10),-3px 3px 0 rgb(110,60,10),3px -3px 0 rgb(110,60,10),-3px -3px 0 rgb(110,60,10)}
+.panel .mlabel.title{color:rgb(255,235,110)}
+.wobble{animation:wob 3.2s ease-in-out infinite}
+@keyframes wob{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+.mlabel.cream{color:rgb(255,245,220)}.mlabel.yellow{color:rgb(255,230,120)}.mlabel.gold{color:rgb(255,230,60)}
+.mlabel.small{font-size:17px!important;white-space:normal;line-height:1.2!important;height:auto!important}
+.mbtn{position:absolute}
+.level{padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.level .lvico{font-size:40px;line-height:48px}
+.level .lvnum{font-size:26px;line-height:30px}
+.level .lvsub{font-size:14px;line-height:18px;color:rgb(255,255,230);height:18px}
+.level.locked{cursor:default;filter:none!important}
+.wiggle{animation:wig 1.4s ease-in-out infinite}
+@keyframes wig{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.tabs{position:absolute;top:124px;left:0;width:980px;display:flex;justify-content:center;gap:8px}
+.tab{width:148px;height:56px;font-size:19px}
+.homelink{position:absolute;top:10px;left:10px;color:#fff;background:rgba(0,0,0,.35);padding:6px 12px;border-radius:10px;text-decoration:none;font-size:15px;z-index:3}
+.beegrid{position:absolute;left:10px;top:46px;right:10px;bottom:66px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;overflow-y:auto}
+.newtag{position:absolute;top:-1px;left:0;width:100%;text-align:center;color:rgb(255,60,60);font-size:14px;text-shadow:0 0 2px #fff,0 0 3px #fff;z-index:6}
+.sidetip{position:absolute;left:8px;right:8px;bottom:6px;height:56px;color:rgb(255,255,200);font-size:17px;text-align:center;line-height:1.2}
+.slotrow{position:absolute;inset:3px 10px;display:flex;gap:10px;align-items:center}
+.emptyslot{width:78px;height:100px;flex:none;background:rgb(90,60,30);border-radius:8px;color:rgb(140,100,60);font-size:40px;display:flex;align-items:center;justify-content:center}
+.cardgrid{position:absolute;inset:10px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;overflow-y:auto;padding:4px 2px}
+.viewport{position:absolute;left:20px;top:16px;width:calc(100% - 40px);height:210px;border-radius:12px}
+.dname{position:absolute;top:232px;left:10px;right:10px;text-align:center;font-size:32px;color:rgb(80,50,20)}
+.dstats{position:absolute;top:280px;left:15px;right:15px;font-size:20px;color:rgb(90,60,30);line-height:1.3}
+.ddesc{position:absolute;top:384px;left:15px;right:15px;font-size:19px;color:rgb(60,40,20);line-height:1.25}
+.msgtext{position:absolute;left:30px;right:30px;font-size:24px;color:rgb(255,245,220);text-align:center;line-height:1.25}
+.bigcard{font-size:26px}
+.rotate{position:fixed;inset:0;z-index:100;background:rgba(20,30,10,.94);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;font-size:22px;gap:16px}
+.rotate .big{font-size:64px}
+@media (orientation:portrait) and (max-width:700px){.rotate.armed{display:flex}}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div class="rotate armed" id="rotate"><div class="big">📱↻</div><div>Flowers vs Bees plays best with your phone turned sideways.</div><button class="btn" style="padding:10px 18px;font-size:20px" onclick="document.getElementById('rotate').classList.remove('armed')">Play anyway</button></div>
+<script>
+"use strict";
+// ===================================================================================
+// Config: every flower, bee, area and level in Flowers vs Bees.
+// ===================================================================================
+const C = (r, g, b) => [r, g, b];
+const rgb = (c, a) => a === undefined ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})` : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const lerpC = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+
+class RNG {
+	constructor(seed) { this.s = (Math.floor(seed) >>> 0) || 1; }
+	next() {
+		let t = (this.s += 0x6D2B79F5) >>> 0;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	}
+	num(a, b) { return a === undefined ? this.next() : a + this.next() * (b - a); }
+	int(a, b) { return a + Math.floor(this.next() * (b - a + 1)); }
+}
+
+const Config = {};
+Config.TILE = 7;
+Config.COLS = 9;
+Config.MAX_SLOTS = 5;
+Config.LEVELS_PER_AREA = 10;
+Config.START_FLOWERS = ["sunflower", "rose"];
+
+Config.Flowers = [
+	{ id: "sunflower", name: "Sunflower", cost: 50, recharge: 7.5, hp: 300, kind: "sun", amount: 25, interval: 24,
+		look: { type: "daisy", petal: C(255, 205, 30), center: C(150, 85, 30), n: 12, face: true },
+		desc: "Makes 25 sun every 24 seconds. Plant lots of these first!" },
+	{ id: "rose", name: "Rose Shooter", cost: 100, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "thorn",
+		look: { type: "rose", color: C(225, 30, 60) }, desc: "Shoots thorns at bees in its lane." },
+	{ id: "tulip", name: "Tulip Bomb", cost: 150, recharge: 45, hp: 1e9, kind: "bomb", dmg: 1800, radius: 1.5, fuse: 0.9,
+		look: { type: "tulip", color: C(255, 60, 40), fuse: true }, desc: "Explodes after a moment, blasting every bee in a 3x3 area." },
+	{ id: "thornbush", name: "Thorn Bush", cost: 50, recharge: 30, hp: 4000, kind: "wall",
+		look: { type: "bush" }, desc: "A tough prickly wall that keeps bees busy." },
+	{ id: "pinecone", name: "Pinecone Mine", cost: 25, recharge: 30, hp: 300, kind: "mine", dmg: 1800, arm: 12,
+		look: { type: "pinecone" }, desc: "Takes 12 seconds to arm, then blows up the first bee that touches it." },
+	{ id: "snowlily", name: "Snow Lily", cost: 175, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "frost",
+		look: { type: "lily", color: C(185, 225, 255) }, desc: "Shoots frost petals that slow bees down." },
+	{ id: "dandelion", name: "Dandelion Puff", cost: 0, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "puff", range: 3,
+		look: { type: "puff" }, desc: "FREE! Shoots fluffy seeds, but only 3 tiles far." },
+	{ id: "moonflower", name: "Moonflower", cost: 25, recharge: 7.5, hp: 300, kind: "sun", amount: 20, interval: 24,
+		look: { type: "daisy", petal: C(205, 215, 255), center: C(255, 250, 200), n: 10, glow: true, face: true }, desc: "Cheap sun maker that glows in the dark." },
+	{ id: "flytrap", name: "Venus Flytrap", cost: 150, recharge: 7.5, hp: 300, kind: "chomper", chew: 25,
+		look: { type: "trap" }, desc: "Swallows a whole bee in one bite, then chews for a while." },
+	{ id: "doom", name: "Doom Dahlia", cost: 125, recharge: 50, hp: 1e9, kind: "bomb", dmg: 1800, radius: 3.3, fuse: 1.2, crater: 45,
+		look: { type: "dahlia" }, desc: "A HUGE explosion that wipes out everything nearby. Leaves a crater." },
+	{ id: "lilypad", name: "Lily Pad", cost: 25, recharge: 7.5, hp: 300, kind: "pad", aquatic: true,
+		look: { type: "pad" }, desc: "Floats on water so you can plant other flowers on top of it." },
+	{ id: "doublerose", name: "Double Rose", cost: 200, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "thorn", count: 2,
+		look: { type: "rose", color: C(255, 80, 150), double: true }, desc: "Shoots TWO thorns at a time." },
+	{ id: "snapper", name: "Lotus Snapper", cost: 25, recharge: 30, hp: 300, kind: "snapper", aquatic: true,
+		look: { type: "lotus", color: C(255, 140, 205), jaws: true }, desc: "Hides in the water and snaps up the first bee that flies over it." },
+	{ id: "daisy3", name: "Triple Daisy", cost: 325, recharge: 7.5, hp: 300, kind: "triple", dmg: 20, interval: 1.4, proj: "thorn",
+		look: { type: "daisy", petal: C(255, 255, 255), center: C(255, 200, 0), n: 10, heads: 3 }, desc: "Shoots in three lanes at once." },
+	{ id: "cattail", name: "Cattail Spiker", cost: 225, recharge: 7.5, hp: 300, kind: "homing", dmg: 20, interval: 1.4, count: 2, aquatic: true,
+		look: { type: "cattail" }, desc: "Water flower that fires homing spikes at bees in ANY lane." },
+	{ id: "twinsun", name: "Twin Sunflower", cost: 125, recharge: 30, hp: 300, kind: "sun", amount: 25, count: 2, interval: 24,
+		look: { type: "daisy", petal: C(255, 180, 0), center: C(140, 70, 20), n: 12, heads: 2, face: true }, desc: "Makes twice as much sun as a Sunflower." },
+	{ id: "firepoppy", name: "Fire Poppy", cost: 175, recharge: 7.5, hp: 300, kind: "fire",
+		look: { type: "poppy" }, desc: "Thorns that fly through it catch fire and do double damage." },
+	{ id: "pumpkin", name: "Pumpkin Lobber", cost: 300, recharge: 7.5, hp: 300, kind: "lobber", dmg: 80, splash: 26, interval: 2.8,
+		look: { type: "pumpkin" }, desc: "Lobs heavy pumpkins over shields that splash nearby bees." },
+	{ id: "lightning", name: "Lightning Lotus", cost: 200, recharge: 7.5, hp: 300, kind: "lightning", dmg: 40, chain: 3, interval: 2.5,
+		look: { type: "lotus", color: C(80, 225, 255), neon: true }, desc: "Zaps a bee with lightning that jumps to 2 more bees." },
+	{ id: "glowlily", name: "Glow Lily", cost: 25, recharge: 30, hp: 300, kind: "lantern", radius: 2.2,
+		look: { type: "lantern" }, desc: "Lights up the fog so you can see the bees hiding in it." },
+	{ id: "lavender", name: "Lavender Laser", cost: 250, recharge: 7.5, hp: 300, kind: "laser", dmg: 40, interval: 2.5,
+		look: { type: "spike", color: C(170, 115, 235) }, desc: "Fires a laser beam that hits EVERY bee in its lane." },
+	{ id: "magnet", name: "Magnet Marigold", cost: 100, recharge: 7.5, hp: 300, kind: "magnet", range: 3.5, cooldown: 12,
+		look: { type: "magnet" }, desc: "Pulls metal helmets and shields right off bees." },
+	{ id: "icerose", name: "Ice Crystal Rose", cost: 75, recharge: 50, hp: 1e9, kind: "ice", freeze: 5,
+		look: { type: "rose", color: C(150, 230, 255), ice: true }, desc: "Freezes EVERY bee on the lawn solid for 5 seconds." },
+	{ id: "garlic", name: "Garlic Bloom", cost: 50, recharge: 7.5, hp: 400, kind: "garlic",
+		look: { type: "garlic" }, desc: "Bees hate the smell! Any bee that stings it flies off into another lane." },
+	{ id: "star", name: "Star Anise", cost: 125, recharge: 7.5, hp: 300, kind: "star", dmg: 20, interval: 1.4,
+		look: { type: "star" }, desc: "Shoots stars in 5 directions at once." },
+	{ id: "thistle", name: "Thistle Tall", cost: 125, recharge: 30, hp: 8000, kind: "wall", tall: true,
+		look: { type: "thistle" }, desc: "A HUGE wall. Even Hopper Wasps can't jump over it." },
+	{ id: "gloom", name: "Gloom Vine", cost: 150, recharge: 7.5, hp: 300, kind: "gloom", dmg: 20, interval: 0.5,
+		look: { type: "gloom" }, desc: "Lashes every bee around it with spooky thorny vines." },
+	// Minigame-only (Pinecone Bowling)
+	{ id: "bowl", name: "Rolling Pinecone", cost: 0, recharge: 0, hp: 1, kind: "roll", dmg: 300, hidden: true,
+		look: { type: "pinecone", rolling: true }, desc: "Roll it! It bounces off bees." },
+	{ id: "bowlx", name: "Explosive Pinecone", cost: 0, recharge: 0, hp: 1, kind: "roll", dmg: 1800, explode: true, hidden: true,
+		look: { type: "pinecone", rolling: true, red: true }, desc: "Roll it! KABOOM on the first bee." },
+	{ id: "bowlg", name: "Giant Pinecone", cost: 0, recharge: 0, hp: 1, kind: "roll", dmg: 1800, giant: true, hidden: true,
+		look: { type: "pinecone", rolling: true, giant: true }, desc: "Rolls over EVERYTHING in its lane." },
+];
+Config.FlowerById = {};
+Config.Flowers.forEach((f, i) => { f.index = i + 1; Config.FlowerById[f.id] = f; });
+
+// speed = tiles per second. cost = how much of a wave's budget the bee uses.
+Config.Bees = [
+	{ id: "worker", name: "Worker Bee", hp: 200, speed: 0.22, cost: 1, weight: 6, intro: 1,
+		look: { body: C(255, 200, 30) }, desc: "Your everyday bee. Buzzes slowly toward your greenhouse." },
+	{ id: "flag", name: "Flag Bee", hp: 200, speed: 0.32, cost: 1, intro: 2, pool: false,
+		look: { body: C(255, 200, 30), flag: true }, desc: "Leads a HUGE swarm of bees." },
+	{ id: "bumble", name: "Bumble Bee", hp: 200, armor: { hp: 370, look: "acorn" }, speed: 0.22, cost: 2, weight: 5, intro: 3,
+		look: { body: C(255, 185, 40), fuzzy: true }, desc: "Wears an acorn helmet. Twice as tough as a Worker Bee." },
+	{ id: "hornet", name: "Hornet", hp: 180, speed: 0.48, cost: 2, weight: 2.5, intro: 6,
+		look: { body: C(230, 90, 20), stripe: C(40, 10, 0), angry: true }, desc: "Super fast and super grumpy." },
+	{ id: "armored", name: "Armored Bee", hp: 200, armor: { hp: 1100, metal: true, look: "bucket" }, speed: 0.22, cost: 4, weight: 3, intro: 7,
+		look: { body: C(255, 200, 30) }, desc: "Wears a metal bucket. VERY tough." },
+	{ id: "hopper", name: "Hopper Wasp", hp: 340, speed: 0.45, hopSpeed: 0.22, hop: true, cost: 2, weight: 2.5, intro: 9,
+		look: { body: C(255, 230, 0), stripe: C(20, 20, 20), slim: true }, desc: "Hops right over the first flower it meets." },
+	{ id: "moth", name: "Moth Bee", hp: 300, speed: 0.26, laneChange: true, cost: 2, weight: 3, intro: 11,
+		look: { body: C(170, 150, 120), stripe: C(90, 70, 50), moth: true }, desc: "Flutters around and switches lanes without warning." },
+	{ id: "bomber", name: "Bomb Bee", hp: 270, speed: 0.24, bomb: true, cost: 3, weight: 2, intro: 14,
+		look: { body: C(255, 200, 30), bomb: true }, desc: "Carries a bomb. Blows up the first flower it reaches!" },
+	{ id: "shield", name: "Shield Bee", hp: 200, shield: { hp: 1100, metal: true }, speed: 0.22, cost: 4, weight: 2, intro: 17,
+		look: { body: C(255, 200, 30) }, desc: "Hides behind a metal honeycomb shield. Lobbed shots go over it." },
+	{ id: "swarm", name: "Drone Swarm", hp: 260, speed: 0.24, split: "drone", splitCount: 3, cost: 3, weight: 2, intro: 22,
+		look: { body: C(255, 210, 60), swarm: true }, desc: "Three bees in a trench coat. Splits apart when hit enough." },
+	{ id: "drone", name: "Mini Drone", hp: 70, speed: 0.45, cost: 1, intro: 22, pool: false,
+		look: { body: C(255, 210, 60), scale: 0.55 }, desc: "A tiny fast bee from a Drone Swarm." },
+	{ id: "medic", name: "Medic Bee", hp: 300, speed: 0.22, heal: 25, cost: 3, weight: 1.6, intro: 26,
+		look: { body: C(255, 245, 230), stripe: C(220, 30, 30), medic: true }, desc: "Heals the bees around it." },
+	{ id: "stinger", name: "Stinger Bee", hp: 500, speed: 0.22, ranged: true, cost: 4, weight: 2, intro: 32,
+		look: { body: C(150, 70, 200), stripe: C(40, 0, 60), lance: true }, desc: "Stops and fires stingers at your flowers from far away." },
+	{ id: "honey", name: "Honey Thrower", hp: 400, speed: 0.22, honey: true, cost: 3, weight: 2, intro: 36,
+		look: { body: C(255, 170, 0), pot: true }, desc: "Throws sticky honey that stops flowers from working." },
+	{ id: "giant", name: "Giant Bee", hp: 3000, speed: 0.14, smash: true, larva: true, cost: 10, weight: 0.8, intro: 47, minBudget: 14,
+		look: { body: C(230, 160, 20), stripe: C(30, 15, 0), scale: 2.1, angry: true, lance: true }, desc: "ENORMOUS. Squashes flowers flat and throws its larva baby." },
+	{ id: "larva", name: "Bee Larva", hp: 100, speed: 0.4, cost: 1, intro: 47, pool: false,
+		look: { larva: true }, desc: "A wiggly baby bee thrown by a Giant Bee." },
+	{ id: "zombee", name: "Zombee", hp: 270, speed: 0.2, revive: true, cost: 3, weight: 4, intro: 51,
+		look: { body: C(150, 190, 110), stripe: C(60, 50, 40), zombie: true }, desc: "Gets back up once after you beat it!" },
+	{ id: "ghost", name: "Ghost Bee", hp: 300, speed: 0.24, phase: true, cost: 3, weight: 2.5, intro: 54,
+		look: { body: C(220, 240, 255), stripe: C(150, 170, 200), ghost: true }, desc: "Turns see-through and shots pass right through it." },
+	{ id: "knight", name: "Bone Knight Bee", hp: 300, armor: { hp: 1500, metal: true, look: "helm" }, speed: 0.18, cost: 7, weight: 1.5, intro: 57,
+		look: { body: C(235, 230, 215), stripe: C(40, 40, 40), zombie: true }, desc: "A skeleton bee in a knight's helmet." },
+	{ id: "honeyball", name: "Molten Honey Ball", hp: 900, speed: 0.33, crush: true, iceKills: true, cost: 5, intro: 60, pool: false,
+		look: { ball: true }, desc: "The Queen's rolling honey ball. Squashes everything. Freeze or blow it up!" },
+];
+Config.BeeById = {};
+Config.Bees.forEach((b, i) => { b.index = i + 1; Config.BeeById[b.id] = b; });
+
+Config.Queen = {
+	name: "THE ZOMBEE QUEEN", hp: 36000,
+	lines: {
+		intro: ["BZZZZT! WHO DARES PLANT FLOWERS IN MY KINGDOM?!", "I AM THE ZOMBEE QUEEN! YOUR GARDEN BELONGS TO THE HIVE!"],
+		phase2: ["YOU'RE STARTING TO BUG ME, GARDENER...", "MY ROYAL GUARD WILL STING YOU INTO SUBMISSION!"],
+		phase3: ["ENOUGH!!! FEEL THE WRATH OF THE WHOLE HIVE!!!"],
+		dive: ["I'LL CRUSH YOU MYSELF!"],
+		dizzy: ["Bzz... so... dizzy..."],
+		death: ["NOOOO... MY BEAUTIFUL... HIVE..."],
+	},
+};
+
+Config.Areas = [
+	{ id: "day", name: "Day", rows: 5, sky: 10, music: "day", minigame: "bowling",
+		grass: [C(105, 185, 60), C(125, 205, 75)], color: C(110, 200, 80), icon: "☀️",
+		bg: ["#7cc8ff", "#cdeeff"], tint: null },
+	{ id: "night", name: "Night", rows: 5, sky: null, music: "night", minigame: "whack",
+		grass: [C(40, 85, 75), C(50, 100, 88)], color: C(70, 80, 160), icon: "🌙",
+		bg: ["#0b1030", "#26306a"], tint: "rgba(20,30,80,0.18)" },
+	{ id: "garden", name: "Garden", rows: 6, sky: 10, water: { 3: true, 4: true }, music: "garden", minigame: "laststand",
+		grass: [C(95, 175, 70), C(115, 195, 85)], color: C(60, 170, 200), icon: "🪷",
+		bg: ["#86d4ff", "#d8f6ff"], tint: null },
+	{ id: "sunrise", name: "Sunrise", rows: 5, sky: 8, sunbeam: true, music: "sunrise", minigame: "seedrain",
+		grass: [C(150, 185, 80), C(170, 200, 95)], color: C(255, 170, 90), icon: "🌅",
+		bg: ["#ff9f7a", "#ffe3a8"], tint: "rgba(255,170,120,0.10)" },
+	{ id: "sunset", name: "Sunset", rows: 5, sky: 13, fog: 6, music: "sunset", minigame: "invisibee",
+		grass: [C(150, 130, 70), C(165, 145, 85)], color: C(230, 100, 60), icon: "🌇",
+		bg: ["#5a2a6a", "#ff8a50"], tint: "rgba(255,120,60,0.12)" },
+	{ id: "zombie", name: "Zombie World", rows: 5, sky: 16, graves: 6, music: "zombie", minigame: "hivebreaker",
+		grass: [C(70, 90, 60), C(82, 102, 68)], color: C(120, 200, 90), icon: "🧟",
+		bg: ["#120a20", "#2e4a2a"], tint: "rgba(40,90,40,0.15)" },
+];
+
+Config.Minigames = {
+	bowling: { name: "Pinecone Bowling", icon: "🎳", tip: "Roll pinecones down the lanes! You can only place them left of the red line." },
+	whack: { name: "Whack-a-Bee", icon: "🔨", tip: "Click the bees to SMACK them with your swatter!" },
+	laststand: { name: "Last Stand", icon: "🛡️", tip: "You get 5000 sun and NO more. Build your defense, then press START!" },
+	seedrain: { name: "It's Raining Seeds", icon: "🌧️", tip: "Click the falling seed packets to catch them, then plant them for free!" },
+	invisibee: { name: "Invisi-Bee", icon: "👻", tip: "The bees are invisible! Watch their shadows." },
+	hivebreaker: { name: "Hive Breaker", icon: "🏺", tip: "Click the honey pots to break them. Some have flowers, some have BEES!" },
+};
+
+Config.Rewards = {
+	1: "tulip", 3: "thornbush", 6: "pinecone", 8: "snowlily",
+	11: "dandelion", 13: "moonflower", 16: "flytrap", 18: "doom", 20: "lilypad",
+	21: "doublerose", 23: "snapper", 26: "daisy3", 28: "cattail",
+	31: "twinsun", 33: "firepoppy", 36: "pumpkin", 38: "lightning",
+	41: "glowlily", 43: "lavender", 46: "magnet", 48: "icerose",
+	51: "garlic", 53: "star", 56: "thistle", 58: "gloom",
+};
+
+Config.Belts = [
+	{ rose: 4, snowlily: 2, tulip: 1, thornbush: 1.5, pinecone: 1 },
+	{ rose: 3, dandelion: 2, snowlily: 2, flytrap: 1.4, thornbush: 1.2, tulip: 1, doom: 0.5 },
+	{ lilypad: 3, doublerose: 2.5, rose: 1.5, daisy3: 1.4, snapper: 1, snowlily: 1.2, thornbush: 1, tulip: 0.8 },
+	{ doublerose: 3, pumpkin: 2, lightning: 1.6, firepoppy: 1.4, snowlily: 1.2, thornbush: 1, tulip: 1, twinsun: 0 },
+	{ doublerose: 2.5, lavender: 2, pumpkin: 1.6, glowlily: 1, magnet: 1, snowlily: 1, thornbush: 1, icerose: 0.7, tulip: 0.8 },
+	{ doublerose: 3, snowlily: 2, pumpkin: 2, lavender: 1.6, firepoppy: 1, icerose: 1.1, tulip: 1.2, thistle: 1, gloom: 1, star: 1, doom: 0.5 },
+];
+Config.BowlBelt = { bowl: 7, bowlx: 2, bowlg: 1 };
+
+Config.AreaOf = g => [Math.ceil(g / 10), (g - 1) % 10 + 1];
+Config.LevelName = g => { const [a, n] = Config.AreaOf(g); return `${Config.Areas[a - 1].name} ${a}-${n}`; };
+
+function beePool(g, area, filter) {
+	const pool = [];
+	for (const b of Config.Bees) {
+		if (b.pool !== false && b.intro <= g && (!filter || filter[b.id])) {
+			let w = b.weight || 1;
+			if (Math.ceil(b.intro / 10) === area) w *= 2;
+			if (b.id === "worker") w = Math.max(2, w - (area - 1));
+			if (area === 6 && b.id === "worker") w = 1;
+			pool.push({ def: b, w });
+		}
+	}
+	return pool;
+}
+
+function pickBee(rng, pool, maxCost, budget) {
+	const ok = e => e.def.cost <= maxCost && (!e.def.minBudget || budget >= e.def.minBudget);
+	let total = 0;
+	for (const e of pool) if (ok(e)) total += e.w;
+	if (total <= 0) return null;
+	let r = rng.next() * total;
+	for (const e of pool) if (ok(e)) { r -= e.w; if (r <= 0) return e.def; }
+	return pool[0].def;
+}
+
+// Builds the full spec for level g (1..60).
+Config.Level = function (g) {
+	const [area, n] = Config.AreaOf(g);
+	const A = Config.Areas[area - 1];
+	const rng = new RNG(g * 7919 + 13);
+	const spec = {
+		g, area, n, A, rows: A.rows, mode: "normal", startSun: 50, sky: A.sky,
+		music: A.music, reward: Config.Rewards[g], name: Config.LevelName(g), firstWave: 20,
+	};
+	if (n === 5) { spec.mode = A.minigame; spec.music = "minigame"; }
+	else if (n === 10) { spec.mode = area === 6 ? "boss" : "conveyor"; spec.music = area === 6 ? "boss" : "conveyor"; }
+	spec.active = {};
+	for (let r = 1; r <= spec.rows; r++) spec.active[r] = (g !== 1 || r === 3) && (g > 3 || (r >= 2 && r <= 4));
+
+	let count = 10, mult = 1;
+	if (g === 1) count = 4; else if (g === 2) count = 6; else if (g === 3) count = 8; else if (n >= 6) count = 15;
+	let filter = null;
+	const m = spec.mode;
+	if (m === "conveyor") { count = 20; mult = 1.3; spec.startSun = 0; spec.belt = Config.Belts[area - 1]; spec.firstWave = 12; spec.sky = null; }
+	else if (m === "boss") { count = 0; spec.startSun = 0; spec.belt = Config.Belts[area - 1]; spec.sky = null; spec.beltRate = 3.2; }
+	else if (m === "bowling") { count = 10; mult = 1.1; spec.startSun = 0; spec.belt = Config.BowlBelt; spec.sky = null; spec.bowlLine = 3; spec.firstWave = 10; spec.beltRate = 2.6; }
+	else if (m === "whack") {
+		count = 12; mult = 1.4; spec.startSun = 0; spec.sky = null; spec.firstWave = 6;
+		spec.belt = { tulip: 1, icerose: 0.6, pinecone: 1 }; spec.beltRate = 9;
+		filter = { worker: true, bumble: true, hornet: true, armored: true, moth: true };
+	}
+	else if (m === "laststand") { count = 15; mult = 1.2; spec.startSun = 5000; spec.sky = null; spec.noSun = true; spec.prep = true; }
+	else if (m === "seedrain") { count = 10; mult = 1.1; spec.startSun = 0; spec.sky = null; spec.seedRain = true; spec.firstWave = 14; }
+	else if (m === "invisibee") { count = 10; mult = 1; }
+	else if (m === "hivebreaker") { count = 0; spec.startSun = 0; spec.sky = null; }
+	spec.beltRate = spec.beltRate || 3.6;
+	if (spec.belt) spec.noSlots = true;
+
+	const pool = beePool(g, area, filter);
+	let newBee = null;
+	for (const b of Config.Bees) if (b.intro === g && b.pool !== false) newBee = b;
+	spec.newBee = newBee && newBee.id;
+	const strength = 1 + (g - 1) * 0.06;
+	spec.waves = [];
+	for (let w = 1; w <= count; w++) {
+		const flag = (w % 10 === 0) || w === count;
+		let budget = strength * (1 + (w - 1) * 0.3) * mult;
+		if (flag) budget *= 2.4;
+		budget = Math.max(1, Math.floor(budget + 0.5));
+		const wave = { flag, bees: [] };
+		const spread = flag ? 7 : 4;
+		if (flag) { wave.bees.push({ id: "flag", t: 0 }); budget -= 1; }
+		if (newBee && (w === 2 || w === 4 || flag) && newBee.cost <= budget) {
+			wave.bees.push({ id: newBee.id, t: rng.next() * spread }); budget -= newBee.cost;
+		}
+		let guard = 0;
+		while (budget > 0 && guard < 60) {
+			guard++;
+			const b = pickBee(rng, pool, budget, budget);
+			if (!b) break;
+			wave.bees.push({ id: b.id, t: rng.next() * spread });
+			budget -= b.cost;
+		}
+		wave.bees.sort((a, b) => a.t - b.t);
+		spec.waves.push(wave);
+	}
+	const seen = {};
+	let list = [];
+	for (const wv of spec.waves) for (const e of wv.bees) if (!seen[e.id]) { seen[e.id] = true; list.push(e.id); }
+	if (m === "boss") list = ["worker", "bumble", "armored", "zombee", "ghost", "knight", "giant", "honeyball"];
+	if (m === "hivebreaker") list = ["worker", "bumble", "armored", "zombee", "ghost", "knight", "hopper"];
+	list.sort((a, b) => Config.BeeById[a].index - Config.BeeById[b].index);
+	spec.beeList = list;
+	return spec;
+};
+
+Config.WeightedPick = function (rng, weights) {
+	let total = 0;
+	for (const id in weights) if (weights[id] > 0) total += weights[id];
+	if (total <= 0) return null;
+	let r = rng.next() * total, last = null;
+	for (const id in weights) {
+		const w = weights[id];
+		if (w > 0) { last = id; r -= w; if (r <= 0) return id; }
+	}
+	return last;
+};
+
+// ===================================================================================
+// Audio: every sound is synthesised in the browser (no sound files).
+// ===================================================================================
+const Audio = (() => {
+	let ctx = null, master = null, musicGain = null, sfxGain = null, noiseBuf = null;
+	const A = { enabled: true, track: null };
+	try { A.enabled = localStorage.getItem("fvb_music") !== "off"; } catch (e) {}
+
+	function init() {
+		if (ctx) { if (ctx.state === "suspended") ctx.resume(); return; }
+		const AC = window.AudioContext || window.webkitAudioContext;
+		if (!AC) return;
+		ctx = new AC();
+		master = ctx.createGain(); master.gain.value = 0.8; master.connect(ctx.destination);
+		sfxGain = ctx.createGain(); sfxGain.gain.value = 0.55; sfxGain.connect(master);
+		musicGain = ctx.createGain(); musicGain.gain.value = A.enabled ? 0.22 : 0; musicGain.connect(master);
+		noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+		const d = noiseBuf.getChannelData(0);
+		for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+		if (A.track) startTrack(A.track);
+	}
+	window.addEventListener("pointerdown", init);
+	window.addEventListener("keydown", init);
+
+	function tone(type, f0, f1, dur, vol, when, dest) {
+		const t = (when || ctx.currentTime);
+		const o = ctx.createOscillator(), g = ctx.createGain();
+		o.type = type;
+		o.frequency.setValueAtTime(f0, t);
+		if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+		g.gain.setValueAtTime(0.0001, t);
+		g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+		g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+		o.connect(g); g.connect(dest || sfxGain);
+		o.start(t); o.stop(t + dur + 0.05);
+	}
+	function noise(dur, vol, filt, freq, when, q) {
+		const t = (when || ctx.currentTime);
+		const s = ctx.createBufferSource(); s.buffer = noiseBuf;
+		const f = ctx.createBiquadFilter(); f.type = filt || "lowpass"; f.frequency.value = freq || 2000; f.Q.value = q || 0.8;
+		const g = ctx.createGain();
+		g.gain.setValueAtTime(vol, t);
+		g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+		s.connect(f); f.connect(g); g.connect(sfxGain);
+		s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+	}
+	const last = {};
+	A.Sfx = function (name, pitch) {
+		if (!ctx) return;
+		const now = ctx.currentTime;
+		if (last[name] && now - last[name] < 0.045) return; // don't stack the same sound 40 times
+		last[name] = now;
+		const p = pitch || 1;
+		switch (name) {
+			case "plant": tone("sine", 260 * p, 120 * p, 0.15, 0.5); noise(0.12, 0.25, "lowpass", 900); break;
+			case "shoot": tone("square", 700 * p, 260 * p, 0.07, 0.12); break;
+			case "hit": noise(0.06, 0.3, "bandpass", 1800 * p, 0, 2); break;
+			case "explode": noise(0.8, 0.9, "lowpass", 700); tone("sine", 120, 35, 0.6, 0.7); break;
+			case "sun": tone("sine", 880, 880, 0.12, 0.25); tone("sine", 1320, 1320, 0.2, 0.22, now + 0.07); break;
+			case "chomp": tone("square", 180 * p, 70 * p, 0.12, 0.3); noise(0.1, 0.3, "bandpass", 1200, now + 0.05); break;
+			case "shovel": noise(0.25, 0.4, "highpass", 1500); break;
+			case "zap": tone("sawtooth", 1400 * p, 300 * p, 0.18, 0.15); noise(0.12, 0.2, "highpass", 4000); break;
+			case "freeze": for (let i = 0; i < 5; i++) tone("sine", 1800 + i * 300, 2400 + i * 300, 0.3, 0.08, now + i * 0.05); noise(0.5, 0.2, "highpass", 6000); break;
+			case "buzz": tone("sawtooth", 170 * p, 210 * p, 0.45, 0.12); tone("sawtooth", 176 * p, 200 * p, 0.45, 0.1); break;
+			case "thud": tone("sine", 110 * p, 45 * p, 0.25, 0.6); break;
+			case "vase": noise(0.3, 0.5, "bandpass", 2500, 0, 1.5); tone("triangle", 900, 400, 0.15, 0.2); break;
+			case "win": [523, 659, 784, 1047].forEach((f, i) => tone("triangle", f, f, 0.3, 0.3, now + i * 0.12)); break;
+			case "lose": [392, 349, 311, 262].forEach((f, i) => tone("sawtooth", f, f * 0.97, 0.4, 0.18, now + i * 0.22)); break;
+			case "swarm": for (let i = 0; i < 4; i++) tone("sawtooth", 140 + i * 13, 190 + i * 9, 1.6, 0.08, now + i * 0.1); break;
+			case "metal": tone("square", 2100 * p, 1700 * p, 0.06, 0.07); break;
+			case "magic": [880, 1109, 1319, 1760].forEach((f, i) => tone("sine", f * p, f * p, 0.25, 0.15, now + i * 0.06)); break;
+			case "click": tone("square", 1300 * p, 900 * p, 0.03, 0.08); break;
+			case "sizzle": noise(0.25, 0.25, "highpass", 5000); break;
+			case "slurp": tone("sine", 200, 900, 0.3, 0.35); break;
+			case "roar": tone("sawtooth", 90 * p, 55 * p, 1.2, 0.35); tone("square", 60 * p, 40 * p, 1.2, 0.2); noise(1.0, 0.3, "lowpass", 500); break;
+			case "whack": noise(0.12, 0.7, "lowpass", 2500); tone("sine", 300, 90, 0.12, 0.4); break;
+			case "mower": tone("sawtooth", 90, 160, 0.9, 0.18); tone("square", 45, 80, 0.9, 0.1); break;
+			case "splash": noise(0.35, 0.4, "bandpass", 900 * p, 0, 1.2); break;
+		}
+	};
+
+	// ---- Music: little procedural loops, one style per track -------------------------
+	const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
+	const TRACKS = {
+		menu: { bpm: 112, root: 60, scale: [0, 2, 4, 7, 9], chords: [[0, 4, 7], [5, 9, 12], [7, 11, 14], [0, 4, 7]], wave: "triangle", bass: "sine" },
+		choose: { bpm: 100, root: 62, scale: [0, 2, 4, 7, 9], chords: [[0, 4, 7], [9, 12, 16], [5, 9, 12], [7, 11, 14]], wave: "triangle", bass: "sine" },
+		day: { bpm: 120, root: 60, scale: [0, 2, 4, 5, 7, 9, 11], chords: [[0, 4, 7], [9, 12, 16], [5, 9, 12], [7, 11, 14]], wave: "square", bass: "triangle" },
+		night: { bpm: 92, root: 57, scale: [0, 2, 3, 5, 7, 8, 10], chords: [[0, 3, 7], [8, 12, 15], [3, 7, 10], [10, 14, 17]], wave: "triangle", bass: "sine" },
+		garden: { bpm: 108, root: 65, scale: [0, 2, 4, 7, 9], chords: [[0, 4, 7], [2, 5, 9], [5, 9, 12], [7, 11, 14]], wave: "sine", bass: "triangle" },
+		sunrise: { bpm: 104, root: 62, scale: [0, 2, 4, 6, 7, 9, 11], chords: [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]], wave: "triangle", bass: "sine" },
+		sunset: { bpm: 96, root: 58, scale: [0, 2, 3, 5, 7, 9, 10], chords: [[0, 3, 7], [5, 9, 12], [10, 14, 17], [3, 7, 10]], wave: "triangle", bass: "triangle" },
+		zombie: { bpm: 100, root: 55, scale: [0, 1, 3, 5, 7, 8, 10], chords: [[0, 3, 7], [1, 5, 8], [8, 12, 15], [7, 10, 14]], wave: "sawtooth", bass: "square" },
+		minigame: { bpm: 140, root: 63, scale: [0, 2, 4, 7, 9], chords: [[0, 4, 7], [5, 9, 12], [0, 4, 7], [7, 11, 14]], wave: "square", bass: "triangle" },
+		conveyor: { bpm: 132, root: 57, scale: [0, 2, 3, 5, 7, 8, 11], chords: [[0, 3, 7], [5, 8, 12], [7, 11, 14], [0, 3, 7]], wave: "square", bass: "sawtooth" },
+		boss: { bpm: 150, root: 52, scale: [0, 1, 3, 5, 6, 8, 10], chords: [[0, 3, 7], [1, 5, 8], [6, 10, 13], [5, 8, 12]], wave: "sawtooth", bass: "sawtooth", drums: true },
+		victory: { bpm: 124, root: 60, scale: [0, 2, 4, 5, 7, 9, 11], chords: [[0, 4, 7], [5, 9, 12], [7, 11, 14], [0, 4, 7]], wave: "triangle", bass: "triangle" },
+	};
+	let seq = null;
+	function startTrack(name) {
+		if (seq) { clearInterval(seq.timer); seq = null; }
+		if (!ctx || !name || !TRACKS[name]) return;
+		const T = TRACKS[name];
+		let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+		const r = new RNG(h);
+		// a 4-bar melody, 8 steps per bar
+		const mel = [];
+		for (let i = 0; i < 32; i++) mel.push(r.next() < 0.72 ? T.scale[r.int(0, T.scale.length - 1)] + (r.next() < 0.25 ? 12 : 0) : null);
+		const stepDur = 60 / T.bpm / 2;
+		seq = { step: 0, next: ctx.currentTime + 0.1 };
+		seq.timer = setInterval(() => {
+			while (seq && seq.next < ctx.currentTime + 0.25) {
+				const s = seq.step % 32, bar = Math.floor(s / 8), t = seq.next;
+				const ch = T.chords[bar];
+				if (s % 8 === 0) for (const n of ch) tone(T.wave === "sawtooth" ? "triangle" : "sine", NOTE(T.root + n - 12), 0, stepDur * 7.5, 0.05, t, musicGain);
+				if (s % 2 === 0) tone(T.bass, NOTE(T.root + ch[0] - 24 + (s % 4 === 2 ? 7 : 0)), 0, stepDur * 1.6, 0.16, t, musicGain);
+				if (mel[s] !== null) tone(T.wave, NOTE(T.root + mel[s]), 0, stepDur * 0.9, T.wave === "square" || T.wave === "sawtooth" ? 0.05 : 0.09, t, musicGain);
+				if (T.drums || name === "minigame" || name === "conveyor") {
+					if (s % 4 === 0) tone("sine", 120, 40, 0.15, 0.25, t, musicGain);
+				}
+				seq.step++; seq.next += stepDur;
+			}
+		}, 60);
+	}
+	A.Music = function (name) {
+		if (A.track === name) return;
+		A.track = name;
+		startTrack(name);
+	};
+	A.SetEnabled = function (on) {
+		A.enabled = on;
+		try { localStorage.setItem("fvb_music", on ? "on" : "off"); } catch (e) {}
+		if (musicGain) musicGain.gain.value = on ? 0.22 : 0;
+	};
+	return A;
+})();
+
+// ===================================================================================
+// Art: every flower, bee and prop is drawn with canvas paths, in "stud" units
+// (one lawn tile = 7 studs). +x is toward the hive, -y is up.
+// ===================================================================================
+const Art = (() => {
+	const TAU = Math.PI * 2;
+	const OUT = "rgba(40,25,10,0.85)";
+	let X = null; // current context
+	const lw = w => { X.lineWidth = w; };
+	function circ(x, y, r, fill, line) {
+		X.beginPath(); X.arc(x, y, r, 0, TAU);
+		if (fill) { X.fillStyle = fill; X.fill(); }
+		if (line) { X.strokeStyle = line; X.stroke(); }
+	}
+	function ell(x, y, rx, ry, rot, fill, line) {
+		X.beginPath(); X.ellipse(x, y, Math.abs(rx), Math.abs(ry), rot || 0, 0, TAU);
+		if (fill) { X.fillStyle = fill; X.fill(); }
+		if (line) { X.strokeStyle = line; X.stroke(); }
+	}
+	function rect(x, y, w, h, fill, line, r) {
+		X.beginPath();
+		if (r && X.roundRect) X.roundRect(x, y, w, h, r); else X.rect(x, y, w, h);
+		if (fill) { X.fillStyle = fill; X.fill(); }
+		if (line) { X.strokeStyle = line; X.stroke(); }
+	}
+	function poly(pts, fill, line) {
+		X.beginPath(); X.moveTo(pts[0], pts[1]);
+		for (let i = 2; i < pts.length; i += 2) X.lineTo(pts[i], pts[i + 1]);
+		X.closePath();
+		if (fill) { X.fillStyle = fill; X.fill(); }
+		if (line) { X.strokeStyle = line; X.stroke(); }
+	}
+	function seg(x1, y1, x2, y2, w, col) {
+		X.beginPath(); X.moveTo(x1, y1); X.lineTo(x2, y2);
+		X.lineWidth = w; X.strokeStyle = col; X.lineCap = "round"; X.stroke();
+	}
+	function curve(x1, y1, cx, cy, x2, y2, w, col) {
+		X.beginPath(); X.moveTo(x1, y1); X.quadraticCurveTo(cx, cy, x2, y2);
+		X.lineWidth = w; X.strokeStyle = col; X.lineCap = "round"; X.stroke();
+	}
+	function star(x, y, r1, r2, n, rot, fill, line) {
+		const pts = [];
+		for (let i = 0; i < n * 2; i++) {
+			const a = rot + i / (n * 2) * TAU - Math.PI / 2, r = i % 2 ? r2 : r1;
+			pts.push(x + Math.cos(a) * r, y + Math.sin(a) * r);
+		}
+		poly(pts, fill, line);
+	}
+	const STEM = "#3f9a2e", STEM_D = "#2a6e1f", LEAF = "#58b83a";
+	function leaf(x, y, len, ang, col) {
+		X.save(); X.translate(x, y); X.rotate(ang);
+		X.beginPath(); X.moveTo(0, 0);
+		X.quadraticCurveTo(len * 0.5, -len * 0.38, len, 0);
+		X.quadraticCurveTo(len * 0.5, len * 0.38, 0, 0);
+		X.fillStyle = col || LEAF; X.fill(); lw(0.1); X.strokeStyle = STEM_D; X.stroke();
+		X.restore();
+	}
+	function stem(h, bend) {
+		curve(0, 0, bend || 0.3, -h * 0.5, 0, -h, 0.42, STEM_D);
+		curve(0, 0, bend || 0.3, -h * 0.5, 0, -h, 0.26, STEM);
+		leaf(0, -0.25, 1.6, -0.35); leaf(0, -0.25, 1.6, Math.PI + 0.35);
+	}
+	function face(x, y, s, mood) {
+		ell(x - 0.32 * s, y - 0.1 * s, 0.13 * s, 0.2 * s, 0, "#2a1608");
+		ell(x + 0.32 * s, y - 0.1 * s, 0.13 * s, 0.2 * s, 0, "#2a1608");
+		circ(x - 0.29 * s, y - 0.16 * s, 0.05 * s, "#fff"); circ(x + 0.35 * s, y - 0.16 * s, 0.05 * s, "#fff");
+		X.beginPath();
+		if (mood === "angry") {
+			X.moveTo(x - 0.5 * s, y - 0.42 * s); X.lineTo(x - 0.15 * s, y - 0.28 * s);
+			X.moveTo(x + 0.5 * s, y - 0.42 * s); X.lineTo(x + 0.15 * s, y - 0.28 * s);
+			X.moveTo(x - 0.25 * s, y + 0.32 * s); X.quadraticCurveTo(x, y + 0.15 * s, x + 0.25 * s, y + 0.32 * s);
+		} else {
+			X.moveTo(x - 0.3 * s, y + 0.15 * s); X.quadraticCurveTo(x, y + 0.45 * s, x + 0.3 * s, y + 0.15 * s);
+		}
+		lw(0.09 * s); X.strokeStyle = "#2a1608"; X.lineCap = "round"; X.stroke();
+	}
+	function eye(x, y, r, look) {
+		circ(x, y, r, "#fff", OUT);
+		circ(x + (look || 0.3) * r, y, r * 0.5, "#111");
+		circ(x + (look || 0.3) * r - r * 0.18, y - r * 0.2, r * 0.16, "#fff");
+	}
+	function mouthTube(x, y, len, r, col) {
+		rect(x, y - r, len, r * 2, col, OUT, r * 0.4);
+		ell(x + len, y, r * 0.45, r * 1.15, 0, col, OUT);
+		ell(x + len + 0.05, y, r * 0.28, r * 0.8, 0, "#2a1010");
+	}
+
+	// ----------------------------------------------------------------- flowers --------
+	const F = {};
+	F.daisy = (L, s) => {
+		const heads = L.heads || 1;
+		const pos = heads === 1 ? [[0, -3.7]] : heads === 2 ? [[-1.15, -3.4], [1.15, -3.8]] : [[-1.6, -3.2], [0, -4.1], [1.6, -3.2]];
+		const r = heads > 1 ? 0.95 : 1.25;
+		for (const p of pos) { curve(0, 0, p[0] * 0.2 + 0.3, p[1] * 0.5, p[0], p[1], 0.36, STEM_D); curve(0, 0, p[0] * 0.2 + 0.3, p[1] * 0.5, p[0], p[1], 0.22, STEM); }
+		leaf(0, -0.25, 1.6, -0.35); leaf(0, -0.25, 1.6, Math.PI + 0.35);
+		pos.forEach((p, k) => {
+			const hx = p[0] + s.hx, hy = p[1] + s.hy + Math.sin(s.t * 2.4 + k) * 0.06;
+			X.save(); X.translate(hx, hy); X.rotate(s.sway);
+			if (L.glow) { X.shadowColor = rgb(L.petal); X.shadowBlur = 14; }
+			const n = L.n || 12;
+			for (let i = 0; i < n; i++) {
+				const a = i / n * TAU + (s.spin || 0);
+				ell(Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95, r * 0.62, r * 0.27, a, rgb(L.petal), "rgba(60,40,0,0.35)");
+			}
+			X.shadowBlur = 0;
+			lw(0.1); circ(0, 0, r * 0.6, rgb(L.center), OUT);
+			if (L.face) face(0, 0.02, r * 0.75);
+			else for (let i = 0; i < 6; i++) circ(Math.cos(i) * r * 0.3, Math.sin(i) * r * 0.3, 0.08, "rgba(0,0,0,0.25)");
+			X.restore();
+		});
+	};
+	F.rose = (L, s) => {
+		stem(3.1);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [0, 0, 0], 0.35)), light = rgb(lerpC(L.color, [255, 255, 255], 0.35));
+		X.save(); X.translate(s.hx, -3.4 + s.hy); X.rotate(s.sway);
+		lw(0.1);
+		if (L.double) { circ(-0.75, -0.55, 0.85, dark, OUT); leaf(-0.9, 0.2, 1.3, Math.PI * 0.85, "#3c8c2a"); }
+		if (!L.ice) mouthTube(0.6, 0.05, 1.1, 0.42, col);
+		if (L.ice) {
+			X.shadowColor = "#bff"; X.shadowBlur = 12;
+			poly([0, -1.5, 1.1, -0.5, 0.9, 0.9, -0.9, 0.9, -1.1, -0.5], col, "#e8ffff");
+			X.shadowBlur = 0;
+			poly([0, -1.5, 0.35, -0.2, 0, 0.9, -0.35, -0.2], "rgba(255,255,255,0.5)");
+			poly([-1.1, -0.5, 0, -0.2, 1.1, -0.5, 0, 0.1], "rgba(255,255,255,0.3)");
+		} else {
+			circ(0, 0, 1.15, col, OUT);
+			X.beginPath(); X.arc(0.05, 0.05, 0.75, 0.3, 4.2); lw(0.16); X.strokeStyle = dark; X.stroke();
+			X.beginPath(); X.arc(-0.05, -0.05, 0.4, 2.5, 7.5); X.stroke();
+			circ(-0.45, -0.5, 0.2, light);
+			eye(0.3, -0.25, 0.26, 0.4);
+		}
+		X.restore();
+	};
+	F.tulip = (L, s) => {
+		curve(0, 0, 0.2, -1.4, 0, -2.6, 0.4, STEM_D); curve(0, 0, 0.2, -1.4, 0, -2.6, 0.24, STEM);
+		leaf(0, -0.2, 2.4, -1.15); leaf(0, -0.2, 2.4, Math.PI + 1.15);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [0, 0, 0], 0.3));
+		X.save(); X.translate(0, -2.6); X.rotate(s.sway);
+		const sw = 1 + s.punch * 0.12;
+		X.scale(sw, sw);
+		lw(0.12);
+		poly([-1.1, -0.2, -1.2, -1.8, -0.55, -1.2, 0, -2.1, 0.55, -1.2, 1.2, -1.8, 1.1, -0.2, 0, 0.35], col, OUT);
+		poly([-0.4, -0.3, 0, -1.9, 0.4, -0.3], dark);
+		if (L.fuse) {
+			curve(0, -2.0, 0.4, -2.5, 0.25, -2.95, 0.12, "#6b4a2a");
+			const f = 0.25 + Math.abs(Math.sin(s.t * 18)) * 0.15;
+			X.shadowColor = "#ffb030"; X.shadowBlur = 10; circ(0.25, -3.0, f, "#ffd040"); X.shadowBlur = 0;
+		}
+		eye(-0.35, -0.9, 0.2, 0.2); eye(0.35, -0.9, 0.2, 0.2);
+		X.restore();
+	};
+	F.bush = (L, s) => {
+		lw(0.12);
+		const sq = 1 + s.punch * 0.05;
+		X.save(); X.scale(sq, 1 / sq);
+		for (let i = 0; i < 12; i++) {
+			const a = i / 12 * TAU;
+			poly([Math.cos(a) * 1.7, -1.7 + Math.sin(a) * 1.5, Math.cos(a + 0.12) * 2.4, -1.7 + Math.sin(a + 0.12) * 2.1, Math.cos(a + 0.25) * 1.7, -1.7 + Math.sin(a + 0.25) * 1.5], "#e8e0b0", OUT);
+		}
+		circ(-0.8, -1.3, 1.3, "#2f7d2a", OUT); circ(0.8, -1.3, 1.3, "#2f7d2a", OUT); circ(0, -2.3, 1.45, "#3b922f", OUT);
+		circ(0, -1.4, 1.2, "#3b922f");
+		eye(-0.4, -1.8, 0.28, 0.2); eye(0.45, -1.8, 0.28, 0.2);
+		seg(-0.7, -2.2, -0.15, -2.05, 0.12, "#1a3d10"); seg(0.75, -2.2, 0.2, -2.05, 0.12, "#1a3d10");
+		X.restore();
+	};
+	F.pinecone = (L, s) => {
+		const g = L.giant ? 1.9 : 1;
+		X.save(); X.scale(g, g);
+		const cy = L.rolling ? -1.1 : -1.3;
+		if (L.rolling) { X.translate(0, cy); X.rotate(s.spin || 0); X.translate(0, -cy); }
+		const base = L.red ? "#b0402a" : "#8a5a2a", sc = L.red ? "#d9603a" : "#a8743a";
+		lw(0.1);
+		ell(0, cy, 1.05, L.rolling ? 1.05 : 1.35, 0, base, OUT);
+		for (let r = -2; r <= 2; r++) for (let c = -1; c <= 1; c++) {
+			const x = c * 0.55 + (r % 2 ? 0.27 : 0), y = cy + r * 0.45;
+			if (x * x / 1.0 + (y - cy) * (y - cy) / 1.6 < 0.85) {
+				X.beginPath(); X.arc(x, y + 0.12, 0.3, Math.PI * 1.1, Math.PI * 1.9); lw(0.12); X.strokeStyle = sc; X.stroke();
+			}
+		}
+		if (L.red) { curve(0, cy - 1.0, 0.4, cy - 1.4, 0.3, cy - 1.7, 0.1, "#555"); circ(0.3, cy - 1.75, 0.18 + Math.abs(Math.sin(s.t * 20)) * 0.1, "#ffcc33"); }
+		if (!L.rolling) {
+			eye(-0.35, cy - 0.25, 0.22, 0.3); eye(0.35, cy - 0.25, 0.22, 0.3);
+			if (s.armed) {
+				const on = Math.floor(s.t * 3) % 2 === 0;
+				seg(0, cy - 1.35, 0, cy - 1.8, 0.12, "#333");
+				X.shadowColor = "#f33"; X.shadowBlur = on ? 14 : 0;
+				circ(0, cy - 1.9, 0.25, on ? "#ff3030" : "#7a1a1a"); X.shadowBlur = 0;
+			}
+		} else { eye(-0.35, cy - 0.25, 0.22, 0); eye(0.35, cy - 0.25, 0.22, 0); }
+		X.restore();
+	};
+	F.lily = (L, s) => {
+		stem(3.0);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [0, 40, 120], 0.35));
+		X.save(); X.translate(s.hx, -3.4 + s.hy); X.rotate(s.sway);
+		lw(0.1);
+		for (let i = -2; i <= 2; i++) {
+			const a = i * 0.45;
+			ell(0.5 + Math.cos(a) * 0.9, Math.sin(a) * 0.9, 0.9, 0.36, a, col, "rgba(40,80,140,0.6)");
+		}
+		circ(0, 0, 0.75, col, OUT);
+		ell(1.25, 0, 0.3, 0.55, 0, dark);
+		eye(-0.1, -0.25, 0.24, 0.4);
+		for (let i = 0; i < 3; i++) circ(-0.3 + i * 0.3, 0.45, 0.06, "#fff");
+		X.restore();
+	};
+	F.puff = (L, s) => {
+		curve(0, 0, 0.2, -0.9, 0, -1.8, 0.3, STEM_D); curve(0, 0, 0.2, -0.9, 0, -1.8, 0.18, STEM);
+		leaf(0, -0.15, 1.3, -0.3); leaf(0, -0.15, 1.3, Math.PI + 0.3);
+		X.save(); X.translate(s.hx * 0.6, -2.4 + s.hy); X.rotate(s.sway);
+		for (let i = 0; i < 20; i++) { const a = i / 20 * TAU; seg(0, 0, Math.cos(a) * 1.05, Math.sin(a) * 1.05, 0.05, "rgba(255,255,255,0.8)"); circ(Math.cos(a) * 1.05, Math.sin(a) * 1.05, 0.11, "#fff"); }
+		circ(0, 0, 0.7, "rgba(255,255,255,0.9)", "rgba(120,120,120,0.5)");
+		eye(-0.2, -0.1, 0.17, 0.4); eye(0.25, -0.1, 0.17, 0.4);
+		X.restore();
+	};
+	F.trap = (L, s) => {
+		curve(0, 0, -0.4, -1.0, -0.2, -2.2, 0.5, STEM_D); curve(0, 0, -0.4, -1.0, -0.2, -2.2, 0.32, STEM);
+		leaf(0, -0.2, 1.8, -0.3); leaf(0, -0.2, 1.8, Math.PI + 0.3);
+		X.save(); X.translate(-0.2, -2.6); X.rotate(s.sway * 0.5);
+		const open = s.chew ? 0.05 : (0.6 - s.chomp * 0.6 + Math.sin(s.t * 3) * 0.06);
+		lw(0.1);
+		// bottom jaw
+		X.beginPath(); X.moveTo(-0.5, 0); X.quadraticCurveTo(0.9, 1.3, 2.1, 0); X.closePath();
+		X.fillStyle = "#3f9a2e"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		X.beginPath(); X.moveTo(-0.3, 0); X.quadraticCurveTo(0.9, 0.8, 1.9, 0); X.closePath(); X.fillStyle = "#e86a8a"; X.fill();
+		for (let i = 0; i < 5; i++) poly([0 + i * 0.4, 0, 0.18 + i * 0.4, -0.3, 0.36 + i * 0.4, 0], "#fff");
+		if (s.chew) ell(0.7, 0.55, 1.0, 0.65, 0, "#4caa38", OUT);
+		// top jaw
+		X.save(); X.rotate(-open);
+		X.beginPath(); X.moveTo(-0.5, 0); X.quadraticCurveTo(0.9, -1.5, 2.2, 0); X.closePath();
+		X.fillStyle = "#4caa38"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		X.beginPath(); X.moveTo(-0.3, 0); X.quadraticCurveTo(0.9, -0.9, 2.0, 0); X.closePath(); X.fillStyle = "#e86a8a"; X.fill();
+		for (let i = 0; i < 5; i++) poly([0 + i * 0.4, 0, 0.18 + i * 0.4, 0.3, 0.36 + i * 0.4, 0], "#fff");
+		for (let i = 0; i < 5; i++) seg(-0.2 + i * 0.5, -0.65 + Math.abs(i - 2) * 0.12, -0.3 + i * 0.55, -1.0 + Math.abs(i - 2) * 0.1, 0.07, "#2a6e1f");
+		eye(0.3, -0.75, 0.22, 0.4);
+		X.restore();
+		X.restore();
+	};
+	F.dahlia = (L, s) => {
+		stem(2.4);
+		X.save(); X.translate(0, -3.2); X.rotate(s.sway);
+		const p = 1 + s.punch * 0.15; X.scale(p, p);
+		for (let i = 0; i < 16; i++) { const a = i / 16 * TAU + s.t * 0.3; ell(Math.cos(a) * 1.25, Math.sin(a) * 1.25, 0.7, 0.28, a, "#4a1a6a", "rgba(0,0,0,0.5)"); }
+		for (let i = 0; i < 12; i++) { const a = i / 12 * TAU - s.t * 0.4; ell(Math.cos(a) * 0.8, Math.sin(a) * 0.8, 0.5, 0.22, a, "#7a2a9a"); }
+		circ(0, 0, 0.6, "#200a30", OUT);
+		X.shadowColor = "#f0f"; X.shadowBlur = 8;
+		poly([-0.45, -0.2, -0.1, -0.05, -0.4, 0.05], "#ff40d0"); poly([0.45, -0.2, 0.1, -0.05, 0.4, 0.05], "#ff40d0");
+		X.shadowBlur = 0;
+		X.restore();
+	};
+	F.pad = (L, s) => {
+		X.beginPath(); X.ellipse(0, -0.1, 2.8, 0.95, 0, 0.25, TAU - 0.05); X.lineTo(0, -0.1); X.closePath();
+		X.fillStyle = "#4caa38"; X.fill(); lw(0.12); X.strokeStyle = STEM_D; X.stroke();
+		for (let i = 0; i < 6; i++) { const a = 0.6 + i * 0.9; seg(0, -0.1, Math.cos(a) * 2.3, -0.1 + Math.sin(a) * 0.75, 0.07, "#2f7d2a"); }
+	};
+	F.lotus = (L, s) => {
+		F.pad(L, s);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [0, 0, 0], 0.25));
+		X.save(); X.translate(0, -0.5);
+		if (L.neon) { X.shadowColor = col; X.shadowBlur = 16; }
+		lw(0.1);
+		for (let i = -2; i <= 2; i++) { const a = i * 0.42; X.save(); X.rotate(a); ell(0, -1.0, 0.45, 1.1, 0, i % 2 ? dark : col, "rgba(60,0,40,0.5)"); X.restore(); }
+		X.shadowBlur = 0;
+		if (L.jaws) {
+			eye(-0.25, -0.8, 0.2, 0.3); eye(0.25, -0.8, 0.2, 0.3);
+			for (let i = 0; i < 4; i++) poly([-0.6 + i * 0.3, -0.25, -0.45 + i * 0.3, -0.55, -0.3 + i * 0.3, -0.25], "#fff");
+		} else {
+			circ(0, -0.9, 0.38, "#fff7a0", OUT);
+			if (L.neon) for (let i = 0; i < 3; i++) { const a = s.t * 4 + i * 2.1; seg(0, -0.9, Math.cos(a) * 1.3, -0.9 + Math.sin(a) * 1.3, 0.07, "#cfffff"); }
+		}
+		X.restore();
+	};
+	F.cattail = (L, s) => {
+		F.pad(L, s);
+		leaf(-0.4, -0.3, 3.4, -1.9, "#5fae3d"); leaf(0.4, -0.3, 3.0, -1.25, "#4f9e32");
+		curve(0, -0.2, 0.3, -3, 0, -5.4, 0.3, STEM_D);
+		X.save(); X.translate(0 + s.hx * 0.4, -4.9 + s.hy); X.rotate(s.sway);
+		rect(-0.48, -1.4, 0.96, 2.4, "#7a4a22", OUT, 0.48);
+		for (let i = 0; i < 5; i++) seg(-0.3, -1.0 + i * 0.45, 0.3, -0.9 + i * 0.45, 0.06, "#5a3214");
+		seg(0, -1.4, 0, -2.2, 0.1, "#5a3214");
+		eye(-0.15, -0.6, 0.18, 0.4); eye(0.2, -0.6, 0.18, 0.4);
+		X.restore();
+	};
+	F.poppy = (L, s) => {
+		stem(2.9);
+		X.save(); X.translate(0, -3.4); X.rotate(s.sway);
+		for (let i = 0; i < 6; i++) {
+			const ph = s.t * 9 + i * 1.3, h = 1.2 + Math.sin(ph) * 0.35;
+			poly([-0.6 + i * 0.24, -0.5, -0.45 + i * 0.24 + Math.sin(ph) * 0.15, -0.5 - h, -0.3 + i * 0.24, -0.5], i % 2 ? "rgba(255,200,40,0.9)" : "rgba(255,110,20,0.9)");
+		}
+		lw(0.1);
+		for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.4; ell(Math.cos(a) * 0.75, Math.sin(a) * 0.6, 0.85, 0.6, a, "#e8361e", OUT); }
+		circ(0, 0, 0.45, "#1a0a0a");
+		for (let i = 0; i < 8; i++) circ(Math.cos(i) * 0.3, Math.sin(i) * 0.3, 0.05, "#ffd040");
+		X.restore();
+	};
+	F.pumpkin = (L, s) => {
+		curve(0.3, -1.6, 1.2, -3.0, -0.2, -3.6, 0.3, STEM_D);
+		leaf(0.6, -2.4, 1.4, -0.6); leaf(0.2, -2.0, 1.2, Math.PI + 0.2);
+		X.save(); X.translate(-0.3 + s.hx * 0.6, -3.8 + s.hy);
+		X.beginPath(); X.moveTo(-1.0, 0); X.quadraticCurveTo(0, 1.0, 1.0, 0); X.fillStyle = "#4caa38"; X.fill(); lw(0.1); X.strokeStyle = OUT; X.stroke();
+		if (s.punch < 0.3) circ(0, -0.25, 0.45, "#ff9a1a", OUT);
+		X.restore();
+		lw(0.12);
+		ell(-0.9, -1.1, 0.9, 1.05, 0, "#f08a10", OUT); ell(0.9, -1.1, 0.9, 1.05, 0, "#f08a10", OUT); ell(0, -1.15, 1.0, 1.15, 0, "#ff9a1a", OUT);
+		poly([-0.75, -1.5, -0.35, -1.5, -0.55, -1.1], "#3a1a00"); poly([0.35, -1.5, 0.75, -1.5, 0.55, -1.1], "#3a1a00");
+		poly([-0.7, -0.8, 0.7, -0.8, 0.4, -0.45, 0, -0.65, -0.4, -0.45], "#3a1a00");
+		rect(-0.15, -2.45, 0.3, 0.4, "#5a3a14");
+	};
+	F.lantern = (L, s) => {
+		curve(0, 0, 0.8, -2.0, 0.4, -3.2, 0.36, STEM_D); curve(0, 0, 0.8, -2.0, 0.4, -3.2, 0.22, STEM);
+		leaf(0, -0.25, 1.6, -0.35); leaf(0, -0.25, 1.6, Math.PI + 0.35);
+		X.save(); X.translate(0.4 + s.hx * 0.4, -3.7 + s.hy); X.rotate(s.sway);
+		const fl = 0.8 + Math.sin(s.t * 3) * 0.2;
+		const g = X.createRadialGradient(0, 0, 0.2, 0, 0, 3.2);
+		g.addColorStop(0, `rgba(255,240,150,${0.45 * fl})`); g.addColorStop(1, "rgba(255,240,150,0)");
+		circ(0, 0, 3.2, g);
+		X.shadowColor = "#ffe060"; X.shadowBlur = 18;
+		ell(0, 0, 0.75, 0.95, 0, "#fff3a0", "#d0a020");
+		X.shadowBlur = 0;
+		poly([-0.75, -0.6, 0, -1.3, 0.75, -0.6, 0, -0.85], "#58b83a");
+		eye(-0.22, 0, 0.16, 0.2); eye(0.22, 0, 0.16, 0.2);
+		X.restore();
+	};
+	F.spike = (L, s) => {
+		curve(0, 0, 0.2, -2.5, 0, -5.2, 0.3, STEM_D);
+		leaf(0, -0.2, 1.8, -0.5); leaf(0, -0.2, 1.8, Math.PI + 0.5); leaf(0, -1.4, 1.2, -0.7); leaf(0, -1.4, 1.2, Math.PI + 0.7);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [40, 0, 80], 0.4));
+		X.save(); X.translate(s.hx * 0.3, s.hy); X.rotate(s.sway * 0.5);
+		for (let i = 0; i < 11; i++) {
+			const y = -2.4 - i * 0.28, w = 0.55 - i * 0.03;
+			ell(-w * 0.6, y, w * 0.55, 0.2, -0.4, i % 2 ? col : dark); ell(w * 0.6, y, w * 0.55, 0.2, 0.4, i % 2 ? dark : col);
+		}
+		X.shadowColor = col; X.shadowBlur = 10; circ(0.1, -5.4, 0.28, "#f0d0ff"); X.shadowBlur = 0;
+		X.restore();
+	};
+	F.magnet = (L, s) => {
+		stem(3.0);
+		X.save(); X.translate(s.hx, -3.5 + s.hy); X.rotate(s.sway);
+		lw(0.1);
+		for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; ell(Math.cos(a) * 1.0, Math.sin(a) * 1.0, 0.55, 0.32, a, i % 2 ? "#ff9a10" : "#ffb830", "rgba(90,40,0,0.5)"); }
+		circ(0, 0, 0.75, "#c86010", OUT);
+		X.beginPath(); X.arc(0, -0.05, 0.5, Math.PI, 0, true); lw(0.32); X.strokeStyle = "#e02020"; X.lineCap = "butt"; X.stroke();
+		rect(-0.66, -0.05, 0.32, 0.4, "#ddd"); rect(0.34, -0.05, 0.32, 0.4, "#ddd");
+		X.restore();
+	};
+	F.garlic = (L, s) => {
+		X.save(); X.translate(0, 0); X.scale(1 + s.punch * 0.05, 1);
+		lw(0.12);
+		X.beginPath(); X.moveTo(0, -3.2); X.bezierCurveTo(1.8, -2.4, 1.9, 0, 0, 0); X.bezierCurveTo(-1.9, 0, -1.8, -2.4, 0, -3.2);
+		X.fillStyle = "#f6f0e2"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		for (const x of [-0.7, 0, 0.7]) curve(x * 0.4, -3.0, x * 1.3, -1.5, x, -0.1, 0.07, "rgba(150,120,160,0.7)");
+		leaf(0, -3.1, 1.2, -1.9, "#7ac050"); leaf(0, -3.1, 1.0, -1.2, "#6ab040");
+		face(0, -1.4, 0.8);
+		X.restore();
+	};
+	F.star = (L, s) => {
+		stem(2.4);
+		X.save(); X.translate(0, -3.2 + s.hy); X.rotate(s.sway + s.t * 0.4);
+		lw(0.12);
+		star(0, 0, 1.6, 0.7, 5, 0, "#ffd23a", OUT);
+		star(0, 0, 0.9, 0.42, 5, 0, "#c88a20");
+		X.restore();
+		X.save(); X.translate(0, -3.2 + s.hy); face(0, 0, 0.6); X.restore();
+	};
+	F.thistle = (L, s) => {
+		lw(0.14);
+		rect(-1.15, -8.2, 2.3, 8.2, "#5e8a4a", OUT, 0.6);
+		for (let i = 0; i < 9; i++) {
+			const y = -0.8 - i * 0.85, side = i % 2 ? 1 : -1;
+			poly([side * 1.1, y, side * 1.9, y - 0.25, side * 1.1, y - 0.5], "#e8e6c0", OUT);
+		}
+		for (let i = 0; i < 6; i++) seg(-0.6 + (i % 3) * 0.6, -1.5 - Math.floor(i / 3) * 3, -0.6 + (i % 3) * 0.6, -2.5 - Math.floor(i / 3) * 3, 0.08, "#3e6a30");
+		ell(0, -8.7, 1.5, 1.0, 0, "#3e6a30", OUT);
+		for (let i = 0; i < 16; i++) { const a = Math.PI + i / 15 * Math.PI; seg(0, -9.0, Math.cos(a) * 1.8, -9.0 + Math.sin(a) * 1.6, 0.18, i % 2 ? "#b050d0" : "#d070f0"); }
+		eye(-0.45, -6.5, 0.32, 0.3); eye(0.45, -6.5, 0.32, 0.3);
+		seg(-0.85, -7.0, -0.2, -6.85, 0.14, "#1a3010"); seg(0.85, -7.0, 0.2, -6.85, 0.14, "#1a3010");
+	};
+	F.gloom = (L, s) => {
+		for (let i = 0; i < 6; i++) {
+			const a = Math.PI + 0.2 + i / 5 * (Math.PI - 0.4), w = Math.sin(s.t * 3 + i) * 0.4;
+			const ex = Math.cos(a) * (2.6 + s.punch * 0.8), ey = -1.6 + Math.sin(a) * (2.2 + s.punch * 0.8);
+			curve(0, -1.6, Math.cos(a + w) * 1.6, -1.6 + Math.sin(a + w) * 1.6, ex, ey, 0.3, "#3a1a4a");
+			poly([ex - 0.15, ey, ex, ey - 0.35, ex + 0.15, ey], "#c0a0d0");
+		}
+		lw(0.12);
+		ell(0, -1.6, 1.55, 1.45, 0, "#5a2a7a", OUT);
+		for (let i = 0; i < 6; i++) circ(Math.cos(i * 1.7) * 0.9, -1.6 + Math.sin(i * 1.7) * 0.8, 0.18, "#8a50aa");
+		X.shadowColor = "#d0f"; X.shadowBlur = 8;
+		ell(-0.45, -1.85, 0.25, 0.16, 0.3, "#f0b0ff"); ell(0.45, -1.85, 0.25, 0.16, -0.3, "#f0b0ff");
+		X.shadowBlur = 0;
+	};
+
+	// One sizing hint per look so cards can frame the tall ones.
+	const HEIGHT = { daisy: 5.2, rose: 4.8, tulip: 5.8, bush: 4.2, pinecone: 3.2, lily: 4.8, puff: 3.6, trap: 4.2, dahlia: 5.2, pad: 2, lotus: 3.2, cattail: 7.6, poppy: 5.2, pumpkin: 5, lantern: 5, spike: 6, magnet: 5, garlic: 4, star: 5, thistle: 10.5, gloom: 4 };
+
+	function flowerState(o) {
+		o = o || {};
+		return { t: o.t || 0, punch: o.punch || 0, hx: -(o.punch || 0) * 0.5, hy: o.hy || 0, sway: o.sway || 0, chomp: o.chomp || 0, chew: o.chew, armed: o.armed, spin: o.spin };
+	}
+	function drawFlower(ctx, def, o) {
+		X = ctx;
+		ctx.save();
+		ctx.lineJoin = "round";
+		const s = flowerState(o);
+		(F[def.look.type] || F.daisy)(def.look, s);
+		ctx.restore();
+	}
+
+	// ----------------------------------------------------------------- bees -----------
+	function bodyBee(L, o) {
+		const body = rgb(L.body), stripe = rgb(L.stripe || C(40, 25, 10));
+		const head = rgb(lerpC(L.body, [30, 20, 0], 0.18));
+		const slim = L.slim, flap = o.frozen ? 0.6 : 0.55 + Math.sin(o.t * 45) * 0.45;
+		const ax = slim ? 0.6 : 0.45, rx = slim ? 1.35 : 1.15, ry = slim ? 0.6 : 0.85;
+		// back wing
+		if (L.moth) {
+			X.save(); X.translate(0.1, -0.6); X.scale(1, flap); ell(0.2, -0.9, 1.3, 1.0, -0.3, "#8a7050", OUT); circ(0.3, -1.0, 0.35, "#3a2a1a"); X.restore();
+		} else {
+			X.save(); X.translate(0.1, -0.7); X.scale(1, flap); ell(0.35, -0.6, 0.85, 0.5, -0.4, "rgba(225,240,255,0.55)", "rgba(80,100,120,0.6)"); X.restore();
+		}
+		lw(0.1);
+		// legs
+		seg(-0.3, ry * 0.8, -0.5, ry + 0.35, 0.09, "#2a1a08"); seg(0.3, ry * 0.85, 0.2, ry + 0.4, 0.09, "#2a1a08");
+		// stinger
+		poly([ax + rx - 0.1, -0.15, ax + rx + 0.55, 0.05, ax + rx - 0.1, 0.25], "#2a1a08");
+		// abdomen + stripes
+		ell(ax, 0, rx, ry, 0, body, OUT);
+		X.save(); X.beginPath(); X.ellipse(ax, 0, rx, ry, 0, 0, TAU); X.clip();
+		for (const sx of [-0.15, 0.45, 1.05]) rect(ax + sx, -ry, 0.27, ry * 2, stripe);
+		X.restore();
+		if (L.fuzzy) for (let i = 0; i < 14; i++) { const a = i / 14 * TAU; circ(ax + Math.cos(a) * rx, Math.sin(a) * ry, 0.13, rgb(lerpC(L.body, [255, 255, 255], 0.3))); }
+		if (L.zombie) { seg(ax - 0.2, -0.5, ax + 0.4, 0.5, 0.06, "#222"); for (let i = 0; i < 4; i++) seg(ax - 0.25 + i * 0.18, -0.3 + i * 0.25, ax + 0.0 + i * 0.18, -0.4 + i * 0.25, 0.05, "#222"); }
+		// head
+		circ(-0.85, -0.2, 0.68, head, OUT);
+		// antennae
+		curve(-0.95, -0.8, -1.1, -1.2, -1.4, -1.3, 0.07, "#2a1a08"); circ(-1.42, -1.32, 0.1, "#2a1a08");
+		if (!L.zombie) { curve(-0.7, -0.85, -0.8, -1.3, -1.05, -1.45, 0.07, "#2a1a08"); circ(-1.07, -1.47, 0.1, "#2a1a08"); }
+		// eye
+		if (L.zombie) {
+			circ(-1.12, -0.32, 0.24, "#e0f0c0", OUT); circ(-1.18, -0.32, 0.1, "#600");
+			seg(-0.75, -0.48, -0.55, -0.28, 0.07, "#222"); seg(-0.55, -0.48, -0.75, -0.28, 0.07, "#222");
+		} else eye(-1.1, -0.32, 0.26, -0.4);
+		if (L.angry) seg(-1.4, -0.7, -0.9, -0.52, 0.1, "#2a1a08");
+		X.beginPath(); X.arc(-1.18, 0.12, 0.17, 0.2, Math.PI - 0.2); lw(0.06); X.strokeStyle = "#2a1a08"; X.stroke();
+		// front wing
+		if (!o.wingLost) {
+			if (L.moth) { X.save(); X.translate(0.2, -0.6); X.scale(1, flap); ell(0.4, -0.8, 1.2, 0.95, 0.2, "#a08a68", OUT); circ(0.5, -0.9, 0.32, "#f0e0c0"); circ(0.5, -0.9, 0.15, "#3a2a1a"); X.restore(); }
+			else { X.save(); X.translate(0.25, -0.7); X.scale(1, flap); ell(0.5, -0.55, 0.95, 0.52, -0.25, "rgba(235,248,255,0.7)", "rgba(80,100,120,0.7)"); X.restore(); }
+		}
+	}
+	function drawBee(ctx, def, o) {
+		X = ctx;
+		o = o || {};
+		let L = def.look;
+		if (o.tint && L.body) L = Object.assign({}, L, { body: lerpC(L.body, o.tint, 0.55), stripe: lerpC(L.stripe || C(40, 25, 10), o.tint, 0.4) });
+		ctx.save();
+		ctx.lineJoin = "round";
+		if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+		if (L.ghost) ctx.globalAlpha *= 0.78;
+		if (L.ball) {
+			ctx.rotate(o.roll || 0);
+			ctx.shadowColor = "#ffa000"; ctx.shadowBlur = 20;
+			circ(0, 0, 1.7, "rgba(255,150,0,0.95)", "#a05000");
+			ctx.shadowBlur = 0;
+			for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ell(Math.cos(a) * 1.15, Math.sin(a) * 1.15, 0.32, 0.22, a, "#ffd040"); }
+			circ(-0.5, -0.5, 0.4, "rgba(255,255,220,0.5)");
+		} else if (L.larva) {
+			for (let i = 3; i >= 0; i--) circ(i * 0.55, 0.1 * i + Math.sin(o.t * 8 + i) * 0.08, 0.5 - i * 0.06, "#faf5e1", OUT);
+			eye(-0.2, -0.1, 0.16, -0.4);
+			X.save(); X.translate(0.3, -0.5); X.scale(1, 0.5 + Math.sin(o.t * 45) * 0.4); ell(0, -0.2, 0.35, 0.2, 0, "rgba(235,245,255,0.6)"); X.restore();
+		} else {
+			const s = L.scale || 1;
+			ctx.scale(s, s);
+			if (L.swarm) {
+				ell(0.5, 0.7, 1.2, 1.0, 0, "#96704a", OUT);
+				for (const p of [[0.85, 0.45, 0.6], [0.65, 0.55, 0.65], [0, -0.55, 0.65]]) {
+					ctx.save(); ctx.translate(p[0], p[1]); ctx.scale(p[2], p[2]); bodyBee(L, o); ctx.restore();
+				}
+				rect(-0.2, 0.2, 1.4, 0.3, "#7a5a3a");
+			} else bodyBee(L, o);
+			if (L.flag) {
+				ctx.save(); ctx.rotate(Math.sin(o.t * 4) * 0.08);
+				seg(0.3, 0.3, 0.3, -3.2, 0.12, "#78502a");
+				const w = Math.sin(o.t * 6) * 0.15;
+				poly([0.35, -3.2, 1.9, -3.0 + w, 1.9, -2.2 + w, 0.35, -2.3], "#dc1e1e", OUT);
+				circ(1.1, -2.7, 0.22, "#ffd200");
+				ctx.restore();
+			}
+			if (L.bomb && o.bomb !== false) {
+				curve(-1.4, 0.45, -1.3, 0.2, -1.2, 0, 0.1, "#968050");
+				circ(-1.4, 1.0, 0.55, "#19191e", OUT);
+				circ(-1.55, 0.85, 0.15, "rgba(255,255,255,0.4)");
+				ctx.shadowColor = "#f90"; ctx.shadowBlur = 10; circ(-1.18, -0.05, 0.16 + Math.abs(Math.sin(o.t * 20)) * 0.08, "#ffc832"); ctx.shadowBlur = 0;
+			}
+			if (L.medic) {
+				ell(-0.95, -0.7, 0.5, 0.25, 0, "#fff", OUT);
+				rect(-1.2, -0.79, 0.5, 0.15, "#e61414"); rect(-1.02, -0.97, 0.15, 0.5, "#e61414");
+			}
+			if (L.lance) { seg(-1.0, 0.45, -2.6, 0.45, 0.32, "#782aa0"); poly([-2.6, 0.3, -3.4, 0.45, -2.6, 0.6], "#c8c8d2", OUT); }
+			if (L.pot) {
+				rect(-1.95, 0.25, 0.9, 1.0, "#be6e28", OUT, 0.2);
+				ell(-1.5, 0.25, 0.45, 0.14, 0, "#ffbe00");
+				ctx.shadowColor = "#fb0"; ctx.shadowBlur = 8; ell(-1.5, 0.22, 0.32, 0.1, 0, "#ffd84a"); ctx.shadowBlur = 0;
+			}
+			if (def.id === "giant" && o.larva !== false) circ(0.4, -0.85, 0.55, "#faf5e1", OUT);
+			if (def.armor && o.armor !== false) armorPart(def.armor.look);
+			if (def.shield && o.shield !== false) shieldPart();
+		}
+		ctx.restore();
+	}
+	function armorPart(look) {
+		lw(0.1);
+		if (look === "acorn") {
+			ell(-0.95, -0.65, 0.72, 0.45, 0, "#82502a", OUT);
+			for (let i = 0; i < 4; i++) seg(-1.5 + i * 0.35, -0.78, -1.4 + i * 0.35, -0.6, 0.05, "#5a3414");
+			rect(-1.05, -1.25, 0.2, 0.32, "#5a3c1e");
+		} else if (look === "bucket") {
+			poly([-1.48, -0.25, -0.42, -0.25, -0.5, -1.55, -1.4, -1.55], "#a0a5af", OUT);
+			rect(-1.55, -0.38, 1.18, 0.16, "#82878f", OUT);
+			seg(-1.1, -1.4, -1.1, -0.45, 0.1, "rgba(255,255,255,0.35)");
+		} else {
+			circ(-0.95, -0.3, 0.72, "#b4b9c8", OUT);
+			rect(-1.7, -0.42, 0.55, 0.12, "#141414");
+			ell(-0.8, -1.05, 0.6, 0.25, -0.2, "#dc1e28", OUT);
+			seg(-0.95, -1.0, -0.95, 0.4, 0.08, "rgba(255,255,255,0.3)");
+		}
+	}
+	function shieldPart() {
+		lw(0.12);
+		ell(-1.95, 0.2, 0.55, 1.45, 0, "#dcaa28", "#8a6010");
+		for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; star(-1.95 + Math.cos(a) * 0.25, 0.2 + Math.sin(a) * 0.75, 0.22, 0.22, 3, 0, "#aa7814"); }
+		star(-1.95, 0.2, 0.25, 0.25, 3, 0, "#aa7814");
+	}
+	function drawDrop(ctx, kind, look) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round";
+		if (kind === "armor") armorPart(look);
+		else if (kind === "shield") shieldPart();
+		else if (kind === "wingR") { ctx.translate(0.25, -0.7); ell(0.5, -0.55, 0.95, 0.52, -0.25, "rgba(235,248,255,0.7)", "rgba(80,100,120,0.7)"); }
+		else if (kind === "larva") circ(0.4, -0.85, 0.55, "#faf5e1", OUT);
+		ctx.restore();
+	}
+	function drawQueen(ctx, o) {
+		X = ctx;
+		ctx.save(); ctx.lineJoin = "round";
+		ctx.scale(4.2, 4.2);
+		// cape
+		X.save(); X.rotate(-0.35); ell(0.9, -0.3, 1.2, 0.5, 0, "#6e148c", "#3a0050"); X.restore();
+		bodyBee({ body: C(170, 200, 110), stripe: C(70, 30, 90), zombie: true, angry: true }, o);
+		// crown
+		poly([-1.4, -0.8, -1.4, -1.35, -1.2, -1.1, -0.95, -1.45, -0.7, -1.1, -0.5, -1.35, -0.5, -0.8], "#ffc828", "#a07000");
+		for (const x of [-1.4, -0.95, -0.5]) { ctx.shadowColor = "#f06"; ctx.shadowBlur = 8; circ(x, x === -0.95 ? -1.48 : -1.38, 0.09, "#ff1e50"); ctx.shadowBlur = 0; }
+		// scepter
+		ctx.save(); ctx.rotate(Math.sin(o.t * 2) * 0.15);
+		seg(-1.1, 0.7, -1.9, -0.8, 0.14, "#ffc828");
+		ctx.shadowColor = "#ff3c8c"; ctx.shadowBlur = 16; circ(-1.95, -0.95, 0.24, "#ff2878"); ctx.shadowBlur = 0;
+		ctx.restore();
+		ctx.restore();
+	}
+
+	// ----------------------------------------------------------------- props ----------
+	function drawSun(ctx, spin, alpha) {
+		X = ctx; ctx.save(); ctx.globalAlpha *= (alpha === undefined ? 1 : alpha);
+		const g = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 2.6);
+		g.addColorStop(0, "rgba(255,240,120,0.7)"); g.addColorStop(1, "rgba(255,220,60,0)");
+		circ(0, 0, 2.6, g);
+		ctx.rotate(spin);
+		for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; poly([Math.cos(a - 0.15) * 0.95, Math.sin(a - 0.15) * 0.95, Math.cos(a) * 1.75, Math.sin(a) * 1.75, Math.cos(a + 0.15) * 0.95, Math.sin(a + 0.15) * 0.95], "#ffd21e"); }
+		ctx.rotate(-spin);
+		circ(0, 0, 0.98, "#ffe128", "#e0a000");
+		face(0, 0.05, 0.6);
+		ctx.restore();
+	}
+	function drawLadybug(ctx, t, active) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round";
+		lw(0.1);
+		for (let i = 0; i < 3; i++) seg(-0.6 + i * 0.6, -0.2, -0.75 + i * 0.6 + Math.sin(t * 20 + i) * (active ? 0.15 : 0), 0.05, 0.1, "#111");
+		X.beginPath(); X.arc(0, -0.25, 1.3, Math.PI, 0); X.closePath(); X.fillStyle = "#e01e1e"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		seg(0, -1.55, 0, -0.25, 0.08, "#111");
+		for (const p of [[-0.6, -0.8], [0.55, -0.9], [-0.3, -1.25], [0.3, -0.5], [-0.8, -0.45]]) circ(p[0], p[1], 0.17, "#111");
+		circ(1.25, -0.5, 0.45, "#111", OUT);
+		circ(1.4, -0.65, 0.12, "#fff");
+		curve(1.4, -0.9, 1.6, -1.3, 1.85, -1.3, 0.06, "#111");
+		ctx.restore();
+	}
+	function drawProj(ctx, kind, age) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round";
+		lw(0.08);
+		switch (kind) {
+			case "thorn": poly([-0.45, -0.18, 0.55, 0, -0.45, 0.18], "#9adf4a", "#3a6a10"); break;
+			case "frost": ctx.shadowColor = "#9df"; ctx.shadowBlur = 8; ell(0, 0, 0.5, 0.25, 0, "#c8f0ff", "#5aa0d0"); star(0, 0, 0.3, 0.12, 6, age * 6, "#fff"); break;
+			case "puff": for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + age * 5; seg(0, 0, Math.cos(a) * 0.45, Math.sin(a) * 0.45, 0.05, "#fff"); } circ(0, 0, 0.15, "#bbb"); break;
+			case "fire": ctx.shadowColor = "#f80"; ctx.shadowBlur = 12; poly([-0.9, -0.3, 0.6, 0, -0.9, 0.3, -0.6, 0], "#ff7a10"); poly([-0.3, -0.15, 0.55, 0, -0.3, 0.15], "#ffe040"); break;
+			case "spike": poly([-0.45, -0.15, 0.55, 0, -0.45, 0.15], "#6a4a20", "#2a1a08"); break;
+			case "star": ctx.rotate(age * 12); star(0, 0, 0.5, 0.22, 5, 0, "#ffd23a", "#a07000"); break;
+			case "pumpkin": circ(0, 0, 0.55, "#ff9a1a", "#a05000"); rect(-0.07, -0.72, 0.14, 0.22, "#5a3a14"); break;
+			case "stinger": poly([0.4, -0.12, -0.6, 0, 0.4, 0.12], "#a050d0", "#400060"); break;
+			case "honey": ctx.shadowColor = "#fb0"; ctx.shadowBlur = 8; circ(0, 0, 0.5, "#ffaf00", "#b06000"); break;
+			case "honeybomb": ctx.shadowColor = "#fb0"; ctx.shadowBlur = 14; circ(0, 0, 1.2, "#ff9a00", "#a05000"); circ(-0.35, -0.35, 0.3, "rgba(255,255,220,0.6)"); break;
+			case "bigstinger": ctx.shadowColor = "#c0f"; ctx.shadowBlur = 12; poly([1.2, -0.45, -1.8, 0, 1.2, 0.45], "#9a40d0", "#400060"); break;
+		}
+		ctx.restore();
+	}
+	function drawVase(ctx, green, t) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round"; lw(0.12);
+		const body = green ? "#5ab04a" : "#c88a4a", dark = green ? "#3a7a2a" : "#8a5a2a";
+		X.beginPath(); X.moveTo(-0.8, -3.4); X.bezierCurveTo(-2.2, -2.4, -1.9, 0, -1.0, 0); X.lineTo(1.0, 0); X.bezierCurveTo(1.9, 0, 2.2, -2.4, 0.8, -3.4); X.closePath();
+		X.fillStyle = body; X.fill(); X.strokeStyle = OUT; X.stroke();
+		rect(-0.95, -3.85, 1.9, 0.5, dark, OUT, 0.15);
+		seg(-1.4, -1.6, 1.4, -1.6, 0.18, dark);
+		if (green) { leaf(0, -1.6, 0.9, -0.6, "#9ae07a"); leaf(0, -1.6, 0.9, Math.PI + 0.6, "#9ae07a"); }
+		else { circ(0, -1.6, 0.4, "#ffd040"); seg(-1.6, -2.4, -1.0, -2.0, 0.08, "rgba(255,255,255,0.35)"); }
+		ctx.restore();
+	}
+	function drawGrave(ctx) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round"; lw(0.12);
+		ell(0, 0, 1.8, 0.4, 0, "#4a3a2a");
+		X.beginPath(); X.moveTo(-1.2, 0); X.lineTo(-1.2, -2.6); X.arc(0, -2.6, 1.2, Math.PI, 0); X.lineTo(1.2, 0); X.closePath();
+		X.fillStyle = "#8a8f96"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		X.font = "bold 0.7px sans-serif"; X.fillStyle = "#4a4f56"; X.textAlign = "center"; X.fillText("RIP", 0, -2.2);
+		seg(-0.6, -1.4, 0.6, -1.4, 0.1, "#6a6f76"); seg(-0.6, -0.9, 0.4, -0.9, 0.1, "#6a6f76");
+		ctx.restore();
+	}
+	function drawPacket(ctx, def, golden) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round"; lw(0.15);
+		if (golden) { ctx.shadowColor = "#ffd040"; ctx.shadowBlur = 22; }
+		rect(-1.6, -2.1, 3.2, 4.2, golden ? "#ffe07a" : "#f5ebc8", "#78501e", 0.3);
+		ctx.shadowBlur = 0;
+		const band = def ? (def.look.color || def.look.petal || C(110, 200, 80)) : C(110, 200, 80);
+		rect(-1.35, -1.85, 2.7, 2.4, rgb(lerpC(band, [150, 215, 110], 0.5)), null, 0.2);
+		if (def) {
+			ctx.save(); ctx.translate(0, 0.45);
+			const h = HEIGHT[def.look.type] || 5, sc = 2.1 / h;
+			ctx.scale(sc, sc); drawFlower(ctx, def, { t: 0 }); X = ctx;
+			ctx.restore();
+		}
+		rect(-1.35, 0.8, 2.7, 0.9, golden ? "#ffcf3a" : "#e0d0a0", null, 0.15);
+		ctx.restore();
+	}
+	function drawTrophy(ctx) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round"; lw(0.12);
+		ctx.shadowColor = "#ffd040"; ctx.shadowBlur = 24;
+		X.beginPath(); X.moveTo(-1.4, -3.4); X.lineTo(1.4, -3.4); X.quadraticCurveTo(1.3, -1.2, 0, -1.0); X.quadraticCurveTo(-1.3, -1.2, -1.4, -3.4);
+		X.fillStyle = "#ffc828"; X.fill(); X.strokeStyle = "#a07000"; X.stroke();
+		ctx.shadowBlur = 0;
+		X.beginPath(); X.arc(-1.4, -2.6, 0.55, Math.PI * 0.5, Math.PI * 1.5); lw(0.2); X.strokeStyle = "#ffc828"; X.stroke();
+		X.beginPath(); X.arc(1.4, -2.6, 0.55, -Math.PI * 0.5, Math.PI * 0.5); X.stroke();
+		rect(-0.2, -1.05, 0.4, 0.75, "#e0a820");
+		rect(-0.9, -0.35, 1.8, 0.4, "#a07000", null, 0.1);
+		star(0, -2.4, 0.5, 0.22, 5, 0, "#fff6c0");
+		ctx.restore();
+	}
+	function drawHive(ctx, t) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round"; lw(0.2);
+		seg(0, -16, 0, -13.5, 0.5, "#6a4a2a");
+		for (let i = 0; i < 6; i++) {
+			const w = [2.4, 3.4, 4.0, 4.2, 3.8, 3.0][i], y = -13 + i * 2.1;
+			ell(0, y, w, 1.25, 0, i % 2 ? "#e8a828" : "#f0b838", "#8a5a10");
+		}
+		ell(-1.2, -3.8, 1.1, 1.0, 0, "#3a2408");
+		ctx.restore();
+	}
+	function drawTree(ctx, col, dead) {
+		X = ctx; ctx.save(); ctx.lineJoin = "round"; lw(0.2);
+		rect(-0.7, -7, 1.4, 7, "#6a4a2a", OUT);
+		if (dead) {
+			seg(0, -6, -2.5, -9, 0.5, "#5a3a1a"); seg(0, -6.5, 2.2, -10, 0.5, "#5a3a1a"); seg(0, -7, 0, -11, 0.5, "#5a3a1a");
+		} else {
+			circ(-1.8, -8, 2.6, rgb(col), OUT); circ(1.8, -8, 2.6, rgb(col), OUT); circ(0, -10.5, 3.0, rgb(lerpC(col, [255, 255, 255], 0.08)), OUT);
+		}
+		ctx.restore();
+	}
+
+	// Card art (cached) ---------------------------------------------------------------
+	const cache = {};
+	function icon(id, bee, w, h) {
+		w = w || 120; h = h || 96;
+		const key = (bee ? "b:" : "f:") + id + ":" + w + "x" + h;
+		if (cache[key]) return cache[key];
+		const c = document.createElement("canvas"); c.width = w; c.height = h;
+		const ctx = c.getContext("2d");
+		if (bee) {
+			const def = Config.BeeById[id];
+			const s = def.look.scale || 1, ext = def.look.ball ? 4 : (def.look.flag ? 6 : 5.4) * Math.max(1, s * 0.8);
+			const k = Math.min(w, h) / ext;
+			ctx.translate(w * 0.5, h * (def.look.flag ? 0.62 : 0.52)); ctx.scale(k, k);
+			if (s > 1) ctx.scale(1 / s * 1.6, 1 / s * 1.6);
+			drawBee(ctx, def, { t: 0.4 });
+		} else {
+			const def = Config.FlowerById[id];
+			const hh = HEIGHT[def.look.type] || 5;
+			const k = Math.min(h * 0.92 / hh, w / 6.4);
+			ctx.translate(w * 0.5, h * 0.96); ctx.scale(k, k);
+			drawFlower(ctx, def, { t: 0.5, armed: true });
+		}
+		cache[key] = c.toDataURL();
+		return cache[key];
+	}
+
+	return { drawFlower, drawBee, drawDrop, drawQueen, drawSun, drawLadybug, drawProj, drawVase, drawGrave, drawPacket, drawTrophy, drawHive, drawTree, icon, HEIGHT };
+})();
+
+// ===================================================================================
+// Game: one level of Flowers vs Bees -- the lawn, flowers, bees, waves, minigames,
+// conveyor belt and the Zombee Queen.
+// ===================================================================================
+const TILE = Config.TILE, COLS = Config.COLS, GROUND = 0.5;
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let DPR = 1;
+
+function el(tag, cls, parent, html) {
+	const e = document.createElement(tag);
+	if (cls) e.className = cls;
+	if (html !== undefined) e.innerHTML = html;
+	if (parent) parent.appendChild(e);
+	return e;
+}
+function btn(parent, text, cls, cb) {
+	const b = el("button", "btn " + (cls || ""), parent, text);
+	if (cb) b.addEventListener("click", ev => { ev.stopPropagation(); Audio.Sfx("click", 1); cb(); });
+	return b;
+}
+
+// Seed packet card (DOM)
+function makeCard(id, opts) {
+	opts = opts || {};
+	const def = opts.bee ? Config.BeeById[id] : Config.FlowerById[id];
+	const f = el("div", "card" + (opts.bee ? " bee" : ""));
+	if (opts.w) { f.style.width = opts.w + "px"; f.style.height = opts.h + "px"; f.style.fontSize = (opts.w / 72 * 11) + "px"; }
+	const band = el("div", "band", f);
+	const img = el("img", null, band); img.src = Art.icon(id, opts.bee); img.draggable = false;
+	const nm = el("div", "nm", f, def.name);
+	if (def.name.length > 14) nm.style.fontSize = "0.78em";
+	else if (def.name.length > 11) nm.style.fontSize = "0.88em";
+	el("div", "cost", f, (opts.bee || opts.free) ? "" : "☀ " + def.cost);
+	const shade = el("div", "shade", f);
+	const card = { frame: f, def, id };
+	card.setCooldown = fr => { shade.style.height = (clamp(fr, 0, 1) * 100) + "%"; };
+	card.setEnabled = on => { f.classList.toggle("off", !on); };
+	card.setSelected = on => { f.classList.toggle("sel", !!on); };
+	card.setLocked = () => { f.classList.add("locked"); img.style.filter = "brightness(0)"; f.querySelector(".nm").textContent = "???"; f.querySelector(".cost").textContent = ""; };
+	return card;
+}
+
+class Game {
+	constructor(spec, opts) {
+		this.spec = spec;
+		this.opts = opts;
+		this.rows = spec.rows;
+		this.t = 0;
+		this.speed = 1;
+		this.state = "intro";
+		this.sun = spec.startSun;
+		this.plants = []; this.bees = []; this.projs = []; this.suns = []; this.fx = []; this.rollers = []; this.packets = []; this.timers = []; this.rtimers = [];
+		this.mowers = {};
+		this.waveIdx = 0;
+		this.waveTimer = spec.firstWave;
+		this.waveInterval = Math.max(16, 25 - spec.g * 0.15);
+		this.pendingSpawns = 0;
+		this.peakHp = 1;
+		this.skyTimer = 6;
+		this.lastDeath = { x: 4.5, row: (this.rows + 1) / 2, y: 3 };
+		this.shake = 0;
+		this.mouse = null;
+		this.buildBoard();
+		this.buildHUD();
+		Audio.Music(spec.music);
+		this.layout();
+		this._onResize = () => this.layout();
+		window.addEventListener("resize", this._onResize);
+		this._onKey = e => this.onKey(e);
+		window.addEventListener("keydown", this._onKey);
+		this._onDown = e => { e.preventDefault(); this.onPointer(e.clientX, e.clientY, e.button); };
+		this._onMove = e => { this.mouse = { x: e.clientX, y: e.clientY }; };
+		this._onCtx = e => e.preventDefault();
+		cv.addEventListener("pointerdown", this._onDown);
+		cv.addEventListener("pointermove", this._onMove);
+		cv.addEventListener("contextmenu", this._onCtx);
+		this.intro();
+		let last = performance.now();
+		const loop = now => {
+			if (this.state === "gone") return;
+			const dt = (now - last) / 1000; last = now;
+			this.step(dt);
+			this.raf = requestAnimationFrame(loop);
+		};
+		this.raf = requestAnimationFrame(loop);
+	}
+
+	delay(t, fn) { this.timers.push({ t, fn }); }
+	rdelay(t, fn) { this.rtimers.push({ t, fn }); }
+
+	// board -> screen (px).  y is height in studs.
+	S(x, row, y) {
+		const L = this.L;
+		return [L.ox + x * L.T + this.shx, L.oy + (row - 0.5) * L.T + 0.22 * L.T - (y || 0) * L.k + this.shy];
+	}
+
+	layout() {
+		DPR = Math.min(2, window.devicePixelRatio || 1);
+		const W = window.innerWidth, H = window.innerHeight;
+		cv.width = W * DPR; cv.height = H * DPR;
+		cv.style.width = W + "px"; cv.style.height = H + "px";
+		const s = clamp(Math.min(W / 900, H / 600), 0.5, 1.15);
+		this.uiS = s;
+		for (const e of this.scaled) e.style.transform = `scale(${s})`;
+		if (this.beltFrame) this.beltFrame.style.height = ((H - 20) / s) + "px";
+		const topH = (this.seedBar.style.display === "none" ? 60 : 118) * s;
+		if (this.bossBar) {
+			this.bossBar.style.top = (topH + 4) + "px";
+			this.queenBox.style.top = (topH + 42) + "px";
+		}
+		const leftW = this.beltFrame ? (104 * s) : 0;
+		const span = 12.7, availW = W - leftW - 16, availH = H - topH - 10;
+		const T = Math.max(20, Math.min(availW / span, availH / (this.rows + 0.75)));
+		const ox = leftW + 8 + 1.35 * T + (availW - span * T) / 2;
+		const oy = topH + 0.6 * T + Math.max(0, (availH - (this.rows + 0.75) * T) / 2);
+		this.L = { T, ox, oy, k: T / TILE, W, H };
+		this.shx = 0; this.shy = 0;
+		this.bakeBackground();
+	}
+
+	// ------------------------------------------------------------------ construction
+	buildBoard() {
+		const spec = this.spec, A = spec.A;
+		this.grid = {};
+		for (let r = 1; r <= this.rows; r++) {
+			this.grid[r] = {};
+			for (let c = 1; c <= COLS; c++) this.grid[r][c] = { water: !!(A.water && A.water[r]), crater: 0 };
+		}
+		if (A.graves && spec.mode !== "hivebreaker" && spec.mode !== "boss") {
+			const grng = new RNG(spec.g * 31);
+			let placed = 0, guard = 0;
+			while (placed < A.graves && guard++ < 500) {
+				const c = grng.int(5, 9), r = grng.int(1, this.rows);
+				const cell = this.grid[r][c];
+				if (!cell.grave && spec.active[r]) { cell.grave = { tilt: grng.num(-0.15, 0.15) }; placed++; }
+			}
+		}
+		if (A.fog && spec.mode !== "invisibee") {
+			this.fog = [];
+			for (let r = 1; r <= this.rows; r++) for (let c = A.fog; c <= 12; c++) this.fog.push({ c, r, tr: 0.04 });
+		}
+		if (A.sunbeam) { this.beamCol = 1; this.beamTimer = 12; this.beamX = 0.5; }
+		for (let r = 1; r <= this.rows; r++) if (spec.active[r]) this.mowers[r] = { row: r, x: -0.45, active: false };
+		if (spec.mode === "hivebreaker") this.setupVases();
+		this.stars = [];
+		for (let i = 0; i < 60; i++) this.stars.push([Math.random(), Math.random(), Math.random() * 6]);
+	}
+
+	setupVases() {
+		const rng = new RNG(Date.now() % 100000);
+		const cells = [];
+		for (let r = 1; r <= this.rows; r++) for (let c = 5; c <= 9; c++) cells.push([c, r]);
+		const plants = ["rose", "doublerose", "snowlily", "tulip", "pumpkin", "lavender", "thornbush", "flytrap", "gloom", "lightning", "doublerose", "pinecone"];
+		const bees = ["worker", "worker", "bumble", "bumble", "armored", "zombee", "zombee", "ghost", "knight", "hopper", "bumble", "zombee", "worker"];
+		const contents = plants.map(p => ({ plant: p })).concat(bees.map(b => ({ bee: b })));
+		for (let i = contents.length - 1; i >= 1; i--) { const j = rng.int(0, i); [contents[i], contents[j]] = [contents[j], contents[i]]; }
+		this.vasesLeft = 0;
+		cells.forEach((cr, i) => {
+			const content = contents[i];
+			if (content) {
+				this.grid[cr[1]][cr[0]].vase = { content, green: !!content.plant && rng.next() < 0.4 };
+				this.vasesLeft++;
+			}
+		});
+	}
+
+	// ------------------------------------------------------------------ HUD
+	buildHUD() {
+		const spec = this.spec;
+		const hud = el("div", "hud", document.body);
+		this.hud = hud;
+		this.scaled = [];
+		const bar = el("div", "seedbar", hud);
+		this.seedBar = bar;
+		this.scaled.push(bar);
+		const sunBox = el("div", "sunbox", bar, `<div class="sunico">☀️</div>`);
+		this.sunLabel = el("div", "sunnum", sunBox, String(this.sun));
+		this.sunBox = sunBox;
+		if (spec.noSlots || spec.seedRain || spec.mode === "hivebreaker") sunBox.style.display = "none";
+		this.slots = [];
+		if (!spec.noSlots && !spec.seedRain && spec.mode !== "hivebreaker") {
+			this.opts.loadout.forEach((id, i) => {
+				const card = makeCard(id);
+				bar.appendChild(card.frame);
+				const def = Config.FlowerById[id];
+				const slot = { card, def, cd: def.recharge >= 30 ? def.recharge * 0.6 : 0 };
+				slot.cdMax = slot.cd > 0 ? slot.cd : def.recharge;
+				this.slots.push(slot);
+				card.frame.addEventListener("pointerdown", ev => { ev.stopPropagation(); this.selectSlot(i); });
+			});
+		}
+		const shovel = btn(bar, "🪚<br><span>SHOVEL</span>", "shovel", () => this.toggleShovel());
+		this.shovelBtn = shovel;
+		if (spec.mode === "bowling" || spec.mode === "whack") shovel.style.display = "none";
+		if (shovel.style.display === "none" && this.slots.length === 0 && sunBox.style.display === "none") bar.style.display = "none";
+
+		const right = el("div", "hudright", hud);
+		this.scaled.push(right);
+		this.speedBtn = btn(right, "⏩ 1x", "speed", () => { this.speed = this.speed === 1 ? 2 : 1; this.speedBtn.textContent = "⏩ " + this.speed + "x"; });
+		btn(right, "II", "pause", () => this.pause(true));
+
+		const prog = el("div", "prog", hud);
+		this.scaled.push(prog);
+		let lbl = spec.name;
+		if (spec.mode === "boss") lbl += "  👑 FINAL BOSS";
+		else if (spec.mode === "conveyor") lbl += "  ⚙️ Conveyor";
+		else if (Config.Minigames[spec.mode]) lbl += "  " + Config.Minigames[spec.mode].name;
+		el("div", "proglbl", prog, lbl);
+		const track = el("div", "track", prog);
+		this.progFill = el("div", "fill", track);
+		const nw = spec.waves.length;
+		spec.waves.forEach((w, i) => { if (w.flag) { const f = el("div", "flag", track, "🚩"); f.style.left = `calc(${(i + 1) / nw * 100}% - 14px)`; } });
+		if (nw === 0) track.style.display = "none";
+
+		this.announceEl = el("div", "announce", hud);
+		this.hintEl = el("div", "hint", hud);
+
+		if (spec.belt || spec.seedRain || spec.mode === "hivebreaker") {
+			bar.style.left = "104px";
+			bar.style.transformOrigin = "-96px 0";
+			const belt = el("div", "belt", hud);
+			this.scaled.push(belt);
+			this.beltFrame = belt;
+			this.beltCards = [];
+			this.beltTimer = 1.5;
+			this.beltRng = new RNG(spec.g * 101 + Date.now() % 10000);
+		}
+		if (spec.mode === "boss") {
+			const bb = el("div", "bossbar", hud);
+			this.bossFill = el("div", "bfill", bb);
+			el("div", "blbl", bb, "👑 " + Config.Queen.name + " 👑");
+			this.bossBar = bb;
+			this.queenBox = el("div", "queensay", hud);
+			this.queenBox.style.display = "none";
+		}
+		if (spec.prep) {
+			this.startBtn = btn(hud, "START! 🌼", "startbtn", () => {
+				if (this.state === "prep") {
+					this.state = "play";
+					this.waveTimer = 3;
+					this.startBtn.remove();
+					this.announce("HERE THEY COME!", 2);
+				}
+			});
+			this.startBtn.style.display = "none";
+		}
+	}
+
+	announce(text, dur, color) {
+		const a = this.announceEl;
+		a.textContent = text;
+		a.style.color = color ? rgb(color) : "rgb(255,70,40)";
+		a.classList.remove("show"); void a.offsetWidth; a.classList.add("show");
+		a.style.opacity = 1;
+		const token = {};
+		this.announceToken = token;
+		this.rdelay(dur || 2, () => { if (this.announceToken === token) a.style.opacity = 0; });
+	}
+	hint(text) { this.hintEl.textContent = text || ""; this.hintEl.style.display = text ? "block" : "none"; }
+
+	intro() {
+		const spec = this.spec;
+		const mg = Config.Minigames[spec.mode];
+		const seq = [["READY...", C(255, 230, 80)], ["SET...", C(255, 160, 60)], [spec.mode === "boss" ? "FIGHT!" : "PLANT!", C(255, 60, 60)]];
+		seq.forEach((s, i) => this.rdelay(i * 0.8 + 0.3, () => this.announce(s[0], 0.7, s[1])));
+		this.hint("");
+		this.rdelay(2.6, () => {
+			if (this.state !== "intro") return;
+			this.state = spec.prep ? "prep" : "play";
+			if (this.startBtn) this.startBtn.style.display = "block";
+			if (mg) { this.hint(mg.tip); this.rdelay(8, () => { if (this.hintEl.textContent === mg.tip) this.hint(""); }); }
+			if (spec.g === 1) this.hint("Click a seed card at the top, then click the lawn to plant it! Click falling ☀️ to collect sun.");
+			if (spec.mode === "boss") this.startBoss();
+		});
+	}
+
+	// ------------------------------------------------------------------ selection & planting
+	clearSelection() {
+		if (this.sel && this.sel.card) this.sel.card.setSelected(false);
+		this.sel = null;
+		this.shovel = false;
+		this.shovelBtn.classList.remove("on");
+	}
+	selectSlot(i) {
+		const slot = this.slots[i];
+		if (!slot || (this.state !== "play" && this.state !== "prep") || this.paused) return;
+		if (this.sel && this.sel.slot === i) { this.clearSelection(); return; }
+		if (slot.cd > 0) { Audio.Sfx("thud", 1.4); return; }
+		if (this.sun < slot.def.cost) {
+			Audio.Sfx("thud", 1.4);
+			this.sunBox.classList.remove("flash"); void this.sunBox.offsetWidth; this.sunBox.classList.add("flash");
+			return;
+		}
+		this.clearSelection();
+		this.sel = { slot: i, def: slot.def, card: slot.card };
+		slot.card.setSelected(true);
+		Audio.Sfx("click", 1.2);
+	}
+	selectBelt(bc) {
+		if ((this.state !== "play" && this.state !== "prep") || this.paused) return;
+		if (this.sel && this.sel.belt === bc) { this.clearSelection(); return; }
+		this.clearSelection();
+		this.sel = { belt: bc, def: bc.card.def, card: bc.card };
+		bc.card.setSelected(true);
+		Audio.Sfx("click", 1.2);
+	}
+	toggleShovel() {
+		const on = !this.shovel;
+		this.clearSelection();
+		this.shovel = on;
+		this.shovelBtn.classList.toggle("on", on);
+	}
+	canPlant(def, c, r) {
+		if (c < 1 || c > COLS || r < 1 || r > this.rows) return false;
+		if (!this.spec.active[r]) return false;
+		const cell = this.grid[r][c];
+		if (cell.grave || cell.vase || cell.crater > 0) return false;
+		if (this.spec.bowlLine && c > this.spec.bowlLine) return false;
+		if (def.kind === "roll") return !cell.main && !cell.pad && !cell.water;
+		if (def.aquatic) return cell.water && !cell.pad && !cell.main;
+		if (cell.water && !cell.pad) return false;
+		return !cell.main;
+	}
+	tryPlant(c, r) {
+		const sel = this.sel;
+		if (!sel) return false;
+		const def = sel.def;
+		if (!this.canPlant(def, c, r)) { Audio.Sfx("thud", 1.5); return false; }
+		if (sel.slot !== undefined) {
+			const slot = this.slots[sel.slot];
+			if (slot.cd > 0 || this.sun < def.cost) { this.clearSelection(); return false; }
+			this.sun -= def.cost;
+			slot.cd = def.recharge;
+			slot.cdMax = def.recharge;
+		} else if (sel.belt) {
+			this.removeBeltCard(sel.belt);
+		}
+		this.clearSelection();
+		if (def.kind === "roll") this.addRoller(def, c, r); else this.addPlant(def, c, r);
+		if (this.spec.g === 1 && !this.planted) {
+			this.planted = true;
+			this.hint("Great! Now collect ☀️ sun and plant more flowers!");
+			this.rdelay(6, () => this.hint(""));
+		}
+		return true;
+	}
+	addPlant(def, c, r) {
+		const cell = this.grid[r][c];
+		const onPad = def.kind !== "pad" && !!cell.pad;
+		const p = {
+			def, c, r, x: c - 0.5, hp: def.hp, onPad, inWater: cell.water && !onPad && def.kind !== "pad",
+			timer: 0.3, grow: 0, punch: 0, sticky: 0, phase: Math.random() * 6,
+		};
+		const k = def.kind;
+		if (k === "sun") p.timer = rnd(4, 8);
+		if (k === "mine") { p.armT = def.arm; p.armed = false; }
+		if (k === "bomb") p.fuse = def.fuse;
+		if (k === "ice") p.fuse = 0.6;
+		if (k === "magnet") p.timer = 0;
+		if (k === "gloom") p.timer = 0.5;
+		if (k === "pad") cell.pad = p; else cell.main = p;
+		this.plants.push(p);
+		Audio.Sfx(cell.water ? "splash" : "plant");
+		this.puff(c - 0.5, r, 1, cell.water ? C(120, 190, 255) : C(140, 100, 60));
+		return p;
+	}
+	removePlant(p) {
+		if (p.dead) return;
+		p.dead = true;
+		const cell = this.grid[p.r][p.c];
+		if (cell.main === p) cell.main = null;
+		if (cell.pad === p) {
+			cell.pad = null;
+			if (cell.main && !cell.main.def.aquatic) this.removePlant(cell.main);
+		}
+	}
+	shovelAt(c, r) {
+		const cell = this.grid[r] && this.grid[r][c];
+		if (!cell) return;
+		const p = cell.main || cell.pad;
+		if (p) { this.removePlant(p); Audio.Sfx("shovel"); this.puff(c - 0.5, r, 1, C(140, 100, 60)); }
+		this.clearSelection();
+	}
+
+	// ------------------------------------------------------------------ conveyor belt
+	beltMax() { return Math.floor(((this.L.H - 20) / this.uiS - 10) / 98); }
+	addBeltCard(id) {
+		if (this.beltCards.length >= Math.max(3, this.beltMax())) return false;
+		const card = makeCard(id, { free: true });
+		const y = (this.L.H - 20) / this.uiS + 10;
+		card.frame.style.top = y + "px";
+		this.beltFrame.appendChild(card.frame);
+		const bc = { card, id, y };
+		card.frame.addEventListener("pointerdown", ev => { ev.stopPropagation(); this.selectBelt(bc); });
+		this.beltCards.push(bc);
+		return true;
+	}
+	removeBeltCard(bc) {
+		const i = this.beltCards.indexOf(bc);
+		if (i >= 0) this.beltCards.splice(i, 1);
+		bc.card.frame.remove();
+	}
+	updateBelt(dt) {
+		if (!this.beltFrame) return;
+		this.beltFrame.style.backgroundPosition = `0 ${(-this.t * 40) % 60}px`;
+		this.beltCards.forEach((bc, i) => {
+			const target = 8 + i * 98;
+			bc.y = Math.max(target, bc.y - 160 * dt);
+			bc.card.frame.style.top = bc.y + "px";
+		});
+		if (this.spec.belt && this.state === "play") {
+			this.beltTimer -= dt;
+			if (this.beltTimer <= 0) {
+				this.beltTimer = this.spec.beltRate;
+				const id = Config.WeightedPick(this.beltRng, this.spec.belt);
+				if (id) this.addBeltCard(id);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------ sun
+	spawnSun(x, row, y, value, fromSky) {
+		const s = { x, row, y, value: value || 25, life: 0, spin: Math.random() * 6 };
+		if (fromSky) { s.state = "fall"; s.groundY = 2.2; }
+		else { s.state = "hop"; s.vy = 14; s.vx = rnd(-0.6, 0.6); s.vr = rnd(-0.3, 0.4); s.groundY = 1.8; }
+		this.suns.push(s);
+		return s;
+	}
+	collectSun(s) {
+		if (s.state === "collect") return;
+		s.state = "collect";
+		s.from = this.S(s.x, s.row, s.y);
+		s.ct = 0;
+		Audio.Sfx("sun");
+	}
+	sunTarget() {
+		if (this.sunBox.style.display === "none" || this.seedBar.style.display === "none") return [60, 50];
+		const r = this.sunBox.getBoundingClientRect();
+		return [r.left + r.width / 2, r.top + r.height * 0.35];
+	}
+	updateSuns(dt) {
+		for (let i = this.suns.length - 1; i >= 0; i--) {
+			const s = this.suns[i];
+			s.spin += dt * 1.5;
+			if (s.state === "fall") {
+				s.y -= 6 * dt;
+				if (s.y <= s.groundY) { s.y = s.groundY; s.state = "rest"; }
+			} else if (s.state === "hop") {
+				s.vy -= 40 * dt;
+				s.y += s.vy * dt; s.x += s.vx * dt; s.row += s.vr * dt;
+				if (s.y <= s.groundY && s.vy < 0) { s.y = s.groundY; s.state = "rest"; }
+			} else if (s.state === "rest") {
+				s.life += dt;
+			} else if (s.state === "collect") {
+				s.ct += dt / this.speed * 2.4;
+				if (s.ct >= 1) {
+					this.sun += s.value;
+					this.suns.splice(i, 1);
+					this.sunLabel.classList.remove("pop"); void this.sunLabel.offsetWidth; this.sunLabel.classList.add("pop");
+					continue;
+				}
+			}
+			if (s.state === "rest" && s.life > 11) this.suns.splice(i, 1);
+		}
+	}
+
+	// ------------------------------------------------------------------ bees
+	randomRow() {
+		const rows = [];
+		for (let r = 1; r <= this.rows; r++) if (this.spec.active[r]) rows.push(r);
+		return rows[rint(0, rows.length - 1)];
+	}
+	spawnBee(id, row, x, opts) {
+		opts = opts || {};
+		const def = Config.BeeById[id];
+		row = row || this.randomRow();
+		const s = def.look.scale || 1;
+		const b = {
+			def, row, rowF: row, x: x !== undefined && x !== null ? x : rnd(9.7, 10.3), hp: def.hp, maxHp: def.hp,
+			armor: def.armor ? def.armor.hp : 0, metal: def.armor && def.armor.metal,
+			shield: def.shield ? def.shield.hp : 0, shieldMetal: def.shield && def.shield.metal,
+			slowT: 0, frozenT: 0, state: "walk", t: Math.random() * 10,
+			hover: def.look.ball ? 1.7 : (def.look.larva ? 1.6 : 2.6 + 0.8 * s), hw: 0.32 * s + 0.12,
+			phaseT: Math.random() * 5, laneT: rnd(4, 8), honeyT: rnd(3, 6), shootT: 1.5, rise: opts.rise ? 1 : 0,
+			speed: def.speed, flash: 0, hopY: 0, dropped: {},
+		};
+		this.bees.push(b);
+		this.peakHp = Math.max(this.peakHp, this.totalHp());
+		return b;
+	}
+	totalHp() { let t = 0; for (const b of this.bees) t += b.hp + b.armor + b.shield; return t; }
+	targetable(b) { return !b.dead && !b.down && !b.phased && b.rise <= 0 && b.x < 9.55; }
+	laneHasTarget(row, x, range) {
+		for (const b of this.bees) if (b.row === row && this.targetable(b) && b.x >= x - 0.3 && (!range || b.x <= x + range)) return true;
+		if (this.boss && !this.boss.dead && (!range || x + range >= 9.1)) return true;
+		return false;
+	}
+	firstBee(row, x, range) {
+		let best = null;
+		for (const b of this.bees) if (b.row === row && this.targetable(b) && b.x >= x - 0.3 && (!range || b.x <= x + range)) if (!best || b.x < best.x) best = b;
+		return best;
+	}
+	anyBee() {
+		for (const b of this.bees) if (this.targetable(b)) return true;
+		return !!(this.boss && !this.boss.dead);
+	}
+	setTint(b, tint) { b.tint = tint; }
+	dropGroup(b, g) {
+		if (b.dropped[g]) return;
+		if (g === "armor" && !b.def.armor) return;
+		if (g === "shield" && !b.def.shield) return;
+		if (g === "larva" && b.def.id !== "giant") return;
+		b.dropped[g] = true;
+		if (this.spec.mode === "invisibee") return;
+		const sc = b.def.look.scale || 1;
+		let x = b.x, row = b.rowF, y = b.hover + (b.hopY || 0);
+		let vx = rnd(0.3, 0.8), vy = 10;
+		const look = b.def.armor && b.def.armor.look;
+		this.addFx(0.8, (f, a, dt) => { vy -= 40 * dt; y += vy * dt; x += vx * dt; f.x = x; f.y = y; f.rot = a * 3; f.alpha = 1 - a; },
+			(f) => { this.drawAt(f.x, row, f.y, sc, f.rot, f.alpha, c2 => Art.drawDrop(c2, g, look)); }, null, { x, y, rot: 0, alpha: 1 });
+	}
+	damageBee(b, dmg, o) {
+		o = o || {};
+		if (b.dead || b.down) return;
+		if (b.phased && !o.explosive) return;
+		if (o.frost) {
+			if (b.slowT <= 0 && !b.def.look.ball) this.setTint(b, C(120, 200, 255));
+			b.slowT = 10;
+		} else if (o.fire && b.slowT > 0) {
+			b.slowT = 0;
+			this.setTint(b, null);
+		}
+		if (b.shield > 0 && !o.ignoreShield) {
+			b.shield -= dmg;
+			Audio.Sfx("metal");
+			if (b.shield > 0) return;
+			dmg = -b.shield;
+			b.shield = 0;
+			this.dropGroup(b, "shield");
+		}
+		if (b.armor > 0) {
+			b.armor -= dmg;
+			if (b.metal) Audio.Sfx("metal");
+			if (b.armor > 0) { b.flash = 0.08; return; }
+			dmg = -b.armor;
+			b.armor = 0;
+			this.dropGroup(b, "armor");
+		}
+		if (dmg <= 0) return;
+		b.hp -= dmg;
+		b.flash = 0.08;
+		if (!b.lostWing && b.hp < b.maxHp * 0.4 && !b.def.look.ball && !b.def.look.larva) {
+			b.lostWing = true;
+			this.dropGroup(b, "wingR");
+		}
+		if (b.hp <= 0) this.killBee(b, o);
+	}
+	killBee(b, o) {
+		o = o || {};
+		const def = b.def;
+		if (def.revive && !b.revived && !o.noRevive) {
+			b.revived = true;
+			b.down = true;
+			b.downT = 2.5;
+			b.hp = b.maxHp * 0.5;
+			b.state = "walk";
+			return;
+		}
+		b.dead = true;
+		this.lastDeath = { x: b.x, row: b.rowF, y: b.hover };
+		if (def.split) for (let i = 1; i <= def.splitCount; i++) { const nb = this.spawnBee(def.split, b.row, b.x + (i - 2) * 0.35); nb.rowF = b.rowF; }
+		if (def.bomb && !o.quiet) this.explosion(b.x, b.row, 0.6, 0, C(255, 140, 40));
+		Audio.Sfx("hit", 0.8);
+		const x = b.x, row = b.rowF, hover = b.hover + (b.hopY || 0), sc = 1, inv = this.spec.mode === "invisibee";
+		const drawOpts = { t: b.t, wingLost: b.lostWing, armor: false, shield: false, larva: !b.dropped.larva, bomb: false, tint: b.tint, frozen: true };
+		this.addFx(0.9, null, f => {
+			const a = f.a || 0;
+			if (inv) return;
+			this.drawAt(x, row, hover - a * (hover - 0.6), sc, a * 2.6, 1 - a * a, c2 => Art.drawBee(c2, def, drawOpts));
+		});
+	}
+	changeLane(b) {
+		const options = [];
+		for (const d of [-1, 1]) { const r = b.row + d; if (r >= 1 && r <= this.rows && this.spec.active[r]) options.push(r); }
+		if (!options.length) return;
+		b.row = options[rint(0, options.length - 1)];
+	}
+	contactPlant(row, x) {
+		const c = Math.floor(x + 0.5);
+		if (c < 1 || c > COLS) return null;
+		const d = x - (c - 0.5);
+		if (d < -0.05 || d > 0.75) return null;
+		const cell = this.grid[row][c];
+		const p = cell.main || cell.pad;
+		if (!p) return null;
+		const k = p.def.kind;
+		if ((k === "mine" && p.armed) || k === "snapper" || k === "bomb" || k === "ice") return null;
+		return [p, c];
+	}
+	flattenCell(r, c) {
+		const cell = this.grid[r] && this.grid[r][c];
+		if (!cell) return;
+		if (cell.main) this.removePlant(cell.main);
+		if (cell.pad) this.removePlant(cell.pad);
+	}
+	updateBees(dt) {
+		const medics = this.bees.filter(b => b.def.heal && !b.dead);
+		for (let i = this.bees.length - 1; i >= 0; i--) {
+			const b = this.bees[i];
+			if (b.dead) this.bees.splice(i, 1);
+			else this.updateBee(b, dt, medics);
+		}
+	}
+	updateBee(b, dt, medics) {
+		const def = b.def;
+		b.t += dt;
+		b.flash = Math.max(0, b.flash - dt);
+		if (b.rowF !== b.row) {
+			const d = b.row - b.rowF, step = 1.6 * dt;
+			b.rowF = Math.abs(d) <= step ? b.row : b.rowF + step * (d > 0 ? 1 : -1);
+		}
+		if (b.rise > 0) { b.rise = Math.max(0, b.rise - dt * 1.4); return; }
+		if (b.down) {
+			b.downT -= dt;
+			if (b.downT <= 0) { b.down = false; this.setTint(b, C(120, 255, 120)); this.delay(0.6, () => { if (!b.dead) this.setTint(b, null); }); }
+			return;
+		}
+		if (def.phase) {
+			b.phaseT += dt;
+			b.phased = (b.phaseT % 5) > 3.2;
+		}
+		for (const m of medics) if (m !== b && Math.abs(m.x - b.x) < 1.6 && Math.abs(m.rowF - b.rowF) < 1.5) b.hp = Math.min(b.maxHp, b.hp + m.def.heal * dt);
+		if (b.frozenT > 0) {
+			b.frozenT -= dt;
+			if (b.frozenT <= 0) this.setTint(b, b.slowT > 0 ? C(120, 200, 255) : null);
+			return;
+		}
+		if (b.slowT > 0) {
+			b.slowT -= dt;
+			if (b.slowT <= 0) this.setTint(b, null);
+		}
+		const mdt = dt * (b.slowT > 0 ? 0.5 : 1);
+
+		if (b.state === "hop") {
+			b.hopT += dt;
+			const a = Math.min(1, b.hopT / 0.7);
+			b.x = b.hopFrom + (b.hopTo - b.hopFrom) * a;
+			b.hopY = Math.sin(a * Math.PI) * 5;
+			if (a >= 1) { b.state = "walk"; b.hopped = true; b.speed = def.hopSpeed; b.hopY = 0; }
+			return;
+		}
+		if (b.state === "fuse" || b.state === "smash") {
+			b.windT -= mdt;
+			if (b.windT <= 0) {
+				if (b.state === "fuse") {
+					this.flattenCell(b.row, b.targetC);
+					this.explosion(b.x - 0.3, b.row, 0.6, 0, C(255, 140, 40));
+					b.hp = 0;
+					this.killBee(b, { noRevive: true, quiet: true });
+				} else {
+					this.flattenCell(b.row, b.targetC);
+					Audio.Sfx("thud", 0.7);
+					this.shake = 0.35;
+					this.puff(b.targetC - 0.5, b.row, 1, C(120, 90, 50));
+					b.state = "walk";
+				}
+			}
+			return;
+		}
+		if (def.laneChange) {
+			b.laneT -= dt;
+			if (b.laneT <= 0 && b.state === "walk" && b.x < 9) { b.laneT = rnd(4, 8); this.changeLane(b); }
+		}
+		if (def.honey && b.x < 9.3) {
+			b.honeyT -= mdt;
+			if (b.honeyT <= 0) {
+				b.honeyT = 7;
+				let target = null;
+				for (let c = Math.min(COLS, Math.floor(b.x)); c >= Math.max(1, Math.floor(b.x - 5)); c--) {
+					const cell = this.grid[b.row][c];
+					const p = cell.main || cell.pad;
+					if (p && p.sticky <= 0) { target = p; break; }
+				}
+				if (target) this.enemyShot("honey", b, target);
+			}
+		}
+		if (def.larva && !b.thrown && b.hp < b.maxHp * 0.5 && b.x > 3.5) {
+			b.thrown = true;
+			this.dropGroup(b, "larva");
+			const lb = this.spawnBee("larva", b.row, Math.max(0.8, b.x - 3.5));
+			lb.rise = 0.6;
+		}
+		if (def.ranged && b.x <= 8.6) {
+			let hasPlant = false;
+			for (let c = Math.floor(b.x); c >= 1; c--) {
+				const cell = this.grid[b.row][c];
+				if (cell && (cell.main || cell.pad)) { hasPlant = (b.x - (c - 0.5)) > 1.1; break; }
+			}
+			if (hasPlant) {
+				b.shootT -= mdt;
+				if (b.shootT <= 0) { b.shootT = 2.2; this.enemyShot("stinger", b); }
+				b.state = "shoot";
+				return;
+			}
+		}
+		let hit = this.contactPlant(b.row, b.x);
+		if (hit && def.crush) { this.flattenCell(b.row, hit[1]); Audio.Sfx("thud", 1.2); hit = null; }
+		if (hit) {
+			const [p, c] = hit;
+			if (def.hop && !b.hopped) {
+				if (p.def.tall) { b.hopped = true; b.speed = def.hopSpeed; }
+				else {
+					b.state = "hop"; b.hopT = 0; b.hopFrom = b.x; b.hopTo = (c - 0.5) - 0.85;
+					Audio.Sfx("buzz", 1.3);
+					return;
+				}
+			}
+			if (def.bomb) { b.state = "fuse"; b.windT = 0.7; b.targetC = c; return; }
+			if (def.smash) { b.state = "smash"; b.windT = 1.1; b.targetC = c; return; }
+			b.state = "sting";
+			p.hp -= (def.dps || 100) * mdt;
+			p.hurt = 0.1;
+			if (p.def.kind === "garlic") {
+				b.garlicT = (b.garlicT || 0) + dt;
+				if (b.garlicT > 0.6) { b.garlicT = 0; b.state = "walk"; this.changeLane(b); b.x += 0.1; }
+			}
+			if (p.hp <= 0) { this.removePlant(p); Audio.Sfx("chomp", 1.3); b.state = "walk"; }
+			return;
+		}
+		b.state = "walk";
+		b.x -= b.speed * mdt;
+		if (b.x < 0.05) {
+			const mower = this.mowers[b.row];
+			if (mower && !mower.active && !mower.used) { mower.active = true; mower.used = true; Audio.Sfx("mower"); }
+			else if (!mower || (mower.used && !mower.active)) { if (b.x < -0.85) this.lose(b); }
+		}
+	}
+
+	// ------------------------------------------------------------------ plants
+	updatePlants(dt) {
+		for (let i = this.plants.length - 1; i >= 0; i--) {
+			const p = this.plants[i];
+			if (p.dead) { this.plants.splice(i, 1); continue; }
+			p.grow = Math.min(1, p.grow + dt * 4);
+			p.punch = Math.max(0, p.punch - dt * 5);
+			p.hurt = Math.max(0, (p.hurt || 0) - dt);
+			let pdt = dt;
+			if (this.beamCol && p.c === this.beamCol) pdt = dt * 2;
+			if (p.sticky > 0) p.sticky -= dt;
+			else this.updatePlant(p, pdt);
+		}
+	}
+	fire(p, kind, row, opts) {
+		const pr = this.addProj(kind, p.x + 0.4, row || p.r, 9, 0, p.def.dmg, opts);
+		if (opts && opts.rowTarget) { pr.row = p.r; pr.rowTarget = row; }
+		p.punch = 1;
+		Audio.Sfx("shoot");
+		return pr;
+	}
+	updatePlant(p, dt) {
+		const def = p.def, k = def.kind;
+		if (k === "sun") {
+			if (this.spec.noSun) return;
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				p.timer = def.interval;
+				for (let n = 0; n < (def.count || 1); n++) this.spawnSun(p.x, p.r, 4, def.amount);
+				p.punch = 1;
+			}
+		} else if (k === "shooter") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				if (this.laneHasTarget(p.r, p.x, def.range)) {
+					p.timer = def.interval;
+					const life = def.range ? def.range / 9 : null;
+					for (let n = 1; n <= (def.count || 1); n++) this.delay((n - 1) * 0.16, () => { if (!p.dead) this.fire(p, def.proj, p.r, { life, frost: def.proj === "frost" }); });
+				} else p.timer = 0;
+			}
+		} else if (k === "triple") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				const lanes = [];
+				for (let r = p.r - 1; r <= p.r + 1; r++) if (r >= 1 && r <= this.rows && this.spec.active[r]) lanes.push(r);
+				if (lanes.some(r => this.laneHasTarget(r, p.x))) {
+					p.timer = def.interval;
+					for (const r of lanes) this.fire(p, "thorn", r, { rowTarget: r !== p.r ? r : null });
+				} else p.timer = 0;
+			}
+		} else if (k === "homing") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				if (this.anyBee()) {
+					p.timer = def.interval;
+					for (let n = 1; n <= def.count; n++) this.delay((n - 1) * 0.2, () => {
+						if (p.dead) return;
+						const pr = this.addProj("spike", p.x, p.r, 0, 0, def.dmg, { homing: true });
+						pr.y = 4; p.punch = 1;
+					});
+				} else p.timer = 0;
+			}
+		} else if (k === "star") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				if (this.anyBee()) {
+					p.timer = def.interval;
+					for (const d of [[0, -1], [0, 1], [-1, 0], [0.87, -0.5], [0.87, 0.5]]) this.addProj("star", p.x, p.r, d[0] * 8, d[1] * 8, def.dmg, {});
+					p.punch = 1;
+					Audio.Sfx("shoot", 1.3);
+				} else p.timer = 0;
+			}
+		} else if (k === "lobber") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				const target = this.firstBee(p.r, p.x);
+				if (target || (this.boss && !this.boss.dead)) { p.timer = def.interval; this.lob(p, target); }
+				else p.timer = 0;
+			}
+		} else if (k === "laser") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				if (this.laneHasTarget(p.r, p.x)) { p.timer = def.interval; this.laser(p); }
+				else p.timer = 0;
+			}
+		} else if (k === "lightning") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				const target = this.firstBee(p.r, p.x);
+				if (target || (this.boss && !this.boss.dead)) { p.timer = def.interval; this.lightning(p, target); }
+				else p.timer = 0;
+			}
+		} else if (k === "gloom") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				p.timer = def.interval;
+				let hit = false;
+				for (const b of this.bees) if (this.targetable(b) && Math.abs(b.x - p.x) <= 1.5 && Math.abs(b.rowF - p.r) <= 1.1) { this.damageBee(b, def.dmg, { ignoreShield: true }); hit = true; }
+				if (hit) { p.punch = 1; this.ring(p.x, p.r, 1.2, 1.5 * TILE, C(170, 80, 255), 0.35); }
+			}
+		} else if (k === "chomper") {
+			if (p.chew) { p.chew -= dt; if (p.chew <= 0) p.chew = null; }
+			else {
+				for (const b of this.bees) {
+					if (b.row === p.r && this.targetable(b) && b.x >= p.x - 0.3 && b.x <= p.x + 1.3) {
+						if (b.def.id === "giant" || b.def.crush) this.damageBee(b, 400, { ignoreShield: true });
+						else { b.hp = 0; b.armor = 0; b.shield = 0; this.killBee(b, { noRevive: true }); }
+						p.chew = def.chew; p.chomp = 1;
+						Audio.Sfx("chomp");
+						break;
+					}
+				}
+			}
+			p.chomp = Math.max(0, (p.chomp || 0) - dt * 2);
+		} else if (k === "bomb") {
+			p.fuse -= dt;
+			p.punch = 0.5 + Math.sin(this.t * 30) * 0.5;
+			if (p.fuse <= 0) {
+				this.removePlant(p);
+				if (def.id === "doom") {
+					this.explosion(p.x, p.r, def.radius, def.dmg, C(120, 0, 160), true);
+					this.grid[p.r][p.c].crater = def.crater;
+					this.shake = 0.8;
+				} else this.explosion(p.x, p.r, def.radius, def.dmg, C(255, 90, 30));
+			}
+		} else if (k === "ice") {
+			p.fuse -= dt;
+			if (p.fuse <= 0) { this.removePlant(p); this.freezeAll(def.freeze); }
+		} else if (k === "mine") {
+			if (!p.armed) {
+				p.armT -= dt;
+				if (p.armT <= 0) { p.armed = true; Audio.Sfx("magic", 1.4); }
+			} else {
+				for (const b of this.bees) {
+					if (b.row === p.r && !b.dead && !b.down && b.rise <= 0 && Math.abs(b.x - p.x) < 0.6) {
+						this.removePlant(p);
+						this.explosion(p.x, p.r, 0.9, def.dmg, C(255, 120, 40), false, true);
+						break;
+					}
+				}
+			}
+		} else if (k === "snapper") {
+			for (const b of this.bees) {
+				if (b.row === p.r && !b.dead && !b.down && b.rise <= 0 && Math.abs(b.x - p.x) < 0.65) {
+					this.removePlant(p);
+					b.hp = 0; b.armor = 0; b.shield = 0;
+					this.killBee(b, { noRevive: true });
+					Audio.Sfx("slurp");
+					this.puff(p.x, p.r, 1, C(120, 190, 255));
+					break;
+				}
+			}
+		} else if (k === "magnet") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				for (const b of this.bees) {
+					if (this.targetable(b) && ((b.metal && b.armor > 0) || (b.shieldMetal && b.shield > 0))) {
+						const d = Math.hypot(b.x - p.x, b.rowF - p.r);
+						if (d <= def.range) {
+							if (b.shield > 0 && b.shieldMetal) { b.shield = 0; this.dropGroup(b, "shield"); }
+							else { b.armor = 0; this.dropGroup(b, "armor"); }
+							p.timer = def.cooldown; p.punch = 1;
+							Audio.Sfx("metal", 0.7);
+							this.beam([p.x, p.r, 4.5], [b.x, b.rowF, b.hover + 1], C(255, 60, 60), 0.3, 0.3);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------ projectiles
+	addProj(kind, x, row, vx, vr, dmg, opts) {
+		const pr = { kind, x, row, vx, vr, dmg, opts: opts || {}, age: 0, y: 3.7 };
+		this.projs.push(pr);
+		return pr;
+	}
+	nearestBee(x, row) {
+		let best = null;
+		for (const b of this.bees) if (this.targetable(b)) if (!best || b.x < best.x) best = b;
+		return best;
+	}
+	updateProjs(dt) {
+		for (let i = this.projs.length - 1; i >= 0; i--) {
+			const pr = this.projs[i];
+			pr.age += dt;
+			let remove = false;
+			if (pr.enemy) remove = this.updateEnemyShot(pr, dt);
+			else if (pr.lob) {
+				pr.lt += dt / pr.lob.time;
+				if (pr.lob.target && !pr.lob.target.dead) { pr.lob.toX = pr.lob.target.x; pr.lob.toRow = pr.lob.target.rowF; }
+				const a = Math.min(1, pr.lt);
+				pr.x = pr.lob.fromX + (pr.lob.toX - pr.lob.fromX) * a;
+				pr.row = pr.lob.fromRow + (pr.lob.toRow - pr.lob.fromRow) * a;
+				pr.y = 5 + Math.sin(a * Math.PI) * 9 - pr.lt * 2;
+				if (pr.lt >= 1) { remove = true; this.lobLand(pr); }
+			} else {
+				if (pr.opts.homing) {
+					let t = pr.target;
+					if (!t || t.dead || !this.targetable(t)) { t = this.nearestBee(pr.x, pr.row); pr.target = t; }
+					let tx = null, tr = null;
+					if (t) { tx = t.x; tr = t.rowF; } else if (this.boss && !this.boss.dead) { tx = 9.6; tr = (this.rows + 1) / 2; }
+					if (tx !== null) {
+						let dx = tx - pr.x, dz = tr - pr.row;
+						const m = Math.hypot(dx, dz);
+						if (m > 0.01) { dx = dx / m * 9; dz = dz / m * 9; }
+						pr.vx = dx; pr.vr = dz;
+					} else if (pr.vx === 0 && pr.vr === 0) pr.vx = 9;
+				}
+				pr.x += pr.vx * dt;
+				if (pr.rowTarget) {
+					const d = pr.rowTarget - pr.row, s = 5 * dt;
+					if (Math.abs(d) <= s) { pr.row = pr.rowTarget; pr.rowTarget = null; } else pr.row += s * (d > 0 ? 1 : -1);
+				} else pr.row += pr.vr * dt;
+				// Fire Poppy
+				if (pr.kind === "thorn" || pr.kind === "frost") {
+					const c = Math.floor(pr.x) + 1, r = Math.floor(pr.row + 0.5);
+					const cell = this.grid[r] && this.grid[r][c];
+					if (cell && cell.main && cell.main.def.kind === "fire" && Math.abs(pr.x - (c - 0.5)) < 0.3 && pr.lastFire !== cell.main) {
+						const newKind = pr.kind === "thorn" ? "fire" : "thorn";
+						const np = this.addProj(newKind, pr.x, pr.row, pr.vx, pr.vr, pr.kind === "thorn" ? pr.dmg * 2 : pr.dmg, { fire: newKind === "fire" });
+						np.lastFire = cell.main;
+						remove = true;
+						if (newKind === "fire") Audio.Sfx("sizzle");
+					}
+				}
+				if (!remove) {
+					let hit = null;
+					for (const b of this.bees) if (this.targetable(b) && Math.abs(b.rowF - pr.row) < 0.5 && Math.abs(b.x - pr.x) < b.hw + 0.15) if (!hit || b.x < hit.x) hit = b;
+					if (hit) {
+						const fromFront = pr.vx > 0 && Math.abs(pr.vr) < 0.1;
+						this.damageBee(hit, pr.dmg, { frost: pr.opts.frost, fire: pr.opts.fire, ignoreShield: !fromFront });
+						if (pr.opts.fire) {
+							for (const b of this.bees) if (b !== hit && this.targetable(b) && b.row === hit.row && Math.abs(b.x - hit.x) < 0.9) this.damageBee(b, pr.dmg / 3, { fire: true });
+							this.ring(pr.x, pr.row, 3, 4, C(255, 140, 30), 0.25);
+						}
+						Audio.Sfx("hit");
+						remove = true;
+					} else if (this.boss && !this.boss.dead && pr.x >= 9.15) {
+						this.damageBoss(pr.dmg);
+						Audio.Sfx("hit");
+						remove = true;
+					}
+				}
+				const life = pr.opts.life;
+				if (pr.x > 10.6 || pr.x < -1 || pr.row < 0.4 || pr.row > this.rows + 0.6 || (life && pr.age > life) || pr.age > 6) remove = true;
+			}
+			if (remove) this.projs.splice(i, 1);
+		}
+	}
+	lob(p, target) {
+		const pr = this.addProj("pumpkin", p.x, p.r, 0, 0, p.def.dmg, {});
+		pr.lob = { fromX: p.x, fromRow: p.r, toX: target ? target.x : 9.6, toRow: target ? target.rowF : p.r, target, time: 1.0, splash: p.def.splash };
+		pr.lt = 0;
+		p.punch = 1;
+		Audio.Sfx("shoot", 0.7);
+	}
+	lobLand(pr) {
+		const L = pr.lob;
+		const x = pr.x, row = L.target ? L.target.row : Math.floor(pr.row + 0.5);
+		if (L.target && !L.target.dead) this.damageBee(L.target, pr.dmg, { ignoreShield: true });
+		else if (this.boss && !this.boss.dead && x >= 9.0) this.damageBoss(pr.dmg);
+		for (const b of this.bees) if (b !== L.target && this.targetable(b) && Math.abs(b.x - x) <= 1.0 && Math.abs(b.row - row) <= 1) this.damageBee(b, L.splash || 0, { ignoreShield: true });
+		this.ring(x, row, 2, 7, C(255, 150, 30), 0.3);
+		Audio.Sfx("hit", 0.6);
+	}
+	laser(p) {
+		p.punch = 1;
+		Audio.Sfx("zap", 1.4);
+		this.beam([p.x + 0.1, p.r, 5.3], [10.4, p.r, 3.2], C(200, 120, 255), 0.6, 0.35);
+		for (const b of this.bees) if (b.row === p.r && this.targetable(b) && b.x >= p.x - 0.3) this.damageBee(b, p.def.dmg, { ignoreShield: true });
+		if (this.boss && !this.boss.dead) this.damageBoss(p.def.dmg);
+	}
+	lightning(p, target) {
+		p.punch = 1;
+		Audio.Sfx("zap");
+		const from = [p.x, p.r, 2.5];
+		if (!target) { this.zig(from, [9.6, p.r, 5]); this.damageBoss(p.def.dmg); return; }
+		const hit = new Set([target]);
+		let cur = target;
+		this.zig(from, [cur.x, cur.rowF, cur.hover]);
+		this.damageBee(cur, p.def.dmg, { ignoreShield: true });
+		for (let n = 2; n <= p.def.chain; n++) {
+			let best = null, bd = null;
+			for (const b of this.bees) if (!hit.has(b) && this.targetable(b)) {
+				const d = (b.x - cur.x) ** 2 + (b.rowF - cur.rowF) ** 2;
+				if (d < 6.5 && (bd === null || d < bd)) { best = b; bd = d; }
+			}
+			if (!best) break;
+			hit.add(best);
+			this.zig([cur.x, cur.rowF, cur.hover], [best.x, best.rowF, best.hover]);
+			this.damageBee(best, p.def.dmg * 0.65, { ignoreShield: true });
+			cur = best;
+		}
+	}
+	enemyShot(kind, b, target) {
+		const pr = this.addProj(kind, b.x - 0.5, b.row, -7, 0, 50, {});
+		pr.enemy = true;
+		pr.y = b.hover;
+		if (kind === "honey" && target) { pr.lob = { fromX: b.x, toX: target.x, time: 1.0 }; pr.lt = 0; pr.target = target; }
+		return pr;
+	}
+	updateEnemyShot(pr, dt) {
+		if (pr.lob) {
+			pr.lt += dt / pr.lob.time;
+			const a = Math.min(1, pr.lt);
+			pr.x = pr.lob.fromX + (pr.lob.toX - pr.lob.fromX) * a;
+			pr.y = 3 + Math.sin(a * Math.PI) * 7;
+			if (pr.kind === "honeybomb") pr.y = 9 * (1 - a) + Math.sin(a * Math.PI) * 6 + 1;
+			if (pr.lt >= 1) {
+				const t = pr.target;
+				if (t && !t.dead) {
+					if (pr.kind === "honey") { t.sticky = 6; Audio.Sfx("splash", 1.3); }
+					else { this.flattenCell(t.r, t.c); this.explosion(t.x, t.r, 0.4, 0, C(255, 150, 0)); }
+				} else if (pr.cell) {
+					this.flattenCell(pr.cell[1], pr.cell[0]);
+					this.explosion(pr.cell[0] - 0.5, pr.cell[1], 0.4, 0, C(255, 150, 0));
+				}
+				return true;
+			}
+			return false;
+		}
+		pr.x += pr.vx * dt;
+		const c = Math.floor(pr.x) + 1;
+		const cell = this.grid[pr.row] && this.grid[pr.row][c];
+		if (cell && Math.abs(pr.x - (c - 0.5)) < 0.45) {
+			const p = cell.main || cell.pad;
+			if (p) {
+				if (pr.kind === "bigstinger") {
+					this.flattenCell(pr.row, c);
+					Audio.Sfx("thud");
+					this.puff(c - 0.5, pr.row, 1, C(150, 60, 200));
+				} else {
+					p.hp -= pr.dmg;
+					p.hurt = 0.15;
+					if (p.hp <= 0) this.removePlant(p);
+					Audio.Sfx("hit", 1.4);
+				}
+				return true;
+			}
+		}
+		return pr.x < -1;
+	}
+
+	// ------------------------------------------------------------------ rollers (bowling)
+	addRoller(def, c, r) {
+		this.rollers.push({ def, x: c - 0.5, rowF: r, vr: 0, hits: new Set(), spin: 0, combo: 0 });
+		Audio.Sfx("thud", 1.3);
+	}
+	updateRollers(dt) {
+		for (let i = this.rollers.length - 1; i >= 0; i--) {
+			const ro = this.rollers[i], def = ro.def;
+			const spd = def.giant ? 2.0 : 2.6;
+			ro.x += spd * dt;
+			ro.spin += spd * dt * (def.giant ? 0.9 : 1.6) * Math.PI;
+			ro.rowF += ro.vr * dt;
+			if (ro.rowF < 1) { ro.rowF = 1; ro.vr = Math.abs(ro.vr); }
+			if (ro.rowF > this.rows) { ro.rowF = this.rows; ro.vr = -Math.abs(ro.vr); }
+			let gone = ro.x > 10.6;
+			for (const b of this.bees) {
+				if (!ro.hits.has(b) && this.targetable(b) && Math.abs(b.rowF - ro.rowF) < (def.giant ? 0.6 : 0.45) && Math.abs(b.x - ro.x) < (def.giant ? 0.9 : 0.55)) {
+					ro.hits.add(b);
+					if (def.explode) { this.explosion(ro.x, Math.floor(ro.rowF + 0.5), 1.5, def.dmg, C(255, 90, 30)); gone = true; break; }
+					this.damageBee(b, def.dmg, {});
+					Audio.Sfx("thud", 1.1);
+					if (!def.giant) {
+						ro.combo++;
+						if (ro.vr === 0) {
+							let dir = Math.random() < 0.5 ? -1 : 1;
+							if (ro.rowF <= 1) dir = 1; else if (ro.rowF >= this.rows) dir = -1;
+							ro.vr = dir * 2.4;
+						} else ro.vr = -ro.vr;
+						if (ro.combo >= 2) this.popup(ro.x, ro.rowF, 5, ro.combo + "x COMBO!", C(255, 220, 60));
+					}
+				}
+			}
+			if (gone) this.rollers.splice(i, 1);
+		}
+	}
+
+	// ------------------------------------------------------------------ effects
+	addFx(life, update, draw, done, init) {
+		const f = Object.assign({ t: 0, life, update, draw, done }, init || {});
+		this.fx.push(f);
+		return f;
+	}
+	updateFx(dt) {
+		for (let i = this.fx.length - 1; i >= 0; i--) {
+			const f = this.fx[i];
+			f.t += dt;
+			const a = Math.min(1, f.t / f.life);
+			f.a = a;
+			if (f.update) f.update(f, a, dt);
+			if (a >= 1) { if (f.done) f.done(); this.fx.splice(i, 1); }
+		}
+	}
+	// draw something in stud space at a board position
+	drawAt(x, row, y, scale, rot, alpha, fn) {
+		const [sx, sy] = this.S(x, row, y);
+		ctx.save();
+		ctx.translate(sx, sy);
+		const k = this.L.k * (scale || 1);
+		ctx.scale(k, k);
+		if (rot) ctx.rotate(rot);
+		if (alpha !== undefined && alpha !== null) ctx.globalAlpha *= clamp(alpha, 0, 1);
+		fn(ctx);
+		ctx.restore();
+	}
+	ring(x, row, y, size, color, life) {
+		this.addFx(life || 0.4, null, f => {
+			const [sx, sy] = this.S(x, row, y);
+			const r = (0.5 + size * f.a * 0.5) * this.L.k;
+			ctx.save();
+			ctx.globalAlpha = 0.7 * (1 - f.a);
+			ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.55, 0, 0, Math.PI * 2);
+			ctx.lineWidth = Math.max(2, this.L.k * 0.5); ctx.strokeStyle = rgb(color); ctx.stroke();
+			ctx.restore();
+		});
+	}
+	puff(x, row, y, color) {
+		for (let i = 1; i <= 6; i++) {
+			const a = i / 6 * Math.PI * 2;
+			const dx = Math.cos(a), dz = Math.sin(a);
+			this.addFx(0.45, null, f => {
+				const t = f.a;
+				const [sx, sy] = this.S(x + dx * t * 0.5, row + dz * t * 0.3, y + t * 2.8);
+				ctx.save(); ctx.globalAlpha = 1 - t;
+				ctx.beginPath(); ctx.arc(sx, sy, this.L.k * 0.45, 0, Math.PI * 2); ctx.fillStyle = rgb(color); ctx.fill();
+				ctx.restore();
+			});
+		}
+	}
+	popup(x, row, y, text, color) {
+		this.addFx(1.0, null, f => {
+			const [sx, sy] = this.S(x, row, y + f.a * 4);
+			ctx.save(); ctx.globalAlpha = 1 - f.a * f.a;
+			ctx.font = `${Math.round(this.L.T * 0.32)}px Fredoka, 'Fredoka One', sans-serif`;
+			ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "#2a1400"; ctx.strokeText(text, sx, sy);
+			ctx.fillStyle = rgb(color); ctx.fillText(text, sx, sy);
+			ctx.restore();
+		}, null, { top: true });
+	}
+	beam(a, b, color, width, life) {
+		this.addFx(life || 0.3, null, f => {
+			const p1 = this.S(a[0], a[1], a[2]), p2 = this.S(b[0], b[1], b[2]);
+			ctx.save();
+			ctx.globalAlpha = 0.9 * (1 - f.a);
+			ctx.shadowColor = rgb(color); ctx.shadowBlur = 12;
+			ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+			ctx.lineWidth = Math.max(2, width * this.L.k * (1 - f.a * 0.6)); ctx.strokeStyle = rgb(color); ctx.lineCap = "round"; ctx.stroke();
+			ctx.lineWidth *= 0.4; ctx.strokeStyle = "#fff"; ctx.stroke();
+			ctx.restore();
+		});
+	}
+	zig(a, b) {
+		const pts = [a];
+		for (let i = 1; i <= 4; i++) { const t = i / 5; pts.push([a[0] + (b[0] - a[0]) * t + rnd(-0.15, 0.15), a[1] + (b[1] - a[1]) * t + rnd(-0.15, 0.15), a[2] + (b[2] - a[2]) * t + rnd(-1, 1)]); }
+		pts.push(b);
+		for (let i = 0; i < pts.length - 1; i++) this.beam(pts[i], pts[i + 1], C(120, 230, 255), 0.35, 0.25);
+	}
+	explosion(x, row, radius, dmg, color, round, single) {
+		const size = Math.max(4, radius * TILE * 2);
+		this.addFx(0.5, null, f => {
+			const [sx, sy] = this.S(x, row, 2);
+			const r = (0.5 + size * 0.5 * Math.sqrt(f.a)) * this.L.k;
+			ctx.save();
+			ctx.globalAlpha = 0.9 * (1 - f.a);
+			const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+			g.addColorStop(0, "rgba(255,255,220,1)"); g.addColorStop(0.35, rgb(color, 0.95)); g.addColorStop(1, rgb(color, 0));
+			ctx.fillStyle = g;
+			ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+			ctx.restore();
+		}, null, { top: true });
+		Audio.Sfx("explode");
+		this.shake = Math.max(this.shake, 0.25 + radius * 0.1);
+		if (dmg <= 0) return;
+		for (const b of this.bees) {
+			if (!b.dead && !b.down && b.rise <= 0) {
+				const dx = Math.abs(b.x - x), dr = Math.abs(b.rowF - row);
+				let inside;
+				if (round) inside = Math.sqrt(dx * dx + dr * dr) <= radius;
+				else if (single) inside = dr < 0.5 && dx <= radius;
+				else inside = dr <= 1.1 && dx <= radius;
+				if (inside) this.damageBee(b, dmg, { ignoreShield: true, explosive: true, noRevive: round });
+			}
+		}
+		if (this.boss && !this.boss.dead && x + radius >= 9.0) this.damageBoss(dmg * 0.5);
+	}
+	freezeAll(t) {
+		Audio.Sfx("freeze");
+		const flash = el("div", "flash", this.hud);
+		setTimeout(() => flash.remove(), 900);
+		for (const b of this.bees) {
+			if (b.dead) continue;
+			if (b.def.iceKills) { b.hp = 0; this.killBee(b, { noRevive: true }); }
+			else {
+				b.frozenT = t;
+				b.slowT = t + 8;
+				this.setTint(b, C(170, 230, 255));
+				this.damageBee(b, 20, { ignoreShield: true, explosive: true });
+			}
+		}
+		if (this.boss && !this.boss.dead) this.boss.frozen = t;
+	}
+
+	// ------------------------------------------------------------------ waves
+	spawnWave(idx) {
+		const wave = this.spec.waves[idx - 1];
+		const whack = this.spec.mode === "whack";
+		for (const e of wave.bees) {
+			this.pendingSpawns++;
+			this.delay(e.t, () => {
+				this.pendingSpawns--;
+				if (this.state !== "play" && this.state !== "prep") return;
+				if (whack) { const b = this.spawnBee(e.id, null, rnd(4.5, 8.8), { rise: true }); b.speed *= 1.3; }
+				else this.spawnBee(e.id);
+			});
+		}
+		if (wave.flag) {
+			for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
+				if (this.grid[r][c].grave) this.spawnBee(this.spec.g >= 51 ? "zombee" : "worker", r, c - 0.5, { rise: true });
+			}
+		}
+	}
+	updateWaves(dt) {
+		const spec = this.spec, n = spec.waves.length;
+		if (n === 0 || this.state !== "play") return;
+		if (this.waveIdx < n) {
+			this.waveTimer -= dt;
+			if (this.waveIdx > 0 && this.waveTimer > 5 && this.totalHp() < this.peakHp * 0.25) this.waveTimer = 5;
+			const nextWave = spec.waves[this.waveIdx];
+			if (nextWave.flag && !nextWave.announced && this.waveTimer <= 5) {
+				nextWave.announced = true;
+				this.announce(this.waveIdx + 1 === n ? "THE FINAL SWARM!" : "A HUGE SWARM OF BEES IS APPROACHING!", 3);
+				Audio.Sfx("swarm");
+			}
+			if (this.waveTimer <= 0) {
+				this.waveIdx++;
+				this.spawnWave(this.waveIdx);
+				this.waveTimer = this.waveInterval;
+				this.peakHp = 1;
+				if (this.waveIdx === 1) Audio.Sfx("buzz", 1);
+			}
+		}
+		let frac = (this.waveIdx - 1 + clamp(1 - this.waveTimer / this.waveInterval, 0, 1)) / n;
+		if (this.waveIdx === 0) frac = 0;
+		if (this.waveIdx >= n) frac = 1;
+		this.progFill.style.width = (clamp(frac, 0, 1) * 100) + "%";
+		if (this.waveIdx >= n && this.pendingSpawns <= 0 && this.bees.length === 0) this.win();
+	}
+	updateSky(dt) {
+		if (!this.spec.sky || this.state !== "play") return;
+		this.skyTimer -= dt;
+		if (this.skyTimer <= 0) {
+			this.skyTimer = this.spec.sky * rnd(0.8, 1.2);
+			this.spawnSun(rnd(0.6, 8.4), this.randomRow(), 34, 25, true);
+		}
+	}
+	updateSeedRain(dt) {
+		if (!this.spec.seedRain || this.state !== "play") return;
+		this.rainT = (this.rainT === undefined ? 1 : this.rainT) - dt;
+		if (this.rainT <= 0) {
+			this.rainT = 3.2;
+			let choices = this.opts.owned.filter(id => { const d = Config.FlowerById[id]; return d && d.kind !== "sun" && !d.aquatic && !d.hidden; });
+			if (!choices.length) choices = ["rose"];
+			const id = choices[rint(0, choices.length - 1)];
+			this.packets.push({ id, x: rnd(1, 8.5), row: rnd(0.8, this.rows + 0.2), y: 30, t: 0 });
+		}
+		for (let i = this.packets.length - 1; i >= 0; i--) {
+			const pk = this.packets[i];
+			pk.t += dt;
+			pk.x -= Math.sin(pk.t * 2) * 2 * dt / TILE;
+			pk.y -= 4 * dt;
+			if (pk.y < 1.5) this.packets.splice(i, 1);
+		}
+	}
+	breakVase(c, r) {
+		const cell = this.grid[r][c], v = cell.vase;
+		if (!v) return;
+		cell.vase = null;
+		this.vasesLeft--;
+		Audio.Sfx("vase");
+		this.puff(c - 0.5, r, 2, C(200, 140, 60));
+		if (v.content.plant) {
+			this.addBeltCard(v.content.plant);
+			this.popup(c - 0.5, r, 4, "🌼 " + Config.FlowerById[v.content.plant].name + "!", C(120, 255, 120));
+		} else if (v.content.bee) {
+			const b = this.spawnBee(v.content.bee, r, c - 0.5, { rise: true });
+			b.rise = 0.5;
+		}
+	}
+
+	// ------------------------------------------------------------------ the Zombee Queen
+	startBoss() {
+		this.boss = { hp: Config.Queen.hp, max: Config.Queen.hp, phase: 1, atkT: 7, dizzy: 0, frozen: 0, dive: 0, t: 0, enter: 1, stomp: 0, flash: 0 };
+		Audio.Sfx("roar");
+		this.shake = 0.8;
+		this.queenSay(Config.Queen.lines.intro[0]);
+		this.rdelay(3.5, () => { if (this.boss && !this.boss.dead) this.queenSay(Config.Queen.lines.intro[1]); });
+	}
+	queenSay(text) {
+		if (!this.queenBox) return;
+		this.say = { text, i: 0, t: 0, hold: 0 };
+		this.queenBox.style.display = "block";
+		this.queenBox.textContent = "";
+	}
+	updateSay(dt) {
+		const s = this.say;
+		if (!s) return;
+		s.t += dt;
+		const n = Math.min(s.text.length, Math.floor(s.t / 0.03));
+		this.queenBox.textContent = s.text.slice(0, n);
+		if (n >= s.text.length) { s.hold += dt; if (s.hold > 2.5) { this.queenBox.style.display = "none"; this.say = null; } }
+	}
+	damageBoss(dmg) {
+		const q = this.boss;
+		if (!q || q.dead || q.enter > 0) return;
+		if (q.dizzy > 0) dmg *= 2;
+		q.hp -= dmg;
+		q.flash = 0.06;
+		this.bossFill.style.width = (Math.max(0, q.hp / q.max) * 100) + "%";
+		const frac = q.hp / q.max;
+		if (q.phase === 1 && frac <= 0.66) {
+			q.phase = 2;
+			this.queenSay(Config.Queen.lines.phase2[0]);
+			Audio.Sfx("roar", 1.1);
+			this.shake = 0.8;
+			this.bossFill.style.background = "rgb(230,90,40)";
+			for (let i = 1; i <= 4; i++) this.spawnBee(i === 1 ? "flag" : "zombee", null, rnd(9.2, 9.8));
+		} else if (q.phase === 2 && frac <= 0.33) {
+			q.phase = 3;
+			this.queenSay(Config.Queen.lines.phase3[0]);
+			Audio.Sfx("roar", 0.9);
+			this.shake = 1.2;
+			this.bossFill.style.background = "rgb(255,30,30)";
+			for (let i = 1; i <= 6; i++) this.spawnBee(i === 1 ? "flag" : (i % 2 === 0 ? "knight" : "ghost"), null, rnd(9.2, 9.8));
+		}
+		if (q.hp <= 0) this.bossDeath();
+	}
+	plantedCells() {
+		const out = [];
+		for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) { const cell = this.grid[r][c]; if (cell.main || cell.pad) out.push([c, r]); }
+		return out;
+	}
+	warn(c, r, t) {
+		this.addFx(t, null, f => {
+			const L = this.L;
+			const x = L.ox + (c - 1) * L.T + this.shx, y = L.oy + (r - 1) * L.T + this.shy;
+			ctx.save();
+			ctx.globalAlpha = 0.25 + 0.4 * Math.abs(Math.sin(f.a * 18));
+			ctx.fillStyle = "#ff1e1e";
+			ctx.fillRect(x + L.T * 0.06, y + L.T * 0.06, L.T * 0.88, L.T * 0.88);
+			ctx.restore();
+		}, null, { under: true });
+	}
+	bossAttack(name) {
+		const q = this.boss;
+		const BOSS_SUMMONS = [["worker", "bumble", "zombee", "worker"], ["bumble", "armored", "zombee", "ghost", "hopper"], ["armored", "knight", "ghost", "zombee", "hornet", "shield"]];
+		if (name === "summon") {
+			const list = BOSS_SUMMONS[q.phase - 1];
+			const n = 1 + q.phase + rint(0, 1);
+			for (let i = 0; i < n; i++) this.spawnBee(list[rint(0, list.length - 1)], null, rnd(8.9, 9.5));
+			Audio.Sfx("buzz", 0.8);
+		} else if (name === "honeybomb") {
+			const cells = this.plantedCells();
+			for (let i = 0; i < q.phase; i++) {
+				const cell = cells.length ? cells.splice(rint(0, cells.length - 1), 1)[0] : [rint(2, 8), this.randomRow()];
+				this.warn(cell[0], cell[1], 1.6);
+				const pr = this.addProj("honeybomb", 10.3, cell[1], 0, 0, 0, {});
+				pr.enemy = true;
+				pr.lob = { fromX: 9.8, toX: cell[0] - 0.5, time: 1.6 };
+				pr.lt = 0;
+				pr.cell = cell;
+			}
+		} else if (name === "stinger") {
+			let best = this.randomRow(), bestN = -1;
+			for (let r = 1; r <= this.rows; r++) {
+				let n = 0;
+				for (let c = 1; c <= COLS; c++) if (this.grid[r][c].main) n++;
+				if (n > bestN) { best = r; bestN = n; }
+			}
+			const rows = [best];
+			if (q.phase >= 2) rows.push(this.randomRow());
+			for (const r of rows) { const pr = this.addProj("bigstinger", 9.3, r, -8, 0, 0, {}); pr.enemy = true; pr.y = 3; }
+			Audio.Sfx("zap", 0.6);
+		} else if (name === "honeyball") {
+			this.spawnBee("honeyball", null, 9.2);
+			Audio.Sfx("roar", 1.4);
+		} else if (name === "stomp") {
+			const rows = [];
+			for (let r = 1; r <= this.rows; r++) if (q.phase >= 3 || Math.random() < 0.45) rows.push(r);
+			for (const r of rows) for (let c = 8; c <= 9; c++) this.warn(c, r, 1.2);
+			this.delay(1.2, () => {
+				if (!this.boss || this.boss.dead) return;
+				this.boss.stomp = 0.5;
+				for (const r of rows) for (let c = 8; c <= 9; c++) this.flattenCell(r, c);
+				Audio.Sfx("thud", 0.6);
+				this.shake = 0.9;
+			});
+		} else if (name === "giant") {
+			this.spawnBee("giant", null, 9.2);
+		} else if (name === "dive") {
+			const r = this.randomRow();
+			this.queenSay(Config.Queen.lines.dive[0]);
+			for (let c = 6; c <= 9; c++) this.warn(c, r, 1.5);
+			q.diveRow = r;
+			q.dive = 3.5;
+			this.delay(1.5, () => {
+				if (!this.boss || this.boss.dead) return;
+				for (let c = 6; c <= 9; c++) this.flattenCell(r, c);
+				this.shake = 1;
+				Audio.Sfx("thud", 0.5);
+				this.delay(0.6, () => {
+					if (this.boss && !this.boss.dead) {
+						this.boss.dizzy = 5;
+						this.queenSay(Config.Queen.lines.dizzy[0]);
+						this.announce("SHE'S DIZZY! DOUBLE DAMAGE!", 2, C(255, 220, 60));
+					}
+				});
+			});
+		}
+	}
+	updateBoss(dt) {
+		const q = this.boss;
+		if (!q || q.dead) return;
+		q.t += dt;
+		q.enter = Math.max(0, q.enter - dt * 0.5);
+		q.dizzy = Math.max(0, q.dizzy - dt);
+		q.dive = Math.max(0, q.dive - dt);
+		q.stomp = Math.max(0, q.stomp - dt);
+		q.flash = Math.max(0, q.flash - dt);
+		if (q.frozen > 0) { q.frozen -= dt; return; }
+		if (q.dizzy > 0 || q.enter > 0) return;
+		q.atkT -= dt;
+		if (q.atkT <= 0) {
+			q.atkT = [7, 5.5, 4.5][q.phase - 1];
+			const list = [
+				["summon", "honeybomb", "stinger", "summon"],
+				["summon", "honeybomb", "stinger", "honeyball", "stomp"],
+				["summon", "honeybomb", "honeyball", "stomp", "giant", "dive", "stinger"],
+			][q.phase - 1];
+			let name;
+			do { name = list[rint(0, list.length - 1)]; } while (name === q.last && list.length > 1);
+			q.last = name;
+			this.bossAttack(name);
+		}
+	}
+	queenPos() {
+		const q = this.boss;
+		let mid = (this.rows + 1) / 2, x = 10.4 + q.enter * 6, y = 9 + Math.sin(q.t * 1.6) * 1.2;
+		if (q.dive > 0 && q.diveRow) {
+			const a = Math.sin(Math.min(1, (3.5 - q.dive) / 1.5) * Math.PI * 0.5);
+			mid += (q.diveRow - mid) * a; y -= 6 * a; x -= 1.5 * a;
+		}
+		if (q.dizzy > 0) y = 4;
+		if (q.stomp > 0) y -= q.stomp * 6;
+		return [x, mid, y];
+	}
+	bossDeath() {
+		const q = this.boss;
+		q.dead = true;
+		this.queenSay(Config.Queen.lines.death[0]);
+		Audio.Sfx("roar", 0.7);
+		for (const b of this.bees) if (!b.dead) { b.hp = 0; b.armor = 0; b.shield = 0; this.killBee(b, { noRevive: true }); }
+		for (let i = 1; i <= 10; i++) this.delay(i * 0.3, () => { this.explosion(rnd(9.3, 11), rnd(1, this.rows), 0.8, 0, i % 2 === 0 ? C(255, 200, 40) : C(255, 60, 160)); this.shake = 0.6; });
+		const [x, mid, y] = this.queenPos();
+		this.addFx(3.5, null, f => {
+			this.drawAt(x, mid, y - f.a * 12, 1, f.a * 1.2, 1 - f.a * f.a, c2 => Art.drawQueen(c2, { t: q.t, frozen: true }));
+		});
+		this.bossBar.style.display = "none";
+		this.lastDeath = { x: 8, row: (this.rows + 1) / 2, y: 4 };
+		this.delay(3.6, () => this.win());
+	}
+
+	// ------------------------------------------------------------------ win / lose / pause
+	win() {
+		if (this.state !== "play") return;
+		this.state = "won";
+		this.clearSelection();
+		for (const b of this.bees) if (!b.dead) { b.hp = 0; this.killBee(b, { noRevive: true }); }
+		const spec = this.spec;
+		const def = spec.reward && Config.FlowerById[spec.reward];
+		const owned = def && this.opts.owned.includes(spec.reward);
+		const ld = this.lastDeath;
+		this.reward = { def: (def && !owned) ? def : null, x: clamp(ld.x, 1, 8.5), row: clamp(ld.row, 1, this.rows), y: 4, t: 0 };
+		this.hint("Click the prize to collect it!");
+		Audio.Sfx("magic");
+	}
+	collectReward() {
+		const rw = this.reward;
+		if (!rw || rw.taken) return;
+		rw.taken = true;
+		rw.ta = 0;
+		this.hint("");
+		Audio.Sfx("win", 1);
+		Audio.Music(this.spec.mode === "boss" ? "victory" : null);
+		this.announce(this.spec.mode === "boss" ? "YOU SAVED THE GARDEN!" : "LEVEL COMPLETE!", 3, C(255, 230, 80));
+		this.rdelay(1.8, () => this.opts.onEnd({ won: true }));
+	}
+	lose(b) {
+		if (this.state !== "play") return;
+		this.state = "lost";
+		this.clearSelection();
+		Audio.Music(null);
+		Audio.Sfx("lose");
+		this.loseBee = b;
+		this.announce("THE BEES INVADED YOUR GREENHOUSE!", 6, C(255, 60, 60));
+		this.rdelay(2.5, () => {
+			const o = this.overlay("Oh no! 🐝", "The bees got into your greenhouse.");
+			const row = el("div", "orow", o);
+			btn(row, "TRY AGAIN", "green", () => this.opts.onEnd({ won: false, retry: true }));
+			btn(row, "MAP", "tan", () => this.opts.onEnd({ won: false }));
+		});
+	}
+	overlay(title, sub) {
+		const wrap = el("div", "ovwrap", this.hud);
+		const o = el("div", "overlay", wrap);
+		o.style.transform = `scale(${this.uiS})`;
+		el("div", "otitle", o, title);
+		el("div", "osub", o, sub || "");
+		o._wrap = wrap;
+		return o;
+	}
+	pause(on) {
+		if (this.state === "won" || this.state === "lost") return;
+		if (on) {
+			if (this.paused) return;
+			this.paused = true;
+			const o = this.overlay("Paused", this.spec.name);
+			this.pauseFrame = o;
+			btn(o, "RESUME", "green wide", () => this.pause(false));
+			const row = el("div", "orow", o);
+			btn(row, "RESTART", "orange", () => this.opts.onEnd({ won: false, retry: true }));
+			btn(row, "MAP", "tan", () => this.opts.onEnd({ won: false }));
+			const mb = btn(o, Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF", "blue wide", () => {
+				Audio.SetEnabled(!Audio.enabled);
+				mb.textContent = Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF";
+			});
+		} else {
+			this.paused = false;
+			if (this.pauseFrame) { this.pauseFrame._wrap.remove(); this.pauseFrame = null; }
+		}
+	}
+
+	// ------------------------------------------------------------------ input
+	screenToCell(sx, sy) {
+		const L = this.L;
+		return [Math.floor((sx - L.ox) / L.T) + 1, Math.floor((sy - L.oy) / L.T) + 1];
+	}
+	sdist(x, row, y, sx, sy) { const p = this.S(x, row, y); return Math.hypot(p[0] - sx, p[1] - sy); }
+	onKey(e) {
+		const k = e.key;
+		if (k === "Escape" || k === "p" || k === "P") {
+			if (this.sel || this.shovel) this.clearSelection(); else this.pause(!this.paused);
+			return;
+		}
+		if (this.paused) return;
+		if (k === "s" || k === "S" || k === "q" || k === "Q") { this.toggleShovel(); return; }
+		const n = parseInt(k, 10);
+		if (n >= 1 && n <= 5) {
+			if (this.slots[n - 1]) this.selectSlot(n - 1);
+			else if (this.beltCards && this.beltCards[n - 1]) this.selectBelt(this.beltCards[n - 1]);
+		}
+	}
+	onPointer(sx, sy, button) {
+		if (button === 2) { this.clearSelection(); return; }
+		if (this.paused) return;
+		const T = this.L.T;
+		if (this.state === "won") {
+			if (this.reward && this.sdist(this.reward.x, this.reward.row, this.reward.y, sx, sy) < T * 1.3) this.collectReward();
+			return;
+		}
+		if (this.state !== "play" && this.state !== "prep") return;
+		for (const s of this.suns) if (s.state !== "collect" && this.sdist(s.x, s.row, s.y, sx, sy) < T * 0.62) { this.collectSun(s); return; }
+		for (let i = 0; i < this.packets.length; i++) {
+			const pk = this.packets[i];
+			if (this.sdist(pk.x, pk.row, pk.y, sx, sy) < T * 0.7) {
+				if (this.addBeltCard(pk.id)) { this.packets.splice(i, 1); Audio.Sfx("magic", 1.3); }
+				return;
+			}
+		}
+		if (this.spec.mode === "whack" && !this.sel) {
+			let best = null, bd = null;
+			for (const b of this.bees) if (!b.dead && b.x < 9.6) {
+				const d = this.sdist(b.x, b.rowF, b.hover - b.rise * (b.hover + 3), sx, sy);
+				if (d < T * 0.8 && (bd === null || d < bd)) { best = b; bd = d; }
+			}
+			if (best) { this.whack(best); return; }
+		}
+		const [c, r] = this.screenToCell(sx, sy);
+		if (this.shovel) { this.shovelAt(c, r); return; }
+		if (this.sel) { this.tryPlant(c, r); return; }
+		if (this.grid[r] && this.grid[r][c] && this.grid[r][c].vase) this.breakVase(c, r);
+	}
+	whack(b) {
+		Audio.Sfx("whack");
+		const x = b.x, row = b.rowF, y = b.hover + 1;
+		this.addFx(0.25, null, f => {
+			this.drawAt(x, row, y, 1, 0, 1, c2 => {
+				c2.rotate(-1.4 + f.a * 1.4);
+				c2.fillStyle = "#96643a"; c2.fillRect(-0.2, -5.5, 0.4, 4.2);
+				c2.fillStyle = "#c83c3c"; c2.strokeStyle = "#5a1010"; c2.lineWidth = 0.15;
+				c2.beginPath(); c2.rect(-1.3, -7.2, 2.6, 1.8); c2.fill(); c2.stroke();
+			});
+		}, null, { top: true });
+		this.damageBee(b, 300, { ignoreShield: true, explosive: true });
+		this.shake = 0.12;
+	}
+
+	// ------------------------------------------------------------------ main loop
+	step(rawDt) {
+		rawDt = Math.min(rawDt, 0.1);
+		for (let i = this.rtimers.length - 1; i >= 0; i--) {
+			const tm = this.rtimers[i];
+			tm.t -= rawDt;
+			if (tm.t <= 0) { this.rtimers.splice(i, 1); try { tm.fn(); } catch (e) { console.warn(e); } }
+			if (this.state === "gone") return;
+		}
+		const dt = this.paused ? 0 : Math.min(rawDt, 0.05) * this.speed;
+		if (dt > 0) {
+			this.t += dt;
+			for (let i = this.timers.length - 1; i >= 0; i--) {
+				const tm = this.timers[i];
+				tm.t -= dt;
+				if (tm.t <= 0) { this.timers.splice(i, 1); try { tm.fn(); } catch (e) { console.warn(e); } }
+			}
+			if (this.state === "play" || this.state === "prep") {
+				this.updateSky(dt);
+				this.updateWaves(dt);
+				this.updateSeedRain(dt);
+				this.updatePlants(dt);
+				this.updateBees(dt);
+				this.updateBoss(dt);
+				this.updateRollers(dt);
+				this.updateProjs(dt);
+				this.updateMowers(dt);
+				this.updateSlots(dt);
+				if (this.spec.mode === "hivebreaker" && this.state === "play" && this.vasesLeft <= 0 && this.bees.length === 0) this.win();
+				if (this.beamCol) {
+					this.beamTimer -= dt;
+					if (this.beamTimer <= 0) {
+						this.beamTimer = 12;
+						this.beamDir = this.beamDir || 1;
+						if (this.beamCol + this.beamDir > COLS || this.beamCol + this.beamDir < 1) this.beamDir = -this.beamDir;
+						this.beamCol += this.beamDir;
+					}
+				}
+				for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
+					const cell = this.grid[r][c];
+					if (cell.crater > 0) cell.crater -= dt;
+				}
+			} else if (this.state === "lost") {
+				if (this.loseBee && !this.loseBee.dead) { this.loseBee.x -= dt * 0.6; this.loseBee.t += dt; }
+			}
+			this.updateSuns(dt);
+			this.updateFx(dt);
+			this.updateBelt(dt);
+			if (this.say) this.updateSay(dt);
+		}
+		if (this.reward) { this.reward.t += rawDt; if (this.reward.taken) this.reward.ta += rawDt; }
+		this.updateFog(rawDt);
+		this.render(rawDt);
+		this.sunLabel.textContent = String(this.sun);
+	}
+	updateSlots(dt) {
+		for (const slot of this.slots) {
+			slot.cd = Math.max(0, slot.cd - dt);
+			slot.card.setCooldown(slot.cdMax > 0 ? slot.cd / slot.cdMax : 0);
+			slot.card.setEnabled(slot.cd <= 0 && this.sun >= slot.def.cost);
+		}
+	}
+	updateMowers(dt) {
+		for (const key in this.mowers) {
+			const m = this.mowers[key];
+			if (!m.active) continue;
+			m.x += 7 * dt;
+			for (const b of this.bees) if (b.row === m.row && !b.dead && Math.abs(b.x - m.x) < 0.7) { b.hp = 0; b.armor = 0; b.shield = 0; b.down = false; this.killBee(b, { noRevive: true }); }
+			if (m.x > 11) this.mowers[key] = { used: true, active: false, row: m.row, gone: true };
+		}
+	}
+	updateFog(dt) {
+		if (!this.fog) return;
+		const lanterns = this.plants.filter(p => p.def.kind === "lantern" && !p.dead);
+		for (const f of this.fog) {
+			let clear = false;
+			for (const l of lanterns) if ((l.c - f.c) ** 2 + (l.r - f.r) ** 2 <= l.def.radius ** 2) { clear = true; break; }
+			const target = clear ? 1 : 0.04;
+			f.tr += (target - f.tr) * Math.min(1, dt * 3);
+		}
+	}
+
+	// ------------------------------------------------------------------ rendering
+	bakeBackground() {
+		const L = this.L, A = this.spec.A, spec = this.spec;
+		const bg = this.bg || (this.bg = document.createElement("canvas"));
+		bg.width = cv.width; bg.height = cv.height;
+		const g = bg.getContext("2d");
+		g.setTransform(DPR, 0, 0, DPR, 0, 0);
+		const { T, ox, oy, W, H } = L;
+		// sky
+		const grd = g.createLinearGradient(0, 0, 0, oy);
+		grd.addColorStop(0, A.bg[0]); grd.addColorStop(1, A.bg[1]);
+		g.fillStyle = grd; g.fillRect(0, 0, W, H);
+		if (A.id === "night" || A.id === "zombie") {
+			for (const s of this.stars) { g.fillStyle = `rgba(255,255,240,${0.4 + s[2] / 10})`; g.fillRect(s[0] * W, s[1] * oy * 0.9, 2, 2); }
+			g.save(); g.shadowColor = "#dde"; g.shadowBlur = 30; g.fillStyle = "#f0f0dc";
+			g.beginPath(); g.arc(ox + 2 * T, oy * 0.35, T * 0.45, 0, Math.PI * 2); g.fill(); g.restore();
+		} else if (A.id === "sunrise" || A.id === "sunset") {
+			g.save(); g.shadowColor = A.id === "sunrise" ? "#ffbe5a" : "#ff6e3c"; g.shadowBlur = 50;
+			g.fillStyle = A.id === "sunrise" ? "#ffbe5a" : "#ff6e3c";
+			g.beginPath(); g.arc(A.id === "sunrise" ? ox - 0.5 * T : ox + 9 * T, oy * 0.55, T * 0.9, 0, Math.PI * 2); g.fill(); g.restore();
+		} else {
+			g.fillStyle = "rgba(255,255,255,0.85)";
+			for (const c of [[0.15, 0.3], [0.5, 0.18], [0.8, 0.35]]) for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(c[0] * W + i * T * 0.35, c[1] * oy + (i % 2) * T * 0.1, T * 0.3, 0, Math.PI * 2); g.fill(); }
+		}
+		// ground behind the lawn
+		const groundTop = oy - 0.45 * T;
+		g.fillStyle = rgb(lerpC(A.grass[0], [0, 0, 0], 0.25));
+		g.fillRect(0, groundTop, W, H - groundTop);
+		// trees + fence along the back
+		const dead = A.id === "zombie" || A.id === "night";
+		for (let i = 0; i < 8; i++) {
+			g.save(); g.translate(ox + (i * 1.9 - 1) * T, groundTop + (i % 2) * T * 0.05); g.scale(L.k * 0.75, L.k * 0.75);
+			Art.drawTree(g, lerpC(A.grass[0], [0, 80, 0], 0.3), dead && i % 2 === 0); g.restore();
+		}
+		g.fillStyle = "#f0e6d2"; g.strokeStyle = "#a08a6a"; g.lineWidth = 1;
+		for (let x = ox - 1.5 * T; x < ox + 12 * T; x += T * 0.32) { g.fillRect(x, groundTop - T * 0.42, T * 0.24, T * 0.42); g.strokeRect(x, groundTop - T * 0.42, T * 0.24, T * 0.42); }
+		g.fillRect(ox - 1.5 * T, groundTop - T * 0.3, 13.5 * T, T * 0.06);
+		// street + hive
+		g.fillStyle = "#96784f"; g.fillRect(ox + 9 * T, oy - 0.45 * T, 4 * T, (this.rows + 1) * T);
+		g.fillStyle = "rgba(0,0,0,0.12)";
+		for (let r = 0; r < this.rows; r++) g.fillRect(ox + 9 * T, oy + r * T + T * 0.48, 4 * T, T * 0.04);
+		g.save(); g.translate(ox + 11.2 * T, oy + this.rows * T * 0.55); g.scale(L.k * 0.9, L.k * 0.9); Art.drawHive(g, 0); g.restore();
+		// lawn tiles
+		for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
+			const cell = this.grid[r][c];
+			let col;
+			if (!spec.active[r]) col = C(130, 95, 60);
+			else if (cell.water) col = (c % 2 === 0) ? C(60, 150, 220) : C(70, 160, 230);
+			else col = A.grass[(r + c) % 2];
+			const x = ox + (c - 1) * T, y = oy + (r - 1) * T;
+			g.fillStyle = rgb(col); g.fillRect(x, y, T + 0.5, T + 0.5);
+			if (spec.active[r] && !cell.water) {
+				g.fillStyle = "rgba(255,255,255,0.06)";
+				for (let i = 0; i < 5; i++) g.fillRect(x + ((i * 37 + c * 13) % 90) / 100 * T, y + ((i * 53 + r * 29) % 90) / 100 * T, 2, T * 0.08);
+			}
+		}
+		g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2; g.strokeRect(ox, oy, COLS * T, this.rows * T);
+		// greenhouse
+		const gx = ox - 1.25 * T;
+		g.fillStyle = "#c8c8d2"; g.fillRect(gx - 0.1 * T, oy - 0.5 * T, 1.15 * T, (this.rows + 0.6) * T);
+		g.fillStyle = "rgba(200,240,255,0.55)"; g.fillRect(gx, oy - 0.45 * T, 0.95 * T, (this.rows + 0.5) * T);
+		g.strokeStyle = "#f0f0f5"; g.lineWidth = Math.max(2, T * 0.06);
+		for (let r = 0; r <= this.rows; r++) { g.beginPath(); g.moveTo(gx, oy + r * T); g.lineTo(gx + 0.95 * T, oy + r * T); g.stroke(); }
+		g.beginPath(); g.moveTo(gx + 0.47 * T, oy - 0.45 * T); g.lineTo(gx + 0.47 * T, oy + this.rows * T); g.stroke();
+		g.fillStyle = "rgba(255,255,255,0.3)";
+		for (let r = 0; r < this.rows; r++) g.fillRect(gx + 0.08 * T, oy + r * T + 0.1 * T, 0.12 * T, 0.6 * T);
+		// bowling line
+		if (spec.bowlLine) { g.fillStyle = "#ff1e1e"; g.shadowColor = "#f00"; g.shadowBlur = 10; g.fillRect(ox + spec.bowlLine * T - 2, oy, 4, this.rows * T); g.shadowBlur = 0; }
+	}
+
+	render(dt) {
+		const L = this.L;
+		if (this.shake > 0) {
+			this.shake = Math.max(0, this.shake - dt);
+			const s = this.shake * 1.5 * L.k;
+			this.shx = rnd(-s, s); this.shy = rnd(-s, s);
+		} else { this.shx = 0; this.shy = 0; }
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.drawImage(this.bg, this.shx * DPR, this.shy * DPR);
+		ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+		const T = L.T, t = performance.now() / 1000;
+		// water shimmer
+		for (let r = 1; r <= this.rows; r++) {
+			if (!this.grid[r][1].water) continue;
+			ctx.save(); ctx.globalAlpha = 0.25; ctx.strokeStyle = "#e0f4ff"; ctx.lineWidth = 2;
+			for (let i = 0; i < 9; i++) {
+				const x = L.ox + ((i * 1.1 + t * 0.3) % 9) * T + this.shx, y = L.oy + (r - 0.5 + Math.sin(i * 2.3) * 0.3) * T + this.shy;
+				ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + T * 0.15, y - T * 0.06, x + T * 0.3, y); ctx.stroke();
+			}
+			ctx.restore();
+		}
+		// craters
+		for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
+			if (this.grid[r][c].crater > 0) {
+				const [sx, sy] = this.S(c - 0.5, r, 0);
+				ctx.fillStyle = "#32201a"; ctx.beginPath(); ctx.ellipse(sx, sy - T * 0.15, T * 0.42, T * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = "#1e120c"; ctx.beginPath(); ctx.ellipse(sx, sy - T * 0.12, T * 0.28, T * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+			}
+		}
+		// sunbeam
+		if (this.beamCol) {
+			this.beamX += ((this.beamCol - 0.5) - this.beamX) * Math.min(1, dt * 2);
+			const x = L.ox + (this.beamX - 0.5) * T + this.shx;
+			const gr = ctx.createLinearGradient(x, 0, x + T, 0);
+			gr.addColorStop(0, "rgba(255,230,120,0)"); gr.addColorStop(0.5, "rgba(255,230,120,0.32)"); gr.addColorStop(1, "rgba(255,230,120,0)");
+			ctx.fillStyle = gr; ctx.fillRect(x - T * 0.2, 0, T * 1.4, L.oy + this.rows * T);
+		}
+		// under-fx (warnings)
+		for (const f of this.fx) if (f.under && f.draw) f.draw(f);
+		// hover highlight + ghost
+		let ghost = null;
+		if ((this.sel || this.shovel) && (this.state === "play" || this.state === "prep") && this.mouse) {
+			const [c, r] = this.screenToCell(this.mouse.x, this.mouse.y);
+			if (c >= 1 && c <= COLS && r >= 1 && r <= this.rows) {
+				const ok = this.shovel || this.canPlant(this.sel.def, c, r);
+				if (ok) {
+					ctx.fillStyle = this.shovel ? "rgba(255,120,80,0.4)" : "rgba(255,255,255,0.35)";
+					ctx.fillRect(L.ox + (c - 1) * T + T * 0.05 + this.shx, L.oy + (r - 1) * T + T * 0.05 + this.shy, T * 0.9, T * 0.9);
+					if (this.sel) ghost = { c, r };
+				}
+			}
+		}
+		// shadows
+		const inv = this.spec.mode === "invisibee";
+		for (const b of this.bees) {
+			if (b.dead) continue;
+			const [sx, sy] = this.S(b.x, b.rowF, 0);
+			const s = (b.def.look.scale || 1) * (b.def.look.ball ? 1.4 : 1);
+			ctx.fillStyle = inv ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.28)";
+			ctx.beginPath(); ctx.ellipse(sx, sy, L.k * 1.2 * s, L.k * 0.4 * s, 0, 0, Math.PI * 2); ctx.fill();
+		}
+		// sorted world drawables
+		const list = [];
+		for (const p of this.plants) if (!p.dead) list.push([p.r + (p.def.kind === "pad" ? -0.2 : 0), 0, p]);
+		for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
+			const cell = this.grid[r][c];
+			if (cell.grave) list.push([r - 0.1, 1, { grave: cell.grave, c, r }]);
+			if (cell.vase) list.push([r, 1, { vase: cell.vase, c, r }]);
+		}
+		for (const b of this.bees) if (!b.dead) list.push([b.rowF + 0.1, 2, b]);
+		for (const ro of this.rollers) list.push([ro.rowF + 0.05, 3, ro]);
+		for (const k in this.mowers) { const m = this.mowers[k]; if (!m.gone) list.push([m.row, 4, m]); }
+		list.sort((a, b) => a[0] - b[0]);
+		for (const [, kind, o] of list) {
+			if (kind === 0) this.drawPlant(o, t);
+			else if (kind === 1) {
+				if (o.grave) this.drawAt(o.c - 0.5, o.r, GROUND, 1, o.grave.tilt, 1, c2 => Art.drawGrave(c2));
+				else this.drawAt(o.c - 0.5, o.r, GROUND, 1, 0, 1, c2 => Art.drawVase(c2, o.vase.green, t));
+			} else if (kind === 2) this.drawBeeE(o, inv);
+			else if (kind === 3) {
+				const g = o.def.look.giant ? 1.9 : 1;
+				this.drawAt(o.x, o.rowF, GROUND, 1, 0, 1, c2 => Art.drawFlower(c2, o.def, { t, spin: o.spin }));
+			} else if (kind === 4) {
+				this.drawAt(o.x, o.row, GROUND + (o.active ? Math.abs(Math.sin(t * 20)) * 0.3 : 0), 1, 0, 1, c2 => Art.drawLadybug(c2, t, o.active));
+			}
+		}
+		if (ghost) {
+			const cell = this.grid[ghost.r][ghost.c];
+			this.drawAt(ghost.c - 0.5, ghost.r, GROUND + (cell.pad ? 0.3 : 0), 1, 0, 0.5, c2 => Art.drawFlower(c2, this.sel.def, { t, armed: true }));
+		}
+		// queen
+		const q = this.boss;
+		if (q && !q.dead) {
+			const [x, mid, y] = this.queenPos();
+			let rot = 0, dx = 0;
+			if (q.dizzy > 0) rot = Math.sin(q.t * 6) * 0.3;
+			if (q.flash > 0) dx = 0.05;
+			this.drawAt(x + dx, mid, y, 1, rot, 1, c2 => {
+				if (q.dizzy > 0) { c2.save(); c2.font = "3px sans-serif"; c2.textAlign = "center"; for (let i = 0; i < 3; i++) { const a = q.t * 4 + i * 2.1; c2.fillText("⭐", Math.cos(a) * 4, -9 + Math.sin(a) * 1.2); } c2.restore(); }
+				Art.drawQueen(c2, { t: q.t, frozen: q.frozen > 0 });
+				if (q.frozen > 0) { c2.fillStyle = "rgba(170,230,255,0.45)"; c2.beginPath(); c2.ellipse(0, 0, 9, 6, 0, 0, Math.PI * 2); c2.fill(); }
+			});
+		}
+		// projectiles
+		for (const pr of this.projs) {
+			const [sx, sy] = this.S(pr.x, pr.row, pr.y);
+			ctx.save(); ctx.translate(sx, sy); ctx.scale(L.k * 1.3, L.k * 1.3);
+			Art.drawProj(ctx, pr.kind, pr.age);
+			ctx.restore();
+		}
+		for (const f of this.fx) if (!f.under && !f.top && f.draw) f.draw(f);
+		// fog
+		if (this.fog) {
+			// one opaque-ish layer per cell (alpha can't stack), then soft clouds that only show where fog is thick
+			for (const f of this.fog) {
+				const a = (1 - f.tr) * 0.94;
+				if (a < 0.02) continue;
+				const x = L.ox + (f.c - 1) * T + this.shx, y = L.oy + (f.r - 1) * T + this.shy;
+				ctx.fillStyle = `rgba(232,168,140,${a})`;
+				ctx.fillRect(x - 0.5, f.r === 1 ? y - T * 0.6 : y - 0.5, T + 1, f.r === 1 ? T * 1.6 + 0.5 : T + 1);
+			}
+			ctx.save();
+			for (let i = 0; i < 14; i++) {
+				const fx = 5 + ((i * 2.7 + t * 0.12 * (1 + i % 3)) % 7.5), fr = 0.5 + (i * 1.73) % this.rows;
+				const cell = this.fog.find(f => f.c === Math.floor(fx) + 1 && f.r === Math.min(this.rows, Math.floor(fr) + 1));
+				const a = cell ? (1 - cell.tr) : 1;
+				if (a < 0.3) continue;
+				const [sx, sy] = [L.ox + fx * T + this.shx, L.oy + fr * T + this.shy];
+				const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, T * 0.9);
+				g.addColorStop(0, `rgba(255,214,190,${0.35 * a})`); g.addColorStop(1, "rgba(255,214,190,0)");
+				ctx.fillStyle = g; ctx.fillRect(sx - T, sy - T, T * 2, T * 2);
+			}
+			ctx.restore();
+		}
+		if (this.spec.A.tint) { ctx.fillStyle = this.spec.A.tint; ctx.fillRect(0, 0, L.W, L.H); }
+		for (const f of this.fx) if (f.top && f.draw) f.draw(f);
+		// seed packets
+		for (const pk of this.packets) this.drawAt(pk.x, pk.row, pk.y, 1.2, Math.sin(pk.t * 2) * 0.3, 1, c2 => Art.drawPacket(c2, Config.FlowerById[pk.id]));
+		// suns
+		const target = this.sunTarget();
+		for (const s of this.suns) {
+			const blink = s.state === "rest" && s.life > 9 && (Math.floor(s.life * 6) % 2 === 0);
+			if (s.state === "collect") {
+				const a = Math.pow(Math.min(1, s.ct), 1.5);
+				const x = s.from[0] + (target[0] - s.from[0]) * a, y = s.from[1] + (target[1] - s.from[1]) * a;
+				ctx.save(); ctx.translate(x, y); const k = L.k * (1 - a * 0.4); ctx.scale(k, k); Art.drawSun(ctx, s.spin, 1); ctx.restore();
+			} else this.drawAt(s.x, s.row, s.y, 1, 0, 1, c2 => Art.drawSun(c2, s.spin, blink ? 0.4 : 1));
+		}
+		// reward
+		const rw = this.reward;
+		if (rw) {
+			const y = rw.taken ? rw.y + Math.min(1, rw.ta / 1.6) * 6 : rw.y + Math.sin(rw.t * 3) * 0.6;
+			const sc = rw.taken ? 1.5 + Math.min(1, rw.ta / 1.6) : 1.5;
+			this.drawAt(rw.x, rw.row, y, sc, rw.taken ? rw.ta * 6 : Math.sin(rw.t * 1.5) * 0.15, rw.taken ? 1 - Math.max(0, rw.ta - 1.2) * 2 : 1, c2 => {
+				if (rw.def) Art.drawPacket(c2, rw.def, true); else { c2.translate(0, 2); Art.drawTrophy(c2); }
+			});
+		}
+	}
+
+	drawPlant(p, t) {
+		const def = p.def;
+		const sway = Math.sin(t * 2 + p.phase) * 0.04;
+		let y = GROUND + (p.onPad ? 0.3 : 0) + (p.inWater ? -0.2 : 0);
+		let dx = 0;
+		if (def.kind === "mine" && !p.armed) y -= 1.2;
+		if (p.hurt > 0) dx = rnd(-0.015, 0.015);
+		const grow = p.grow;
+		const [sx, sy] = this.S(p.x + dx, p.r, y);
+		const k = this.L.k;
+		ctx.save();
+		ctx.translate(sx, sy);
+		ctx.scale(k, k * (0.4 + grow * 0.6));
+		if (def.kind === "mine" && !p.armed) {
+			ctx.save(); ctx.beginPath(); ctx.rect(-4, -10, 8, 10 - 1.2 + 0.3); ctx.clip();
+			Art.drawFlower(ctx, def, { t, punch: p.punch, sway, phase: p.phase });
+			ctx.restore();
+			ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.ellipse(0, -1.0, 1.6, 0.5, 0, 0, Math.PI * 2); ctx.fill();
+		} else {
+			if (p.inWater && def.kind !== "pad" && !def.aquatic) { /* unreachable: land flowers can't sit in water */ }
+			Art.drawFlower(ctx, def, { t, punch: p.punch, sway: p.sticky > 0 ? 0 : sway, chomp: p.chomp || 0, chew: p.chew, armed: p.armed });
+		}
+		if (p.sticky > 0) {
+			ctx.globalAlpha = 0.75;
+			ctx.fillStyle = "#ffaf00"; ctx.beginPath(); ctx.ellipse(0, -3.2, 1.6, 1.0, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.fillRect(-0.3, -3.0, 0.25, 1.4); ctx.fillRect(0.6, -2.8, 0.25, 1.1);
+		}
+		ctx.restore();
+		if (p.hp < def.hp && def.hp < 1e8 && p.hp > 0) {
+			const [hx, hy] = this.S(p.x, p.r, 0);
+			const w = this.L.T * 0.6;
+			ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(hx - w / 2, hy + this.L.T * 0.12, w, 4);
+			ctx.fillStyle = p.hp / def.hp > 0.4 ? "#7ee04a" : "#ff6040"; ctx.fillRect(hx - w / 2, hy + this.L.T * 0.12, w * p.hp / def.hp, 4);
+		}
+	}
+
+	drawBeeE(b, inv) {
+		if (inv) return;
+		const def = b.def;
+		const bob = Math.sin(b.t * 5) * 0.35;
+		let y = b.hover + bob - b.rise * (b.hover + 3) + (b.hopY || 0);
+		let rot = 0, x = b.x;
+		if (b.down) { y = 0.9; rot = 2.6; }
+		if (b.state === "sting") x += Math.sin(b.t * 18) * 0.035;
+		if (b.state === "smash") rot = -0.5 * (1 - b.windT);
+		if (b.flash > 0) x += 0.02;
+		let roll = 0;
+		if (def.look.ball) { y = b.hover; roll = -b.x * 1.8; }
+		const frozen = b.frozenT > 0;
+		const alpha = b.phased ? 0.18 : 1;
+		const [sx, sy] = this.S(x, b.rowF, y);
+		const k = this.L.k;
+		ctx.save();
+		ctx.translate(sx, sy); ctx.scale(k, k);
+		if (b.rise > 0) { // climbing out of the ground: clip below the lawn line
+			const [, gy] = this.S(x, b.rowF, 0);
+			ctx.beginPath(); ctx.rect(-8, -20, 16, (gy - sy) / k + 20); ctx.clip();
+		}
+		if (rot) ctx.rotate(rot);
+		ctx.globalAlpha = alpha;
+		Art.drawBee(ctx, def, {
+			t: frozen ? 0 : b.t, frozen, wingLost: b.lostWing, armor: b.armor > 0, shield: b.shield > 0, larva: !b.dropped.larva,
+			tint: b.tint, roll,
+		});
+		if (b.flash > 0) { ctx.globalAlpha = 0.35; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(0, 0, 1.8 * (def.look.scale || 1), 1.2 * (def.look.scale || 1), 0, 0, Math.PI * 2); ctx.fill(); }
+		if (frozen) { ctx.globalAlpha = 0.4; ctx.fillStyle = "#c8f0ff"; ctx.beginPath(); ctx.ellipse(0, 0, 2.2 * (def.look.scale || 1), 1.6 * (def.look.scale || 1), 0, 0, Math.PI * 2); ctx.fill(); }
+		ctx.restore();
+	}
+
+	destroy() {
+		this.state = "gone";
+		cancelAnimationFrame(this.raf);
+		window.removeEventListener("resize", this._onResize);
+		window.removeEventListener("keydown", this._onKey);
+		cv.removeEventListener("pointerdown", this._onDown);
+		cv.removeEventListener("pointermove", this._onMove);
+		cv.removeEventListener("contextmenu", this._onCtx);
+		this.hud.remove();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.clearRect(0, 0, cv.width, cv.height);
+	}
+}
+
+// ===================================================================================
+// Menus: world map, choose-your-flowers screen, almanac and reward popups.
+// ===================================================================================
+const Menus = (() => {
+	let current = null;
+	const M = {};
+	M.Close = () => { if (current) { current.remove(); current = null; } };
+
+	function screen(name) {
+		M.Close();
+		const gui = el("div", "menu " + name, document.body);
+		current = gui;
+		for (let i = 1; i <= 6; i++) {
+			const b = el("div", "mbee", gui, "🐝");
+			b.style.top = (8 + i * 9) + "%";
+			b.style.animationDuration = (30 / (0.04 + i * 0.012) / 10) + "s";
+			b.style.animationDelay = (-i * 3.1) + "s";
+			const f = el("div", "mflower", gui, ["🌻", "🌷", "🌹", "🌼", "🪷", "🌸"][i - 1]);
+			f.style.left = `calc(${i / 7 * 100}% - 22px)`;
+			f.style.transform = `rotate(${i % 2 === 0 ? 8 : -8}deg)`;
+		}
+		const root = el("div", "mroot", gui);
+		const fit = () => {
+			const s = clamp(Math.min(window.innerWidth / 1000, window.innerHeight / 680), 0.3, 1.2);
+			root.style.transform = `translate(-50%,-50%) scale(${s})`;
+		};
+		fit();
+		window.addEventListener("resize", fit);
+		gui._cleanup = () => window.removeEventListener("resize", fit);
+		const rm = gui.remove.bind(gui);
+		gui.remove = () => { gui._cleanup(); rm(); };
+		return [gui, root];
+	}
+	function panel(parent, w, h, x, y, color) {
+		const f = el("div", "panel", parent);
+		Object.assign(f.style, { width: w + "px", height: h + "px", left: x + "px", top: y + "px" });
+		if (color) f.style.background = rgb(color);
+		return f;
+	}
+	function label(parent, text, x, y, w, h, cls) {
+		const l = el("div", "mlabel " + (cls || ""), parent, text);
+		Object.assign(l.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px", lineHeight: h + "px", fontSize: Math.round(h * 0.78) + "px" });
+		return l;
+	}
+	function mbtn(parent, text, x, y, w, h, color, cb, cls) {
+		const b = btn(parent, text, "mbtn " + (cls || ""), cb);
+		Object.assign(b.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px", background: color ? rgb(color) : null, fontSize: Math.round(Math.min(h * 0.42, 26)) + "px" });
+		return b;
+	}
+	const owns = (data, id) => data.owned.includes(id);
+
+	// World map -----------------------------------------------------------------------
+	M.Map = function (data, cb, area) {
+		Audio.Music("menu");
+		const [gui, root] = screen("map");
+		label(root, "🌻 FLOWERS vs BEES 🐝", 0, 0, 980, 86, "title wobble");
+		const nFlowers = Config.Flowers.filter(f => !f.hidden).length;
+		label(root, `🌼 Flowers collected: ${data.owned.length} / ${nFlowers}`, 0, 86, 980, 30, "white");
+		const maxArea = clamp(Math.ceil(data.unlocked / 10), 1, 6);
+		area = clamp(area || maxArea, 1, 6);
+		if (area > maxArea) area = maxArea;
+		const tabs = el("div", "tabs", root);
+		const board = panel(root, 900, 360, 40, 200);
+		const showArea = a => {
+			area = a;
+			board.innerHTML = "";
+			const A = Config.Areas[a - 1];
+			board.style.background = rgb(lerpC(A.color, C(120, 80, 40), 0.55));
+			label(board, `${A.icon}  ${A.name}  ${A.icon}`, 0, 10, 890, 44, "white");
+			const blurb = [
+				"The sun is shining and the bees are coming. Plant Sunflowers for sun!",
+				"No sun falls from the sky at night. Moonflowers and Dandelion Puffs are cheap!",
+				"The pond needs Lily Pads before you can plant on the water.",
+				"A beam of morning sunlight sweeps the lawn. Flowers inside it work TWICE as fast!",
+				"Thick orange fog hides the bees. Glow Lilies light it up.",
+				"Spooky graves... and bees that won't stay down. The Zombee Queen waits at the end!",
+			][a - 1];
+			label(board, blurb, 45, 56, 800, 26, "cream");
+			for (let n = 1; n <= 10; n++) {
+				const g = (a - 1) * 10 + n;
+				const col = (n - 1) % 5, row = Math.floor((n - 1) / 5);
+				const locked = g > data.unlocked;
+				const beaten = data.beaten[String(g)];
+				let icon = "🌼";
+				if (n === 5) icon = Config.Minigames[A.minigame].icon;
+				else if (n === 10) icon = a === 6 ? "👑" : "⚙️";
+				const color = locked ? C(110, 110, 110) : (beaten ? C(110, 200, 80) : C(255, 200, 50));
+				let sub = n === 5 ? Config.Minigames[A.minigame].name : (n === 10 ? (a === 6 ? "FINAL BOSS" : "Conveyor") : "");
+				const reward = Config.Rewards[g];
+				if (reward && !owns(data, reward) && !locked) sub = "🎁 New flower!";
+				if (beaten) sub = "⭐ " + sub;
+				const b = mbtn(board, `<div class="lvico">${locked ? "🔒" : icon}</div><div class="lvnum">${a}-${n}</div><div class="lvsub">${sub}</div>`,
+					40 + col * 168, 92 + row * 128, 150, 112, color, () => {
+						if (locked) { Audio.Sfx("thud", 1.4); return; }
+						cb.play(g);
+					}, "level" + (locked ? " locked" : "") + (!locked && !beaten ? " wiggle" : ""));
+			}
+		};
+		for (let a = 1; a <= 6; a++) {
+			const A = Config.Areas[a - 1];
+			const locked = a > maxArea;
+			const t = btn(tabs, (locked ? "🔒 " : A.icon + " ") + A.name, "tab", () => { if (!locked) showArea(a); });
+			t.style.background = rgb(locked ? C(100, 100, 100) : A.color);
+		}
+		showArea(area);
+		if (data.unlocked > 60) label(root, "🏆 YOU BEAT THE ZOMBEE QUEEN! You can replay any level. 🏆", 0, 566, 980, 30, "gold");
+		mbtn(root, "📖 ALMANAC", 250, 598, 220, 60, C(90, 150, 220), () => cb.almanac(area));
+		const mb = mbtn(root, Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF", 510, 598, 220, 60, C(200, 120, 200), () => {
+			Audio.SetEnabled(!Audio.enabled);
+			mb.textContent = Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF";
+		});
+		const home = el("a", "homelink", gui, "⬅ platyfy");
+		home.href = "index.html";
+		return gui;
+	};
+
+	// Choose your flowers --------------------------------------------------------------
+	M.Choose = function (spec, data, onGo, onBack) {
+		Audio.Music("choose");
+		const [gui, root] = screen("choose");
+		label(root, `Choose your ${Config.MAX_SLOTS} flowers! 🌷`, 0, 4, 980, 60, "title");
+		label(root, spec.name + (Config.Minigames[spec.mode] ? "  •  " + Config.Minigames[spec.mode].name : ""), 0, 62, 980, 28, "white");
+		const selected = [];
+		for (const id of data.loadout || []) if (owns(data, id) && selected.length < Config.MAX_SLOTS && !selected.includes(id)) selected.push(id);
+		const need = Math.min(Config.MAX_SLOTS, data.owned.length);
+		const top = panel(root, 560, 116, 40, 98, C(130, 85, 40));
+		const grid = panel(root, 560, 420, 40, 228, C(150, 105, 60));
+		const side = panel(root, 330, 420, 620, 98, C(120, 90, 70));
+		label(side, "🐝 Bees in this level", 0, 8, 320, 34, "yellow");
+		const beeGrid = el("div", "beegrid", side);
+		for (const id of spec.beeList) {
+			const card = makeCard(id, { bee: true, w: 70, h: 88 });
+			beeGrid.appendChild(card.frame);
+			card.frame.title = Config.BeeById[id].name + ": " + Config.BeeById[id].desc;
+			if (id === spec.newBee) el("div", "newtag", card.frame, "NEW!");
+		}
+		let tip = "";
+		const A = spec.A;
+		if (A.water && owns(data, "lilypad")) tip = "💡 Bring Lily Pads to plant on the pond!";
+		if (A.id === "night" && spec.mode === "normal") tip = "💡 No sun falls at night. Bring Moonflowers!";
+		if (A.fog && owns(data, "glowlily")) tip = "💡 Glow Lilies clear the fog!";
+		if (spec.mode === "laststand") tip = "💡 No sun this time. Sun flowers are useless!";
+		const tipEl = el("div", "sidetip", side, tip);
+
+		const slotRow = el("div", "slotrow", top);
+		const scroll = el("div", "cardgrid", grid);
+		const tipLabel = label(root, "Tap a flower to see what it does.", 40, 652, 560, 24, "cream small");
+		let goBtn;
+		const gridCards = {};
+		const refresh = () => {
+			slotRow.innerHTML = "";
+			for (let i = 0; i < Config.MAX_SLOTS; i++) {
+				const id = selected[i];
+				if (id) {
+					const card = makeCard(id, { w: 78, h: 100 });
+					slotRow.appendChild(card.frame);
+					card.frame.addEventListener("click", () => { selected.splice(selected.indexOf(id), 1); Audio.Sfx("click", 0.9); refresh(); });
+				} else el("div", "emptyslot", slotRow, String(i + 1));
+			}
+			for (const id in gridCards) gridCards[id].setEnabled(!selected.includes(id));
+			const ok = selected.length >= need;
+			goBtn.style.background = ok ? "rgb(230,80,60)" : "rgb(120,120,120)";
+			goBtn.textContent = ok ? "LET'S GROW! 🌱" : `Pick ${need - selected.length} more`;
+		};
+		const list = data.owned.slice().sort((a, b) => Config.FlowerById[a].index - Config.FlowerById[b].index);
+		for (const id of list) {
+			const card = makeCard(id, { w: 78, h: 100 });
+			scroll.appendChild(card.frame);
+			gridCards[id] = card;
+			const d = Config.FlowerById[id];
+			const tipText = `${d.name} (☀${d.cost}): ${d.desc}`;
+			card.frame.addEventListener("click", () => {
+				if (selected.includes(id)) selected.splice(selected.indexOf(id), 1);
+				else if (selected.length < Config.MAX_SLOTS) selected.push(id);
+				else { Audio.Sfx("thud", 1.4); return; }
+				Audio.Sfx("click", 1.1);
+				tipLabel.textContent = tipText;
+				refresh();
+			});
+			card.frame.addEventListener("mouseenter", () => { tipLabel.textContent = tipText; });
+		}
+		goBtn = mbtn(root, "LET'S GROW! 🌱", 620, 530, 330, 70, C(230, 80, 60), () => {
+			if (selected.length < need) { Audio.Sfx("thud", 1.4); return; }
+			onGo(selected.slice());
+		});
+		mbtn(root, "⬅ BACK", 620, 608, 330, 50, C(160, 120, 70), onBack);
+		refresh();
+		return gui;
+	};
+
+	// Almanac --------------------------------------------------------------------------
+	M.Almanac = function (data, onBack) {
+		const [gui, root] = screen("almanac");
+		label(root, "📖 GARDEN ALMANAC", 0, 4, 980, 60, "title");
+		const left = panel(root, 560, 520, 40, 120, C(150, 105, 60));
+		const right = panel(root, 340, 520, 610, 120, C(245, 230, 190));
+		const scroll = el("div", "cardgrid tall", left);
+		let anim = null;
+		const detail = (def, isBee) => {
+			right.innerHTML = "";
+			const vf = el("canvas", "viewport", right);
+			vf.width = 600; vf.height = 420;
+			vf.style.background = isBee ? "rgb(255,215,130)" : "rgb(160,220,120)";
+			const c2 = vf.getContext("2d");
+			const t0 = performance.now();
+			const tick = () => {
+				if (!vf.isConnected) return;
+				const t = (performance.now() - t0) / 1000;
+				c2.setTransform(1, 0, 0, 1, 0, 0);
+				c2.clearRect(0, 0, 600, 420);
+				if (isBee) {
+					const s = def.look.scale || 1, k = 52 / Math.max(1, s * 0.8);
+					c2.translate(300, 210 + Math.sin(t * 3) * 8); c2.scale(k * (def.look.ball ? 1.4 : 1), k * (def.look.ball ? 1.4 : 1));
+					if (s > 1) c2.scale(1 / s * 1.6, 1 / s * 1.6);
+					Art.drawBee(c2, def, { t, roll: -t * 2 });
+				} else {
+					const h = Art.HEIGHT[def.look.type] || 5, k = Math.min(360 / h, 60);
+					c2.fillStyle = "rgba(90,60,30,0.25)"; c2.beginPath(); c2.ellipse(300, 395, 140, 18, 0, 0, Math.PI * 2); c2.fill();
+					c2.translate(300, 395); c2.scale(k, k);
+					Art.drawFlower(c2, def, { t, sway: Math.sin(t * 2) * 0.04, punch: Math.max(0, Math.sin(t * 2.2)) * (def.kind === "shooter" ? 1 : 0), armed: true, spin: t * 2 });
+				}
+				anim = requestAnimationFrame(tick);
+			};
+			cancelAnimationFrame(anim);
+			tick();
+			el("div", "dname", right, def.name);
+			let stats;
+			if (isBee) {
+				const tough = def.hp + (def.armor ? def.armor.hp : 0) + (def.shield ? def.shield.hp : 0);
+				const spd = def.speed >= 0.4 ? "Fast" : (def.speed >= 0.25 ? "Medium" : (def.speed >= 0.18 ? "Slow" : "Very slow"));
+				stats = `Toughness: ${tough}<br>Speed: ${spd}`;
+				if (def.intro <= 60 && def.pool !== false) stats += "<br>First seen: " + Config.LevelName(def.intro);
+			} else {
+				stats = `Cost: ☀ ${def.cost}<br>Recharge: ${def.recharge >= 45 ? "Very slow" : (def.recharge >= 30 ? "Slow" : "Fast")}`;
+				if (def.dmg) stats += "<br>Damage: " + def.dmg;
+				if (def.hp && def.hp < 1e8) stats += "<br>Toughness: " + def.hp;
+			}
+			el("div", "dstats", right, stats);
+			el("div", "ddesc", right, def.desc);
+		};
+		const show = tab => {
+			scroll.innerHTML = "";
+			if (tab === "flowers") {
+				for (const f of Config.Flowers) {
+					if (f.hidden) continue;
+					const card = makeCard(f.id, { w: 78, h: 100 });
+					scroll.appendChild(card.frame);
+					if (owns(data, f.id)) card.frame.addEventListener("click", () => { Audio.Sfx("click", 1); detail(f, false); });
+					else card.setLocked();
+				}
+			} else {
+				const seenUpTo = Math.min(60, data.unlocked);
+				for (const b of Config.Bees) {
+					const card = makeCard(b.id, { w: 78, h: 100, bee: true });
+					scroll.appendChild(card.frame);
+					if (b.intro <= seenUpTo) card.frame.addEventListener("click", () => { Audio.Sfx("click", 1); detail(b, true); });
+					else card.setLocked();
+				}
+			}
+		};
+		mbtn(root, "🌼 FLOWERS", 40, 68, 180, 46, C(110, 200, 80), () => show("flowers"));
+		mbtn(root, "🐝 BEES", 230, 68, 180, 46, C(240, 180, 40), () => show("bees"));
+		mbtn(root, "⬅ BACK", 770, 68, 180, 46, C(160, 120, 70), () => { cancelAnimationFrame(anim); onBack(); });
+		show("flowers");
+		detail(Config.FlowerById.sunflower, false);
+		return gui;
+	};
+
+	// Popups ---------------------------------------------------------------------------
+	M.Message = function (title, text, btnText, cb, flowerId) {
+		const [gui, root] = screen("message");
+		const p = panel(root, 600, flowerId ? 520 : 330, 190, flowerId ? 70 : 165, C(140, 95, 50));
+		label(p, title, 30, 16, 540, 64, "title");
+		let y = 90;
+		if (flowerId) {
+			const def = Config.FlowerById[flowerId];
+			const card = makeCard(flowerId, { w: 170, h: 218 });
+			card.frame.classList.add("bigcard");
+			Object.assign(card.frame.style, { position: "absolute", left: "215px", top: "92px" });
+			p.appendChild(card.frame);
+			label(p, def.name, 30, 318, 540, 40, "white");
+			y = 362;
+		}
+		const t = el("div", "msgtext", p, text.replace(/\n/g, "<br>"));
+		t.style.top = y + "px";
+		mbtn(p, btnText || "OK", 170, (flowerId ? 520 : 330) - 82, 260, 60, C(110, 200, 80), cb);
+		Audio.Sfx("magic", 1);
+		return gui;
+	};
+	return M;
+})();
+
+// ===================================================================================
+// Main: menus -> choose flowers -> play a level -> rewards, in a loop.
+// Progress is saved in this browser (localStorage) the same way the Roblox server did.
+// ===================================================================================
+(() => {
+	const KEY = "fvb_save_v1";
+	function defaultData() { return { unlocked: 1, owned: Config.START_FLOWERS.slice(), loadout: [], beaten: {}, wins: 0 }; }
+	function load() {
+		try {
+			const d = JSON.parse(localStorage.getItem(KEY));
+			if (!d || typeof d !== "object") return defaultData();
+			const out = defaultData();
+			out.unlocked = clamp(Math.floor(Number(d.unlocked) || 1), 1, 61);
+			if (Array.isArray(d.owned)) for (const id of d.owned) if (Config.FlowerById[id] && !Config.FlowerById[id].hidden && !out.owned.includes(id)) out.owned.push(id);
+			if (Array.isArray(d.loadout)) out.loadout = d.loadout.filter(id => out.owned.includes(id)).slice(0, Config.MAX_SLOTS);
+			if (d.beaten && typeof d.beaten === "object") for (const k in d.beaten) if (d.beaten[k]) out.beaten[k] = true;
+			out.wins = Number(d.wins) || 0;
+			return out;
+		} catch (e) { return defaultData(); }
+	}
+	let data = load();
+	let debug = false; // ?level= test runs never touch the real save
+	const save = () => { if (debug) return; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} };
+
+	function reportWin(g) {
+		const d = data;
+		if (g < 1 || g > 60 || g > d.unlocked) return { reward: null };
+		const reward = Config.Rewards[g];
+		let newFlower = null;
+		if (reward && !d.owned.includes(reward)) {
+			d.owned.push(reward);
+			newFlower = reward;
+			if (d.loadout.length < Config.MAX_SLOTS) d.loadout.push(reward);
+		}
+		const first = !d.beaten[String(g)];
+		d.beaten[String(g)] = true;
+		d.unlocked = Math.max(d.unlocked, Math.min(61, g + 1));
+		d.wins++;
+		save();
+		return { reward: newFlower, first };
+	}
+
+	let current = null;
+	const sortedOwned = () => data.owned.slice().sort((a, b) => Config.FlowerById[a].index - Config.FlowerById[b].index);
+
+	function afterWin(g, res) {
+		const [a, n] = Config.AreaOf(g);
+		const toMap = () => showMap(Math.min(6, Config.AreaOf(Math.min(60, g + 1))[0]));
+		const areaMessage = () => {
+			if (g === 60) Menus.Message("🏆 YOU WIN! 🏆", "The Zombee Queen has been defeated and the garden is safe forever! Thanks for playing FLOWERS vs BEES!", "BACK TO MAP", toMap);
+			else if (n === 10 && res && res.first) {
+				const A = Config.Areas[a];
+				Menus.Message("NEW AREA UNLOCKED!", `${A.icon} ${A.name} ${A.icon}\nNew bees, new flowers, new dangers!`, "LET'S GO!", toMap);
+			} else if (n === 5 && res && res.first) Menus.Message("🏅 MINIGAME BEATEN! 🏅", "You beat " + Config.Minigames[Config.Areas[a - 1].minigame].name + "!", "NICE!", toMap);
+			else toMap();
+		};
+		if (res && res.reward) Menus.Message("You got a new flower!", Config.FlowerById[res.reward].desc, "AWESOME!", areaMessage, res.reward);
+		else areaMessage();
+	}
+
+	function run(spec, loadout) {
+		Menus.Close();
+		if (current) { current.destroy(); current = null; }
+		const g = spec.g;
+		current = new Game(spec, {
+			loadout,
+			owned: data.owned,
+			onEnd: result => {
+				if (!current) return;
+				const game = current;
+				current = null;
+				game.destroy();
+				if (result.won) afterWin(g, reportWin(g));
+				else if (result.retry) startLevel(g);
+				else showMap(Config.AreaOf(g)[0]);
+			},
+		});
+	}
+	function startLevel(g) {
+		const spec = Config.Level(g);
+		const usesSlots = !spec.noSlots && !spec.seedRain && spec.mode !== "hivebreaker";
+		if (!usesSlots) { run(spec, []); return; }
+		const owned = sortedOwned();
+		if (owned.length <= Config.MAX_SLOTS) { run(spec, owned); return; }
+		Menus.Choose(spec, data, loadout => {
+			data.loadout = loadout;
+			save();
+			run(spec, loadout);
+		}, () => showMap(spec.area));
+	}
+	function showMap(area) {
+		Menus.Map(data, {
+			play: startLevel,
+			almanac: a => Menus.Almanac(data, () => showMap(a)),
+		}, area);
+	}
+	// Debug/QA hook: ?level=37 jumps straight into a level.
+	const qs = new URLSearchParams(location.search);
+	const lv = parseInt(qs.get("level"), 10);
+	if (lv >= 1 && lv <= 60) {
+		debug = true;
+		const spec = Config.Level(lv);
+		const all = Config.Flowers.filter(f => !f.hidden).map(f => f.id);
+		const owned = qs.get("all") ? all : data.owned;
+		data = Object.assign({}, data, { owned });
+		const usesSlots = !spec.noSlots && !spec.seedRain && spec.mode !== "hivebreaker";
+		run(spec, usesSlots ? (qs.get("loadout") ? qs.get("loadout").split(",") : sortedOwned().slice(0, 5)) : []);
+	} else showMap();
+	window.FVB = { get game() { return current; }, Config };
+})();
+
+</script>
+</body>
+</html>
