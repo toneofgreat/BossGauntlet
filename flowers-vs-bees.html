@@ -145,62 +145,65 @@ Config.MAX_SLOTS = 5;
 Config.LEVELS_PER_AREA = 10;
 Config.START_FLOWERS = ["sunflower", "rose"];
 
+// Flowers ------------------------------------------------------------------------
+// The ids stay the same (levels and saves use them); everything players see and
+// every mechanic is this game's own. kind decides behaviour in Game.lua's port.
 Config.Flowers = [
-	{ id: "sunflower", name: "Sunflower", cost: 50, recharge: 7.5, hp: 300, kind: "sun", amount: 25, interval: 24,
-		look: { type: "daisy", petal: C(255, 205, 30), center: C(150, 85, 30), n: 12, face: true },
-		desc: "Makes 25 sun every 24 seconds. Plant lots of these first!" },
-	{ id: "rose", name: "Rose Shooter", cost: 100, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "thorn",
-		look: { type: "rose", color: C(225, 30, 60) }, desc: "Shoots thorns at bees in its lane." },
-	{ id: "tulip", name: "Tulip Bomb", cost: 150, recharge: 45, hp: 1e9, kind: "bomb", dmg: 1800, radius: 1.5, fuse: 0.9,
-		look: { type: "tulip", color: C(255, 60, 40), fuse: true }, desc: "Explodes after a moment, blasting every bee in a 3x3 area." },
-	{ id: "thornbush", name: "Thorn Bush", cost: 50, recharge: 30, hp: 4000, kind: "wall",
-		look: { type: "bush" }, desc: "A tough prickly wall that keeps bees busy." },
-	{ id: "pinecone", name: "Pinecone Mine", cost: 25, recharge: 30, hp: 300, kind: "mine", dmg: 1800, arm: 12,
-		look: { type: "pinecone" }, desc: "Takes 12 seconds to arm, then blows up the first bee that touches it." },
-	{ id: "snowlily", name: "Snow Lily", cost: 175, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "frost",
-		look: { type: "lily", color: C(185, 225, 255) }, desc: "Shoots frost petals that slow bees down." },
-	{ id: "dandelion", name: "Dandelion Puff", cost: 0, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "puff", range: 3,
-		look: { type: "puff" }, desc: "FREE! Shoots fluffy seeds, but only 3 tiles far." },
-	{ id: "moonflower", name: "Moonflower", cost: 25, recharge: 7.5, hp: 300, kind: "sun", amount: 20, interval: 24,
-		look: { type: "daisy", petal: C(205, 215, 255), center: C(255, 250, 200), n: 10, glow: true, face: true }, desc: "Cheap sun maker that glows in the dark." },
-	{ id: "flytrap", name: "Venus Flytrap", cost: 150, recharge: 7.5, hp: 300, kind: "chomper", chew: 25,
-		look: { type: "trap" }, desc: "Swallows a whole bee in one bite, then chews for a while." },
-	{ id: "doom", name: "Doom Dahlia", cost: 125, recharge: 50, hp: 1e9, kind: "bomb", dmg: 1800, radius: 3.3, fuse: 1.2, crater: 45,
-		look: { type: "dahlia" }, desc: "A HUGE explosion that wipes out everything nearby. Leaves a crater." },
-	{ id: "lilypad", name: "Lily Pad", cost: 25, recharge: 7.5, hp: 300, kind: "pad", aquatic: true,
-		look: { type: "pad" }, desc: "Floats on water so you can plant other flowers on top of it." },
-	{ id: "doublerose", name: "Double Rose", cost: 200, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "thorn", count: 2,
-		look: { type: "rose", color: C(255, 80, 150), double: true }, desc: "Shoots TWO thorns at a time." },
-	{ id: "snapper", name: "Lotus Snapper", cost: 25, recharge: 30, hp: 300, kind: "snapper", aquatic: true,
-		look: { type: "lotus", color: C(255, 140, 205), jaws: true }, desc: "Hides in the water and snaps up the first bee that flies over it." },
-	{ id: "daisy3", name: "Triple Daisy", cost: 325, recharge: 7.5, hp: 300, kind: "triple", dmg: 20, interval: 1.4, proj: "thorn",
-		look: { type: "daisy", petal: C(255, 255, 255), center: C(255, 200, 0), n: 10, heads: 3 }, desc: "Shoots in three lanes at once." },
-	{ id: "cattail", name: "Cattail Spiker", cost: 225, recharge: 7.5, hp: 300, kind: "homing", dmg: 20, interval: 1.4, count: 2, aquatic: true,
-		look: { type: "cattail" }, desc: "Water flower that fires homing spikes at bees in ANY lane." },
-	{ id: "twinsun", name: "Twin Sunflower", cost: 125, recharge: 30, hp: 300, kind: "sun", amount: 25, count: 2, interval: 24,
-		look: { type: "daisy", petal: C(255, 180, 0), center: C(140, 70, 20), n: 12, heads: 2, face: true }, desc: "Makes twice as much sun as a Sunflower." },
-	{ id: "firepoppy", name: "Fire Poppy", cost: 175, recharge: 7.5, hp: 300, kind: "fire",
-		look: { type: "poppy" }, desc: "Thorns that fly through it catch fire and do double damage." },
-	{ id: "pumpkin", name: "Pumpkin Lobber", cost: 300, recharge: 7.5, hp: 300, kind: "lobber", dmg: 80, splash: 26, interval: 2.8,
-		look: { type: "pumpkin" }, desc: "Lobs heavy pumpkins over shields that splash nearby bees." },
-	{ id: "lightning", name: "Lightning Lotus", cost: 200, recharge: 7.5, hp: 300, kind: "lightning", dmg: 40, chain: 3, interval: 2.5,
-		look: { type: "lotus", color: C(80, 225, 255), neon: true }, desc: "Zaps a bee with lightning that jumps to 2 more bees." },
-	{ id: "glowlily", name: "Glow Lily", cost: 25, recharge: 30, hp: 300, kind: "lantern", radius: 2.2,
-		look: { type: "lantern" }, desc: "Lights up the fog so you can see the bees hiding in it." },
-	{ id: "lavender", name: "Lavender Laser", cost: 250, recharge: 7.5, hp: 300, kind: "laser", dmg: 40, interval: 2.5,
-		look: { type: "spike", color: C(170, 115, 235) }, desc: "Fires a laser beam that hits EVERY bee in its lane." },
-	{ id: "magnet", name: "Magnet Marigold", cost: 100, recharge: 7.5, hp: 300, kind: "magnet", range: 3.5, cooldown: 12,
-		look: { type: "magnet" }, desc: "Pulls metal helmets and shields right off bees." },
-	{ id: "icerose", name: "Ice Crystal Rose", cost: 75, recharge: 50, hp: 1e9, kind: "ice", freeze: 5,
-		look: { type: "rose", color: C(150, 230, 255), ice: true }, desc: "Freezes EVERY bee on the lawn solid for 5 seconds." },
-	{ id: "garlic", name: "Garlic Bloom", cost: 50, recharge: 7.5, hp: 400, kind: "garlic",
-		look: { type: "garlic" }, desc: "Bees hate the smell! Any bee that stings it flies off into another lane." },
-	{ id: "star", name: "Star Anise", cost: 125, recharge: 7.5, hp: 300, kind: "star", dmg: 20, interval: 1.4,
-		look: { type: "star" }, desc: "Shoots stars in 5 directions at once." },
-	{ id: "thistle", name: "Thistle Tall", cost: 125, recharge: 30, hp: 8000, kind: "wall", tall: true,
-		look: { type: "thistle" }, desc: "A HUGE wall. Even Hopper Wasps can't jump over it." },
-	{ id: "gloom", name: "Gloom Vine", cost: 150, recharge: 7.5, hp: 300, kind: "gloom", dmg: 20, interval: 0.5,
-		look: { type: "gloom" }, desc: "Lashes every bee around it with spooky thorny vines." },
+	{ id: "sunflower", name: "Dewcup", cost: 50, recharge: 7.5, hp: 300, kind: "cup", fill: 5, every: 4.8, cap: 50,
+		look: { type: "cup", color: C(120, 200, 255) },
+		desc: "Its cup slowly fills with nectar. Click it to pour out what's inside — it holds up to 50, then stops filling." },
+	{ id: "rose", name: "Spine Rose", cost: 100, recharge: 7.5, hp: 300, kind: "shooter", dmg: 20, interval: 1.4, proj: "spine", pierce: 1,
+		look: { type: "srose", color: C(200, 30, 70) }, desc: "Fires long spines that go THROUGH the first bee and hit the one behind it for half damage." },
+	{ id: "tulip", name: "Pollen Tulip", cost: 150, recharge: 45, hp: 1e9, kind: "cloud", dps: 380, radius: 1.5, fuse: 0.9, last: 5,
+		look: { type: "ptulip", color: C(255, 170, 30) }, desc: "Bursts into a 3x3 pollen cloud for 5 seconds. Bees inside can't stop sneezing — they freeze in place and take heavy damage." },
+	{ id: "thornbush", name: "Briar Patch", cost: 50, recharge: 30, hp: 1e9, kind: "briar", slow: 0.3, dps: 12, ground: true,
+		look: { type: "briar" }, desc: "A low tangle of briars. Bees don't stop to sting it — they get caught in it, crawl through at a third of their speed and get scratched." },
+	{ id: "pinecone", name: "Burr Clump", cost: 25, recharge: 20, hp: 1e9, kind: "burr", hold: 6, dps: 150, ground: true,
+		look: { type: "burr" }, desc: "Ready right away. The first bee that flies over it gets stuck in the burrs for 6 seconds and is shredded." },
+	{ id: "snowlily", name: "Frostbell", cost: 175, recharge: 7.5, hp: 300, kind: "bell", dmg: 30, interval: 2.5, radius: 2.2,
+		look: { type: "bell", color: C(170, 225, 255) }, desc: "Rings an icy chime every 2½ seconds. Every bee within 2 tiles — in any direction — is chilled and slowed." },
+	{ id: "dandelion", name: "Dandelion Clock", cost: 0, recharge: 7.5, hp: 300, kind: "clock", dmg: 90, regrow: 15,
+		look: { type: "clock" }, desc: "FREE! When a bee gets close it bursts into seeds that blow nearby bees back a tile. Then it slowly puffs up again." },
+	{ id: "moonflower", name: "Moonflower", cost: 25, recharge: 7.5, hp: 300, kind: "moon", amount: 15, radius: 2.5,
+		look: { type: "moon" }, desc: "Feeds on beaten bees. Every bee beaten within 2½ tiles of it leaves behind a drop of nectar." },
+	{ id: "flytrap", name: "Pitcher Plant", cost: 150, recharge: 7.5, hp: 300, kind: "pitcher", lure: 3, holds: 2, dps: 60,
+		look: { type: "pitcher" }, desc: "Its sweet smell lures the nearest bee in its lane (up to 3 tiles away) into its jug, where it's slowly digested. Holds 2 bees." },
+	{ id: "doom", name: "Corpse Flower", cost: 125, recharge: 50, hp: 1e9, kind: "stink", dmg: 300, radius: 3.3, fuse: 1.2, lingers: 30,
+		look: { type: "corpse" }, desc: "Lets out the WORST smell in the garden. Every bee nearby flees all the way back to the hive. The ground stinks for a while after." },
+	{ id: "lilypad", name: "Lotus Raft", cost: 25, recharge: 7.5, hp: 300, kind: "pad", aquatic: true, boost: 1.25,
+		look: { type: "raft" }, desc: "A floating lotus leaf you can plant on. Flowers riding it work 25% faster in the cool water." },
+	{ id: "doublerose", name: "Ricochet Rose", cost: 200, recharge: 7.5, hp: 300, kind: "shooter", dmg: 30, interval: 1.4, proj: "ricochet", bounce: 1,
+		look: { type: "srose", color: C(255, 90, 160), bounce: true }, desc: "Its thorns bounce off the bee they hit and fly into a bee in the next lane." },
+	{ id: "snapper", name: "Bladderwort", cost: 25, recharge: 20, hp: 300, kind: "bladder", aquatic: true, reach: 1.5, reset: 20,
+		look: { type: "bladder" }, desc: "Lives in the pond. Sucks the nearest bee within 1½ tiles under the water — then needs 20 seconds to reset." },
+	{ id: "daisy3", name: "Daisy Wheel", cost: 325, recharge: 7.5, hp: 300, kind: "wheel", dmg: 20, interval: 0.47,
+		look: { type: "wheel" }, desc: "Spins round and round, flinging a petal into the lane above, its own lane, the lane below, its own lane... and repeat." },
+	{ id: "cattail", name: "Reed Pipe", cost: 225, recharge: 7.5, hp: 300, kind: "sniper", dmg: 90, interval: 2.5, aquatic: true,
+		look: { type: "reed" }, desc: "A water reed that plays one piercing note at the TOUGHEST bee anywhere on the lawn." },
+	{ id: "twinsun", name: "Dew Fountain", cost: 125, recharge: 30, hp: 300, kind: "fountain", amount: 10, interval: 8,
+		look: { type: "fountain" }, desc: "Sprinkles 10 nectar into every Dewcup touching it, every 8 seconds. Surround it with Dewcups!" },
+	{ id: "firepoppy", name: "Fire Poppy", cost: 175, recharge: 7.5, hp: 300, kind: "scorch", dps: 110, interval: 6, last: 3, length: 2,
+		look: { type: "poppy" }, desc: "Every 6 seconds it scorches the 2 tiles in front of it. Bees flying through the flames burn." },
+	{ id: "pumpkin", name: "Squirting Cucumber", cost: 300, recharge: 7.5, hp: 300, kind: "lobber", dmg: 70, bounceDmg: 35, interval: 2.8,
+		look: { type: "cucumber" }, desc: "Pops its seeds out in a high arc — over umbrellas — and they bounce on to the next bee behind." },
+	{ id: "lightning", name: "Storm Iris", cost: 200, recharge: 7.5, hp: 300, kind: "storm", dmg: 40, max: 6, range: 4,
+		look: { type: "iris" }, desc: "Stores up a spark every second (up to 6). When a bee comes within 4 tiles, it lets ALL of them go at once." },
+	{ id: "glowlily", name: "Firefly Bulb", cost: 25, recharge: 30, hp: 300, kind: "firefly",
+		look: { type: "firefly" }, desc: "Sends fireflies down its whole lane, lighting up the fog so you can see what's hiding in it." },
+	{ id: "lavender", name: "Lavender Haze", cost: 250, recharge: 7.5, hp: 300, kind: "haze", dmg: 40, interval: 7, sleep: 2.5, range: 4,
+		look: { type: "haze", color: C(170, 115, 235) }, desc: "Puffs out a sleepy scent every 7 seconds. Bees within 4 tiles in its lane doze off for a moment." },
+	{ id: "magnet", name: "Rust Marigold", cost: 100, recharge: 7.5, hp: 300, kind: "rust", dps: 120, range: 3,
+		look: { type: "rust" }, desc: "Drips a sap that eats through shells and helmets. Hard armour on bees within 3 tiles crumbles away." },
+	{ id: "icerose", name: "Frost Fern", cost: 75, recharge: 50, hp: 1e9, kind: "frostfern", freeze: 6, cols: 3,
+		look: { type: "fern" }, desc: "Throws up a wall of frost: every bee in its column and the 2 columns in front of it is frozen for 6 seconds." },
+	{ id: "garlic", name: "Mint Sprig", cost: 50, recharge: 7.5, hp: 400, kind: "mint", back: 2.5,
+		look: { type: "mint" }, desc: "SO minty. A bee that stings it gets a mouthful and buzzes BACKWARDS toward the hive for a few seconds." },
+	{ id: "star", name: "Maple Spinner", cost: 125, recharge: 7.5, hp: 300, kind: "boomerang", dmg: 20, interval: 2, range: 4,
+		look: { type: "maple" }, desc: "Throws helicopter seeds that spin 4 tiles out and come back — hitting every bee on the way out AND on the way back." },
+	{ id: "thistle", name: "Saguaro", cost: 125, recharge: 30, hp: 6000, kind: "saguaro", prick: 20,
+		look: { type: "saguaro" }, desc: "A giant cactus that bees have to chew through. Every bee stinging it gets pricked back." },
+	{ id: "gloom", name: "Strangler Fig", cost: 150, recharge: 7.5, hp: 300, kind: "fig", dmg: 60, interval: 3, radius: 1.5, hold: 1,
+		look: { type: "fig" }, desc: "Every 3 seconds its roots burst up and grab every bee within 1½ tiles, holding and squeezing them." },
 	// Minigame-only (Pinecone Bowling)
 	{ id: "bowl", name: "Rolling Pinecone", cost: 0, recharge: 0, hp: 1, kind: "roll", dmg: 300, hidden: true,
 		look: { type: "pinecone", rolling: true }, desc: "Roll it! It bounces off bees." },
@@ -212,48 +215,49 @@ Config.Flowers = [
 Config.FlowerById = {};
 Config.Flowers.forEach((f, i) => { f.index = i + 1; Config.FlowerById[f.id] = f; });
 
+// Bees -----------------------------------------------------------------------------
 // speed = tiles per second. cost = how much of a wave's budget the bee uses.
 Config.Bees = [
 	{ id: "worker", name: "Worker Bee", hp: 200, speed: 0.22, cost: 1, weight: 6, intro: 1,
 		look: { body: C(255, 200, 30) }, desc: "Your everyday bee. Buzzes slowly toward your greenhouse." },
-	{ id: "flag", name: "Flag Bee", hp: 200, speed: 0.32, cost: 1, intro: 2, pool: false,
-		look: { body: C(255, 200, 30), flag: true }, desc: "Leads a HUGE swarm of bees." },
-	{ id: "bumble", name: "Bumble Bee", hp: 200, armor: { hp: 370, look: "acorn" }, speed: 0.22, cost: 2, weight: 5, intro: 3,
-		look: { body: C(255, 185, 40), fuzzy: true }, desc: "Wears an acorn helmet. Twice as tough as a Worker Bee." },
-	{ id: "hornet", name: "Hornet", hp: 180, speed: 0.48, cost: 2, weight: 2.5, intro: 6,
-		look: { body: C(230, 90, 20), stripe: C(40, 10, 0), angry: true }, desc: "Super fast and super grumpy." },
-	{ id: "armored", name: "Armored Bee", hp: 200, armor: { hp: 1100, metal: true, look: "bucket" }, speed: 0.22, cost: 4, weight: 3, intro: 7,
-		look: { body: C(255, 200, 30) }, desc: "Wears a metal bucket. VERY tough." },
-	{ id: "hopper", name: "Hopper Wasp", hp: 340, speed: 0.45, hopSpeed: 0.22, hop: true, cost: 2, weight: 2.5, intro: 9,
-		look: { body: C(255, 230, 0), stripe: C(20, 20, 20), slim: true }, desc: "Hops right over the first flower it meets." },
+	{ id: "flag", name: "Scout Bee", hp: 200, speed: 0.32, cost: 1, intro: 2, pool: false, scout: 1.15,
+		look: { body: C(255, 200, 30), scout: true }, desc: "Does the waggle dance to lead a HUGE swarm. While it's alive, every bee flies 15% faster." },
+	{ id: "bumble", name: "Bumble Bee", hp: 570, speed: 0.18, dropAt: 0.5, dropSpeed: 0.3, cost: 2, weight: 5, intro: 3,
+		look: { body: C(255, 185, 40), fuzzy: true, sacks: true }, desc: "Big, fluffy and loaded with pollen. Hurt it enough and it drops the pollen and speeds up." },
+	{ id: "hornet", name: "Hornet", hp: 180, speed: 0.48, dodge: true, cost: 2, weight: 2.5, intro: 6,
+		look: { body: C(230, 90, 20), stripe: C(40, 10, 0), angry: true }, desc: "Super fast and grumpy. The first time it's hit, it jinks sideways into the next lane." },
+	{ id: "armored", name: "Beetle Rider", hp: 200, armor: { hp: 1100, metal: true, look: "beetle" }, speed: 0.2, shellSpeed: 0.32, cost: 4, weight: 3, intro: 7,
+		look: { body: C(255, 200, 30) }, desc: "Rides a big shiny beetle. Crack the beetle's shell and the bee flies on by itself — faster." },
+	{ id: "hopper", name: "Leafcutter Wasp", hp: 340, speed: 0.45, cutSpeed: 0.22, cut: 0.5, cost: 2, weight: 2.5, intro: 9,
+		look: { body: C(255, 230, 0), stripe: C(20, 20, 20), slim: true, jaws: true }, desc: "Rushes in and slices half the health off the first flower it reaches — then slows down to chew." },
 	{ id: "moth", name: "Moth Bee", hp: 300, speed: 0.26, laneChange: true, cost: 2, weight: 3, intro: 11,
 		look: { body: C(170, 150, 120), stripe: C(90, 70, 50), moth: true }, desc: "Flutters around and switches lanes without warning." },
-	{ id: "bomber", name: "Bomb Bee", hp: 270, speed: 0.24, bomb: true, cost: 3, weight: 2, intro: 14,
-		look: { body: C(255, 200, 30), bomb: true }, desc: "Carries a bomb. Blows up the first flower it reaches!" },
-	{ id: "shield", name: "Shield Bee", hp: 200, shield: { hp: 1100, metal: true }, speed: 0.22, cost: 4, weight: 2, intro: 17,
-		look: { body: C(255, 200, 30) }, desc: "Hides behind a metal honeycomb shield. Lobbed shots go over it." },
+	{ id: "bomber", name: "Stink Bee", hp: 270, speed: 0.24, daze: 4, cost: 3, weight: 2, intro: 14,
+		look: { body: C(160, 200, 60), stripe: C(60, 80, 20), stink: true }, desc: "When you beat it, it lets out a stink that knocks out the flowers next to it for 4 seconds." },
+	{ id: "shield", name: "Umbrella Bee", hp: 300, shield: { hp: 700, umbrella: true }, speed: 0.22, cost: 4, weight: 2, intro: 17,
+		look: { body: C(255, 200, 30) }, desc: "Holds a big leaf over its head. Lobbed seeds and anything falling from above hit the leaf instead." },
 	{ id: "swarm", name: "Drone Swarm", hp: 260, speed: 0.24, split: "drone", splitCount: 3, cost: 3, weight: 2, intro: 22,
 		look: { body: C(255, 210, 60), swarm: true }, desc: "Three bees in a trench coat. Splits apart when hit enough." },
 	{ id: "drone", name: "Mini Drone", hp: 70, speed: 0.45, cost: 1, intro: 22, pool: false,
 		look: { body: C(255, 210, 60), scale: 0.55 }, desc: "A tiny fast bee from a Drone Swarm." },
 	{ id: "medic", name: "Medic Bee", hp: 300, speed: 0.22, heal: 25, cost: 3, weight: 1.6, intro: 26,
 		look: { body: C(255, 245, 230), stripe: C(220, 30, 30), medic: true }, desc: "Heals the bees around it." },
-	{ id: "stinger", name: "Stinger Bee", hp: 500, speed: 0.22, ranged: true, cost: 4, weight: 2, intro: 32,
-		look: { body: C(150, 70, 200), stripe: C(40, 0, 60), lance: true }, desc: "Stops and fires stingers at your flowers from far away." },
+	{ id: "stinger", name: "Sniper Bee", hp: 400, speed: 0.22, sniper: true, cost: 4, weight: 2, intro: 32,
+		look: { body: C(150, 70, 200), stripe: C(40, 0, 60), scope: true }, desc: "Stops far away and fires a stinger every 5 seconds at the most EXPENSIVE flower in its lane." },
 	{ id: "honey", name: "Honey Thrower", hp: 400, speed: 0.22, honey: true, cost: 3, weight: 2, intro: 36,
 		look: { body: C(255, 170, 0), pot: true }, desc: "Throws sticky honey that stops flowers from working." },
-	{ id: "giant", name: "Giant Bee", hp: 3000, speed: 0.14, smash: true, larva: true, cost: 10, weight: 0.8, intro: 47, minBudget: 14,
-		look: { body: C(230, 160, 20), stripe: C(30, 15, 0), scale: 2.1, angry: true, lance: true }, desc: "ENORMOUS. Squashes flowers flat and throws its larva baby." },
+	{ id: "giant", name: "Giant Bee", hp: 3000, speed: 0.14, shove: true, hatch: 3, cost: 10, weight: 0.8, intro: 47, minBudget: 14,
+		look: { body: C(230, 160, 20), stripe: C(30, 15, 0), scale: 2.1, angry: true }, desc: "ENORMOUS. Shoves flowers out of its way, and when it's beaten, 3 larvae hatch out of it." },
 	{ id: "larva", name: "Bee Larva", hp: 100, speed: 0.4, cost: 1, intro: 47, pool: false,
-		look: { larva: true }, desc: "A wiggly baby bee thrown by a Giant Bee." },
+		look: { larva: true }, desc: "A wiggly baby bee that hatches from a beaten Giant Bee." },
 	{ id: "zombee", name: "Zombee", hp: 270, speed: 0.2, revive: true, cost: 3, weight: 4, intro: 51,
 		look: { body: C(150, 190, 110), stripe: C(60, 50, 40), zombie: true }, desc: "Gets back up once after you beat it!" },
 	{ id: "ghost", name: "Ghost Bee", hp: 300, speed: 0.24, phase: true, cost: 3, weight: 2.5, intro: 54,
 		look: { body: C(220, 240, 255), stripe: C(150, 170, 200), ghost: true }, desc: "Turns see-through and shots pass right through it." },
-	{ id: "knight", name: "Bone Knight Bee", hp: 300, armor: { hp: 1500, metal: true, look: "helm" }, speed: 0.18, cost: 7, weight: 1.5, intro: 57,
-		look: { body: C(235, 230, 215), stripe: C(40, 40, 40), zombie: true }, desc: "A skeleton bee in a knight's helmet." },
-	{ id: "honeyball", name: "Molten Honey Ball", hp: 900, speed: 0.33, crush: true, iceKills: true, cost: 5, intro: 60, pool: false,
-		look: { ball: true }, desc: "The Queen's rolling honey ball. Squashes everything. Freeze or blow it up!" },
+	{ id: "knight", name: "Bone Knight Bee", hp: 300, armor: { hp: 600, metal: true, look: "helm" }, parry: 4, speed: 0.18, cost: 7, weight: 1.5, intro: 57,
+		look: { body: C(235, 230, 215), stripe: C(40, 40, 40), zombie: true, sword: true }, desc: "A skeleton bee with a sword. It parries the first 4 shots fired at it from the front." },
+	{ id: "honeyball", name: "Honey Wave", hp: 900, speed: 0.33, glue: 8, iceKills: true, cost: 5, intro: 60, pool: false,
+		look: { ball: true }, desc: "The Queen's rolling wave of molten honey. Every flower it rolls over is glued shut for 8 seconds. Freeze it or burn it!" },
 ];
 Config.BeeById = {};
 Config.Bees.forEach((b, i) => { b.index = i + 1; Config.BeeById[b.id] = b; });
@@ -294,7 +298,7 @@ Config.Areas = [
 Config.Minigames = {
 	bowling: { name: "Pinecone Bowling", icon: "🎳", tip: "Roll pinecones down the lanes! You can only place them left of the red line." },
 	whack: { name: "Whack-a-Bee", icon: "🔨", tip: "Click the bees to SMACK them with your swatter!" },
-	laststand: { name: "Last Stand", icon: "🛡️", tip: "You get 5000 sun and NO more. Build your defense, then press START!" },
+	laststand: { name: "Last Stand", icon: "🛡️", tip: "You get 5000 nectar and NO more. Build your defense, then press START!" },
 	seedrain: { name: "It's Raining Seeds", icon: "🌧️", tip: "Click the falling seed packets to catch them, then plant them for free!" },
 	invisibee: { name: "Invisi-Bee", icon: "👻", tip: "The bees are invisible! Watch their shadows." },
 	hivebreaker: { name: "Hive Breaker", icon: "🏺", tip: "Click the honey pots to break them. Some have flowers, some have BEES!" },
@@ -1171,12 +1175,309 @@ const Art = (() => {
 		X.shadowBlur = 0;
 	};
 
+	const ctxAlpha = (a, fn) => { X.save(); X.globalAlpha *= a; fn(); X.restore(); };
+	// ---------------------------------------------------------- the new roster -------
+	F.cup = (L, s) => { // Dewcup: a bell-shaped cup that fills with glowing nectar
+		stem(2.6, 0.2);
+		X.save(); X.translate(s.hx * 0.4, -3.0 + s.hy); X.rotate(s.sway);
+		lw(0.12);
+		X.beginPath(); X.moveTo(-1.4, -1.6); X.quadraticCurveTo(-1.3, 0.6, 0, 0.7); X.quadraticCurveTo(1.3, 0.6, 1.4, -1.6); X.closePath();
+		X.fillStyle = "#5fb4ec"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		const f = clamp(s.fill || 0, 0, 1);
+		if (f > 0) {
+			X.save(); X.beginPath(); X.moveTo(-1.4, -1.6); X.quadraticCurveTo(-1.3, 0.6, 0, 0.7); X.quadraticCurveTo(1.3, 0.6, 1.4, -1.6); X.closePath(); X.clip();
+			if (f >= 1) { X.shadowColor = "#ffd040"; X.shadowBlur = 16; }
+			rect(-1.5, 0.7 - 2.3 * f, 3, 2.4, "#ffc531");
+			ell(0, 0.7 - 2.3 * f, 1.4, 0.18, 0, "#ffe27a");
+			X.restore();
+		}
+		for (const a of [-1.2, -0.4, 0.4, 1.2]) poly([a - 0.35, -1.55, a, -2.2, a + 0.35, -1.55], "#7cc6f4", OUT);
+		eye(-0.45, -0.25, 0.2, 0.2); eye(0.45, -0.25, 0.2, 0.2);
+		if (f >= 1) { X.font = "bold 0.9px sans-serif"; X.textAlign = "center"; X.fillStyle = "#fff"; X.fillText("FULL", 0, -2.5); }
+		X.restore();
+	};
+	F.srose = (L, s) => { // Spine Rose / Ricochet Rose: a thorny bud on a spiky stem that fires from its crown
+		curve(0, 0, 0.3, -1.6, 0, -3.1, 0.45, STEM_D); curve(0, 0, 0.3, -1.6, 0, -3.1, 0.28, "#3b7f2a");
+		for (let i = 0; i < 4; i++) poly([0.1, -0.5 - i * 0.65, 0.55, -0.75 - i * 0.65, 0.12, -0.8 - i * 0.65], "#e8e2c0", OUT);
+		leaf(0, -1.2, 1.4, Math.PI + 0.5);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [0, 0, 0], 0.4));
+		X.save(); X.translate(s.hx, -3.6 + s.hy); X.rotate(s.sway + Math.PI / 2 * 0.15);
+		lw(0.1);
+		for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + (i - 2) * 0.45; ell(Math.cos(a) * 0.6, Math.sin(a) * 0.55 + 0.1, 0.55, 0.9, a + Math.PI / 2, i % 2 ? dark : col, OUT); }
+		X.beginPath(); X.moveTo(-0.9, 0.2); X.quadraticCurveTo(0, 1.3, 0.9, 0.2); X.closePath(); X.fillStyle = "#3f9a2e"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		poly([0.7, -0.2, 1.9, 0, 0.7, 0.2], "#e8e2c0", OUT); // the spine it's about to fire
+		if (L.bounce) { X.beginPath(); X.arc(1.2, -0.9, 0.35, Math.PI, 0); lw(0.1); X.strokeStyle = "#fff"; X.stroke(); }
+		eye(-0.1, -0.1, 0.22, 0.4);
+		X.restore();
+	};
+	F.ptulip = (L, s) => { // Pollen Tulip: a fat yellow bud, swelling, leaking pollen
+		curve(0, 0, 0.2, -1.4, 0, -2.4, 0.4, STEM_D); curve(0, 0, 0.2, -1.4, 0, -2.4, 0.24, STEM);
+		leaf(0, -0.2, 2.2, -1.1); leaf(0, -0.2, 2.2, Math.PI + 1.1);
+		X.save(); X.translate(0, -2.4); X.rotate(s.sway);
+		const sw = 1 + s.punch * 0.18; X.scale(sw, sw);
+		lw(0.12);
+		ell(0, -1.3, 1.2, 1.5, 0, rgb(L.color), OUT);
+		for (const a of [-0.6, 0, 0.6]) { X.save(); X.rotate(a); ell(0, -1.6, 0.4, 1.2, 0, "rgba(255,230,120,0.6)"); X.restore(); }
+		for (let i = 0; i < 6; i++) circ(Math.sin(s.t * 3 + i * 1.7) * 1.3, -2.6 - ((s.t * 0.8 + i * 0.37) % 1) * 1.8, 0.12, "rgba(255,220,60,0.9)");
+		face(0, -1.3, 0.7);
+		X.restore();
+	};
+	F.briar = (L, s) => { // Briar Patch: a low tangle of thorny vines hugging the ground
+		lw(0.12);
+		for (let i = 0; i < 7; i++) {
+			const x0 = -2.4 + i * 0.8, ph = s.t * 0.8 + i;
+			curve(x0, 0, x0 + 0.6, -1.4 - Math.sin(ph) * 0.2, x0 + 1.4, -0.2, 0.22, i % 2 ? "#5a3a1e" : "#6b4a24");
+			poly([x0 + 0.5, -1.0, x0 + 0.7, -1.45, x0 + 0.85, -1.0], "#e8e0b0");
+		}
+		for (let i = 0; i < 4; i++) leaf(-1.8 + i * 1.2, -0.7, 0.7, -0.6 + i * 0.3, "#4a8a2e");
+		for (let i = 0; i < 3; i++) circ(-1.2 + i * 1.2, -0.95, 0.18, "#c0203a");
+	};
+	F.burr = (L, s) => { // Burr Clump: a ball of hooked spines on the ground
+		lw(0.1);
+		const used = s.used;
+		for (let i = 0; i < 18; i++) { const a = i / 18 * TAU; seg(Math.cos(a) * 0.6, -1.0 + Math.sin(a) * 0.6, Math.cos(a) * 1.3, -1.0 + Math.sin(a) * 1.25, 0.12, "#8a6a2a"); X.beginPath(); X.arc(Math.cos(a) * 1.3 + 0.08, -1.0 + Math.sin(a) * 1.25, 0.12, 0, Math.PI); X.strokeStyle = "#6a4a1a"; lw(0.07); X.stroke(); }
+		circ(0, -1.0, 0.85, used ? "#6a5a3a" : "#a8843a", OUT);
+		eye(-0.3, -1.1, 0.18, 0.3); eye(0.3, -1.1, 0.18, 0.3);
+	};
+	F.bell = (L, s) => { // Frostbell: a drooping icy bellflower that rings
+		curve(0, 0, 0.6, -2.6, -0.2, -4.4, 0.32, STEM_D);
+		leaf(0, -0.25, 1.6, -0.35); leaf(0, -0.25, 1.6, Math.PI + 0.35);
+		X.save(); X.translate(-0.2, -4.2); X.rotate(Math.sin(s.t * 6) * 0.08 * (s.punch * 3 + 0.3));
+		lw(0.12);
+		X.beginPath(); X.moveTo(-0.3, 0); X.quadraticCurveTo(-1.3, 0.8, -1.2, 2.2); X.lineTo(1.2, 2.2); X.quadraticCurveTo(1.3, 0.8, 0.3, 0); X.closePath();
+		X.shadowColor = "#cff"; X.shadowBlur = 10; X.fillStyle = rgb(L.color); X.fill(); X.shadowBlur = 0; X.strokeStyle = "#6aa8d0"; X.stroke();
+		for (let i = 0; i < 4; i++) poly([-1.2 + i * 0.6, 2.2, -0.9 + i * 0.6, 2.6, -0.6 + i * 0.6, 2.2], "#e8f8ff");
+		circ(0, 2.5, 0.25, "#9fd8ff");
+		eye(-0.35, 1.2, 0.18, 0.2); eye(0.35, 1.2, 0.18, 0.2);
+		X.restore();
+	};
+	F.clock = (L, s) => { // Dandelion Clock: a seed globe (or a bare stalk while it regrows)
+		curve(0, 0, 0.2, -1.2, 0, -2.4, 0.3, STEM_D);
+		leaf(0, -0.15, 1.5, -0.25, "#6abf3e"); leaf(0, -0.15, 1.5, Math.PI + 0.25, "#6abf3e");
+		X.save(); X.translate(s.hx * 0.5, -3.1 + s.hy); X.rotate(s.sway);
+		if (s.stalk) { circ(0, 0, 0.32, "#8a7a3a", OUT); for (let i = 0; i < 4; i++) { const a = i * 1.6; seg(0, 0, Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0.05, "#fff"); } }
+		else {
+			for (let i = 0; i < 26; i++) { const a = i / 26 * TAU; seg(0, 0, Math.cos(a) * 1.15, Math.sin(a) * 1.15, 0.04, "rgba(255,255,255,0.85)"); circ(Math.cos(a) * 1.2, Math.sin(a) * 1.2, 0.13, "#fff"); }
+			circ(0, 0, 0.45, "#c8b870");
+			eye(-0.17, -0.05, 0.13, 0.3); eye(0.17, -0.05, 0.13, 0.3);
+		}
+		X.restore();
+	};
+	F.moon = (L, s) => { // Moonflower: pale trumpet petals around a crescent that glows
+		stem(3.0);
+		X.save(); X.translate(s.hx, -3.6 + s.hy); X.rotate(s.sway);
+		X.shadowColor = "#cfd8ff"; X.shadowBlur = 16;
+		for (let i = 0; i < 5; i++) { const a = i / 5 * TAU - Math.PI / 2; ell(Math.cos(a) * 0.95, Math.sin(a) * 0.95, 0.85, 0.5, a, "#e8ecff", "rgba(80,90,160,0.5)"); }
+		X.shadowBlur = 0;
+		circ(0, 0, 0.75, "#2a2f5a", OUT);
+		X.beginPath(); X.arc(0, 0, 0.55, 0.5, TAU - 0.5); X.arc(0.25, 0, 0.42, TAU - 0.7, 0.7, true); X.closePath(); X.fillStyle = "#fff7c0"; X.fill();
+		X.restore();
+	};
+	F.pitcher = (L, s) => { // Pitcher Plant: a tall jug with a lid and a lip of nectar
+		leaf(0, -0.2, 1.6, -0.4); leaf(0, -0.2, 1.6, Math.PI + 0.4);
+		curve(0, 0, -0.4, -0.6, -0.2, -1.0, 0.3, STEM_D);
+		lw(0.12);
+		X.beginPath(); X.moveTo(-1.0, -4.0); X.bezierCurveTo(-1.6, -2.4, -1.4, -0.6, 0, -0.7); X.bezierCurveTo(1.4, -0.6, 1.6, -2.4, 1.0, -4.0); X.closePath();
+		X.fillStyle = "#7ab83a"; X.fill(); X.strokeStyle = OUT; X.stroke();
+		for (let i = 0; i < 5; i++) curve(-0.9 + i * 0.45, -3.8, -1.0 + i * 0.5, -2.3, -0.6 + i * 0.3, -1.0, 0.06, "#a0303a");
+		ell(0, -4.0, 1.05, 0.35, 0, "#c0303a", OUT);
+		ell(0, -4.0, 0.8, 0.22, 0, "#2a0a10");
+		const held = s.held || 0;
+		for (let i = 0; i < held; i++) circ(-0.3 + i * 0.6, -4.05, 0.2, "#ffc820");
+		X.save(); X.translate(-0.9, -4.1); X.rotate(-0.5 - Math.sin(s.t * 2) * 0.1);
+		ell(0.9, -0.5, 1.0, 0.35, 0, "#8ac84a", OUT); X.restore();
+		eye(-0.4, -2.6, 0.2, 0.3); eye(0.4, -2.6, 0.2, 0.3);
+	};
+	F.corpse = (L, s) => { // Corpse Flower: a huge mottled red bloom with a stink spike
+		X.save(); X.translate(0, -0.6);
+		const p = 1 + s.punch * 0.12; X.scale(p, p);
+		lw(0.12);
+		for (let i = 0; i < 5; i++) { const a = i / 5 * TAU - Math.PI / 2; X.save(); X.rotate(a + Math.PI / 2); ell(0, -1.25, 0.95, 1.35, 0, "#a8231c", OUT); for (let j = 0; j < 4; j++) circ(rnd(-0.4, 0.4) * 0 + (j - 1.5) * 0.35, -1.3 - (j % 2) * 0.35, 0.13, "#f0d8b0"); X.restore(); }
+		circ(0, 0, 0.75, "#3a0a08", OUT);
+		rect(-0.3, -2.8, 0.6, 2.4, "#6a2a5a", OUT, 0.3);
+		for (let i = 0; i < 3; i++) { const ph = (s.t * 0.7 + i * 0.33) % 1; ctxAlpha(1 - ph, () => circ(Math.sin(i * 2 + s.t) * 0.6, -3 - ph * 2.5, 0.3 + ph * 0.3, "rgba(150,190,60,0.6)")); }
+		X.restore();
+	};
+	F.raft = (L, s) => { // Lotus Raft: a broad round leaf with a raised rim and a little bud
+		X.beginPath(); X.ellipse(0, -0.1, 2.9, 0.95, 0, 0.18, TAU - 0.1); X.lineTo(0, -0.1); X.closePath();
+		X.fillStyle = "#3f9a3a"; X.fill(); lw(0.12); X.strokeStyle = STEM_D; X.stroke();
+		X.beginPath(); X.ellipse(0, -0.25, 2.9, 0.95, 0, Math.PI, TAU); lw(0.22); X.strokeStyle = "#7ac85a"; X.stroke();
+		for (let i = 0; i < 7; i++) { const a = 0.4 + i * 0.8; seg(0, -0.1, Math.cos(a) * 2.4, -0.1 + Math.sin(a) * 0.8, 0.06, "#2f7d2a"); }
+		ell(1.5, -0.6, 0.35, 0.5, 0, "#ff9ad0", OUT);
+	};
+	F.bladder = (L, s) => { // Bladderwort: yellow snapdragon flowers above, bladder traps below the water
+		F.pad(L, s);
+		for (let i = 0; i < 5; i++) circ(-1.5 + i * 0.75, 0.15, 0.22, "rgba(120,200,120,0.8)", "rgba(40,90,40,0.6)");
+		curve(0, -0.2, 0.2, -1.6, 0, -2.8, 0.18, STEM);
+		X.save(); X.translate(0, -3.0); X.rotate(s.sway);
+		lw(0.1);
+		ell(0, 0, 0.7, 0.55, 0, "#ffd21e", OUT); ell(0.45, 0.35, 0.55, 0.3, 0.4, "#ffb800", OUT); ell(-0.2, -0.45, 0.45, 0.35, -0.3, "#ffe060", OUT);
+		if (s.cool > 0) { X.globalAlpha *= 0.6; }
+		eye(-0.15, 0, 0.16, 0.4);
+		X.restore();
+	};
+	F.wheel = (L, s) => { // Daisy Wheel: a daisy head spinning on a pinwheel stalk
+		stem(3.2);
+		X.save(); X.translate(s.hx * 0.3, -3.8 + s.hy); X.rotate(s.spin !== undefined ? s.spin : s.t * 4);
+		for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; ell(Math.cos(a) * 1.1, Math.sin(a) * 1.1, 0.7, 0.24, a, i % 4 === 0 ? "#ffd84a" : "#fff", "rgba(80,60,0,0.35)"); }
+		circ(0, 0, 0.62, "#ffb400", OUT);
+		for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; poly([0, 0, Math.cos(a) * 0.55, Math.sin(a) * 0.55, Math.cos(a + 0.6) * 0.55, Math.sin(a + 0.6) * 0.55], "#e08a00"); }
+		X.restore();
+		X.save(); X.translate(0, -3.8); face(0, 0.05, 0.5); X.restore();
+	};
+	F.reed = (L, s) => { // Reed Pipe: a hollow reed with finger holes, sticking out of the pond
+		F.pad(L, s);
+		leaf(-0.3, -0.3, 2.8, -1.9, "#6abf3e");
+		X.save(); X.translate(s.hx * 0.3, s.hy);
+		rect(-0.35, -6.2, 0.7, 6.0, "#9ab84a", OUT, 0.2);
+		for (let i = 0; i < 4; i++) circ(0, -2.0 - i * 0.9, 0.14, "#3a4a1a");
+		ell(0, -6.2, 0.45, 0.18, 0, "#5a6a2a", OUT);
+		if (s.punch > 0.2) for (let i = 0; i < 3; i++) { X.font = "bold 0.9px sans-serif"; X.fillStyle = "#fff"; X.fillText("♪", 0.6 + i * 0.5, -6.4 - i * 0.6 - s.punch); }
+		eye(-0.12, -5.0, 0.15, 0.4);
+		X.restore();
+	};
+	F.fountain = (L, s) => { // Dew Fountain: a fern frond arch that drips dew from its tips
+		curve(0, 0, 0, -1.5, 0, -2.6, 0.4, STEM_D);
+		lw(0.1);
+		for (const side of [-1, 1]) {
+			X.save(); X.translate(0, -2.6); X.scale(side, 1);
+			curve(0, 0, 1.4, -1.8, 2.4, -0.6, 0.18, "#3f9a2e");
+			for (let i = 1; i <= 6; i++) { const t = i / 7; leaf(t * 2.2, -1.4 * Math.sin(t * Math.PI) - t * 0.2, 0.7, -0.6 + t, "#58b83a"); }
+			const ph = (s.t * 0.9) % 1;
+			circ(2.4, -0.4 + ph * 2, 0.18, `rgba(150,210,255,${1 - ph})`);
+			X.restore();
+		}
+		circ(0, -2.8, 0.55, "#7ac6f4", OUT);
+		eye(-0.18, -2.85, 0.13, 0.2); eye(0.18, -2.85, 0.13, 0.2);
+	};
+	F.cucumber = (L, s) => { // Squirting Cucumber: a hairy green fruit on a vine, ready to pop
+		curve(0, 0, -1.0, -1.0, -0.3, -2.0, 0.3, STEM_D);
+		leaf(0, -0.3, 1.6, -0.5, "#5aa83a"); leaf(-0.4, -1.2, 1.2, Math.PI + 0.3, "#5aa83a");
+		X.save(); X.translate(0.2 + s.hx * 0.6, -2.6 + s.hy); X.rotate(-0.5 + s.sway);
+		const sq = 1 - s.punch * 0.2; X.scale(1 + s.punch * 0.15, sq);
+		lw(0.12);
+		ell(0, 0, 0.8, 1.6, 0, "#7ab83a", OUT);
+		for (let i = 0; i < 10; i++) seg(Math.cos(i) * 0.6, Math.sin(i * 1.7) * 1.2, Math.cos(i) * 0.85, Math.sin(i * 1.7) * 1.35, 0.06, "#d8f0b0");
+		ell(0, -1.55, 0.25, 0.15, 0, "#3a6a1a");
+		eye(-0.25, -0.3, 0.2, 0.3); eye(0.25, -0.3, 0.2, 0.3);
+		X.restore();
+	};
+	F.iris = (L, s) => { // Storm Iris: a dark blue iris crackling with stored sparks
+		stem(2.9);
+		X.save(); X.translate(s.hx, -3.6 + s.hy); X.rotate(s.sway);
+		lw(0.1);
+		for (const a of [-2.2, -0.95]) { X.save(); X.rotate(a); ell(0, -1.0, 0.45, 1.1, 0, "#3a3ab8", OUT); X.restore(); }
+		for (const a of [0.6, 2.6, -1.6]) { X.save(); X.rotate(a + Math.PI); ell(0, -0.9, 0.5, 1.0, 0, "#5a5ae0", OUT); ell(0, -0.7, 0.18, 0.5, 0, "#ffd84a"); X.restore(); }
+		circ(0, 0, 0.4, "#1a1a5a");
+		const n = s.sparks || 0;
+		X.shadowColor = "#9ef"; X.shadowBlur = 10;
+		for (let i = 0; i < n; i++) { const a = s.t * 3 + i / Math.max(1, n) * TAU; circ(Math.cos(a) * 1.6, Math.sin(a) * 1.6, 0.16, "#dff8ff"); }
+		X.shadowBlur = 0;
+		X.restore();
+	};
+	F.firefly = (L, s) => { // Firefly Bulb: a lantern-like seed pod with fireflies circling it
+		curve(0, 0, 0.6, -1.8, 0.2, -3.0, 0.3, STEM_D);
+		leaf(0, -0.25, 1.5, -0.35); leaf(0, -0.25, 1.5, Math.PI + 0.35);
+		X.save(); X.translate(0.2, -3.6 + s.hy);
+		lw(0.1);
+		for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI; X.save(); X.rotate(a - Math.PI / 2); ell(0, -0.0, 0.25, 1.0, 0, "#e88a3a", OUT); X.restore(); }
+		X.shadowColor = "#ff6"; X.shadowBlur = 14;
+		ell(0, 0, 0.55, 0.8, 0, "#ffef80");
+		for (let i = 0; i < 3; i++) { const a = s.t * 2.2 + i * 2.1; circ(Math.cos(a) * 1.7, Math.sin(a * 1.3) * 1.2 - 0.5, 0.14, "#f4ff70"); }
+		X.shadowBlur = 0;
+		X.restore();
+	};
+	F.haze = (L, s) => { // Lavender Haze: lavender spikes with a slow purple mist
+		curve(0, 0, 0.2, -2.5, 0, -4.8, 0.3, STEM_D);
+		curve(0, 0, -0.8, -2.0, -1.0, -3.8, 0.24, STEM_D); curve(0, 0, 0.8, -2.0, 1.0, -3.8, 0.24, STEM_D);
+		leaf(0, -0.2, 1.8, -0.5); leaf(0, -0.2, 1.8, Math.PI + 0.5);
+		const col = rgb(L.color), dark = rgb(lerpC(L.color, [40, 0, 80], 0.4));
+		for (const [x, top] of [[-1.0, -3.8], [0, -4.8], [1.0, -3.8]]) for (let i = 0; i < 6; i++) { const y = top + 1.6 - i * 0.28; circ(x - 0.15, y, 0.18, i % 2 ? col : dark); circ(x + 0.15, y - 0.1, 0.18, i % 2 ? dark : col); }
+		for (let i = 0; i < 3; i++) { const ph = (s.t * 0.4 + i / 3) % 1; X.save(); X.globalAlpha *= 0.4 * (1 - ph); circ(1.2 + ph * 2.5, -3.5 - ph, 0.6 + ph, "#c8a0ff"); X.restore(); }
+		eye(-0.18, -2.4, 0.14, 0.2); eye(0.18, -2.4, 0.14, 0.2);
+	};
+	F.rust = (L, s) => { // Rust Marigold: a burnt-orange marigold dripping corrosive sap
+		stem(3.0);
+		X.save(); X.translate(s.hx, -3.5 + s.hy); X.rotate(s.sway);
+		lw(0.1);
+		for (let ring = 0; ring < 2; ring++) for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + ring * 0.26, r = 1.05 - ring * 0.35; ell(Math.cos(a) * r, Math.sin(a) * r, 0.5 - ring * 0.1, 0.32, a, ring ? "#c8501a" : "#e8781e", "rgba(80,30,0,0.5)"); }
+		circ(0, 0, 0.45, "#6a2a0a", OUT);
+		X.restore();
+		const ph = (s.t * 0.7) % 1;
+		circ(0.6 + s.hx, -2.6 + ph * 2.2, 0.18 * (1 - ph * 0.5), "#b8601a");
+		eye(-0.25 + s.hx, -3.6, 0.15, 0.3); eye(0.25 + s.hx, -3.6, 0.15, 0.3);
+	};
+	F.fern = (L, s) => { // Frost Fern: icy fronds curling up out of the ground
+		lw(0.1);
+		for (const [a, h] of [[-0.5, 3.6], [0, 4.4], [0.5, 3.6]]) {
+			X.save(); X.rotate(a + s.sway);
+			curve(0, 0, 0.5, -h * 0.6, 0, -h, 0.18, "#7ab8d8");
+			for (let i = 1; i < 8; i++) { const y = -h * i / 8; poly([0, y, -0.9 + i * 0.08, y - 0.3, 0, y - 0.25], "#bfe8ff", "#7ab8d8"); poly([0, y, 0.9 - i * 0.08, y - 0.3, 0, y - 0.25], "#d8f4ff", "#7ab8d8"); }
+			X.beginPath(); X.arc(0.25, -h - 0.2, 0.3, Math.PI, TAU + 1.5); X.strokeStyle = "#bfe8ff"; lw(0.16); X.stroke();
+			X.restore();
+		}
+		X.shadowColor = "#bff"; X.shadowBlur = 12; circ(0, -1.2, 0.5, "#e8fbff", OUT); X.shadowBlur = 0;
+		eye(-0.17, -1.25, 0.13, 0.2); eye(0.17, -1.25, 0.13, 0.2);
+	};
+	F.mint = (L, s) => { // Mint Sprig: square-stemmed mint with paired toothy leaves
+		rect(-0.18, -4.0, 0.36, 4.0, "#4a9a3a", OUT);
+		for (let i = 0; i < 4; i++) {
+			const y = -1.0 - i * 0.85, sz = 1.5 - i * 0.2;
+			for (const sd of [-1, 1]) {
+				X.save(); X.translate(0, y); X.scale(sd, 1); X.rotate(-0.3 + Math.sin(s.t * 2 + i) * 0.05);
+				X.beginPath(); X.moveTo(0, 0); for (let k = 0; k <= 6; k++) { const t = k / 6; X.lineTo(t * sz, -Math.sin(t * Math.PI) * sz * 0.45 + (k % 2 ? -0.08 : 0.08)); } for (let k = 6; k >= 0; k--) { const t = k / 6; X.lineTo(t * sz, Math.sin(t * Math.PI) * sz * 0.2); }
+				X.closePath(); X.fillStyle = "#6ad06a"; X.fill(); lw(0.08); X.strokeStyle = "#2a6a2a"; X.stroke();
+				X.restore();
+			}
+		}
+		for (let i = 0; i < 3; i++) { const ph = (s.t * 0.5 + i / 3) % 1; circ(Math.sin(i * 3 + s.t) * 0.8, -4.2 - ph * 1.6, 0.12, `rgba(200,255,220,${1 - ph})`); }
+		eye(-0.3, -4.3, 0.18, 0.2); eye(0.3, -4.3, 0.18, 0.2);
+	};
+	F.maple = (L, s) => { // Maple Spinner: a little maple sapling holding samaras
+		rect(-0.2, -3.0, 0.4, 3.0, "#7a4a2a", OUT);
+		X.save(); X.translate(0, -3.6 + s.hy); X.rotate(s.sway);
+		lw(0.1);
+		const leafPts = r => { const p = []; for (let i = 0; i <= 10; i++) { const a = -Math.PI / 2 + i / 10 * TAU; const rr = (i % 2 ? 0.55 : 1.15) * r; p.push(Math.cos(a) * rr, Math.sin(a) * rr); } return p; };
+		poly(leafPts(1.5), "#e0502a", OUT);
+		poly(leafPts(0.8).map((v, i) => i % 2 ? v - 0.1 : v), "#f07a3a");
+		if (s.punch < 0.3) for (const sd of [-1, 1]) { X.save(); X.translate(sd * 1.2, 0.6); X.rotate(sd * 0.8); ell(0, 0.5, 0.25, 0.7, 0, "#c8a060", OUT); circ(0, 0, 0.2, "#8a6a3a"); X.restore(); }
+		X.restore();
+		X.save(); X.translate(0, -3.6 + s.hy); face(0, 0, 0.6); X.restore();
+	};
+	F.saguaro = (L, s) => { // Saguaro: a tall ribbed cactus with arms
+		lw(0.14);
+		const body = "#4a8a4a";
+		rect(-1.1, -8.4, 2.2, 8.4, body, OUT, 1.1);
+		X.save(); rect(-2.8, -4.6, 1.8, 0.9, body, OUT, 0.45); rect(-2.8, -7.0, 0.9, 3.2, body, OUT, 0.45); X.restore();
+		rect(1.0, -3.6, 1.6, 0.9, body, OUT, 0.45); rect(1.7, -6.0, 0.9, 3.2, body, OUT, 0.45);
+		for (const x of [-0.5, 0, 0.5]) seg(x, -7.9, x, -0.3, 0.07, "#2f6a2f");
+		for (let i = 0; i < 12; i++) { const y = -1 - i * 0.6; seg(-1.1, y, -1.45, y - 0.15, 0.05, "#f0eac0"); seg(1.1, y, 1.45, y - 0.15, 0.05, "#f0eac0"); }
+		circ(0, -8.5, 0.45, "#ff7ab0"); circ(-0.5, -8.3, 0.3, "#ffd0e0");
+		eye(-0.45, -6.2, 0.3, 0.3); eye(0.45, -6.2, 0.3, 0.3);
+		X.beginPath(); X.arc(0, -5.6, 0.35, 0.3, Math.PI - 0.3); lw(0.1); X.strokeStyle = "#1a3a1a"; X.stroke();
+	};
+	F.fig = (L, s) => { // Strangler Fig: a knot of grasping roots around a fig
+		for (let i = 0; i < 6; i++) {
+			const a = Math.PI + 0.25 + i / 5 * (Math.PI - 0.5), w = Math.sin(s.t * 2 + i) * 0.25;
+			const reach = 2.3 + s.punch * 1.0;
+			const ex = Math.cos(a) * reach, ey = -1.0 + Math.sin(a) * reach * 0.8;
+			curve(0, -1.0, Math.cos(a + w) * 1.4, -1.0 + Math.sin(a + w) * 1.2, ex, ey, 0.32, "#6a4a2a");
+			X.beginPath(); X.arc(ex, ey, 0.25, 0, Math.PI * 1.3); lw(0.12); X.strokeStyle = "#5a3a1a"; X.stroke();
+		}
+		lw(0.12);
+		ell(0, -1.4, 1.1, 1.25, 0, "#7a3a6a", OUT);
+		ell(0, -2.6, 0.25, 0.2, 0, "#4a8a3a");
+		for (let i = 0; i < 5; i++) circ(Math.cos(i * 1.3) * 0.6, -1.4 + Math.sin(i * 1.3) * 0.7, 0.08, "#e0b0d0");
+		eye(-0.35, -1.5, 0.2, 0.3); eye(0.35, -1.5, 0.2, 0.3);
+	};
+
 	// One sizing hint per look so cards can frame the tall ones.
-	const HEIGHT = { daisy: 5.2, rose: 4.8, tulip: 5.8, bush: 4.2, pinecone: 3.2, lily: 4.8, puff: 3.6, trap: 4.2, dahlia: 5.2, pad: 2, lotus: 3.2, cattail: 7.6, poppy: 5.2, pumpkin: 5, lantern: 5, spike: 6, magnet: 5, garlic: 4, star: 5, thistle: 10.5, gloom: 4 };
+	const HEIGHT = { cup: 5.6, srose: 5.2, ptulip: 5.4, briar: 2.2, burr: 2.6, bell: 6.8, clock: 4.6, moon: 5.0, pitcher: 5.0, corpse: 4.4, raft: 1.8, bladder: 4.2, wheel: 5.4, reed: 7.4, fountain: 4.6, cucumber: 4.6, iris: 5.4, firefly: 5.0, haze: 5.6, rust: 5.0, fern: 5.4, mint: 6.4, maple: 5.6, saguaro: 9.6, fig: 4.4, daisy: 5.2, rose: 4.8, tulip: 5.8, bush: 4.2, pinecone: 3.2, lily: 4.8, puff: 3.6, trap: 4.2, dahlia: 5.2, pad: 2, lotus: 3.2, cattail: 7.6, poppy: 5.2, pumpkin: 5, lantern: 5, spike: 6, magnet: 5, garlic: 4, star: 5, thistle: 10.5, gloom: 4 };
 
 	function flowerState(o) {
 		o = o || {};
-		return { t: o.t || 0, punch: o.punch || 0, hx: -(o.punch || 0) * 0.5, hy: o.hy || 0, sway: o.sway || 0, chomp: o.chomp || 0, chew: o.chew, armed: o.armed, spin: o.spin };
+		return { t: o.t || 0, punch: o.punch || 0, hx: -(o.punch || 0) * 0.5, hy: o.hy || 0, sway: o.sway || 0, chomp: o.chomp || 0, chew: o.chew, armed: o.armed, spin: o.spin,
+			fill: o.fill, stalk: o.stalk, held: o.held, sparks: o.sparks, used: o.used, cool: o.cool };
 	}
 	function drawFlower(ctx, def, o) {
 		X = ctx;
@@ -1238,13 +1539,16 @@ const Art = (() => {
 		ctx.lineJoin = "round";
 		if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
 		if (L.ghost) ctx.globalAlpha *= 0.78;
-		if (L.ball) {
-			ctx.rotate(o.roll || 0);
-			ctx.shadowColor = "#ffa000"; ctx.shadowBlur = 20;
-			circ(0, 0, 1.7, "rgba(255,150,0,0.95)", "#a05000");
+		if (L.ball) { // Honey Wave: a curling wave of molten honey
+			const w = Math.sin(o.t * 4) * 0.2;
+			ctx.shadowColor = "#ffa000"; ctx.shadowBlur = 18;
+			X.beginPath(); X.moveTo(1.8, 1.6); X.lineTo(-1.6, 1.6); X.quadraticCurveTo(-2.2, 0.2, -1.2, -1.2 + w); X.quadraticCurveTo(-0.2, -2.4, 0.9, -1.4 + w);
+			X.quadraticCurveTo(0.2, -1.2, 0.0, -0.4); X.quadraticCurveTo(0.8, 0.0, 1.8, 0.4); X.closePath();
+			X.fillStyle = "rgba(255,160,0,0.95)"; X.fill(); lw(0.12); X.strokeStyle = "#a05000"; X.stroke();
 			ctx.shadowBlur = 0;
-			for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ell(Math.cos(a) * 1.15, Math.sin(a) * 1.15, 0.32, 0.22, a, "#ffd040"); }
-			circ(-0.5, -0.5, 0.4, "rgba(255,255,220,0.5)");
+			for (let i = 0; i < 4; i++) circ(-1.2 + i * 0.8, 1.6 + ((o.t * 2 + i * 0.3) % 1) * 0.5, 0.15, "#ffb020");
+			ell(-0.6, -0.6, 0.35, 0.2, -0.6, "rgba(255,255,220,0.6)");
+			eye(-0.9, -0.2, 0.22, -0.4); eye(-0.3, -0.5, 0.22, -0.4);
 		} else if (L.larva) {
 			for (let i = 3; i >= 0; i--) circ(i * 0.55, 0.1 * i + Math.sin(o.t * 8 + i) * 0.08, 0.5 - i * 0.06, "#faf5e1", OUT);
 			eye(-0.2, -0.1, 0.16, -0.4);
@@ -1259,6 +1563,21 @@ const Art = (() => {
 				}
 				rect(-0.2, 0.2, 1.4, 0.3, "#7a5a3a");
 			} else bodyBee(L, o);
+			if (L.scout) { // waggle-dance trail and a pollen-dusted antenna tip
+				ctx.save(); ctx.globalAlpha *= 0.6;
+				X.beginPath(); for (let i = 0; i <= 16; i++) { const t = i / 16; const x = 1.4 + t * 2.2, y = Math.sin(t * 12 + o.t * 8) * 0.35; i ? X.lineTo(x, y) : X.moveTo(x, y); }
+				lw(0.12); X.strokeStyle = "#ffe066"; X.stroke(); ctx.restore();
+				circ(-1.42, -1.32, 0.2, "#ffd21e"); circ(-1.07, -1.47, 0.2, "#ffd21e");
+			}
+			if (L.sacks && o.sacks !== false) { circ(0.2, 0.95, 0.4, "#ffcc20", OUT); circ(0.8, 0.9, 0.35, "#ffcc20", OUT); }
+			if (L.jaws) { poly([-1.5, 0.0, -2.1, 0.25, -1.55, 0.3], "#3a2a10"); poly([-1.5, 0.2, -2.0, 0.5, -1.45, 0.45], "#3a2a10"); }
+			if (L.stink) { for (let i = 0; i < 3; i++) { const ph = (o.t * 0.6 + i / 3) % 1; ctx.save(); ctx.globalAlpha *= 0.5 * (1 - ph); circ(1.6 + ph * 1.2, -0.5 - ph * 1.6, 0.35 + ph * 0.4, "#9ac83a"); ctx.restore(); } }
+			if (L.scope) {
+				seg(-1.0, 0.45, -3.0, 0.45, 0.22, "#5a2a7a");
+				poly([-3.0, 0.32, -3.6, 0.45, -3.0, 0.58], "#c8c8d2", OUT);
+				rect(-1.9, 0.0, 0.8, 0.3, "#333"); circ(-1.9, 0.15, 0.18, "#7ad0ff");
+			}
+			if (L.sword) { seg(-1.3, 0.6, -2.9, -0.8, 0.22, "#d8d8e0"); seg(-1.25, 0.55, -1.0, 0.85, 0.3, "#8a6a2a"); seg(-1.5, 0.3, -1.0, 0.8, 0.12, "#8a6a2a"); }
 			if (L.flag) {
 				ctx.save(); ctx.rotate(Math.sin(o.t * 4) * 0.08);
 				seg(0.3, 0.3, 0.3, -3.2, 0.12, "#78502a");
@@ -1283,9 +1602,9 @@ const Art = (() => {
 				ell(-1.5, 0.25, 0.45, 0.14, 0, "#ffbe00");
 				ctx.shadowColor = "#fb0"; ctx.shadowBlur = 8; ell(-1.5, 0.22, 0.32, 0.1, 0, "#ffd84a"); ctx.shadowBlur = 0;
 			}
-			if (def.id === "giant" && o.larva !== false) circ(0.4, -0.85, 0.55, "#faf5e1", OUT);
+
 			if (def.armor && o.armor !== false) armorPart(def.armor.look);
-			if (def.shield && o.shield !== false) shieldPart();
+			if (def.shield && o.shield !== false) shieldPart(def.shield.umbrella ? true : false);
 		}
 		ctx.restore();
 	}
@@ -1295,6 +1614,15 @@ const Art = (() => {
 			ell(-0.95, -0.65, 0.72, 0.45, 0, "#82502a", OUT);
 			for (let i = 0; i < 4; i++) seg(-1.5 + i * 0.35, -0.78, -1.4 + i * 0.35, -0.6, 0.05, "#5a3414");
 			rect(-1.05, -1.25, 0.2, 0.32, "#5a3c1e");
+		} else if (look === "beetle") { // a shiny stag beetle the bee is riding
+			X.save(); X.translate(0, 1.55);
+			ell(0.2, 0, 1.6, 0.75, 0, "#2a4a3a", OUT);
+			seg(0.2, -0.7, 0.2, 0.7, 0.06, "#0a1a12");
+			ell(-0.3, -0.3, 0.6, 0.25, -0.3, "rgba(160,255,200,0.35)");
+			circ(-1.45, 0.05, 0.42, "#1a2a20", OUT);
+			X.beginPath(); X.moveTo(-1.7, -0.1); X.quadraticCurveTo(-2.4, -0.6, -2.3, 0.0); X.moveTo(-1.7, 0.15); X.quadraticCurveTo(-2.4, 0.5, -2.3, 0.1); lw(0.14); X.strokeStyle = "#1a2a20"; X.stroke();
+			for (let i = 0; i < 3; i++) seg(-0.6 + i * 0.7, 0.6, -0.8 + i * 0.7, 1.05, 0.1, "#0a1a12");
+			X.restore();
 		} else if (look === "bucket") {
 			poly([-1.48, -0.25, -0.42, -0.25, -0.5, -1.55, -1.4, -1.55], "#a0a5af", OUT);
 			rect(-1.55, -0.38, 1.18, 0.16, "#82878f", OUT);
@@ -1306,7 +1634,16 @@ const Art = (() => {
 			seg(-0.95, -1.0, -0.95, 0.4, 0.08, "rgba(255,255,255,0.3)");
 		}
 	}
-	function shieldPart() {
+	function shieldPart(umbrella) {
+		if (umbrella !== false) { // leaf umbrella held overhead
+			lw(0.1);
+			seg(-0.4, 0.3, -0.6, -2.6, 0.12, "#6a4a2a");
+			X.beginPath(); X.moveTo(-2.6, -2.2); X.quadraticCurveTo(-0.6, -4.2, 1.5, -2.3); X.quadraticCurveTo(-0.5, -2.8, -2.6, -2.2);
+			X.fillStyle = "#4caa38"; X.fill(); X.strokeStyle = OUT; X.stroke();
+			seg(-2.4, -2.3, 1.3, -2.45, 0.06, "#2a6e1f");
+			for (let i = 0; i < 4; i++) seg(-1.6 + i * 0.8, -2.4, -1.4 + i * 0.75, -3.1 + Math.abs(i - 1.5) * 0.3, 0.05, "#2a6e1f");
+			return;
+		}
 		lw(0.12);
 		ell(-1.95, 0.2, 0.55, 1.45, 0, "#dcaa28", "#8a6010");
 		for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; star(-1.95 + Math.cos(a) * 0.25, 0.2 + Math.sin(a) * 0.75, 0.22, 0.22, 3, 0, "#aa7814"); }
@@ -1315,7 +1652,8 @@ const Art = (() => {
 	function drawDrop(ctx, kind, look) {
 		X = ctx; ctx.save(); ctx.lineJoin = "round";
 		if (kind === "armor") armorPart(look);
-		else if (kind === "shield") shieldPart();
+		else if (kind === "shield") shieldPart(true);
+		else if (kind === "sacks") { circ(0.2, 0.95, 0.4, "#ffcc20", OUT); circ(0.8, 0.9, 0.35, "#ffcc20", OUT); }
 		else if (kind === "wingR") { ctx.translate(0.25, -0.7); ell(0.5, -0.55, 0.95, 0.52, -0.25, "rgba(235,248,255,0.7)", "rgba(80,100,120,0.7)"); }
 		else if (kind === "larva") circ(0.4, -0.85, 0.55, "#faf5e1", OUT);
 		ctx.restore();
@@ -1339,16 +1677,16 @@ const Art = (() => {
 	}
 
 	// ----------------------------------------------------------------- props ----------
-	function drawSun(ctx, spin, alpha) {
+	function drawSun(ctx, spin, alpha) { // a drop of golden nectar
 		X = ctx; ctx.save(); ctx.globalAlpha *= (alpha === undefined ? 1 : alpha);
-		const g = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 2.6);
-		g.addColorStop(0, "rgba(255,240,120,0.7)"); g.addColorStop(1, "rgba(255,220,60,0)");
-		circ(0, 0, 2.6, g);
-		ctx.rotate(spin);
-		for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; poly([Math.cos(a - 0.15) * 0.95, Math.sin(a - 0.15) * 0.95, Math.cos(a) * 1.75, Math.sin(a) * 1.75, Math.cos(a + 0.15) * 0.95, Math.sin(a + 0.15) * 0.95], "#ffd21e"); }
-		ctx.rotate(-spin);
-		circ(0, 0, 0.98, "#ffe128", "#e0a000");
-		face(0, 0.05, 0.6);
+		const g = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 2.4);
+		g.addColorStop(0, "rgba(255,210,90,0.6)"); g.addColorStop(1, "rgba(255,190,40,0)");
+		circ(0, 0, 2.4, g);
+		ctx.rotate(Math.sin(spin * 2) * 0.15);
+		X.beginPath(); X.moveTo(0, -1.7); X.bezierCurveTo(0.6, -0.9, 1.25, -0.2, 1.2, 0.45); X.arc(0, 0.45, 1.2, 0, Math.PI); X.bezierCurveTo(-1.25, -0.2, -0.6, -0.9, 0, -1.7);
+		X.fillStyle = "#ffb820"; X.fill(); lw(0.12); X.strokeStyle = "#c07800"; X.stroke();
+		ell(-0.45, -0.1, 0.22, 0.45, 0.4, "rgba(255,255,230,0.75)");
+		face(0, 0.55, 0.6);
 		ctx.restore();
 	}
 	function drawLadybug(ctx, t, active) {
@@ -1368,6 +1706,12 @@ const Art = (() => {
 		lw(0.08);
 		switch (kind) {
 			case "thorn": poly([-0.45, -0.18, 0.55, 0, -0.45, 0.18], "#9adf4a", "#3a6a10"); break;
+			case "spine": poly([-0.9, -0.12, 0.8, 0, -0.9, 0.12], "#f0eac0", "#6a5a2a"); break;
+			case "ricochet": ctx.rotate(age * 14); poly([-0.45, -0.2, 0.5, 0, -0.45, 0.2], "#ff7ab0", "#8a2050"); break;
+			case "petal": ctx.rotate(age * 10); ell(0, 0, 0.45, 0.2, 0, "#fff", "#c8a040"); break;
+			case "samara": ctx.rotate(age * 18); ell(0.35, 0, 0.55, 0.2, 0, "#c8a060", "#6a4a2a"); circ(-0.15, 0, 0.18, "#8a6a3a"); break;
+			case "seed": circ(0, 0, 0.45, "#e8e0b0", "#6a6a3a"); circ(-0.12, -0.12, 0.12, "#fff"); break;
+			case "nectarshot": circ(0, 0, 0.35, "#ffb820"); break;
 			case "frost": ctx.shadowColor = "#9df"; ctx.shadowBlur = 8; ell(0, 0, 0.5, 0.25, 0, "#c8f0ff", "#5aa0d0"); star(0, 0, 0.3, 0.12, 6, age * 6, "#fff"); break;
 			case "puff": for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + age * 5; seg(0, 0, Math.cos(a) * 0.45, Math.sin(a) * 0.45, 0.05, "#fff"); } circ(0, 0, 0.15, "#bbb"); break;
 			case "fire": ctx.shadowColor = "#f80"; ctx.shadowBlur = 12; poly([-0.9, -0.3, 0.6, 0, -0.9, 0.3, -0.6, 0], "#ff7a10"); poly([-0.3, -0.15, 0.55, 0, -0.3, 0.15], "#ffe040"); break;
@@ -1513,7 +1857,7 @@ function makeCard(id, opts) {
 	const nm = el("div", "nm", f, def.name);
 	if (def.name.length > 14) nm.style.fontSize = "0.78em";
 	else if (def.name.length > 11) nm.style.fontSize = "0.88em";
-	el("div", "cost", f, (opts.bee || opts.free) ? "" : "☀ " + def.cost);
+	el("div", "cost", f, (opts.bee || opts.free) ? "" : "🍯 " + def.cost);
 	const shade = el("div", "shade", f);
 	const card = { frame: f, def, id };
 	card.setCooldown = fr => { shade.style.height = (clamp(fr, 0, 1) * 100) + "%"; };
@@ -1532,6 +1876,7 @@ class Game {
 		this.speed = 1;
 		this.state = "intro";
 		this.sun = spec.startSun;
+		this.zones = [];
 		this.plants = []; this.bees = []; this.projs = []; this.suns = []; this.fx = []; this.rollers = []; this.packets = []; this.timers = []; this.rtimers = [];
 		this.mowers = {};
 		this.waveIdx = 0;
@@ -1656,7 +2001,7 @@ class Game {
 		const bar = el("div", "seedbar", hud);
 		this.seedBar = bar;
 		this.scaled.push(bar);
-		const sunBox = el("div", "sunbox", bar, `<div class="sunico">☀️</div>`);
+		const sunBox = el("div", "sunbox", bar, `<div class="sunico">🍯</div>`);
 		this.sunLabel = el("div", "sunnum", sunBox, String(this.sun));
 		this.sunBox = sunBox;
 		if (spec.noSlots || spec.seedRain || spec.mode === "hivebreaker") sunBox.style.display = "none";
@@ -1752,7 +2097,7 @@ class Game {
 			this.state = spec.prep ? "prep" : "play";
 			if (this.startBtn) this.startBtn.style.display = "block";
 			if (mg) { this.hint(mg.tip); this.rdelay(8, () => { if (this.hintEl.textContent === mg.tip) this.hint(""); }); }
-			if (spec.g === 1) this.hint("Click a seed card at the top, then click the lawn to plant it! Click falling ☀️ to collect sun.");
+			if (spec.g === 1) this.hint("Click a seed card at the top, then click the lawn to plant it! Click the golden drops to collect nectar, and click a full Dewcup to pour it out.");
 			if (spec.mode === "boss") this.startBoss();
 		});
 	}
@@ -1797,7 +2142,7 @@ class Game {
 		if (c < 1 || c > COLS || r < 1 || r > this.rows) return false;
 		if (!this.spec.active[r]) return false;
 		const cell = this.grid[r][c];
-		if (cell.grave || cell.vase || cell.crater > 0) return false;
+		if (cell.grave || cell.vase || cell.crater > 0 || cell.stink > 0) return false;
 		if (this.spec.bowlLine && c > this.spec.bowlLine) return false;
 		if (def.kind === "roll") return !cell.main && !cell.pad && !cell.water;
 		if (def.aquatic) return cell.water && !cell.pad && !cell.main;
@@ -1822,7 +2167,7 @@ class Game {
 		if (def.kind === "roll") this.addRoller(def, c, r); else this.addPlant(def, c, r);
 		if (this.spec.g === 1 && !this.planted) {
 			this.planted = true;
-			this.hint("Great! Now collect ☀️ sun and plant more flowers!");
+			this.hint("Great! Plant Dewcups to make more nectar, and click them when they fill up!");
 			this.rdelay(6, () => this.hint(""));
 		}
 		return true;
@@ -1832,15 +2177,21 @@ class Game {
 		const onPad = def.kind !== "pad" && !!cell.pad;
 		const p = {
 			def, c, r, x: c - 0.5, hp: def.hp, onPad, inWater: cell.water && !onPad && def.kind !== "pad",
-			timer: 0.3, grow: 0, punch: 0, sticky: 0, phase: Math.random() * 6,
+			timer: 0.3, grow: 0, punch: 0, sticky: 0, dazeT: 0, phase: Math.random() * 6,
 		};
 		const k = def.kind;
-		if (k === "sun") p.timer = rnd(4, 8);
-		if (k === "mine") { p.armT = def.arm; p.armed = false; }
-		if (k === "bomb") p.fuse = def.fuse;
-		if (k === "ice") p.fuse = 0.6;
-		if (k === "magnet") p.timer = 0;
-		if (k === "gloom") p.timer = 0.5;
+		if (k === "cup") { p.stored = 10; p.timer = def.every; }
+		if (k === "cloud" || k === "stink") p.fuse = def.fuse;
+		if (k === "frostfern") p.fuse = 0.6;
+		if (k === "clock") { p.state = "puff"; p.regrowT = 0; }
+		if (k === "pitcher") p.held = [];
+		if (k === "bladder") p.cool = 0;
+		if (k === "wheel") { p.turn = 0; p.spin = 0; }
+		if (k === "storm") { p.sparks = 0; p.timer = 1; }
+		if (k === "fountain") p.timer = def.interval;
+		if (k === "scorch" || k === "haze" || k === "fig") p.timer = 1.5;
+		if (k === "boomerang") p.timer = 0.5;
+		if (k === "bell") p.timer = 1;
 		if (k === "pad") cell.pad = p; else cell.main = p;
 		this.plants.push(p);
 		Audio.Sfx(cell.water ? "splash" : "plant");
@@ -1855,6 +2206,35 @@ class Game {
 		if (cell.pad === p) {
 			cell.pad = null;
 			if (cell.main && !cell.main.def.aquatic) this.removePlant(cell.main);
+		}
+		// a pitcher that dies lets its bees go
+		if (p.held) for (const b of p.held) if (!b.dead) { b.inPitcher = null; b.x = p.x + 0.4; }
+		if (p.luring && !p.luring.dead) p.luring.lure = null;
+	}
+	harvest(p) {
+		if (!p.stored || p.stored < 1) return false;
+		const s = this.spawnSun(p.x, p.r, 4, Math.floor(p.stored));
+		this.collectSun(s);
+		p.stored = 0;
+		p.punch = 1;
+		return true;
+	}
+	// Giant Bee: push a flower one tile left, or uproot it if there's no room.
+	shovePlant(r, c) {
+		const cell = this.grid[r] && this.grid[r][c];
+		if (!cell) return;
+		const p = cell.main || cell.pad;
+		if (!p) return;
+		Audio.Sfx("thud", 0.8);
+		this.shake = 0.3;
+		const to = this.grid[r][c - 1];
+		if (cell.main && c > 1 && to && !to.main && !to.grave && !to.vase && !to.stink && (to.water ? !!to.pad : true) && !p.def.aquatic) {
+			cell.main = null; to.main = p;
+			p.c = c - 1; p.x = c - 1.5; p.onPad = !!to.pad; p.inWater = to.water && !to.pad;
+			this.puff(p.x + 0.5, r, 1, C(140, 100, 60));
+		} else {
+			this.removePlant(p);
+			this.puff(c - 0.5, r, 1, C(120, 90, 50));
 		}
 	}
 	shovelAt(c, r) {
@@ -1965,7 +2345,7 @@ class Game {
 			slowT: 0, frozenT: 0, state: "walk", t: Math.random() * 10,
 			hover: def.look.ball ? 1.7 : (def.look.larva ? 1.6 : 2.6 + 0.8 * s), hw: 0.32 * s + 0.12,
 			phaseT: Math.random() * 5, laneT: rnd(4, 8), honeyT: rnd(3, 6), shootT: 1.5, rise: opts.rise ? 1 : 0,
-			speed: def.speed, flash: 0, hopY: 0, dropped: {},
+			speed: def.speed, flash: 0, hopY: 0, dropped: {}, parries: def.parry || 0, backT: 0, sleepT: 0, stuckT: 0, glued: new Set(),
 		};
 		this.bees.push(b);
 		this.peakHp = Math.max(this.peakHp, this.totalHp());
@@ -1992,7 +2372,8 @@ class Game {
 		if (b.dropped[g]) return;
 		if (g === "armor" && !b.def.armor) return;
 		if (g === "shield" && !b.def.shield) return;
-		if (g === "larva" && b.def.id !== "giant") return;
+		if (g === "larva") return;
+		if (g === "sacks" && !b.def.look.sacks) return;
 		b.dropped[g] = true;
 		if (this.spec.mode === "invisibee") return;
 		const sc = b.def.look.scale || 1;
@@ -2004,18 +2385,25 @@ class Game {
 	}
 	damageBee(b, dmg, o) {
 		o = o || {};
-		if (b.dead || b.down) return;
+		if (b.dead || b.down || b.inPitcher) return;
 		if (b.phased && !o.explosive) return;
+		if (b.parries > 0 && o.front) { // Bone Knight parries shots from the front
+			b.parries--;
+			this.popup(b.x, b.rowF, 4.5, "PARRY!", C(230, 230, 255));
+			Audio.Sfx("metal", 1.3);
+			return;
+		}
 		if (o.frost) {
 			if (b.slowT <= 0 && !b.def.look.ball) this.setTint(b, C(120, 200, 255));
-			b.slowT = 10;
+			b.slowT = Math.max(b.slowT, o.slow || 4);
 		} else if (o.fire && b.slowT > 0) {
 			b.slowT = 0;
 			this.setTint(b, null);
 		}
-		if (b.shield > 0 && !o.ignoreShield) {
+		// Umbrella Bee: the leaf only stops things coming from above
+		if (b.shield > 0 && (o.lob || o.above)) {
 			b.shield -= dmg;
-			Audio.Sfx("metal");
+			Audio.Sfx("hit", 0.6);
 			if (b.shield > 0) return;
 			dmg = -b.shield;
 			b.shield = 0;
@@ -2023,15 +2411,17 @@ class Game {
 		}
 		if (b.armor > 0) {
 			b.armor -= dmg;
-			if (b.metal) Audio.Sfx("metal");
+			if (b.metal && !o.quietHit) Audio.Sfx("metal");
 			if (b.armor > 0) { b.flash = 0.08; return; }
 			dmg = -b.armor;
 			b.armor = 0;
 			this.dropGroup(b, "armor");
+			if (b.def.shellSpeed) b.speed = b.def.shellSpeed;
 		}
 		if (dmg <= 0) return;
 		b.hp -= dmg;
 		b.flash = 0.08;
+		if (b.def.dodge && !b.dodged && b.hp > 0) { b.dodged = true; this.changeLane(b); this.popup(b.x, b.rowF, 4.5, "JINK!", C(255, 160, 60)); }
 		if (!b.lostWing && b.hp < b.maxHp * 0.4 && !b.def.look.ball && !b.def.look.larva) {
 			b.lostWing = true;
 			this.dropGroup(b, "wingR");
@@ -2052,10 +2442,23 @@ class Game {
 		b.dead = true;
 		this.lastDeath = { x: b.x, row: b.rowF, y: b.hover };
 		if (def.split) for (let i = 1; i <= def.splitCount; i++) { const nb = this.spawnBee(def.split, b.row, b.x + (i - 2) * 0.35); nb.rowF = b.rowF; }
-		if (def.bomb && !o.quiet) this.explosion(b.x, b.row, 0.6, 0, C(255, 140, 40));
+		if (def.hatch && !o.quiet) for (let i = 0; i < def.hatch; i++) { const lb = this.spawnBee("larva", b.row, clamp(b.x + (i - 1) * 0.45, 0.6, 9.4)); lb.rise = 0.4; }
+		if (def.daze && !o.quiet) { // Stink Bee: knocks out the flowers next to it
+			for (let r = b.row - 1; r <= b.row + 1; r++) for (let c = Math.round(b.x) - 1; c <= Math.round(b.x) + 1; c++) {
+				const cell = this.grid[r] && this.grid[r][c];
+				const p = cell && (cell.main || cell.pad);
+				if (p) p.dazeT = Math.max(p.dazeT || 0, def.daze);
+			}
+			this.ring(b.x, b.rowF, 1, 2.4 * TILE, C(150, 200, 60), 0.6);
+		}
+		// Moonflowers turn beaten bees into nectar
+		for (const p of this.plants) {
+			if (p.dead || p.def.kind !== "moon" || p.sticky > 0 || p.dazeT > 0) continue;
+			if (Math.hypot(p.x - b.x, p.r - b.rowF) <= p.def.radius) { this.spawnSun(b.x, b.rowF, Math.max(2, b.hover), p.def.amount); p.punch = 1; }
+		}
 		Audio.Sfx("hit", 0.8);
-		const x = b.x, row = b.rowF, hover = b.hover + (b.hopY || 0), sc = 1, inv = this.spec.mode === "invisibee";
-		const drawOpts = { t: b.t, wingLost: b.lostWing, armor: false, shield: false, larva: !b.dropped.larva, bomb: false, tint: b.tint, frozen: true };
+		const x = b.x, row = b.rowF, hover = b.hover + (b.hopY || 0), sc = 1, inv = this.spec.mode === "invisibee" || b.inPitcher;
+		const drawOpts = { t: b.t, wingLost: b.lostWing, armor: false, shield: false, larva: false, sacks: !b.dropped.sacks, bomb: false, tint: b.tint, frozen: true };
 		this.addFx(0.9, null, f => {
 			const a = f.a || 0;
 			if (inv) return;
@@ -2077,7 +2480,8 @@ class Game {
 		const p = cell.main || cell.pad;
 		if (!p) return null;
 		const k = p.def.kind;
-		if ((k === "mine" && p.armed) || k === "snapper" || k === "bomb" || k === "ice") return null;
+		// ground-level and one-shot flowers can't be stung — bees fly over them
+		if (k === "briar" || k === "burr" || k === "cloud" || k === "stink" || k === "frostfern" || k === "bladder") return null;
 		return [p, c];
 	}
 	flattenCell(r, c) {
@@ -2088,6 +2492,7 @@ class Game {
 	}
 	updateBees(dt) {
 		const medics = this.bees.filter(b => b.def.heal && !b.dead);
+		this.scoutBoost = this.bees.some(b => b.def.scout && !b.dead && b.rise <= 0) ? 1.15 : 1;
 		for (let i = this.bees.length - 1; i >= 0; i--) {
 			const b = this.bees[i];
 			if (b.dead) this.bees.splice(i, 1);
@@ -2108,46 +2513,43 @@ class Game {
 			if (b.downT <= 0) { b.down = false; this.setTint(b, C(120, 255, 120)); this.delay(0.6, () => { if (!b.dead) this.setTint(b, null); }); }
 			return;
 		}
-		if (def.phase) {
-			b.phaseT += dt;
-			b.phased = (b.phaseT % 5) > 3.2;
+		if (b.inPitcher) return;
+		if (b.lure) { // being drawn into a Pitcher Plant
+			b.lure.t += dt;
+			const a = Math.min(1, b.lure.t);
+			b.x = b.lure.fromX + (b.lure.p.x - b.lure.fromX) * a;
+			if (a >= 1) { b.inPitcher = b.lure.p; b.lure.p.held.push(b); b.lure.p.luring = null; b.lure = null; Audio.Sfx("slurp"); }
+			return;
 		}
+		if (def.phase) { b.phaseT += dt; b.phased = (b.phaseT % 5) > 3.2; }
 		for (const m of medics) if (m !== b && Math.abs(m.x - b.x) < 1.6 && Math.abs(m.rowF - b.rowF) < 1.5) b.hp = Math.min(b.maxHp, b.hp + m.def.heal * dt);
 		if (b.frozenT > 0) {
 			b.frozenT -= dt;
 			if (b.frozenT <= 0) this.setTint(b, b.slowT > 0 ? C(120, 200, 255) : null);
 			return;
 		}
-		if (b.slowT > 0) {
-			b.slowT -= dt;
-			if (b.slowT <= 0) this.setTint(b, null);
+		if (b.slowT > 0) { b.slowT -= dt; if (b.slowT <= 0) this.setTint(b, null); }
+		if (b.sleepT > 0) { b.sleepT -= dt; return; }
+		if (b.stuckT > 0) { b.stuckT -= dt; return; }
+		if (b.inCloud) { b.inCloud = false; return; }
+		let mdt = dt * (b.slowT > 0 ? 0.5 : 1) * (this.scoutBoost || 1);
+		// caught in a Briar Patch?
+		const bc = Math.floor(b.x) + 1, bcell = this.grid[b.row] && this.grid[b.row][bc];
+		if (bcell && bcell.main && bcell.main.def.kind === "briar" && !bcell.main.dead && bcell.main.dazeT <= 0 && bcell.main.sticky <= 0 && !def.look.ball) {
+			mdt *= bcell.main.def.slow;
+			this.damageBee(b, bcell.main.def.dps * dt, { quietHit: true });
+			if (b.dead) return;
 		}
-		const mdt = dt * (b.slowT > 0 ? 0.5 : 1);
-
-		if (b.state === "hop") {
-			b.hopT += dt;
-			const a = Math.min(1, b.hopT / 0.7);
-			b.x = b.hopFrom + (b.hopTo - b.hopFrom) * a;
-			b.hopY = Math.sin(a * Math.PI) * 5;
-			if (a >= 1) { b.state = "walk"; b.hopped = true; b.speed = def.hopSpeed; b.hopY = 0; }
+		if (b.backT > 0) { // Mint Sprig: buzzing backwards
+			b.backT -= dt;
+			b.x = Math.min(9.6, b.x + b.speed * mdt);
+			b.state = "walk";
 			return;
 		}
-		if (b.state === "fuse" || b.state === "smash") {
+		if (def.dropAt && !b.dropped.sacks && b.hp < b.maxHp * def.dropAt) { this.dropGroup(b, "sacks"); b.speed = def.dropSpeed; }
+		if (b.state === "shove") {
 			b.windT -= mdt;
-			if (b.windT <= 0) {
-				if (b.state === "fuse") {
-					this.flattenCell(b.row, b.targetC);
-					this.explosion(b.x - 0.3, b.row, 0.6, 0, C(255, 140, 40));
-					b.hp = 0;
-					this.killBee(b, { noRevive: true, quiet: true });
-				} else {
-					this.flattenCell(b.row, b.targetC);
-					Audio.Sfx("thud", 0.7);
-					this.shake = 0.35;
-					this.puff(b.targetC - 0.5, b.row, 1, C(120, 90, 50));
-					b.state = "walk";
-				}
-			}
+			if (b.windT <= 0) { this.shovePlant(b.row, b.targetC); b.state = "walk"; }
 			return;
 		}
 		if (def.laneChange) {
@@ -2162,50 +2564,48 @@ class Game {
 				for (let c = Math.min(COLS, Math.floor(b.x)); c >= Math.max(1, Math.floor(b.x - 5)); c--) {
 					const cell = this.grid[b.row][c];
 					const p = cell.main || cell.pad;
-					if (p && p.sticky <= 0) { target = p; break; }
+					if (p && p.sticky <= 0 && p.def.kind !== "burr" && p.def.kind !== "briar") { target = p; break; }
 				}
 				if (target) this.enemyShot("honey", b, target);
 			}
 		}
-		if (def.larva && !b.thrown && b.hp < b.maxHp * 0.5 && b.x > 3.5) {
-			b.thrown = true;
-			this.dropGroup(b, "larva");
-			const lb = this.spawnBee("larva", b.row, Math.max(0.8, b.x - 3.5));
-			lb.rise = 0.6;
-		}
-		if (def.ranged && b.x <= 8.6) {
-			let hasPlant = false;
-			for (let c = Math.floor(b.x); c >= 1; c--) {
-				const cell = this.grid[b.row][c];
-				if (cell && (cell.main || cell.pad)) { hasPlant = (b.x - (c - 0.5)) > 1.1; break; }
+		// Sniper Bee: stops far out and shoots the priciest flower in its lane
+		if (def.sniper && b.x <= 8.3) {
+			let best = null;
+			for (let c = 1; c <= COLS; c++) {
+				const cell = this.grid[b.row][c], p = cell.main || cell.pad;
+				if (p && c - 0.5 < b.x - 0.6 && p.def.kind !== "burr" && p.def.kind !== "briar" && (!best || p.def.cost > best.def.cost || (p.def.cost === best.def.cost && p.c > best.c))) best = p;
 			}
-			if (hasPlant) {
-				b.shootT -= mdt;
-				if (b.shootT <= 0) { b.shootT = 2.2; this.enemyShot("stinger", b); }
+			if (best) {
 				b.state = "shoot";
+				b.shootT -= mdt;
+				if (b.shootT <= 0) { b.shootT = 5; this.enemyShot("stinger", b, best); }
 				return;
 			}
 		}
 		let hit = this.contactPlant(b.row, b.x);
-		if (hit && def.crush) { this.flattenCell(b.row, hit[1]); Audio.Sfx("thud", 1.2); hit = null; }
+		if (hit && def.glue) { // Honey Wave rolls right over, gluing flowers shut
+			const [p] = hit;
+			if (!b.glued.has(p)) { b.glued.add(p); p.sticky = Math.max(p.sticky, def.glue); Audio.Sfx("splash", 1.2); }
+			hit = null;
+		}
 		if (hit) {
 			const [p, c] = hit;
-			if (def.hop && !b.hopped) {
-				if (p.def.tall) { b.hopped = true; b.speed = def.hopSpeed; }
-				else {
-					b.state = "hop"; b.hopT = 0; b.hopFrom = b.x; b.hopTo = (c - 0.5) - 0.85;
-					Audio.Sfx("buzz", 1.3);
-					return;
-				}
+			if (def.cut && !b.didCut) { // Leafcutter Wasp
+				b.didCut = true;
+				p.hp -= p.hp * def.cut; p.hurt = 0.3;
+				b.speed = def.cutSpeed;
+				this.popup(p.x, p.r, 4, "SNIP!", C(140, 255, 120));
+				Audio.Sfx("chomp", 1.5);
 			}
-			if (def.bomb) { b.state = "fuse"; b.windT = 0.7; b.targetC = c; return; }
-			if (def.smash) { b.state = "smash"; b.windT = 1.1; b.targetC = c; return; }
+			if (def.shove) { b.state = "shove"; b.windT = 1.0; b.targetC = c; return; }
 			b.state = "sting";
 			p.hp -= (def.dps || 100) * mdt;
 			p.hurt = 0.1;
-			if (p.def.kind === "garlic") {
-				b.garlicT = (b.garlicT || 0) + dt;
-				if (b.garlicT > 0.6) { b.garlicT = 0; b.state = "walk"; this.changeLane(b); b.x += 0.1; }
+			if (p.def.kind === "saguaro") this.damageBee(b, p.def.prick * mdt, { quietHit: true });
+			if (p.def.kind === "mint" && !b.dead) {
+				b.mintT = (b.mintT || 0) + dt;
+				if (b.mintT > 0.4) { b.mintT = 0; b.backT = p.def.back; b.state = "walk"; this.popup(b.x, b.rowF, 4, "BLEH!", C(140, 255, 180)); }
 			}
 			if (p.hp <= 0) { this.removePlant(p); Audio.Sfx("chomp", 1.3); b.state = "walk"; }
 			return;
@@ -2219,7 +2619,6 @@ class Game {
 		}
 	}
 
-	// ------------------------------------------------------------------ plants
 	updatePlants(dt) {
 		for (let i = this.plants.length - 1; i >= 0; i--) {
 			const p = this.plants[i];
@@ -2228,7 +2627,9 @@ class Game {
 			p.punch = Math.max(0, p.punch - dt * 5);
 			p.hurt = Math.max(0, (p.hurt || 0) - dt);
 			let pdt = dt;
-			if (this.beamCol && p.c === this.beamCol) pdt = dt * 2;
+			if (this.beamCol && p.c === this.beamCol) pdt *= 2;
+			if (p.onPad) pdt *= 1.25; // Lotus Raft
+			if (p.dazeT > 0) { p.dazeT -= dt; continue; }
 			if (p.sticky > 0) p.sticky -= dt;
 			else this.updatePlant(p, pdt);
 		}
@@ -2240,55 +2641,153 @@ class Game {
 		Audio.Sfx("shoot");
 		return pr;
 	}
+	beesNear(x, row, radius) { return this.bees.filter(b => this.targetable(b) && Math.hypot(b.x - x, b.rowF - row) <= radius); }
 	updatePlant(p, dt) {
 		const def = p.def, k = def.kind;
-		if (k === "sun") {
+		if (k === "cup") {
 			if (this.spec.noSun) return;
 			p.timer -= dt;
-			if (p.timer <= 0) {
-				p.timer = def.interval;
-				for (let n = 0; n < (def.count || 1); n++) this.spawnSun(p.x, p.r, 4, def.amount);
-				p.punch = 1;
-			}
+			if (p.timer <= 0) { p.timer = def.every; p.stored = Math.min(def.cap, p.stored + def.fill); }
 		} else if (k === "shooter") {
 			p.timer -= dt;
 			if (p.timer <= 0) {
-				if (this.laneHasTarget(p.r, p.x, def.range)) {
-					p.timer = def.interval;
-					const life = def.range ? def.range / 9 : null;
-					for (let n = 1; n <= (def.count || 1); n++) this.delay((n - 1) * 0.16, () => { if (!p.dead) this.fire(p, def.proj, p.r, { life, frost: def.proj === "frost" }); });
-				} else p.timer = 0;
+				if (this.laneHasTarget(p.r, p.x, def.range)) { p.timer = def.interval; this.fire(p, def.proj, p.r, { pierce: def.pierce || 0, bounce: def.bounce || 0 }); }
+				else p.timer = 0;
 			}
-		} else if (k === "triple") {
+		} else if (k === "cloud") {
+			p.fuse -= dt;
+			p.punch = 0.5 + Math.sin(this.t * 25) * 0.5;
+			if (p.fuse <= 0) {
+				this.removePlant(p);
+				this.zones.push({ kind: "cloud", x: p.x, row: p.r, t: def.last, life: def.last, dps: def.dps });
+				Audio.Sfx("splash", 0.6);
+				this.puff(p.x, p.r, 2, C(255, 220, 80));
+			}
+		} else if (k === "burr") {
+			if (!p.used) {
+				for (const b of this.bees) {
+					if (b.row === p.r && !b.dead && !b.down && b.rise <= 0 && !b.inPitcher && Math.abs(b.x - p.x) < 0.55 && !b.def.look.ball) {
+						p.used = b; p.holdT = b.def.id === "giant" ? 2 : def.hold;
+						b.stuckT = p.holdT;
+						Audio.Sfx("thud", 1.4);
+						break;
+					}
+				}
+			} else {
+				p.holdT -= dt;
+				const b = p.used;
+				if (!b.dead) { b.stuckT = Math.max(b.stuckT, 0.05); this.damageBee(b, def.dps * dt, { quietHit: true }); }
+				if (p.holdT <= 0 || b.dead) { if (!b.dead) b.stuckT = 0; this.removePlant(p); this.puff(p.x, p.r, 1, C(160, 120, 60)); }
+			}
+		} else if (k === "bell") {
 			p.timer -= dt;
 			if (p.timer <= 0) {
-				const lanes = [];
-				for (let r = p.r - 1; r <= p.r + 1; r++) if (r >= 1 && r <= this.rows && this.spec.active[r]) lanes.push(r);
-				if (lanes.some(r => this.laneHasTarget(r, p.x))) {
-					p.timer = def.interval;
-					for (const r of lanes) this.fire(p, "thorn", r, { rowTarget: r !== p.r ? r : null });
+				const near = this.beesNear(p.x, p.r, def.radius);
+				if (near.length) {
+					p.timer = def.interval; p.punch = 1;
+					for (const b of near) this.damageBee(b, def.dmg, { frost: true, slow: 4 });
+					this.ring(p.x, p.r, 3, def.radius * TILE * 2, C(170, 225, 255), 0.5);
+					Audio.Sfx("freeze", 1.6);
 				} else p.timer = 0;
 			}
-		} else if (k === "homing") {
+		} else if (k === "clock") {
+			if (p.state === "stalk") { p.regrowT -= dt; if (p.regrowT <= 0) { p.state = "puff"; this.puff(p.x, p.r, 3, C(255, 255, 255)); } }
+			else {
+				const near = this.bees.find(b => b.row === p.r && this.targetable(b) && b.x >= p.x - 0.3 && b.x <= p.x + 1.2);
+				if (near) {
+					for (const b of this.beesNear(p.x, p.r, 1.5)) { this.damageBee(b, def.dmg, {}); if (!b.dead && b.def.id !== "giant") b.x = Math.min(9.4, b.x + 1); }
+					p.state = "stalk"; p.regrowT = def.regrow;
+					for (let i = 0; i < 3; i++) this.puff(p.x + i * 0.3, p.r, 3, C(255, 255, 255));
+					Audio.Sfx("splash", 1.6);
+				}
+			}
+		} else if (k === "pitcher") {
+			for (let i = p.held.length - 1; i >= 0; i--) {
+				const b = p.held[i];
+				if (b.dead) { p.held.splice(i, 1); continue; }
+				b.hp -= def.dps * dt;
+				if (b.hp <= 0) { b.hp = 0; b.armor = 0; b.shield = 0; this.killBee(b, { noRevive: true }); p.held.splice(i, 1); }
+			}
+			if (!p.luring && p.held.length < def.holds) {
+				let best = null;
+				for (const b of this.bees) if (b.row === p.r && this.targetable(b) && !b.lure && b.x >= p.x - 0.3 && b.x <= p.x + def.lure && b.def.id !== "giant" && !b.def.look.ball) if (!best || b.x < best.x) best = b;
+				if (best) { best.lure = { p, t: 0, fromX: best.x }; p.luring = best; p.punch = 1; }
+			}
+		} else if (k === "stink") {
+			p.fuse -= dt;
+			p.punch = 0.5 + Math.sin(this.t * 20) * 0.5;
+			if (p.fuse <= 0) {
+				this.removePlant(p);
+				for (const b of this.bees) {
+					if (b.dead || b.rise > 0 || b.inPitcher) continue;
+					if (Math.hypot(b.x - p.x, b.rowF - p.r) <= def.radius) {
+						this.damageBee(b, def.dmg, { explosive: true });
+						if (!b.dead) { b.x = Math.max(b.x, rnd(9.2, 9.6)); b.lure = null; b.stuckT = 0; }
+					}
+				}
+				this.grid[p.r][p.c].stink = def.lingers;
+				this.ring(p.x, p.r, 1, def.radius * TILE * 2, C(140, 190, 60), 0.9);
+				this.shake = 0.5;
+				Audio.Sfx("explode", 0.6);
+			}
+		} else if (k === "bladder") {
+			p.cool = Math.max(0, p.cool - dt);
+			if (p.cool <= 0) {
+				let best = null;
+				for (const b of this.bees) if (b.row === p.r && !b.dead && !b.down && b.rise <= 0 && !b.inPitcher && Math.abs(b.x - p.x) <= def.reach && b.def.id !== "giant") if (!best || Math.abs(b.x - p.x) < Math.abs(best.x - p.x)) best = b;
+				if (best) {
+					best.hp = 0; best.armor = 0; best.shield = 0;
+					this.killBee(best, { noRevive: true });
+					Audio.Sfx("slurp");
+					this.puff(p.x, p.r, 1, C(120, 190, 255));
+					p.cool = def.reset; p.punch = 1;
+				}
+			}
+		} else if (k === "wheel") {
+			p.spin += dt * 6;
 			p.timer -= dt;
 			if (p.timer <= 0) {
-				if (this.anyBee()) {
+				const seq = [p.r - 1, p.r, p.r + 1, p.r];
+				const valid = seq.filter(r => r >= 1 && r <= this.rows && this.spec.active[r]);
+				if (valid.some(r => this.laneHasTarget(r, p.x))) {
 					p.timer = def.interval;
-					for (let n = 1; n <= def.count; n++) this.delay((n - 1) * 0.2, () => {
-						if (p.dead) return;
-						const pr = this.addProj("spike", p.x, p.r, 0, 0, def.dmg, { homing: true });
-						pr.y = 4; p.punch = 1;
-					});
+					let r;
+					do { r = seq[p.turn % 4]; p.turn++; } while (!(r >= 1 && r <= this.rows && this.spec.active[r]));
+					this.fire(p, "petal", r, { rowTarget: r !== p.r ? r : null });
 				} else p.timer = 0;
 			}
-		} else if (k === "star") {
+		} else if (k === "sniper") {
 			p.timer -= dt;
 			if (p.timer <= 0) {
-				if (this.anyBee()) {
-					p.timer = def.interval;
-					for (const d of [[0, -1], [0, 1], [-1, 0], [0.87, -0.5], [0.87, 0.5]]) this.addProj("star", p.x, p.r, d[0] * 8, d[1] * 8, def.dmg, {});
-					p.punch = 1;
-					Audio.Sfx("shoot", 1.3);
+				let best = null, bv = -1;
+				for (const b of this.bees) if (this.targetable(b)) { const v = b.hp + b.armor + b.shield; if (v > bv) { best = b; bv = v; } }
+				if (best) {
+					p.timer = def.interval; p.punch = 1;
+					this.beam([p.x, p.r, 6], [best.x, best.rowF, best.hover], C(255, 255, 200), 0.25, 0.3);
+					this.damageBee(best, def.dmg, {});
+					Audio.Sfx("zap", 2);
+				} else if (this.boss && !this.boss.dead) { p.timer = def.interval; this.damageBoss(def.dmg); p.punch = 1; }
+				else p.timer = 0;
+			}
+		} else if (k === "fountain") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				p.timer = def.interval;
+				let any = false;
+				for (let r = p.r - 1; r <= p.r + 1; r++) for (let c = p.c - 1; c <= p.c + 1; c++) {
+					const cell = this.grid[r] && this.grid[r][c];
+					const q = cell && cell.main;
+					if (q && q !== p && q.def.kind === "cup" && !this.spec.noSun) { q.stored = Math.min(q.def.cap, q.stored + def.amount); any = true; this.puff(q.x, q.r, 4, C(150, 210, 255)); }
+				}
+				if (any) p.punch = 1;
+			}
+		} else if (k === "scorch") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				if (this.laneHasTarget(p.r, p.x, def.length + 0.5)) {
+					p.timer = def.interval; p.punch = 1;
+					this.zones.push({ kind: "scorch", row: p.r, x0: p.x + 0.4, x1: p.x + 0.4 + def.length, t: def.last, life: def.last, dps: def.dps });
+					Audio.Sfx("sizzle", 0.8);
 				} else p.timer = 0;
 			}
 		} else if (k === "lobber") {
@@ -2298,109 +2797,112 @@ class Game {
 				if (target || (this.boss && !this.boss.dead)) { p.timer = def.interval; this.lob(p, target); }
 				else p.timer = 0;
 			}
-		} else if (k === "laser") {
+		} else if (k === "storm") {
 			p.timer -= dt;
-			if (p.timer <= 0) {
-				if (this.laneHasTarget(p.r, p.x)) { p.timer = def.interval; this.laser(p); }
-				else p.timer = 0;
-			}
-		} else if (k === "lightning") {
-			p.timer -= dt;
-			if (p.timer <= 0) {
-				const target = this.firstBee(p.r, p.x);
-				if (target || (this.boss && !this.boss.dead)) { p.timer = def.interval; this.lightning(p, target); }
-				else p.timer = 0;
-			}
-		} else if (k === "gloom") {
-			p.timer -= dt;
-			if (p.timer <= 0) {
-				p.timer = def.interval;
-				let hit = false;
-				for (const b of this.bees) if (this.targetable(b) && Math.abs(b.x - p.x) <= 1.5 && Math.abs(b.rowF - p.r) <= 1.1) { this.damageBee(b, def.dmg, { ignoreShield: true }); hit = true; }
-				if (hit) { p.punch = 1; this.ring(p.x, p.r, 1.2, 1.5 * TILE, C(170, 80, 255), 0.35); }
-			}
-		} else if (k === "chomper") {
-			if (p.chew) { p.chew -= dt; if (p.chew <= 0) p.chew = null; }
-			else {
-				for (const b of this.bees) {
-					if (b.row === p.r && this.targetable(b) && b.x >= p.x - 0.3 && b.x <= p.x + 1.3) {
-						if (b.def.id === "giant" || b.def.crush) this.damageBee(b, 400, { ignoreShield: true });
-						else { b.hp = 0; b.armor = 0; b.shield = 0; this.killBee(b, { noRevive: true }); }
-						p.chew = def.chew; p.chomp = 1;
-						Audio.Sfx("chomp");
-						break;
+			if (p.timer <= 0) { p.timer = 1; p.sparks = Math.min(def.max, p.sparks + 1); }
+			if (p.sparks > 0) {
+				const near = this.bees.filter(b => this.targetable(b) && Math.abs(b.rowF - p.r) <= 1.1 && b.x >= p.x - 0.5 && b.x <= p.x + def.range);
+				if (near.length) {
+					for (let i = 0; i < p.sparks; i++) {
+						const b = near[rint(0, near.length - 1)];
+						this.zig([p.x, p.r, 4], [b.x, b.rowF, b.hover]);
+						this.damageBee(b, def.dmg, {});
 					}
+					p.sparks = 0; p.punch = 1;
+					Audio.Sfx("zap");
+				} else if (this.boss && !this.boss.dead && p.x + def.range >= 9.0) {
+					this.zig([p.x, p.r, 4], [9.6, p.r, 6]);
+					this.damageBoss(def.dmg * p.sparks); p.sparks = 0; p.punch = 1;
 				}
 			}
-			p.chomp = Math.max(0, (p.chomp || 0) - dt * 2);
-		} else if (k === "bomb") {
+		} else if (k === "haze") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				const hit = this.bees.filter(b => b.row === p.r && this.targetable(b) && b.x >= p.x - 0.3 && b.x <= p.x + def.range);
+				if (hit.length) {
+					p.timer = def.interval; p.punch = 1;
+					for (const b of hit) { this.damageBee(b, def.dmg, {}); if (!b.dead) b.sleepT = def.sleep; }
+					this.addFx(0.8, null, f => {
+						const [sx, sy] = this.S(p.x + 0.4 + f.a * def.range * 0.5, p.r, 3);
+						ctx.save(); ctx.globalAlpha = 0.35 * (1 - f.a);
+						ctx.fillStyle = "#c8a0ff"; ctx.beginPath(); ctx.ellipse(sx, sy, this.L.T * (0.5 + f.a * def.range * 0.4), this.L.T * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+						ctx.restore();
+					});
+					Audio.Sfx("magic", 0.6);
+				} else p.timer = 0;
+			}
+		} else if (k === "rust") {
+			for (const b of this.bees) {
+				if (!this.targetable(b) || !(b.metal && b.armor > 0)) continue;
+				if (Math.hypot(b.x - p.x, b.rowF - p.r) <= def.range) {
+					b.armor -= def.dps * dt;
+					p.punch = Math.max(p.punch, 0.3);
+					if (b.armor <= 0) { b.armor = 0; this.dropGroup(b, "armor"); if (b.def.shellSpeed) b.speed = b.def.shellSpeed; Audio.Sfx("metal", 0.7); }
+				}
+			}
+		} else if (k === "frostfern") {
 			p.fuse -= dt;
-			p.punch = 0.5 + Math.sin(this.t * 30) * 0.5;
 			if (p.fuse <= 0) {
 				this.removePlant(p);
-				if (def.id === "doom") {
-					this.explosion(p.x, p.r, def.radius, def.dmg, C(120, 0, 160), true);
-					this.grid[p.r][p.c].crater = def.crater;
-					this.shake = 0.8;
-				} else this.explosion(p.x, p.r, def.radius, def.dmg, C(255, 90, 30));
-			}
-		} else if (k === "ice") {
-			p.fuse -= dt;
-			if (p.fuse <= 0) { this.removePlant(p); this.freezeAll(def.freeze); }
-		} else if (k === "mine") {
-			if (!p.armed) {
-				p.armT -= dt;
-				if (p.armT <= 0) { p.armed = true; Audio.Sfx("magic", 1.4); }
-			} else {
+				const x0 = p.c - 1, x1 = p.c - 1 + def.cols;
+				Audio.Sfx("freeze");
 				for (const b of this.bees) {
-					if (b.row === p.r && !b.dead && !b.down && b.rise <= 0 && Math.abs(b.x - p.x) < 0.6) {
-						this.removePlant(p);
-						this.explosion(p.x, p.r, 0.9, def.dmg, C(255, 120, 40), false, true);
-						break;
-					}
+					if (b.dead || b.rise > 0 || b.x < x0 || b.x > x1) continue;
+					if (b.def.iceKills) { b.hp = 0; this.killBee(b, { noRevive: true }); continue; }
+					b.frozenT = def.freeze; b.slowT = def.freeze + 4;
+					this.setTint(b, C(170, 230, 255));
+					this.damageBee(b, 20, { explosive: true });
 				}
+				if (this.boss && !this.boss.dead && x1 >= 9) this.boss.frozen = def.freeze;
+				this.addFx(0.8, null, f => {
+					const L = this.L;
+					ctx.save(); ctx.globalAlpha = 0.5 * (1 - f.a); ctx.fillStyle = "#c8f0ff";
+					ctx.fillRect(L.ox + x0 * L.T + this.shx, L.oy - L.T * 0.5, def.cols * L.T, (this.rows + 0.5) * L.T);
+					ctx.restore();
+				}, null, { top: true });
 			}
-		} else if (k === "snapper") {
-			for (const b of this.bees) {
-				if (b.row === p.r && !b.dead && !b.down && b.rise <= 0 && Math.abs(b.x - p.x) < 0.65) {
-					this.removePlant(p);
-					b.hp = 0; b.armor = 0; b.shield = 0;
-					this.killBee(b, { noRevive: true });
-					Audio.Sfx("slurp");
-					this.puff(p.x, p.r, 1, C(120, 190, 255));
-					break;
-				}
-			}
-		} else if (k === "magnet") {
+		} else if (k === "boomerang") {
 			p.timer -= dt;
 			if (p.timer <= 0) {
-				for (const b of this.bees) {
-					if (this.targetable(b) && ((b.metal && b.armor > 0) || (b.shieldMetal && b.shield > 0))) {
-						const d = Math.hypot(b.x - p.x, b.rowF - p.r);
-						if (d <= def.range) {
-							if (b.shield > 0 && b.shieldMetal) { b.shield = 0; this.dropGroup(b, "shield"); }
-							else { b.armor = 0; this.dropGroup(b, "armor"); }
-							p.timer = def.cooldown; p.punch = 1;
-							Audio.Sfx("metal", 0.7);
-							this.beam([p.x, p.r, 4.5], [b.x, b.rowF, b.hover + 1], C(255, 60, 60), 0.3, 0.3);
-							break;
-						}
-					}
-				}
+				if (this.laneHasTarget(p.r, p.x, def.range + 0.5)) {
+					p.timer = def.interval;
+					const pr = this.addProj("samara", p.x + 0.3, p.r, 6, 0, def.dmg, {});
+					pr.boomer = { out: true, maxX: p.x + 0.3 + def.range, homeX: p.x };
+					p.punch = 1;
+					Audio.Sfx("shoot", 0.8);
+				} else p.timer = 0;
+			}
+		} else if (k === "fig") {
+			p.timer -= dt;
+			if (p.timer <= 0) {
+				const near = this.beesNear(p.x, p.r, def.radius);
+				if (near.length) {
+					p.timer = def.interval; p.punch = 1;
+					for (const b of near) { this.damageBee(b, def.dmg, {}); if (!b.dead) b.stuckT = Math.max(b.stuckT, def.hold); }
+					this.ring(p.x, p.r, 0.5, def.radius * TILE * 2, C(120, 80, 40), 0.4);
+					Audio.Sfx("thud", 1.6);
+				} else p.timer = 0;
 			}
 		}
 	}
+	updateZones(dt) {
+		for (let i = this.zones.length - 1; i >= 0; i--) {
+			const z = this.zones[i];
+			z.t -= dt;
+			if (z.t <= 0) { this.zones.splice(i, 1); continue; }
+			for (const b of this.bees) {
+				if (b.dead || b.rise > 0 || b.inPitcher) continue;
+				if (z.kind === "cloud" && Math.abs(b.x - z.x) <= 1.5 && Math.abs(b.rowF - z.row) <= 1.1) { b.inCloud = true; this.damageBee(b, z.dps * dt, { explosive: true, quietHit: true }); }
+				if (z.kind === "scorch" && Math.abs(b.rowF - z.row) < 0.5 && b.x >= z.x0 && b.x <= z.x1) this.damageBee(b, z.dps * dt, { fire: true, quietHit: true });
+			}
+			if (z.kind === "cloud" && this.boss && !this.boss.dead && z.x + 1.5 >= 9) this.damageBoss(z.dps * dt * 0.5);
+		}
+	}
 
-	// ------------------------------------------------------------------ projectiles
 	addProj(kind, x, row, vx, vr, dmg, opts) {
-		const pr = { kind, x, row, vx, vr, dmg, opts: opts || {}, age: 0, y: 3.7 };
+		const pr = { kind, x, row, vx, vr, dmg, opts: opts || {}, age: 0, y: 3.7, hit: new Set(), pierce: (opts && opts.pierce) || 0, bounce: (opts && opts.bounce) || 0 };
 		this.projs.push(pr);
 		return pr;
-	}
-	nearestBee(x, row) {
-		let best = null;
-		for (const b of this.bees) if (this.targetable(b)) if (!best || b.x < best.x) best = b;
-		return best;
 	}
 	updateProjs(dt) {
 		for (let i = this.projs.length - 1; i >= 0; i--) {
@@ -2417,109 +2919,84 @@ class Game {
 				pr.y = 5 + Math.sin(a * Math.PI) * 9 - pr.lt * 2;
 				if (pr.lt >= 1) { remove = true; this.lobLand(pr); }
 			} else {
-				if (pr.opts.homing) {
-					let t = pr.target;
-					if (!t || t.dead || !this.targetable(t)) { t = this.nearestBee(pr.x, pr.row); pr.target = t; }
-					let tx = null, tr = null;
-					if (t) { tx = t.x; tr = t.rowF; } else if (this.boss && !this.boss.dead) { tx = 9.6; tr = (this.rows + 1) / 2; }
-					if (tx !== null) {
-						let dx = tx - pr.x, dz = tr - pr.row;
-						const m = Math.hypot(dx, dz);
-						if (m > 0.01) { dx = dx / m * 9; dz = dz / m * 9; }
-						pr.vx = dx; pr.vr = dz;
-					} else if (pr.vx === 0 && pr.vr === 0) pr.vx = 9;
-				}
 				pr.x += pr.vx * dt;
 				if (pr.rowTarget) {
-					const d = pr.rowTarget - pr.row, s = 5 * dt;
-					if (Math.abs(d) <= s) { pr.row = pr.rowTarget; pr.rowTarget = null; } else pr.row += s * (d > 0 ? 1 : -1);
+					const d = pr.rowTarget - pr.row, st = 5 * dt;
+					if (Math.abs(d) <= st) { pr.row = pr.rowTarget; pr.rowTarget = null; } else pr.row += st * (d > 0 ? 1 : -1);
 				} else pr.row += pr.vr * dt;
-				// Fire Poppy
-				if (pr.kind === "thorn" || pr.kind === "frost") {
-					const c = Math.floor(pr.x) + 1, r = Math.floor(pr.row + 0.5);
-					const cell = this.grid[r] && this.grid[r][c];
-					if (cell && cell.main && cell.main.def.kind === "fire" && Math.abs(pr.x - (c - 0.5)) < 0.3 && pr.lastFire !== cell.main) {
-						const newKind = pr.kind === "thorn" ? "fire" : "thorn";
-						const np = this.addProj(newKind, pr.x, pr.row, pr.vx, pr.vr, pr.kind === "thorn" ? pr.dmg * 2 : pr.dmg, { fire: newKind === "fire" });
-						np.lastFire = cell.main;
-						remove = true;
-						if (newKind === "fire") Audio.Sfx("sizzle");
-					}
+				if (pr.boomer) { // Maple Spinner: out, then back
+					if (pr.boomer.out && pr.x >= pr.boomer.maxX) { pr.boomer.out = false; pr.vx = -Math.abs(pr.vx); pr.hit = new Set(); pr.bossHit = false; }
+					if (!pr.boomer.out && pr.x <= pr.boomer.homeX) remove = true;
 				}
 				if (!remove) {
 					let hit = null;
-					for (const b of this.bees) if (this.targetable(b) && Math.abs(b.rowF - pr.row) < 0.5 && Math.abs(b.x - pr.x) < b.hw + 0.15) if (!hit || b.x < hit.x) hit = b;
+					for (const b of this.bees) {
+						if (pr.hit.has(b) || !this.targetable(b) || Math.abs(b.rowF - pr.row) >= 0.5 || Math.abs(b.x - pr.x) >= b.hw + 0.15) continue;
+						if (!hit || (pr.vx >= 0 ? b.x < hit.x : b.x > hit.x)) hit = b;
+					}
 					if (hit) {
-						const fromFront = pr.vx > 0 && Math.abs(pr.vr) < 0.1;
-						this.damageBee(hit, pr.dmg, { frost: pr.opts.frost, fire: pr.opts.fire, ignoreShield: !fromFront });
-						if (pr.opts.fire) {
-							for (const b of this.bees) if (b !== hit && this.targetable(b) && b.row === hit.row && Math.abs(b.x - hit.x) < 0.9) this.damageBee(b, pr.dmg / 3, { fire: true });
-							this.ring(pr.x, pr.row, 3, 4, C(255, 140, 30), 0.25);
-						}
+						const front = pr.vx > 0 && Math.abs(pr.vr) < 0.1 && !pr.rowTarget;
+						this.damageBee(hit, pr.dmg, { front });
+						pr.hit.add(hit);
 						Audio.Sfx("hit");
-						remove = true;
-					} else if (this.boss && !this.boss.dead && pr.x >= 9.15) {
+						if (pr.boomer) { /* keeps going */ }
+						else if (pr.pierce > 0) { pr.pierce--; pr.dmg *= 0.5; }
+						else {
+							if (pr.bounce > 0) { // Ricochet Rose: bounce into a bee in the next lane
+								let best = null, bd = 1e9;
+								for (const b of this.bees) {
+									if (b === hit || !this.targetable(b) || Math.abs(Math.abs(b.rowF - hit.rowF) - 1) > 0.4 || b.x < hit.x - 1.5) continue;
+									const d = Math.hypot(b.x - hit.x, b.rowF - hit.rowF);
+									if (d < bd) { best = b; bd = d; }
+								}
+								if (best) {
+									const dx = best.x - hit.x, dr = best.rowF - hit.rowF, m = Math.hypot(dx, dr) || 1;
+									const np = this.addProj("ricochet", hit.x, hit.rowF, dx / m * 9, dr / m * 9, pr.dmg, {});
+									np.hit.add(hit);
+								}
+							}
+							remove = true;
+						}
+					} else if (this.boss && !this.boss.dead && pr.x >= 9.15 && !pr.bossHit) {
 						this.damageBoss(pr.dmg);
 						Audio.Sfx("hit");
-						remove = true;
+						if (pr.boomer) pr.bossHit = true; else remove = true;
 					}
 				}
-				const life = pr.opts.life;
-				if (pr.x > 10.6 || pr.x < -1 || pr.row < 0.4 || pr.row > this.rows + 0.6 || (life && pr.age > life) || pr.age > 6) remove = true;
+				if (pr.x > 10.6 || pr.x < -1 || pr.row < 0.4 || pr.row > this.rows + 0.6 || pr.age > 6) remove = true;
 			}
 			if (remove) this.projs.splice(i, 1);
 		}
 	}
 	lob(p, target) {
-		const pr = this.addProj("pumpkin", p.x, p.r, 0, 0, p.def.dmg, {});
-		pr.lob = { fromX: p.x, fromRow: p.r, toX: target ? target.x : 9.6, toRow: target ? target.rowF : p.r, target, time: 1.0, splash: p.def.splash };
+		const pr = this.addProj("seed", p.x, p.r, 0, 0, p.def.dmg, {});
+		pr.lob = { fromX: p.x, fromRow: p.r, toX: target ? target.x : 9.6, toRow: target ? target.rowF : p.r, target, time: 1.0, bounceDmg: p.def.bounceDmg };
 		pr.lt = 0;
 		p.punch = 1;
 		Audio.Sfx("shoot", 0.7);
 	}
 	lobLand(pr) {
-		const L = pr.lob;
-		const x = pr.x, row = L.target ? L.target.row : Math.floor(pr.row + 0.5);
-		if (L.target && !L.target.dead) this.damageBee(L.target, pr.dmg, { ignoreShield: true });
-		else if (this.boss && !this.boss.dead && x >= 9.0) this.damageBoss(pr.dmg);
-		for (const b of this.bees) if (b !== L.target && this.targetable(b) && Math.abs(b.x - x) <= 1.0 && Math.abs(b.row - row) <= 1) this.damageBee(b, L.splash || 0, { ignoreShield: true });
-		this.ring(x, row, 2, 7, C(255, 150, 30), 0.3);
+		const L = pr.lob, x = pr.x;
+		if (L.target && !L.target.dead) {
+			const t = L.target;
+			this.damageBee(t, pr.dmg, { lob: true });
+			// Squirting Cucumber: the seed bounces on to the next bee behind
+			let next = null;
+			for (const b of this.bees) if (b !== t && this.targetable(b) && b.row === t.row && b.x > t.x && b.x <= t.x + 1.8) if (!next || b.x < next.x) next = b;
+			if (next) {
+				const from = [t.x, t.rowF, 2], to = [next.x, next.rowF, next.hover];
+				this.addFx(0.35, null, f => { const a = f.a; const [sx, sy] = this.S(from[0] + (to[0] - from[0]) * a, from[1], 2 + Math.sin(a * Math.PI) * 3); ctx.fillStyle = "#e8e0b0"; ctx.beginPath(); ctx.arc(sx, sy, this.L.k * 0.5, 0, Math.PI * 2); ctx.fill(); });
+				this.delay(0.35, () => { if (!next.dead) this.damageBee(next, L.bounceDmg || 0, { lob: true }); });
+			}
+		} else if (this.boss && !this.boss.dead && x >= 9.0) this.damageBoss(pr.dmg);
+		this.ring(x, pr.row, 2, 5, C(220, 230, 160), 0.3);
 		Audio.Sfx("hit", 0.6);
 	}
-	laser(p) {
-		p.punch = 1;
-		Audio.Sfx("zap", 1.4);
-		this.beam([p.x + 0.1, p.r, 5.3], [10.4, p.r, 3.2], C(200, 120, 255), 0.6, 0.35);
-		for (const b of this.bees) if (b.row === p.r && this.targetable(b) && b.x >= p.x - 0.3) this.damageBee(b, p.def.dmg, { ignoreShield: true });
-		if (this.boss && !this.boss.dead) this.damageBoss(p.def.dmg);
-	}
-	lightning(p, target) {
-		p.punch = 1;
-		Audio.Sfx("zap");
-		const from = [p.x, p.r, 2.5];
-		if (!target) { this.zig(from, [9.6, p.r, 5]); this.damageBoss(p.def.dmg); return; }
-		const hit = new Set([target]);
-		let cur = target;
-		this.zig(from, [cur.x, cur.rowF, cur.hover]);
-		this.damageBee(cur, p.def.dmg, { ignoreShield: true });
-		for (let n = 2; n <= p.def.chain; n++) {
-			let best = null, bd = null;
-			for (const b of this.bees) if (!hit.has(b) && this.targetable(b)) {
-				const d = (b.x - cur.x) ** 2 + (b.rowF - cur.rowF) ** 2;
-				if (d < 6.5 && (bd === null || d < bd)) { best = b; bd = d; }
-			}
-			if (!best) break;
-			hit.add(best);
-			this.zig([cur.x, cur.rowF, cur.hover], [best.x, best.rowF, best.hover]);
-			this.damageBee(best, p.def.dmg * 0.65, { ignoreShield: true });
-			cur = best;
-		}
-	}
 	enemyShot(kind, b, target) {
-		const pr = this.addProj(kind, b.x - 0.5, b.row, -7, 0, 50, {});
+		const pr = this.addProj(kind, b.x - 0.5, b.row, -7, 0, kind === "stinger" ? 60 : 50, {});
 		pr.enemy = true;
 		pr.y = b.hover;
-		if (kind === "honey" && target) { pr.lob = { fromX: b.x, toX: target.x, time: 1.0 }; pr.lt = 0; pr.target = target; }
+		if ((kind === "honey" || kind === "stinger") && target) { pr.lob = { fromX: b.x, toX: target.x, time: kind === "stinger" ? 0.8 : 1.0 }; pr.lt = 0; pr.target = target; }
 		return pr;
 	}
 	updateEnemyShot(pr, dt) {
@@ -2527,13 +3004,13 @@ class Game {
 			pr.lt += dt / pr.lob.time;
 			const a = Math.min(1, pr.lt);
 			pr.x = pr.lob.fromX + (pr.lob.toX - pr.lob.fromX) * a;
-			pr.y = 3 + Math.sin(a * Math.PI) * 7;
+			pr.y = pr.kind === "stinger" ? 3 + Math.sin(a * Math.PI) * 4 : 3 + Math.sin(a * Math.PI) * 7;
 			if (pr.kind === "honeybomb") pr.y = 9 * (1 - a) + Math.sin(a * Math.PI) * 6 + 1;
 			if (pr.lt >= 1) {
 				const t = pr.target;
 				if (t && !t.dead) {
 					if (pr.kind === "honey") { t.sticky = 6; Audio.Sfx("splash", 1.3); }
-					else { this.flattenCell(t.r, t.c); this.explosion(t.x, t.r, 0.4, 0, C(255, 150, 0)); }
+					else { t.hp -= pr.dmg; t.hurt = 0.2; Audio.Sfx("hit", 1.4); if (t.hp <= 0) this.removePlant(t); }
 				} else if (pr.cell) {
 					this.flattenCell(pr.cell[1], pr.cell[0]);
 					this.explosion(pr.cell[0] - 0.5, pr.cell[1], 0.4, 0, C(255, 150, 0));
@@ -2547,7 +3024,7 @@ class Game {
 		const cell = this.grid[pr.row] && this.grid[pr.row][c];
 		if (cell && Math.abs(pr.x - (c - 0.5)) < 0.45) {
 			const p = cell.main || cell.pad;
-			if (p) {
+			if (p && p.def.kind !== "briar" && p.def.kind !== "burr") {
 				if (pr.kind === "bigstinger") {
 					this.flattenCell(pr.row, c);
 					Audio.Sfx("thud");
@@ -2753,7 +3230,7 @@ class Game {
 			const nextWave = spec.waves[this.waveIdx];
 			if (nextWave.flag && !nextWave.announced && this.waveTimer <= 5) {
 				nextWave.announced = true;
-				this.announce(this.waveIdx + 1 === n ? "THE FINAL SWARM!" : "A HUGE SWARM OF BEES IS APPROACHING!", 3);
+				this.announce(this.waveIdx + 1 === n ? "THE FINAL SWARM!" : "🐝 THE SCOUTS ARE DANCING... A SWARM IS COMING!", 3);
 				Audio.Sfx("swarm");
 			}
 			if (this.waveTimer <= 0) {
@@ -2783,7 +3260,7 @@ class Game {
 		this.rainT = (this.rainT === undefined ? 1 : this.rainT) - dt;
 		if (this.rainT <= 0) {
 			this.rainT = 3.2;
-			let choices = this.opts.owned.filter(id => { const d = Config.FlowerById[id]; return d && d.kind !== "sun" && !d.aquatic && !d.hidden; });
+			let choices = this.opts.owned.filter(id => { const d = Config.FlowerById[id]; return d && d.kind !== "cup" && d.kind !== "fountain" && d.kind !== "moon" && !d.aquatic && !d.hidden; });
 			if (!choices.length) choices = ["rose"];
 			const id = choices[rint(0, choices.length - 1)];
 			this.packets.push({ id, x: rnd(1, 8.5), row: rnd(0.8, this.rows + 0.2), y: 30, t: 0 });
@@ -3110,6 +3587,10 @@ class Game {
 			if (best) { this.whack(best); return; }
 		}
 		const [c, r] = this.screenToCell(sx, sy);
+		if (!this.sel && !this.shovel) { // pour out a Dewcup
+			const cell = this.grid[r] && this.grid[r][c];
+			if (cell && cell.main && cell.main.def.kind === "cup" && this.harvest(cell.main)) return;
+		}
 		if (this.shovel) { this.shovelAt(c, r); return; }
 		if (this.sel) { this.tryPlant(c, r); return; }
 		if (this.grid[r] && this.grid[r][c] && this.grid[r][c].vase) this.breakVase(c, r);
@@ -3151,6 +3632,7 @@ class Game {
 				this.updateWaves(dt);
 				this.updateSeedRain(dt);
 				this.updatePlants(dt);
+				this.updateZones(dt);
 				this.updateBees(dt);
 				this.updateBoss(dt);
 				this.updateRollers(dt);
@@ -3170,6 +3652,7 @@ class Game {
 				for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
 					const cell = this.grid[r][c];
 					if (cell.crater > 0) cell.crater -= dt;
+					if (cell.stink > 0) cell.stink -= dt;
 				}
 			} else if (this.state === "lost") {
 				if (this.loseBee && !this.loseBee.dead) { this.loseBee.x -= dt * 0.6; this.loseBee.t += dt; }
@@ -3202,10 +3685,10 @@ class Game {
 	}
 	updateFog(dt) {
 		if (!this.fog) return;
-		const lanterns = this.plants.filter(p => p.def.kind === "lantern" && !p.dead);
+		const lights = this.plants.filter(p => p.def.kind === "firefly" && !p.dead);
 		for (const f of this.fog) {
 			let clear = false;
-			for (const l of lanterns) if ((l.c - f.c) ** 2 + (l.r - f.r) ** 2 <= l.def.radius ** 2) { clear = true; break; }
+			for (const l of lights) if ((f.r === l.r && f.c >= l.c - 1) || (Math.abs(f.r - l.r) <= 1 && Math.abs(f.c - l.c) <= 1)) { clear = true; break; }
 			const target = clear ? 1 : 0.04;
 			f.tr += (target - f.tr) * Math.min(1, dt * 3);
 		}
@@ -3308,6 +3791,32 @@ class Game {
 				const [sx, sy] = this.S(c - 0.5, r, 0);
 				ctx.fillStyle = "#32201a"; ctx.beginPath(); ctx.ellipse(sx, sy - T * 0.15, T * 0.42, T * 0.28, 0, 0, Math.PI * 2); ctx.fill();
 				ctx.fillStyle = "#1e120c"; ctx.beginPath(); ctx.ellipse(sx, sy - T * 0.12, T * 0.28, T * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+			}
+		}
+		// stink tiles, pollen clouds and scorched ground
+		for (let r = 1; r <= this.rows; r++) for (let c = 1; c <= COLS; c++) {
+			const st = this.grid[r][c].stink;
+			if (st > 0) {
+				const x = L.ox + (c - 1) * T + this.shx, y = L.oy + (r - 1) * T + this.shy;
+				ctx.fillStyle = `rgba(130,170,50,${Math.min(0.45, st / 10)})`; ctx.fillRect(x, y, T, T);
+				for (let i = 0; i < 2; i++) { const ph = (t * 0.5 + i * 0.5 + c * 0.3) % 1; ctx.fillStyle = `rgba(160,200,70,${0.4 * (1 - ph)})`; ctx.beginPath(); ctx.arc(x + T * (0.3 + i * 0.4), y + T * (0.8 - ph * 0.7), T * 0.12 * (1 + ph), 0, Math.PI * 2); ctx.fill(); }
+			}
+		}
+		for (const z of this.zones) {
+			const fade = Math.min(1, z.t / 0.5, (z.life - z.t) / 0.3 + 0.2);
+			if (z.kind === "cloud") {
+				for (let i = 0; i < 12; i++) {
+					const ax = z.x + Math.cos(i * 2.4 + t) * 1.1 * ((i % 3) / 2 + 0.3), ar = z.row + Math.sin(i * 1.7 + t * 0.8) * 0.9 * ((i % 4) / 3 + 0.2);
+					const [sx, sy] = this.S(ax, ar, 2.5);
+					ctx.fillStyle = `rgba(255,215,70,${0.28 * fade})`; ctx.beginPath(); ctx.arc(sx, sy, T * 0.45, 0, Math.PI * 2); ctx.fill();
+				}
+			} else if (z.kind === "scorch") {
+				for (let i = 0; i < 8; i++) {
+					const ax = z.x0 + (i + 0.5) / 8 * (z.x1 - z.x0), h = 1.2 + Math.sin(t * 12 + i * 2) * 0.6;
+					const [sx, sy] = this.S(ax, z.row, 0);
+					ctx.fillStyle = `rgba(255,${120 + i * 10},20,${0.75 * fade})`;
+					ctx.beginPath(); ctx.moveTo(sx - T * 0.1, sy); ctx.lineTo(sx, sy - h * this.L.k * 2); ctx.lineTo(sx + T * 0.1, sy); ctx.fill();
+				}
 			}
 		}
 		// sunbeam
@@ -3460,8 +3969,10 @@ class Game {
 			ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.ellipse(0, -1.0, 1.6, 0.5, 0, 0, Math.PI * 2); ctx.fill();
 		} else {
 			if (p.inWater && def.kind !== "pad" && !def.aquatic) { /* unreachable: land flowers can't sit in water */ }
-			Art.drawFlower(ctx, def, { t, punch: p.punch, sway: p.sticky > 0 ? 0 : sway, chomp: p.chomp || 0, chew: p.chew, armed: p.armed });
+			Art.drawFlower(ctx, def, { t, punch: p.punch, sway: p.sticky > 0 ? 0 : sway, chomp: p.chomp || 0, chew: p.chew, armed: p.armed,
+				fill: def.kind === "cup" ? p.stored / def.cap : undefined, stalk: p.state === "stalk", held: p.held ? p.held.length : 0, sparks: p.sparks, used: !!p.used, cool: p.cool, spin: p.spin });
 		}
+		if (p.dazeT > 0) { ctx.save(); ctx.font = "2px sans-serif"; ctx.textAlign = "center"; for (let i = 0; i < 3; i++) { const a = t * 4 + i * 2.1; ctx.fillText("💫", Math.cos(a) * 1.6, -5 + Math.sin(a) * 0.5); } ctx.restore(); }
 		if (p.sticky > 0) {
 			ctx.globalAlpha = 0.75;
 			ctx.fillStyle = "#ffaf00"; ctx.beginPath(); ctx.ellipse(0, -3.2, 1.6, 1.0, 0, 0, Math.PI * 2); ctx.fill();
@@ -3477,7 +3988,7 @@ class Game {
 	}
 
 	drawBeeE(b, inv) {
-		if (inv) return;
+		if (inv || b.inPitcher) return;
 		const def = b.def;
 		const bob = Math.sin(b.t * 5) * 0.35;
 		let y = b.hover + bob - b.rise * (b.hover + 3) + (b.hopY || 0);
@@ -3499,12 +4010,15 @@ class Game {
 			ctx.beginPath(); ctx.rect(-8, -20, 16, (gy - sy) / k + 20); ctx.clip();
 		}
 		if (rot) ctx.rotate(rot);
+		if (b.backT > 0) ctx.scale(-1, 1);
 		ctx.globalAlpha = alpha;
 		Art.drawBee(ctx, def, {
-			t: frozen ? 0 : b.t, frozen, wingLost: b.lostWing, armor: b.armor > 0, shield: b.shield > 0, larva: !b.dropped.larva,
+			t: frozen ? 0 : b.t, frozen, wingLost: b.lostWing, armor: b.armor > 0, shield: b.shield > 0, larva: false, sacks: !b.dropped.sacks,
 			tint: b.tint, roll,
 		});
 		if (b.flash > 0) { ctx.globalAlpha = 0.35; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(0, 0, 1.8 * (def.look.scale || 1), 1.2 * (def.look.scale || 1), 0, 0, Math.PI * 2); ctx.fill(); }
+		if (b.sleepT > 0) { ctx.save(); ctx.globalAlpha = 1; ctx.font = "bold 1.4px sans-serif"; ctx.fillStyle = "#e0d0ff"; ctx.fillText("z", -1.2, -2.2 - (b.t % 1)); ctx.fillText("Z", -0.4, -3 - (b.t % 1)); ctx.restore(); }
+		if (b.stuckT > 0) { ctx.save(); ctx.globalAlpha = 1; for (let i = 0; i < 6; i++) { ctx.fillStyle = "#8a6a2a"; ctx.beginPath(); ctx.arc(Math.cos(i * 1.1) * 1.2, 0.6 + Math.sin(i * 1.7) * 0.6, 0.25, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
 		if (frozen) { ctx.globalAlpha = 0.4; ctx.fillStyle = "#c8f0ff"; ctx.beginPath(); ctx.ellipse(0, 0, 2.2 * (def.look.scale || 1), 1.6 * (def.look.scale || 1), 0, 0, Math.PI * 2); ctx.fill(); }
 		ctx.restore();
 	}
@@ -3593,11 +4107,11 @@ const Menus = (() => {
 			board.style.background = rgb(lerpC(A.color, C(120, 80, 40), 0.55));
 			label(board, `${A.icon}  ${A.name}  ${A.icon}`, 0, 10, 890, 44, "white");
 			const blurb = [
-				"The sun is shining and the bees are coming. Plant Sunflowers for sun!",
-				"No sun falls from the sky at night. Moonflowers and Dandelion Puffs are cheap!",
-				"The pond needs Lily Pads before you can plant on the water.",
+				"The bees are coming for your nectar. Plant Dewcups and click them when they fill up!",
+				"No nectar falls from the sky at night. Moonflowers turn beaten bees into nectar!",
+				"The pond needs Lotus Rafts before you can plant on the water.",
 				"A beam of morning sunlight sweeps the lawn. Flowers inside it work TWICE as fast!",
-				"Thick orange fog hides the bees. Glow Lilies light it up.",
+				"Thick orange fog hides the bees. Firefly Bulbs light up a whole lane.",
 				"Spooky graves... and bees that won't stay down. The Zombee Queen waits at the end!",
 			][a - 1];
 			label(board, blurb, 45, 56, 800, 26, "cream");
@@ -3661,10 +4175,10 @@ const Menus = (() => {
 		}
 		let tip = "";
 		const A = spec.A;
-		if (A.water && owns(data, "lilypad")) tip = "💡 Bring Lily Pads to plant on the pond!";
-		if (A.id === "night" && spec.mode === "normal") tip = "💡 No sun falls at night. Bring Moonflowers!";
-		if (A.fog && owns(data, "glowlily")) tip = "💡 Glow Lilies clear the fog!";
-		if (spec.mode === "laststand") tip = "💡 No sun this time. Sun flowers are useless!";
+		if (A.water && owns(data, "lilypad")) tip = "💡 Bring Lotus Rafts to plant on the pond!";
+		if (A.id === "night" && spec.mode === "normal") tip = "💡 No nectar falls at night. Bring Moonflowers!";
+		if (A.fog && owns(data, "glowlily")) tip = "💡 Firefly Bulbs clear the fog in their lane!";
+		if (spec.mode === "laststand") tip = "💡 No nectar this time. Dewcups won't fill!";
 		const tipEl = el("div", "sidetip", side, tip);
 
 		const slotRow = el("div", "slotrow", top);
@@ -3693,7 +4207,7 @@ const Menus = (() => {
 			scroll.appendChild(card.frame);
 			gridCards[id] = card;
 			const d = Config.FlowerById[id];
-			const tipText = `${d.name} (☀${d.cost}): ${d.desc}`;
+			const tipText = `${d.name} (🍯${d.cost}): ${d.desc}`;
 			card.frame.addEventListener("click", () => {
 				if (selected.includes(id)) selected.splice(selected.indexOf(id), 1);
 				else if (selected.length < Config.MAX_SLOTS) selected.push(id);
@@ -3756,7 +4270,7 @@ const Menus = (() => {
 				stats = `Toughness: ${tough}<br>Speed: ${spd}`;
 				if (def.intro <= 60 && def.pool !== false) stats += "<br>First seen: " + Config.LevelName(def.intro);
 			} else {
-				stats = `Cost: ☀ ${def.cost}<br>Recharge: ${def.recharge >= 45 ? "Very slow" : (def.recharge >= 30 ? "Slow" : "Fast")}`;
+				stats = `Cost: 🍯 ${def.cost}<br>Recharge: ${def.recharge >= 45 ? "Very slow" : (def.recharge >= 30 ? "Slow" : "Fast")}`;
 				if (def.dmg) stats += "<br>Damage: " + def.dmg;
 				if (def.hp && def.hp < 1e8) stats += "<br>Toughness: " + def.hp;
 			}
