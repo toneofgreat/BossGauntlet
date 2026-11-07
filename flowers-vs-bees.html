@@ -1689,6 +1689,29 @@ const Art = (() => {
 		face(0, 0.55, 0.6);
 		ctx.restore();
 	}
+	function drawGoldenDew(ctx, spin, alpha) { // Golden Dew: a big shining drop worth 500
+		X = ctx; ctx.save(); ctx.globalAlpha *= (alpha === undefined ? 1 : alpha);
+		const pulse = 1 + Math.sin(spin * 4) * 0.08;
+		const g = ctx.createRadialGradient(0, 0, 0.3, 0, 0, 3.6 * pulse);
+		g.addColorStop(0, "rgba(255,250,200,0.85)"); g.addColorStop(0.45, "rgba(255,215,60,0.45)"); g.addColorStop(1, "rgba(255,190,0,0)");
+		circ(0, 0, 3.6 * pulse, g);
+		ctx.save(); ctx.rotate(Math.sin(spin * 2) * 0.12);
+		const body = ctx.createLinearGradient(-1.4, -2, 1.4, 1.6);
+		body.addColorStop(0, "#fff6b0"); body.addColorStop(0.5, "#ffd21e"); body.addColorStop(1, "#e89a00");
+		X.beginPath(); X.moveTo(0, -2.3); X.bezierCurveTo(0.8, -1.2, 1.65, -0.3, 1.6, 0.55); X.arc(0, 0.55, 1.6, 0, Math.PI); X.bezierCurveTo(-1.65, -0.3, -0.8, -1.2, 0, -2.3);
+		X.fillStyle = body; X.fill(); lw(0.14); X.strokeStyle = "#b86e00"; X.stroke();
+		ell(-0.6, -0.1, 0.3, 0.6, 0.4, "rgba(255,255,240,0.9)");
+		circ(0.55, 1.1, 0.18, "rgba(255,255,255,0.8)");
+		ctx.restore();
+		for (let i = 0; i < 6; i++) {
+			const a = spin * 2 + i / 6 * Math.PI * 2;
+			const px = Math.cos(a) * 2.6, py = Math.sin(a) * 1.1 - 0.2, r = 0.22 + 0.1 * Math.sin(spin * 6 + i);
+			X.beginPath(); X.moveTo(px, py - r * 2.2); X.lineTo(px + r * 0.6, py); X.lineTo(px, py + r * 2.2); X.lineTo(px - r * 0.6, py); X.closePath();
+			X.moveTo(px - r * 2.2, py); X.lineTo(px, py + r * 0.6); X.lineTo(px + r * 2.2, py); X.lineTo(px, py - r * 0.6); X.closePath();
+			X.fillStyle = i % 2 ? "#ffffff" : "#ffe680"; X.fill();
+		}
+		ctx.restore();
+	}
 	function drawLadybug(ctx, t, active) {
 		X = ctx; ctx.save(); ctx.lineJoin = "round";
 		lw(0.1);
@@ -1821,7 +1844,7 @@ const Art = (() => {
 		return cache[key];
 	}
 
-	return { drawFlower, drawBee, drawDrop, drawQueen, drawSun, drawLadybug, drawProj, drawVase, drawGrave, drawPacket, drawTrophy, drawHive, drawTree, icon, HEIGHT };
+	return { drawFlower, drawBee, drawDrop, drawQueen, drawSun, drawGoldenDew, drawLadybug, drawProj, drawVase, drawGrave, drawPacket, drawTrophy, drawHive, drawTree, icon, HEIGHT };
 })();
 
 // ===================================================================================
@@ -2289,12 +2312,30 @@ class Game {
 		this.suns.push(s);
 		return s;
 	}
+	// Golden Dew: a big gold drop worth 500 that falls on a random tile every 10 s in every mode.
+	spawnGoldenDew() {
+		const c = 1 + Math.floor(Math.random() * COLS), r = 1 + Math.floor(Math.random() * this.rows);
+		const s = { x: c - 0.5, row: r, y: 40, value: 500, life: 0, spin: 0, golden: true, maxLife: 14, state: "fall", groundY: 2.6 };
+		this.suns.push(s);
+		return s;
+	}
+	updateGoldenDew(dt) {
+		if (this.state !== "play") return;
+		this.dewTimer = (this.dewTimer === undefined ? 10 : this.dewTimer) - dt;
+		if (this.dewTimer <= 0) { this.dewTimer += 10; this.spawnGoldenDew(); }
+	}
 	collectSun(s) {
 		if (s.state === "collect") return;
 		s.state = "collect";
 		s.from = this.S(s.x, s.row, s.y);
 		s.ct = 0;
 		Audio.Sfx("sun");
+		if (s.golden) {
+			Audio.Sfx("magic", 1.4);
+			this.popup(s.x, s.row, s.y + 2, "+" + s.value + " Golden Dew!", C(255, 215, 40));
+			this.ring(s.x, s.row, s.y, 9, C(255, 210, 60), 0.5);
+			this.puff(s.x, s.row, s.y, C(255, 235, 120));
+		}
 	}
 	sunTarget() {
 		if (this.sunBox.style.display === "none" || this.seedBar.style.display === "none") return [60, 50];
@@ -2306,7 +2347,7 @@ class Game {
 			const s = this.suns[i];
 			s.spin += dt * 1.5;
 			if (s.state === "fall") {
-				s.y -= 6 * dt;
+				s.y -= (s.golden ? 9 : 6) * dt;
 				if (s.y <= s.groundY) { s.y = s.groundY; s.state = "rest"; }
 			} else if (s.state === "hop") {
 				s.vy -= 40 * dt;
@@ -2323,7 +2364,7 @@ class Game {
 					continue;
 				}
 			}
-			if (s.state === "rest" && s.life > 11) this.suns.splice(i, 1);
+			if (s.state === "rest" && s.life > (s.maxLife || 11)) this.suns.splice(i, 1);
 		}
 	}
 
@@ -3570,7 +3611,7 @@ class Game {
 			return;
 		}
 		if (this.state !== "play" && this.state !== "prep") return;
-		for (const s of this.suns) if (s.state !== "collect" && this.sdist(s.x, s.row, s.y, sx, sy) < T * 0.62) { this.collectSun(s); return; }
+		for (const s of this.suns) if (s.state !== "collect" && this.sdist(s.x, s.row, s.y, sx, sy) < T * (s.golden ? 0.85 : 0.62)) { this.collectSun(s); return; }
 		for (let i = 0; i < this.packets.length; i++) {
 			const pk = this.packets[i];
 			if (this.sdist(pk.x, pk.row, pk.y, sx, sy) < T * 0.7) {
@@ -3629,6 +3670,7 @@ class Game {
 			}
 			if (this.state === "play" || this.state === "prep") {
 				this.updateSky(dt);
+				this.updateGoldenDew(dt);
 				this.updateWaves(dt);
 				this.updateSeedRain(dt);
 				this.updatePlants(dt);
@@ -3931,12 +3973,16 @@ class Game {
 		// suns
 		const target = this.sunTarget();
 		for (const s of this.suns) {
-			const blink = s.state === "rest" && s.life > 9 && (Math.floor(s.life * 6) % 2 === 0);
+			const blink = s.state === "rest" && s.life > (s.maxLife || 11) - 2 && (Math.floor(s.life * 6) % 2 === 0);
+			const draw = s.golden ? Art.drawGoldenDew : Art.drawSun;
 			if (s.state === "collect") {
 				const a = Math.pow(Math.min(1, s.ct), 1.5);
 				const x = s.from[0] + (target[0] - s.from[0]) * a, y = s.from[1] + (target[1] - s.from[1]) * a;
-				ctx.save(); ctx.translate(x, y); const k = L.k * (1 - a * 0.4); ctx.scale(k, k); Art.drawSun(ctx, s.spin, 1); ctx.restore();
-			} else this.drawAt(s.x, s.row, s.y, 1, 0, 1, c2 => Art.drawSun(c2, s.spin, blink ? 0.4 : 1));
+				ctx.save(); ctx.translate(x, y); const k = L.k * (1 - a * 0.4); ctx.scale(k, k); draw(ctx, s.spin, 1); ctx.restore();
+			} else {
+				const bob = s.golden && s.state === "rest" ? Math.sin(s.life * 3) * 0.35 : 0;
+				this.drawAt(s.x, s.row, s.y + bob, 1, 0, 1, c2 => draw(c2, s.spin, blink ? 0.4 : 1));
+			}
 		}
 		// reward
 		const rw = this.reward;
