@@ -109,6 +109,29 @@ html,body{width:100%;height:100%;overflow:hidden;background:#2a3a1a;font-family:
 .rotate{position:fixed;inset:0;z-index:100;background:rgba(20,30,10,.94);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;font-size:22px;gap:16px}
 .rotate .big{font-size:64px}
 @media (orientation:portrait) and (max-width:700px){.rotate.armed{display:flex}}
+/* ---- Name, practice, leaderboard ---- */
+.namebtn{font-size:17px!important;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nameinput{position:absolute;left:60px;width:480px;height:64px;font-family:inherit;font-weight:700;font-size:32px;text-align:center;color:rgb(70,45,20);background:rgb(255,245,215);border:4px solid rgb(70,45,20);border-radius:12px;outline:none;user-select:text;-webkit-user-select:text;touch-action:auto}
+.nameinput:focus{box-shadow:0 0 0 4px rgb(255,230,60)}
+.nameerr{position:absolute;left:20px;right:20px;text-align:center;font-size:20px;color:rgb(255,80,70);text-shadow:0 2px 0 rgba(40,0,0,.7);min-height:26px}
+.pbanner{position:fixed;left:0;right:0;top:0;z-index:12;height:34px;line-height:34px;text-align:center;font-size:19px;letter-spacing:1px;background:repeating-linear-gradient(45deg,rgb(220,60,60) 0 18px,rgb(190,40,40) 18px 36px);border-bottom:3px solid rgb(90,10,10);text-shadow:0 2px 0 rgba(0,0,0,.45);pointer-events:none}
+.hud .pbanner{position:absolute;left:50%;right:auto;top:auto;bottom:12px;transform:translateX(-50%);height:28px;line-height:24px;font-size:15px;padding:0 14px;border:3px solid rgb(90,10,10);border-radius:10px}
+.hudname{position:absolute;left:12px;bottom:12px;font-size:15px;padding:3px 10px;background:rgba(0,0,0,.35);border-radius:9px;text-shadow:0 2px 0 rgba(0,0,0,.5);pointer-events:none!important;max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lbhead,.lbrow{display:flex;align-items:center;gap:10px;padding:0 14px;height:40px;font-size:20px}
+.lbhead{position:absolute;left:14px;right:14px;top:62px;color:rgb(255,230,120);font-size:17px}
+.lblist{position:absolute;left:14px;right:14px;top:104px;bottom:70px;overflow-y:auto;overflow-x:hidden;background:rgb(110,72,36);border:3px solid rgb(70,45,20);border-radius:10px;scrollbar-width:auto;scrollbar-color:rgb(255,210,70) rgb(80,50,22);overscroll-behavior:contain;touch-action:pan-y}
+.lblist::-webkit-scrollbar{width:18px}
+.lblist::-webkit-scrollbar-track{background:rgb(80,50,22);border-radius:9px}
+.lblist::-webkit-scrollbar-thumb{background:rgb(255,210,70);border:3px solid rgb(80,50,22);border-radius:9px}
+.lblist::-webkit-scrollbar-thumb:hover{background:rgb(255,230,120)}
+.lbrow{color:rgb(255,245,220);border-bottom:2px solid rgba(70,45,20,.6)}
+.lbrow:nth-child(odd){background:rgba(255,255,255,.05)}
+.lbrow.me{background:rgb(110,200,80)!important;color:#fff;box-shadow:inset 0 0 0 3px rgb(255,240,120)}
+.lbrank{width:64px;flex:none;text-align:right}
+.lbname{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lblvl{width:250px;flex:none;text-align:right;white-space:nowrap}
+.lbmsg{padding:40px 20px;text-align:center;font-size:22px;color:rgb(255,245,220);line-height:1.3}
+.lbyou{position:absolute;left:14px;right:14px;bottom:14px;height:44px;line-height:44px;text-align:center;font-size:19px;color:rgb(255,245,220);background:rgba(0,0,0,.2);border-radius:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -325,6 +348,8 @@ Config.BowlBelt = { bowl: 7, bowlx: 2, bowlg: 1 };
 
 Config.AreaOf = g => [Math.ceil(g / 10), (g - 1) % 10 + 1];
 Config.LevelName = g => { const [a, n] = Config.AreaOf(g); return `${Config.Areas[a - 1].name} ${a}-${n}`; };
+// Leaderboard label for a highest-reached level (61 = the Zombee Queen is beaten).
+Config.LevelLabel = g => { g = Math.floor(Number(g)) || 1; if (g > 60) return "👑 Beat the Queen!"; g = Math.max(1, g); return `${Config.Areas[Config.AreaOf(g)[0] - 1].icon} ${Config.LevelName(g)}`; };
 
 function beePool(g, area, filter) {
 	const pool = [];
@@ -2057,6 +2082,8 @@ class Game {
 		else if (spec.mode === "conveyor") lbl += "  ⚙️ Conveyor";
 		else if (Config.Minigames[spec.mode]) lbl += "  " + Config.Minigames[spec.mode].name;
 		el("div", "proglbl", prog, lbl);
+		if (this.opts.playerName) el("div", "hudname", hud).textContent = "👤 " + this.opts.playerName;
+		if (this.opts.practice) el("div", "pbanner", hud).textContent = "🧪 PRACTICE MODE";
 		const track = el("div", "track", prog);
 		this.progFill = el("div", "fill", track);
 		const nw = spec.waves.length;
@@ -4084,6 +4111,84 @@ class Game {
 }
 
 // ===================================================================================
+// Player names: the word filter. A copy of OofCubes' src/platform/services/censor.js
+// (nameIsAllowed) plus the fvbNameAllowed wrapper from tools/api.js — the leaderboard
+// server runs the SAME rules, this copy just lets us say "try another" up front.
+// Whole-word + leetspeak + squashed repeats, with an allowlist so "class", "assassin",
+// "grass" and "Scunthorpe" stay fine.
+// ===================================================================================
+const NameFilter = (() => {
+	const BAD = new Set([
+		"anal", "anus", "arse", "arsehole", "ass", "asshole", "bastard", "bitch", "bollocks",
+		"boner", "bullshit", "clit", "cock", "coon", "crap", "cum", "cunt", "dick", "dickhead",
+		"dildo", "dyke", "fag", "faggot", "fuck", "fucker", "fucking", "goddamn", "handjob",
+		"jerkoff", "jizz", "kike", "nigga", "nigger", "penis", "piss", "prick", "pussy",
+		"queer", "retard", "retarded", "rimjob", "shit", "shitty", "slut", "spastic", "spic",
+		"fuk", "fck", "phuck", "biatch", "azz", "arsehat", "shite", "wtf",
+		"tits", "titties", "twat", "vagina", "wank", "wanker", "whore",
+	]);
+	const LEET = { "0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "6": "g", "7": "t", "8": "b", "9": "g",
+		"@": "a", "$": "s", "!": "i", "+": "t", "(": "c", "|": "i" };
+	const STRONG = ["fuck", "shit", "cunt", "bitch", "asshole", "nigger", "nigga", "faggot", "whore",
+		"dildo", "wanker", "bastard", "penis", "vagina", "retard", "slut", "pussy"];
+	const NAME_ALLOW = ["scunthorpe", "penistone", "lightwater", "clbuttic", "cockburn", "shittake",
+		"shiitake", "assassin", "classic"];
+	function normalizeWord(word) {
+		let out = "";
+		for (const ch of String(word).toLowerCase()) {
+			const mapped = LEET[ch] !== undefined ? LEET[ch] : ch;
+			const plain = mapped.normalize("NFD").replace(/[̀-ͯ]/g, "");
+			if (/[a-z]/.test(plain)) out += plain;
+		}
+		return out.replace(/([a-z])\1{2,}/g, "$1$1");
+	}
+	const variants = w => [...new Set([w, w.replace(/([a-z])\1+/g, "$1")])];
+	function isBadWord(word) {
+		const raw = String(word);
+		const forms = new Set([raw, raw.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "")]);
+		for (const form of forms) {
+			const n = normalizeWord(form);
+			if (n && variants(n).some(v => BAD.has(v))) return true;
+		}
+		return false;
+	}
+	const words = text => String(text).split(/[^A-Za-z0-9@$!+(|]+/).filter(Boolean);
+	function hasBadWord(text) {
+		const w = words(text);
+		for (const one of w) if (isBadWord(one)) return true;
+		let run = "";
+		for (const one of w) {
+			if (one.length <= 2) { run += one; if (run.length >= 3 && isBadWord(run)) return true; }
+			else run = "";
+		}
+		return false;
+	}
+	function nameIsAllowed(name) {
+		const n = normalizeWord(name);
+		if (!n) return true;
+		if (NAME_ALLOW.includes(n)) return true;
+		if (hasBadWord(name)) return false;
+		return !STRONG.some(bad => n.includes(bad));
+	}
+	function allowed(raw) {
+		const squash = t => t.replace(/[^A-Za-z0-9@$!+(|]/g, "").replace(/(.)\1+/gi, "$1");
+		const forms = [raw, raw.replace(/1/g, "l")];
+		return [...forms, ...forms.map(squash)].every(f => nameIsAllowed(f));
+	}
+	const clean = raw => String(raw == null ? "" : raw).replace(/\s+/g, " ").trim();
+	// -> null if fine, else the message to show
+	function check(raw) {
+		const name = clean(raw);
+		if (!name) return "Type a name first!";
+		if (name.length > 16) return "Names can be up to 16 letters.";
+		if (!/^[A-Za-z0-9 _.\-]+$/.test(name) || !/[A-Za-z0-9]/.test(name)) return "Use letters, numbers, spaces, - _ or . only.";
+		if (!allowed(name)) return "That name isn't allowed — try another";
+		return null;
+	}
+	return { check, clean, allowed };
+})();
+
+// ===================================================================================
 // Menus: world map, choose-your-flowers screen, almanac and reward popups.
 // ===================================================================================
 const Menus = (() => {
@@ -4189,13 +4294,101 @@ const Menus = (() => {
 		}
 		showArea(area);
 		if (data.unlocked > 60) label(root, "🏆 YOU BEAT THE ZOMBEE QUEEN! You can replay any level. 🏆", 0, 566, 980, 30, "gold");
-		mbtn(root, "📖 ALMANAC", 250, 598, 220, 60, C(90, 150, 220), () => cb.almanac(area));
-		const mb = mbtn(root, Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF", 510, 598, 220, 60, C(200, 120, 200), () => {
+		mbtn(root, "📖 ALMANAC", 12, 598, 220, 60, C(90, 150, 220), () => cb.almanac(area));
+		mbtn(root, "🏆 LEADERBOARD", 257, 598, 220, 60, C(230, 170, 40), () => cb.leaderboard(area));
+		if (cb.practiceOn) mbtn(root, "⬅ GO BACK TO NORMAL", 502, 598, 220, 60, C(110, 200, 80), () => cb.practice(false));
+		else mbtn(root, "🧪 PRACTICE MODE", 502, 598, 220, 60, C(220, 80, 70), () => cb.practice(true));
+		const mb = mbtn(root, Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF", 747, 598, 220, 60, C(200, 120, 200), () => {
 			Audio.SetEnabled(!Audio.enabled);
 			mb.textContent = Audio.enabled ? "🎵 MUSIC: ON" : "🎵 MUSIC: OFF";
 		});
+		const nb = mbtn(root, "", 740, 86, 230, 34, C(160, 120, 70), () => cb.editName(area), "namebtn");
+		nb.textContent = cb.name ? `👤 ${cb.name} ✏️` : "👤 Make a name ✏️";
+		nb.title = "Change your name";
 		const home = el("a", "homelink", gui, "⬅ platyfy");
 		home.href = "index.html";
+		if (cb.practiceOn) {
+			el("div", "pbanner", gui).textContent = "🧪 PRACTICE MODE — every flower & level unlocked • nothing is saved 🧪";
+			home.style.top = "44px";
+		}
+		return gui;
+	};
+
+	// Name entry -----------------------------------------------------------------------
+	M.NameEntry = function (current, onDone, onCancel) {
+		const [gui, root] = screen("name");
+		const p = panel(root, 600, 380, 190, 140, C(140, 95, 50));
+		label(p, "What's your name? 🌻", 20, 16, 550, 60, "title");
+		label(p, "It shows in your game and on the leaderboard.", 20, 84, 550, 28, "cream");
+		const inp = el("input", "nameinput", p);
+		Object.assign(inp, { type: "text", maxLength: 16, value: current || "", placeholder: "Your name", autocomplete: "off", spellcheck: false });
+		inp.setAttribute("autocapitalize", "words");
+		inp.style.top = "128px";
+		const err = el("div", "nameerr", p);
+		err.style.top = "204px";
+		const ok = () => {
+			const msg = NameFilter.check(inp.value);
+			if (msg) {
+				err.textContent = msg;
+				Audio.Sfx("thud", 1.4);
+				inp.focus();
+				inp.select();
+				return;
+			}
+			onDone(NameFilter.clean(inp.value));
+		};
+		inp.addEventListener("input", () => { err.textContent = ""; });
+		inp.addEventListener("keydown", ev => {
+			ev.stopPropagation();
+			if (ev.key === "Enter") { ev.preventDefault(); ok(); }
+			else if (ev.key === "Escape" && onCancel) { ev.preventDefault(); onCancel(); }
+		});
+		for (const t of ["pointerdown", "touchstart", "mousedown"]) inp.addEventListener(t, ev => ev.stopPropagation());
+		mbtn(p, "OK! 🌱", 310, 290, 250, 60, C(110, 200, 80), ok);
+		if (onCancel) mbtn(p, "⬅ BACK", 40, 290, 250, 60, C(160, 120, 70), onCancel);
+		setTimeout(() => { try { inp.focus(); } catch (e) {} }, 30);
+		gui._input = inp;
+		gui._err = err;
+		gui._ok = ok;
+		return gui;
+	};
+
+	// Leaderboard ----------------------------------------------------------------------
+	// load() resolves { top: [{rank,name,level,me}], you } or rejects when offline.
+	M.Leaderboard = function (myName, load, onBack) {
+		const [gui, root] = screen("leaderboard");
+		label(root, "🏆 TOP 100 GARDENERS 🏆", 0, 0, 980, 70, "title wobble");
+		const p = panel(root, 760, 570, 110, 76, C(140, 95, 50));
+		label(p, "Highest level reached", 0, 14, 750, 36, "white");
+		el("div", "lbhead", p, `<span class="lbrank">#</span><span class="lbname">Name</span><span class="lblvl">Highest level</span>`);
+		const list = el("div", "lblist", p);
+		const you = el("div", "lbyou", p);
+		list.innerHTML = `<div class="lbmsg">Loading… 🐝</div>`;
+		you.textContent = myName ? `👤 ${myName}` : "Make a name and win levels to get on the board!";
+		mbtn(root, "⬅ BACK", 20, 10, 150, 50, C(160, 120, 70), onBack);
+		gui._list = list;
+		gui._you = you;
+		load().then(res => {
+			if (!list.isConnected) return;
+			const top = res && Array.isArray(res.top) ? res.top : [];
+			list.innerHTML = "";
+			if (!top.length) list.innerHTML = `<div class="lbmsg">Nobody is on the board yet — be the first! 🌱</div>`;
+			let meRow = null;
+			for (const r of top) {
+				const row = el("div", "lbrow" + (r.me ? " me" : ""), list);
+				el("span", "lbrank", row).textContent = r.rank <= 3 ? ["🥇", "🥈", "🥉"][r.rank - 1] : "#" + r.rank;
+				el("span", "lbname", row).textContent = String(r.name || "?");
+				el("span", "lblvl", row).textContent = Config.LevelLabel(r.level);
+				if (r.me) meRow = row;
+			}
+			const y = res && res.you;
+			if (y) you.textContent = `👤 You: #${y.rank} • ${y.name} • ${Config.LevelLabel(y.level)}${y.rank > 100 ? "  (keep going to reach the top 100!)" : ""}`;
+			else if (myName) you.textContent = `👤 ${myName} — win a level to get on the board!`;
+			if (meRow) list.scrollTop = Math.max(0, meRow.offsetTop - list.clientHeight / 2);
+		}).catch(() => {
+			if (!list.isConnected) return;
+			list.innerHTML = `<div class="lbmsg">📡 Leaderboard offline — try later</div>`;
+		});
 		return gui;
 	};
 
@@ -4381,7 +4574,12 @@ const Menus = (() => {
 // ===================================================================================
 (() => {
 	const KEY = "fvb_save_v1";
-	function defaultData() { return { unlocked: 1, owned: Config.START_FLOWERS.slice(), loadout: [], beaten: {}, wins: 0 }; }
+	const PID_KEY = "fvb_pid";            // random leaderboard id; not part of the save
+	const PRACTICE_KEY = "fvb_practice";  // sessionStorage only: "1" while practising
+	const qs = new URLSearchParams(location.search);
+	// The leaderboard lives on the OofCubes relay (tools/api.js, /api/fvb/*).
+	const LB_BASE = (/^https?:\/\/[^\s]+$/.test(qs.get("relay") || "") ? qs.get("relay") : "https://relay.platyfy.com").replace(/\/+$/, "");
+	function defaultData() { return { unlocked: 1, owned: Config.START_FLOWERS.slice(), loadout: [], beaten: {}, wins: 0, name: "" }; }
 	function load() {
 		try {
 			const d = JSON.parse(localStorage.getItem(KEY));
@@ -4392,12 +4590,88 @@ const Menus = (() => {
 			if (Array.isArray(d.loadout)) out.loadout = d.loadout.filter(id => out.owned.includes(id)).slice(0, Config.MAX_SLOTS);
 			if (d.beaten && typeof d.beaten === "object") for (const k in d.beaten) if (d.beaten[k]) out.beaten[k] = true;
 			out.wins = Number(d.wins) || 0;
+			if (typeof d.name === "string" && !NameFilter.check(d.name)) out.name = NameFilter.clean(d.name);
 			return out;
 		} catch (e) { return defaultData(); }
 	}
-	let data = load();
-	let debug = false; // ?level= test runs never touch the real save
-	const save = () => { if (debug) return; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} };
+	// `real` is the save. `data` is what the screens play with: the save itself normally,
+	// a throwaway deep copy in practice mode (and in ?level= debug runs).
+	const real = load();
+	let data = real;
+	let debug = false;    // ?level= test runs never touch the real save
+	let practice = false; // practice runs never touch the real save or the leaderboard
+	// Only ever writes `real`, and never while practising — so practice can't leak into it.
+	const save = () => { if (debug || practice) return; try { localStorage.setItem(KEY, JSON.stringify(real)); } catch (e) {} };
+
+	// ---- practice mode -----------------------------------------------------------------
+	function practiceData() {
+		const d = JSON.parse(JSON.stringify(real));
+		d.owned = Config.Flowers.filter(f => !f.hidden).map(f => f.id);
+		d.unlocked = Math.max(60, d.unlocked); // every level open
+		return d;
+	}
+	function setPractice(on) {
+		practice = !!on;
+		data = practice ? practiceData() : real;
+		try { if (practice) sessionStorage.setItem(PRACTICE_KEY, "1"); else sessionStorage.removeItem(PRACTICE_KEY); } catch (e) {}
+		Audio.Sfx("magic", 1);
+		showMap();
+	}
+
+	// ---- names + leaderboard -------------------------------------------------------------
+	let memPid = null;
+	function getPid(create) {
+		try {
+			const p = localStorage.getItem(PID_KEY);
+			if (p && /^[A-Za-z0-9-]{16,64}$/.test(p)) return p;
+		} catch (e) {}
+		if (memPid) return memPid;
+		if (!create) return null;
+		let id;
+		try { id = crypto.randomUUID(); } catch (e) {
+			id = "";
+			for (let i = 0; i < 32; i++) id += Math.floor(Math.random() * 16).toString(16);
+		}
+		memPid = id;
+		try { localStorage.setItem(PID_KEY, id); } catch (e) {}
+		return id;
+	}
+	function fetchJSON(url, opts) {
+		const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+		const timer = ctl ? setTimeout(() => ctl.abort(), 7000) : 0;
+		return fetch(url, Object.assign({ signal: ctl ? ctl.signal : undefined }, opts || {}))
+			.then(r => r.json().catch(() => null).then(body => {
+				clearTimeout(timer);
+				if (!r.ok) throw new Error((body && body.error) || ("HTTP " + r.status));
+				return body;
+			}), err => { clearTimeout(timer); throw err; });
+	}
+	let lastSent = { level: 0, name: "" };
+	// Highest level reached on the REAL save. Never from practice or debug runs.
+	function submitScore() {
+		if (debug || practice || !real.name) return Promise.resolve(null);
+		const level = clamp(real.unlocked, 1, 61);
+		if (level <= lastSent.level && real.name === lastSent.name) return Promise.resolve(null);
+		const body = { pid: getPid(true), name: real.name, level };
+		return fetchJSON(LB_BASE + "/api/fvb/score", {
+			method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+		}).then(res => { lastSent = { level, name: body.name }; return res; }).catch(() => null);
+	}
+	function loadBoard() {
+		return submitScore().then(() => {
+			const pid = getPid(false);
+			return fetchJSON(LB_BASE + "/api/fvb/top" + (pid ? "?pid=" + encodeURIComponent(pid) : ""));
+		});
+	}
+	function setName(n) {
+		data.name = n;
+		if (!practice && !debug) { real.name = n; save(); submitScore(); }
+	}
+	// "Right before you start a game": ask for a name the first time.
+	function ensureName(then, back) {
+		if (data.name) { then(); return; }
+		Menus.NameEntry("", n => { setName(n); then(); }, back);
+	}
 
 	function reportWin(g) {
 		const d = data;
@@ -4414,6 +4688,7 @@ const Menus = (() => {
 		d.unlocked = Math.max(d.unlocked, Math.min(61, g + 1));
 		d.wins++;
 		save();
+		submitScore(); // no-op in practice/debug, and when the level didn't go up
 		return { reward: newFlower, first };
 	}
 
@@ -4442,6 +4717,8 @@ const Menus = (() => {
 		current = new Game(spec, {
 			loadout,
 			owned: data.owned,
+			playerName: data.name,
+			practice,
 			onEnd: result => {
 				if (!current) return;
 				const game = current;
@@ -4467,23 +4744,32 @@ const Menus = (() => {
 	}
 	function showMap(area) {
 		Menus.Map(data, {
-			play: startLevel,
+			play: g => ensureName(() => startLevel(g), () => showMap(Config.AreaOf(g)[0])),
 			almanac: a => Menus.Almanac(data, () => showMap(a)),
+			leaderboard: a => Menus.Leaderboard(real.name, loadBoard, () => showMap(a)),
+			practice: setPractice,
+			practiceOn: practice,
+			name: data.name,
+			editName: a => Menus.NameEntry(data.name, n => { setName(n); showMap(a); }, () => showMap(a)),
 		}, area);
 	}
 	// Debug/QA hook: ?level=37 jumps straight into a level.
-	const qs = new URLSearchParams(location.search);
 	const lv = parseInt(qs.get("level"), 10);
 	if (lv >= 1 && lv <= 60) {
 		debug = true;
 		const spec = Config.Level(lv);
 		const all = Config.Flowers.filter(f => !f.hidden).map(f => f.id);
 		const owned = qs.get("all") ? all : data.owned;
-		data = Object.assign({}, data, { owned });
+		data = Object.assign({}, real, { owned });
 		const usesSlots = !spec.noSlots && !spec.seedRain && spec.mode !== "hivebreaker";
 		run(spec, usesSlots ? (qs.get("loadout") ? qs.get("loadout").split(",") : sortedOwned().slice(0, 5)) : []);
-	} else showMap();
-	window.FVB = { get game() { return current; }, Config };
+	} else {
+		let wasPractising = false;
+		try { wasPractising = sessionStorage.getItem(PRACTICE_KEY) === "1"; } catch (e) {}
+		if (wasPractising) { practice = true; data = practiceData(); }
+		showMap();
+	}
+	window.FVB = { get game() { return current; }, Config, NameFilter, get practice() { return practice; }, get data() { return data; }, get real() { return real; } };
 })();
 
 </script>
