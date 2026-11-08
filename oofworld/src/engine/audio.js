@@ -731,7 +731,7 @@ const pighide_chase = {
   bpm: 150,
   bars: 32,
   swing: 0,
-  gain: 0.64,
+  gain: 0.7,
   fadeInS: 0.03,
   delay: { beats: 0.75, fb: 0.25, cut: 2800, wet: 0.35 },
   duck: { depth: 0.3, release: 0.12 },
@@ -762,12 +762,12 @@ const pighide_chase = {
   },
   lead: PH_CHASE_LEAD,
   parts: [
-    { voice: { ...PH_BRASS2, v: 0.12 }, min: 1, notes: PH_CHASE_HORNS2 },
+    { voice: { ...PH_BRASS2, v: 0.14 }, min: 1, notes: PH_CHASE_HORNS2 },
     { voice: { ...PH_PIZZ, v: 0.13 }, notes: PH_CHASE_PIZZ }, // "where'd they go?" breakdown
     { voice: PH_GLOCK, notes: PH_CHASE_GLOCK },
-    { voice: { ...PH_ARP, v: 0.12 }, min: 1, duck: true, bars: [[0, 15], [24, 31]], gate: 0.5, panSeq: [-0.4, 0.4], arp: PH_ARP_UPDOWN },
-    { voice: { ...PH_PAD, v: 0.08 }, min: 2, duck: true, pad: { oct: -1, beats: 3.9 } },
-    { voice: { ...PH_DOUBLE, v: 0.1 }, min: 2, copyLead: -12, bars: [[8, 12], [14, 15], [24, 31]] }, // not bar 13: A4 vs the Bb4 stab
+    { voice: { ...PH_ARP, v: 0.15 }, min: 1, duck: true, bars: [[0, 15], [24, 31]], gate: 0.5, panSeq: [-0.4, 0.4], arp: PH_ARP_UPDOWN },
+    { voice: { ...PH_PAD, v: 0.1 }, min: 2, duck: true, pad: { oct: -1, beats: 3.9 } },
+    { voice: { ...PH_DOUBLE, v: 0.12 }, min: 2, copyLead: -12, bars: [[8, 12], [14, 15], [24, 31]] }, // not bar 13: A4 vs the Bb4 stab
     { voice: { ...PH_GLOCK, v: 0.05 }, min: 2, copyLead: 12, bars: [[8, 15]] },
   ],
   drums(bar, pass, lvl) {
