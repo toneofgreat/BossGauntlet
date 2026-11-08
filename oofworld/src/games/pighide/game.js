@@ -5,7 +5,7 @@
 //   round.js    phases, the wire, scoring          rigs.js   rig pairing, looks, tags, x-ray
 //   pigs.js     pig models + every pig ability     hunters.js hunter models + weapons
 //   fx.js       local visual effects               hud.js    #pighide-ui
-//   shops.js    the five lobby kiosks
+//   shops.js    the five lobby kiosks                music.js  the round-following soundtrack
 //
 // Nothing here invents a player (ARCHITECTURE §9): rounds need two or more real people, and
 // solo/offline the lobby, the city, the shops and PRACTICE stay fully playable.
@@ -22,6 +22,7 @@ import { createHunters } from "./scripts/hunters.js";
 import { createFx } from "./scripts/fx.js";
 import { createHud } from "./scripts/hud.js";
 import { createShops } from "./scripts/shops.js";
+import { createMusic } from "./scripts/music.js";
 
 export const meta = {
   slug: "pighide",
@@ -149,6 +150,7 @@ export function init(ctx) {
     ctx, S, bag: [], buttons: [], nearKiosk: null, hitsSent: 0, lastOutHits: [],
     saveT: 0, emitT: 0, lastPhase: S.phase, lastSaveJson: null, saveWarned: false,
     city: null, fx: null, rigs: null, pigs: null, hunters: null, round: null, shops: null, hud: null,
+    music: null,
   };
   try { G.lastSaveJson = JSON.stringify(save); } catch { /* fine */ }
 
@@ -190,6 +192,7 @@ export function init(ctx) {
     onRemoteFx(peerId, kind, data) { if (G) G.hunters.onRemoteFx(peerId, kind, data); },
   };
   G.round = createRound(ctx, S, hooks);
+  G.music = createMusic(ctx, S);
 
   G.shops = createShops(ctx, S, {
     pig: (cl, sk) => G.pigs.buildPigModel(cl, sk),
@@ -234,6 +237,7 @@ export function update(dt, ctx) {
     G.lastOutHits = S.outHits.map((x) => ({ ...x }));
   }
   safe(() => G.round.update(step));
+  safe(() => G.music.update());
   safe(() => G.rigs.update(step));
   safe(() => G.pigs.update(step));
   safe(() => G.hunters.update(step));
@@ -290,6 +294,7 @@ export function dispose(ctx) {
   if (!G) return;
   const g = G;
   for (const off of g.bag.splice(0)) { try { if (typeof off === "function") off(); } catch { /* fine */ } }
+  safe(() => g.music.dispose());
   safe(() => g.hud.dispose());
   safe(() => g.shops.dispose());
   safe(() => g.round.dispose());

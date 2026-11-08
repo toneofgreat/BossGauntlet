@@ -411,6 +411,22 @@ export const REWARDS = deepFreeze({
 });
 
 // =====================================================================================
+// Music (scripts/music.js). Track ids are engine TRACKS keys in src/engine/audio.js.
+// The seek levels key off the seek clock, which counts DOWN from TUNE.SEEK_S.
+// =====================================================================================
+
+export const MUSIC = deepFreeze({
+  ids: {
+    lobby: "pighide_lobby", hide: "pighide_hide", chase: "pighide_chase",
+    frenzy: "pighide_frenzy", pigsWin: "pighide_pigswin", hunterWin: "pighide_hunterwin",
+  },
+  HIDE_BAR_S: 2.5,      // 4 beats at pighide_hide's 96 bpm — keep in sync with audio.js
+  LVL1_AT_S: 210,       // seek clock at/below this: chase level 1 (horns, arp, cowbell)
+  LVL2_AT_S: 120,       // ...level 2 (pad, octave doubles)
+  FRENZY_AT_S: 45,      // ...the frenzy track for the last stretch
+});
+
+// =====================================================================================
 // Lookups
 // =====================================================================================
 
