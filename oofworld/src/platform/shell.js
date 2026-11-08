@@ -104,6 +104,11 @@ const PLACES = [
   // portalColor && !hidden, so the Hub grows its arch and NEW! ribbon from this row.
   { slug: "showdown", hidden: false, name: "Showdown",                 icon: "🏆", portalColor: "#9b59b6",
     module: "../games/showdown/game.js", data: "../games/showdown/place.json" },
+  // Spec 27 §16: landed hidden while src/games/pighide/ was the registration stub, and
+  // was flipped visible once validate was green and scenario:pighide passed. buildPortals
+  // grows the pink arch and NEW! ribbon from this row alone.
+  { slug: "pighide", hidden: false, name: "PIG HIDE",                icon: "🐷", portalColor: "#ff8fb1",
+    module: "../games/pighide/game.js", data: "../games/pighide/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];

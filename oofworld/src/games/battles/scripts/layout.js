@@ -46,6 +46,14 @@ export const CLOUD_STEPS = Object.freeze((() => {
   while (y < 86) { steps.push(Object.freeze([420 + r * Math.cos(a), y, r * Math.sin(a)])); a += 5 / r; r = Math.max(5, r - 2.4); y += 3; }
   return steps;
 })());
+// The lead-in clouds (spawned with the cloud steps): the pillar cap (top y 23) is far
+// above anything a jump reaches (apex 6.37; the highest stand tier tops out at 13.8), so
+// four clouds climb from the top tier of the stands, along the pillar's own bearing, up
+// to its cap. Edge gaps ~1.5, rises ≤ 2.5.
+export const CLOUD_LEAD = Object.freeze([[70.5, 16.3], [66, 18.6], [61.5, 20.9], [57.2, 22.6]].map(([r, y]) => {
+  const a = (2 / 14) * Math.PI * 2; // pillar 2 of 14 (buildArena), the tall one the spiral starts on
+  return Object.freeze([ARENA_CENTER[0] + r * Math.cos(a), y, ARENA_CENTER[1] + r * Math.sin(a)]);
+}));
 // The star bridge (spawned only once the stars are matched): canopy deck -> star isle.
 export const STAR_STEPS = Object.freeze([
   [116, 86, 56], [121, 88.5, 60], [126, 91, 63.5], [130, 93.5, 66.5], [133.5, 96, 68.5], [136.8, 98.5, 70.8],

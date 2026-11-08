@@ -19,7 +19,24 @@ const SEND_HZ = 12;
 const MOVE_EPS = 0.05;
 const YAW_EPS = 0.01;
 const INTERP_S = 0.12;
-const STALE_S = 15;
+// Remote players stay drawn for as long as they are CONNECTED. The relay is the authority
+// on that: it sends `bye` when their socket closes or stops answering its ping (<= ~70 s),
+// and a closed socket of OUR OWN clears everybody. STALE_S is only a last resort for a
+// peer the relay never said goodbye to, and it is measured in WALL-CLOCK seconds of total
+// silence, not sim time, so it neither fires while our own tab is backgrounded nor for
+// somebody merely standing still: every live client sends a KEEPALIVE_S heartbeat (a
+// repeat of its last `move`) even when idle and even from a hidden tab.
+//
+// Amended 2026-11-07. This was 15 s of SIM time with no heartbeat, which was the
+// "players turn invisible" bug: §5.3 makes a still player send nothing, so anybody who
+// stood still (or switched tabs: rAF stops, so update() stops) for 15 s was evicted from
+// every other roster, and because a `move` from an unknown id was ignored they never came
+// back until they left and re-joined.
+const STALE_S = 120;
+const KEEPALIVE_S = 8;
+// A remote that stood still for a long time and then moves would otherwise be walked from
+// its old sample to its new one over the whole idle gap; cap the span the lerp uses.
+const INTERP_SPAN_MAX_S = 0.5;
 const RETRY_MIN_S = 1;
 const RETRY_MAX_S = 30;
 
@@ -65,12 +82,21 @@ export function createNet(deps = {}) {
     getAvatar: () => null,
     getToken: () => null, // spec 14: a session token makes the room know who you are
     onStatus: () => {},
+    now: () => Date.now(), // wall clock, for STALE_S / KEEPALIVE_S (injectable for tests)
+    getDocument: () => (typeof document === "undefined" ? null : document),
     WebSocketImpl: typeof WebSocket === "undefined" ? null : WebSocket,
     ...deps,
   };
 
   const listeners = new Map();
   const peers = new Map(); // id -> remote player record (§3.1)
+  // Peers dropped by the STALE_S last resort, kept so that the moment they say anything
+  // again they come straight back with their real name and avatar. The relay still thinks
+  // they are here (it sent no `bye`), so restoring them invents nobody (ARCHITECTURE §9).
+  const dormant = new Map();
+  // Place-owned INTENTIONAL hiding (a dead/spectating player, an invisibility ability, a
+  // pig disguised as a prop). Purely local and per-Place: cleared on every join/leave.
+  const hiddenPeers = new Set();
 
   let ws = null;
   let url = null;
@@ -80,6 +106,9 @@ export function createNet(deps = {}) {
   let publishedState = null;
   let publishedJson = "null";
   let lastSent = { pos: null, yaw: 0, anim: "idle" };
+  let lastSentMs = 0;
+  let latest = null; // the last { pos, yaw, anim } the shell handed update(), for keepalives
+  let keepaliveTimer = null;
   let sendAccum = 0;
   let simTime = 0;
   let retryS = RETRY_MIN_S;
@@ -106,6 +135,41 @@ export function createNet(deps = {}) {
     if (!ws || ws.readyState !== 1) return false;
     try { ws.send(JSON.stringify(obj)); return true; } catch { return false; }
   }
+
+  function sendMove(pos, yaw, anim) {
+    lastSent = { pos: [pos[0], pos[1], pos[2]], yaw, anim };
+    lastSentMs = d.now();
+    send({ t: "move", pos: lastSent.pos, yaw, anim });
+  }
+
+  // The heartbeat. Runs off a timer AND off the relay's own ping, because a background tab
+  // gets no rAF (so no update()) and its timers are throttled, but socket messages are
+  // still delivered to it, so answering a ping is the one thing a hidden tab always does.
+  // `force` sends even if a heartbeat went out recently (the tab just hid: publish where we
+  // actually stopped, which the 12 Hz throttle may not have sent yet).
+  function keepalive(force) {
+    if (!ws || ws.readyState !== 1 || !selfId || !latest) return;
+    const changed = !lastSent.pos
+      || latest.pos[0] !== lastSent.pos[0] || latest.pos[1] !== lastSent.pos[1]
+      || latest.pos[2] !== lastSent.pos[2] || latest.yaw !== lastSent.yaw
+      || latest.anim !== lastSent.anim;
+    if (!force && !changed && d.now() - lastSentMs < KEEPALIVE_S * 1000) return;
+    sendMove(latest.pos, latest.yaw, latest.anim);
+  }
+
+  function startKeepalive() {
+    if (keepaliveTimer || typeof setInterval !== "function") return;
+    keepaliveTimer = setInterval(() => keepalive(false), (KEEPALIVE_S / 2) * 1000);
+    if (keepaliveTimer && typeof keepaliveTimer.unref === "function") keepaliveTimer.unref();
+  }
+  function stopKeepalive() {
+    if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = null; }
+  }
+
+  // Hiding: say exactly where we stopped. Showing again: same, so nobody waits a step.
+  const doc = d.getDocument();
+  const onVisibility = () => keepalive(true);
+  if (doc && typeof doc.addEventListener === "function") doc.addEventListener("visibilitychange", onVisibility);
 
   function connect() {
     if (disposed || !place) return;
@@ -143,10 +207,13 @@ export function createNet(deps = {}) {
       if (ws !== sock) return;
       ws = null;
       selfId = null;
+      stopKeepalive();
       // Everyone we knew about is only known through this socket. Dropping them is the
-      // honest thing: they may still be playing, but we no longer have any idea.
+      // honest thing: they may still be playing, but we no longer have any idea. This is
+      // the "unless you are offline" case: the only time a live player vanishes.
       const had = peers.size;
       peers.clear();
+      dormant.clear();
       if (had) emit("bye", { id: null, all: true });
       setStatus("offline", "disconnected");
       scheduleRetry();
@@ -170,7 +237,17 @@ export function createNet(deps = {}) {
       case "welcome": {
         selfId = m.id;
         peers.clear();
+        dormant.clear();
         for (const r of m.peers || []) addPeer(r);
+        // A fresh room (new Place, or a reconnect) knows nothing about where we are: the
+        // relay's record starts with pos null, and a peer with no position is not drawn.
+        // Forget what we sent on the OLD socket/room so the next update() (or the
+        // keepalive, if our tab is hidden right now) publishes our position at once,
+        // instead of leaving a player who is standing still invisible to the whole room.
+        lastSent = { pos: null, yaw: 0, anim: "idle" };
+        lastSentMs = 0;
+        startKeepalive();
+        keepalive(true);
         setStatus("online");
         // `build` rides along: spec 18 puts the room's existing parts in the welcome so
         // somebody arriving late sees the same world as everybody already there.
@@ -178,11 +255,12 @@ export function createNet(deps = {}) {
         return;
       }
       case "peer":
-        if (m.record && m.record.id !== selfId) addPeer(m.record);
+        if (m.record && m.record.id !== selfId) { dormant.delete(m.record.id); addPeer(m.record); }
         return;
       case "move": {
-        const p = peers.get(m.id);
+        const p = peers.get(m.id) || revive(m.id);
         if (!p) return;
+        p.heardMs = d.now();
         // Keep the previous sample: §5.4 interpolates between it and this one rather
         // than extrapolating, so a dropped packet makes a remote avatar late instead of
         // sending it through a wall.
@@ -194,11 +272,15 @@ export function createNet(deps = {}) {
         return;
       }
       case "state": {
-        const p = peers.get(m.id);
-        if (p) { p.state = m.state; p.at = simTime; }
+        const p = peers.get(m.id) || revive(m.id);
+        if (p) { p.state = m.state; p.at = simTime; p.heardMs = d.now(); }
         return;
       }
       case "bye": {
+        // The relay saying they left (socket closed / stopped answering its ping): the one
+        // authoritative way a connected player stops being drawn.
+        dormant.delete(m.id);
+        hiddenPeers.delete(m.id);
         if (peers.delete(m.id)) emit("bye", { id: m.id });
         return;
       }
@@ -228,6 +310,9 @@ export function createNet(deps = {}) {
         return;
       case "ping":
         send({ t: "pong" });
+        // Not throttled in a background tab (a socket event, not a timer), so this is the
+        // heartbeat of last resort for a hidden tab.
+        keepalive(false);
         return;
       default:
         // Unknown message types are ignored, not errors: a newer relay may say more
@@ -250,20 +335,40 @@ export function createNet(deps = {}) {
       anim: r.anim || "idle",
       state: r.state === undefined ? null : r.state,
       at: simTime,
+      heardMs: d.now(),
       prev: null,
     };
     peers.set(rec.id, rec);
     emit("peer", rec);
   }
 
+  function revive(id) {
+    const rec = dormant.get(id);
+    if (!rec) return null;
+    dormant.delete(id);
+    rec.heardMs = d.now();
+    peers.set(id, rec);
+    emit("peer", rec);
+    return rec;
+  }
+
   // Called by the shell every sim step. Owns the send throttle and stale eviction; the
   // renderer reads `roster()` and interpolates with `interpolated()`.
   function update(dt, pos, yaw, anim) {
     simTime += dt;
+    if (Array.isArray(pos)) latest = { pos: [pos[0], pos[1], pos[2]], yaw, anim };
     if (!ws || ws.readyState !== 1 || !selfId) return;
 
+    // Last resort only (see STALE_S): total wall-clock silence from a peer the relay never
+    // said `bye` for. Live peers heartbeat every KEEPALIVE_S, so this never fires for
+    // somebody who is merely idle or tabbed out.
+    const nowMs = d.now();
     for (const [id, p] of peers) {
-      if (simTime - p.at > STALE_S) { peers.delete(id); emit("bye", { id }); }
+      if (nowMs - p.heardMs > STALE_S * 1000) {
+        peers.delete(id);
+        dormant.set(id, p);
+        emit("bye", { id });
+      }
     }
 
     sendAccum += dt;
@@ -276,9 +381,13 @@ export function createNet(deps = {}) {
       || Math.abs(pos[2] - lastSent.pos[2]) > MOVE_EPS
       || Math.abs(yaw - lastSent.yaw) > YAW_EPS
       || anim !== lastSent.anim;
-    if (!moved) return; // §5.3: standing still costs nothing
-    lastSent = { pos: [pos[0], pos[1], pos[2]], yaw, anim };
-    send({ t: "move", pos: lastSent.pos, yaw, anim });
+    if (!moved) {
+      // §5.3: standing still costs nothing, except one heartbeat every KEEPALIVE_S so the
+      // room knows we are still here.
+      if (nowMs - lastSentMs >= KEEPALIVE_S * 1000) sendMove(pos, yaw, anim);
+      return;
+    }
+    sendMove(pos, yaw, anim);
   }
 
   // Where to draw a remote player right now: INTERP_S behind their last sample, walked
@@ -288,7 +397,7 @@ export function createNet(deps = {}) {
     if (!p.prev || !p.prev.pos) return { pos: p.pos, yaw: p.yaw };
     const span = p.at - p.prev.at;
     if (!(span > 0)) return { pos: p.pos, yaw: p.yaw };
-    const t = Math.max(0, Math.min(1, (simTime - p.at) / Math.max(INTERP_S, span)));
+    const t = Math.max(0, Math.min(1, (simTime - p.at) / Math.max(INTERP_S, Math.min(span, INTERP_SPAN_MAX_S))));
     const a = p.prev.pos;
     const b = p.pos;
     // Shortest-arc yaw so a remote turning past pi does not spin the long way round.
@@ -306,6 +415,14 @@ export function createNet(deps = {}) {
     join(slug) {
       place = slug;
       retryS = RETRY_MIN_S;
+      hiddenPeers.clear();
+      latest = null; // the last Place's position must not be heartbeated into this room
+      // Nor its published state: connect() hands publishedState to the relay inside the
+      // join, and the relay caches it as ours for this room. The shell joins BEFORE the
+      // new Place's init, so this never discards anything the new Place published; a
+      // same-Place re-join (sign-in) just re-sends on the Place's next publish.
+      publishedState = null;
+      publishedJson = "null";
       connect();
     },
     leave() {
@@ -314,13 +431,17 @@ export function createNet(deps = {}) {
       const sock = ws;
       ws = null;
       selfId = null;
+      stopKeepalive();
       peers.clear();
+      dormant.clear();
+      hiddenPeers.clear();
       if (sock) { try { sock.close(); } catch { /* already closing */ } }
       setStatus("offline");
     },
     dispose() {
       disposed = true;
       this.leave();
+      if (doc && typeof doc.removeEventListener === "function") doc.removeEventListener("visibilitychange", onVisibility);
       listeners.clear();
     },
     update,
@@ -332,6 +453,23 @@ export function createNet(deps = {}) {
     status: () => status,
     self: () => ({ id: selfId, name }),
     roster: () => [...peers.values()],
+    // Place-level INTENTIONAL hiding of a remote player's rig in YOUR view (a dead or
+    // spectating fighter, an invisibility ability, a pig disguised as a prop). The peer
+    // stays in roster()/count() because they are still a real, connected player; only
+    // their avatar and name tag are not drawn. Cleared on every Place change and when that
+    // peer leaves, so a Place can never leave somebody invisible anywhere else.
+    setPeerHidden(id, hidden) {
+      if (typeof id !== "string" || !id) return;
+      if (hidden) hiddenPeers.add(id); else hiddenPeers.delete(id);
+    },
+    isPeerHidden: (id) => hiddenPeers.has(id),
+    clearPeerHidden() { hiddenPeers.clear(); },
+    // Wall-clock seconds since anything was last heard from this peer (Infinity if not in
+    // the roster), for Places that keep their own staleness rule (showdown §5.3).
+    silentFor(id) {
+      const p = peers.get(id);
+      return p ? Math.max(0, (d.now() - p.heardMs) / 1000) : Infinity;
+    },
     count: () => peers.size + 1, // §9: the TRUE number, including you, 1 when alone
     // Outbound for message types the Place or the UI owns rather than net.js — chat
     // today. Silently does nothing offline, like everything else here.

@@ -160,6 +160,19 @@ export const BADGES = Object.freeze([
   B("showdown.error-handled", "Error Handled", "🧩", "Clear the error stage, the hardest in the lobby obby."),
   B("showdown.untouched", "Untouched", "🛡️", "Win a round without taking a single hit.", true),
   B("showdown.photo-finish", "Photo Finish", "⏱️", "Win with under five seconds left on the round clock.", true),
+  // spec 27 §12.3 — PIG HIDE. Every pig/hunter milestone is a LIFETIME count (thresholds,
+  // never spent), so each of these fires at most once per profile by construction.
+  B("pighide.first-pig-win", "Still Oinking", "🐷", "Win your first round of PIG HIDE as a pig."),
+  B("pighide.pig-wins-10", "Hide Master", "🫥", "Win 10 rounds as a pig."),
+  B("pighide.pig-wins-50", "Mad Scientist", "🧪", "Win 50 rounds as a pig and unlock the Mad Scientist Pig."),
+  B("pighide.pig-wins-1000", "Pig Radar", "📡", "Win 1,000 rounds as a pig and claim the Pig Radar."),
+  B("pighide.first-hunter-win", "First Round-Up", "🎯", "Catch every pig in a round as the hunter."),
+  B("pighide.hunter-wins-25", "Rocket Ranger", "🚀", "Win 25 rounds as the hunter and unlock the RPG Hunter."),
+  B("pighide.hunter-wins-250", "The Amazing Hunter", "🦸", "Win 250 rounds as the hunter and become The Amazing Hunter."),
+  B("pighide.clean-sweep", "Clean Sweep", "🧹", "Catch three or more pigs in one winning round."),
+  B("pighide.new-look", "New Look", "🎨", "Buy your first pig skin or hunter skin."),
+  B("pighide.decoy-duty", "Decoy Duty", "🥸", "Have the hunter catch your clone instead of you.", true),
+  B("pighide.close-call", "Close Call", "😅", "Win as a pig with 20 HP or less left.", true),
 ]);
 
 const defsById = new Map();

@@ -39,6 +39,13 @@ export const SOURCE_CAPS = Object.freeze({
   // the "*" fallback of 100 applies and a player clearing Dilly Impossible then `error`
   // would watch their largest reward in the Place silently truncate.
   showdown: 700,
+  // spec 27 §12.4. The worst HONEST minute holds at most ONE round result: a round is a
+  // 30 s hide plus a seek that can end the instant the last pig is caught, then an 8 s
+  // result and a fresh START, so two results are >= 76 s apart. The largest single
+  // payout is a hunter win (40); a pig win pays 25. Skin purchases are SPENDS and badge
+  // bonuses ride the uncapped `badge` token, so neither counts here. 100 covers one
+  // hunter win with 2.5x headroom and is stated explicitly rather than inherited from "*".
+  pighide: 100,
 });
 
 const REASON_RE = /^[a-z][a-z0-9:._-]*$/;

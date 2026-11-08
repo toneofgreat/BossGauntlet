@@ -11,7 +11,7 @@
 // into onTouch(), ticks update(dt), and calls refreshWorld() after loads/changes so a
 // returning save finds its doors already open and its bridges already hung.
 
-import { FLOOR_TOP, RING_CENTER, CLOUD_STEPS, STAR_STEPS, SKY_ISLE, SKY_COORDS, CRATER, LOBBY_SPAWN } from "./layout.js";
+import { FLOOR_TOP, RING_CENTER, CLOUD_STEPS, CLOUD_LEAD, STAR_STEPS, SKY_ISLE, SKY_COORDS, CRATER, LOBBY_SPAWN } from "./layout.js";
 
 const DIGS_NEEDED = 6;
 
@@ -477,6 +477,10 @@ export function createQuest(deps) {
         const [x, y, z] = CLOUD_STEPS[i];
         part({ id: "bt_qcloud_" + i, size: [3, 0.8, 3], position: [x, y - 0.4, z], color: i % 2 ? "#eef2fa" : "#dfe8f2", material: "plastic", canCollide: true });
       }
+      for (let i = 0; i < CLOUD_LEAD.length; i++) {
+        const [x, y, z] = CLOUD_LEAD[i];
+        part({ id: "bt_qlead_" + i, size: [3, 0.8, 3], position: [x, y - 0.4, z], color: i % 2 ? "#dfe8f2" : "#eef2fa", material: "plastic", canCollide: true });
+      }
       // the altar at the ring's heart, and the book of numbers on it
       part({ id: "bt_qaltar", shape: "cylinder", size: [7, 1, 7], position: [RING_CENTER[0], RING_CENTER[1] - 3.5, RING_CENTER[2]], color: "#dfe8f2", material: "plastic", canCollide: true });
       part({ id: "bt_qaltar2", shape: "cylinder", size: [2.4, 1.6, 2.4], position: [RING_CENTER[0], RING_CENTER[1] - 2.2, RING_CENTER[2]], color: "#8a93a6", material: "metal", canCollide: false }); // walk-through: it stands ON the touch pad
@@ -502,9 +506,10 @@ export function createQuest(deps) {
         return true;
       case "bt_book1":
         if (!s.quest.b1) { s.quest.b1 = true; saveNow(); }
+        refreshWorld(); // the clouds rise now, even if the book is shut with the ✕ instead of its button
         pagedPanel("📕 The Hermit", BOOK1.map((body, i) => ({ heading: `Page ${i + 1} of 15`, body })), {
           doneLabel: "Close the book",
-          onDone: () => { refreshWorld(); toast("Fifteen pages. Those first letters were no accident…", "📕", 4600); },
+          onDone: () => { refreshWorld(); toast("Fifteen pages. Those first letters were no accident… Clouds now climb from the arena's stands.", "📕", 4600); },
         });
         return true;
       case "bt_book2":

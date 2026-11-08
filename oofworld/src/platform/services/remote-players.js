@@ -67,6 +67,9 @@ export function createRemotePlayers(deps) {
     const root = rig && (rig.root || rig.group || rig.object3D);
     if (!root) return null;
     if (root.parent !== scene) scene.add(root);
+    // Lets a Place pair a drawn rig to its player exactly (spec 27 §9.0) instead of guessing
+    // by position. Read-only for Places.
+    root.userData.peerId = peer.id;
     const tag = makeTag(peer.name);
     root.add(tag.sprite);
     const entry = { rig, root, tag, tagText: peer.name };
@@ -103,6 +106,22 @@ export function createRemotePlayers(deps) {
       // converted it a second time.
       e.root.position.set(at.pos[0], at.pos[1], at.pos[2]);
       e.root.rotation.y = at.yaw;
+      // The ONLY way a connected player's rig is not drawn: the Place asked for it
+      // (net.setPeerHidden: dead, spectating, invisible, disguised). Hidden, not
+      // despawned, so it reappears instantly and in the right place when un-hidden.
+      // Anything else (idle, tabbed out, far away) keeps them visible at their last
+      // known position until the relay says they left.
+      const hide = typeof net.isPeerHidden === "function" && net.isPeerHidden(peer.id);
+      e.root.visible = !hide;
+      // A rig is a few small meshes whose bounds are never recomputed as limbs animate;
+      // never let the frustum test pop a live player out at the screen edge.
+      // Re-applied twice a second, not once: gear, hats, a re-made name tag and Place
+      // attachments all join the rig after spawn. About 20 nodes a rig, so it is cheap.
+      e.cullT = (e.cullT || 0) - (Number.isFinite(dt) ? dt : 1);
+      if (e.cullT <= 0) {
+        e.cullT = 0.5;
+        e.root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh || o.isSprite) o.frustumCulled = false; });
+      }
       if (e.rig && typeof e.rig.setAnimState === "function") {
         e.rig.setAnimState({ mode: peer.anim || "idle", speed: peer.anim === "walk" ? 16 : 0 });
       }
