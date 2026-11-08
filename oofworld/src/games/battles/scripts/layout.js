@@ -438,16 +438,32 @@ function buildCourtyard(parts, out) {
     const doorway = s === 0, windowSlat = s === 1; // the window slat stops short of the top
     const h = doorway ? TRUNK_H - 6.4 : windowSlat ? TRUNK_H - 7 : TRUNK_H;
     const yBase = doorway ? FLOOR_TOP + 6.4 : FLOOR_TOP;
-    parts.push(P({ size: [3.9, h, 1.5], position: [bx, yBase + h / 2, bz], rotation: [0, 90 - (a * 57.29578), 0], color: s % 2 ? "#4a2f18" : "#5a3a1f", material: "wood" }));
+    const rot = [0, 90 - (a * 57.29578), 0], col = s % 2 ? "#4a2f18" : "#5a3a1f";
+    // The doorway's two neighbours (slats 1 and 9) overlap the opening down low and left
+    // only ~2.2 studs for a 2-stud capsule. Below the lintel they are narrower (2.6) and
+    // shifted away from the door, which opens the gap to ~4.3; above it they are full.
+    const neighbour = s === 1 || s === SLATS - 1;
+    if (neighbour) {
+      const away = s === 1 ? 1 : -1; // +tangent (increasing angle) points away from slat 0 for s=1
+      const tx = -Math.sin(a) * away, tz = Math.cos(a) * away, shift = (3.9 - 2.6) / 2;
+      parts.push(P({ size: [2.6, 6.4, 1.5], position: [bx + tx * shift, FLOOR_TOP + 3.2, bz + tz * shift], rotation: rot, color: col, material: "wood" }));
+      parts.push(P({ size: [3.9, h - 6.4, 1.5], position: [bx, FLOOR_TOP + 6.4 + (h - 6.4) / 2, bz], rotation: rot, color: col, material: "wood" }));
+      continue;
+    }
+    parts.push(P({ size: [3.9, h, 1.5], position: [bx, yBase + h / 2, bz], rotation: rot, color: col, material: "wood" }));
   }
-  parts.push({ id: "bt_treedoor", size: [3.6, 6.4, 1.6], position: [TX, FLOOR_TOP + 3.2, TZ + 5.3], color: "#3a2414", material: "wood", canCollide: true });
+  parts.push({ id: "bt_treedoor", size: [4.8, 6.4, 1.6], position: [TX, FLOOR_TOP + 3.2, TZ + 5.3], color: "#3a2414", material: "wood", canCollide: true });
   parts.push(P({ shape: "sphere", size: [0.5, 0.5, 0.3], position: [TX, FLOOR_TOP + 4.6, TZ + 6.2], color: "#3ddc84", material: "neon", canCollide: false })); // a mossy "knot" that is clearly a lock
   parts.push({ id: "bt_tree", shape: "cylinder", size: [5, 0.3, 5], position: [TX, FLOOR_TOP + 0.2, TZ + 8], color: "#2f8f4a", material: "neon", canCollide: false, behaviors: [{ type: "touchEvent", event: "bt_tree", cooldownS: 1.5 }] });
   // inside: 23 tiny ledges spiralling up (three of them SPIN — the most annoying jumps
   // ever built on purpose), two more up to the window sill, then out and around
   for (let s = 0; s < 23; s++) {
     const a = Math.PI / 2 + s * 0.9, y = FLOOR_TOP + 4 + s * 2.85;
-    const lx = TX + 3.1 * Math.cos(a), lz = TZ + 3.1 * Math.sin(a);
+    // Ledge 0 used to sit dead south at r 3.1 — right behind the doorway at head height,
+    // so nobody could walk in under it or jump up onto it through the 6.4-stud door. It
+    // now stands at the trunk's centre: same height, 3.1 studs from ledge 1, path clear.
+    const r = s === 0 ? 0 : 3.1;
+    const lx = TX + r * Math.cos(a), lz = TZ + r * Math.sin(a);
     const def = { size: [1.5, 0.4, 1.5], position: [lx, y, lz], rotation: [0, -a * 57.29578, 0], color: s % 2 ? "#6b4423" : "#7d5230", material: "wood" };
     if (s === 8 || s === 15 || s === 22) { def.behaviors = [{ type: "spinner", axis: "y", speed: 120 }]; def.color = "#b98a4e"; }
     parts.push(P(def));
