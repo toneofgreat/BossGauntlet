@@ -566,7 +566,7 @@ function createCustomizer(deps, opts) {
     const head = headHexOf(st);
 
     const intro = el("div", "font-size:12px;color:#9aa3b8;margin:2px 0 10px;",
-      "Every hairstyle is free. Tap one to wear it, then pick any colour.");
+      "Buy a hairstyle once with Oofbux and it's yours forever. Tap an owned style to wear it, then pick any colour.");
     grid.appendChild(intro);
 
     // ---- colour controls
@@ -684,7 +684,11 @@ function createCustomizer(deps, opts) {
         el("div", "font-size:11px;color:" + (on ? "#00a2ff" : "#7ac74f") + ";", on ? "Wearing" : sub));
       node.tabIndex = 0;
       node.setAttribute("aria-label", name);
-      const wear = () => { avatar.setHair(id); render(); };
+      const wear = () => {
+        if (id && typeof avatar.ownsHair === "function" && !avatar.ownsHair(id)) { buyHair(id, name); return; }
+        avatar.setHair(id);
+        render();
+      };
       node.addEventListener("click", wear);
       node.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wear(); }
@@ -692,7 +696,10 @@ function createCustomizer(deps, opts) {
       tiles.appendChild(node);
     };
     mk(null, "No hair", "Free");
-    for (const s of HAIR_STYLES) mk(s.id, s.name, s.glow ? "Free · ✨" : "Free");
+    for (const s of HAIR_STYLES) {
+      const have = typeof avatar.ownsHair === "function" ? avatar.ownsHair(s.id) : true;
+      mk(s.id, s.name, (have ? "Owned" : "⬡ " + s.price.toLocaleString()) + (s.glow ? " · ✨" : ""));
+    }
     grid.appendChild(tiles);
   }
 
@@ -735,6 +742,29 @@ function createCustomizer(deps, opts) {
       preview.setWalking && preview.setWalking(item.type === "trail" && !isEquipped);
       render();
     };
+  }
+
+  // Hair (2026-11-13): tapping a style you don't own asks to buy it, then wears it.
+  async function buyHair(id, name) {
+    const price = (HAIR_STYLES.find((h) => h.id === id) || {}).price;
+    if (typeof price !== "number") return;
+    if (!economy.canAfford(price)) {
+      ui.toast("Not enough Oofbux — " + name + " costs ⬡ " + price.toLocaleString(), { icon: "💸" });
+      return;
+    }
+    if (confirmDialog) {
+      const yes = await confirmDialog("Buy " + name + "?", "This hairstyle costs ⬡ " + price.toLocaleString() + " Oofbux. You keep it forever.");
+      if (!yes) return;
+    }
+    const res = avatar.buyHair(id);
+    if (res && res.ok) {
+      avatar.setHair(id);
+      ui.toast("Bought " + name + "!", { icon: "💇" });
+      preview.setState(avatar.getState());
+    } else if (res && res.reason === "broke") {
+      ui.toast("Not enough Oofbux", { icon: "💸" });
+    }
+    render();
   }
 
   async function buy(item) {

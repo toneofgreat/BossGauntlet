@@ -1,8 +1,9 @@
-// src/platform/services/avatar/hair.js — HAIR: free, procedural 3D hairstyles that any
-// player can wear in any colour (spec 05 §5.12, amended 2026-11-12).
+// src/platform/services/avatar/hair.js — HAIR: procedural 3D hairstyles that a player
+// buys once with Oofbux and can wear in any colour (spec 05 §5.12, amended 2026-11-12 and
+// 2026-11-13: prices).
 //
-// Hair is NOT a Catalog item. It is never bought, never granted and never owned: every
-// style here is free to wear from the first boot. It lives in the avatar state as two
+// Hair is NOT a Catalog item: ownership lives in the avatar state's own `hairOwned` list
+// (services/avatar.js buyHair/ownsHair), and each style's `price` is set below. It lives in the avatar state as two
 // extra keys on `equipped` — `hair` (a style id below, or null) and `hairColor` (a
 // "#rrggbb", or null for the style's own default) — which is why the room sees it with
 // no change to the wire format: shell.js already broadcasts `equipped` whole.
@@ -33,29 +34,35 @@ const POP = ["#ff6fb5", "#4b7bff", "#35e0e0", "#7ac74f", "#a64dff"];
 
 // glow: the style lights itself (emissive) and reads well on any background.
 export const HAIR_STYLES = Object.freeze([
-  { id: "hair_spiky", name: "Spiky Anime", color: "#f5c518", presets: ["#f5c518", "#1b1b1b", "#35a3e0", "#d94436", "#f2f4fa", "#ff6fb5"] },
-  { id: "hair_long", name: "Long Flowing", color: "#4a2c1a", presets: [...NATURAL, "#a64dff"] },
-  { id: "hair_afro", name: "Big Afro", color: "#2a1a10", presets: ["#2a1a10", "#1b1b1b", "#8c5a3c", "#ff6fb5", "#35a3e0", "#f1d27a"] },
-  { id: "hair_mohawk", name: "Mohawk", color: "#e0245e", presets: ["#e0245e", "#7ac74f", "#35a3e0", "#1b1b1b", "#f5c518", "#a64dff"] },
-  { id: "hair_ponytail", name: "Ponytail", color: "#c9873a", presets: [...NATURAL, ...POP.slice(0, 2)] },
-  { id: "hair_twintails", name: "Twin Tails", color: "#35e0e0", presets: ["#35e0e0", "#ff6fb5", "#a64dff", "#1b1b1b", "#f1d27a", "#d94436"] },
-  { id: "hair_buzz", name: "Buzz Cut", color: "#2e2018", presets: ["#2e2018", "#1b1b1b", "#c9873a", "#f2f4fa", "#4b7bff", "#7ac74f"] },
-  { id: "hair_curly", name: "Curly Mop", color: "#6b3a1e", presets: [...NATURAL, "#ff6fb5"] },
-  { id: "hair_bun", name: "Top Bun", color: "#1b1b1b", presets: ["#1b1b1b", "#4a2c1a", "#f1d27a", "#d94436", "#ff6fb5", "#35a3e0"] },
-  { id: "hair_emo", name: "Emo Fringe", color: "#14141c", presets: ["#14141c", "#a64dff", "#e0245e", "#35a3e0", "#f2f4fa", "#7ac74f"] },
-  { id: "hair_dreads", name: "Dreadlocks", color: "#3a2416", presets: ["#3a2416", "#1b1b1b", "#c9873a", "#7ac74f", "#e0245e", "#f1d27a"] },
-  { id: "hair_flame", name: "Flame Hair", color: "#ff5a00", glow: true, presets: ["#ff5a00", "#ff2a2a", "#3fa9ff", "#a64dff", "#3ddc84", "#f2f4fa"] },
-  { id: "hair_galaxy", name: "Galaxy Hair", color: "#6b3fa0", glow: true, presets: ["#6b3fa0", "#2a67c9", "#e0245e", "#2fbf9b", "#ff8a3d", "#14141c"] },
-  { id: "hair_pompadour", name: "Pompadour", color: "#1b1b1b", presets: ["#1b1b1b", "#4a2c1a", "#c9873a", "#f2f4fa", "#d94436", "#4b7bff"] },
-  { id: "hair_braids", name: "Braids", color: "#5a3420", presets: [...NATURAL, "#a64dff"] },
-  { id: "hair_rainbow", name: "Rainbow Ombre", color: "#ff3b6b", glow: true, presets: ["#ff3b6b", "#ffb84d", "#4db8ff", "#b84dff", "#3ddc84", "#ffffff"] },
-  { id: "hair_sidepart", name: "Side Part", color: "#4a2c1a", presets: [...NATURAL, "#4b7bff"] },
-  { id: "hair_spacebuns", name: "Space Buns", color: "#ff6fb5", presets: ["#ff6fb5", "#a64dff", "#35e0e0", "#1b1b1b", "#f1d27a", "#d94436"] },
-  { id: "hair_crystal", name: "Crystal Shards", color: "#7fe3ff", glow: true, presets: ["#7fe3ff", "#c58bff", "#7dffb0", "#ff8ad8", "#ffffff", "#ffd36b"] },
-  { id: "hair_wolfcut", name: "Wolf Cut", color: "#7a7f8c", presets: ["#7a7f8c", "#1b1b1b", "#f2f4fa", "#4a2c1a", "#e0245e", "#35a3e0"] },
+  { id: "hair_spiky", price: 100, name: "Spiky Anime", color: "#f5c518", presets: ["#f5c518", "#1b1b1b", "#35a3e0", "#d94436", "#f2f4fa", "#ff6fb5"] },
+  { id: "hair_long", price: 100, name: "Long Flowing", color: "#4a2c1a", presets: [...NATURAL, "#a64dff"] },
+  { id: "hair_afro", price: 150, name: "Big Afro", color: "#2a1a10", presets: ["#2a1a10", "#1b1b1b", "#8c5a3c", "#ff6fb5", "#35a3e0", "#f1d27a"] },
+  { id: "hair_mohawk", price: 200, name: "Mohawk", color: "#e0245e", presets: ["#e0245e", "#7ac74f", "#35a3e0", "#1b1b1b", "#f5c518", "#a64dff"] },
+  { id: "hair_ponytail", price: 200, name: "Ponytail", color: "#c9873a", presets: [...NATURAL, ...POP.slice(0, 2)] },
+  { id: "hair_twintails", price: 250, name: "Twin Tails", color: "#35e0e0", presets: ["#35e0e0", "#ff6fb5", "#a64dff", "#1b1b1b", "#f1d27a", "#d94436"] },
+  { id: "hair_buzz", price: 250, name: "Buzz Cut", color: "#2e2018", presets: ["#2e2018", "#1b1b1b", "#c9873a", "#f2f4fa", "#4b7bff", "#7ac74f"] },
+  { id: "hair_curly", price: 250, name: "Curly Mop", color: "#6b3a1e", presets: [...NATURAL, "#ff6fb5"] },
+  { id: "hair_bun", price: 250, name: "Top Bun", color: "#1b1b1b", presets: ["#1b1b1b", "#4a2c1a", "#f1d27a", "#d94436", "#ff6fb5", "#35a3e0"] },
+  { id: "hair_emo", price: 250, name: "Emo Fringe", color: "#14141c", presets: ["#14141c", "#a64dff", "#e0245e", "#35a3e0", "#f2f4fa", "#7ac74f"] },
+  { id: "hair_dreads", price: 250, name: "Dreadlocks", color: "#3a2416", presets: ["#3a2416", "#1b1b1b", "#c9873a", "#7ac74f", "#e0245e", "#f1d27a"] },
+  { id: "hair_flame", price: 25000, name: "Flame Hair", color: "#ff5a00", glow: true, presets: ["#ff5a00", "#ff2a2a", "#3fa9ff", "#a64dff", "#3ddc84", "#f2f4fa"] },
+  { id: "hair_galaxy", price: 25000, name: "Galaxy Hair", color: "#6b3fa0", glow: true, presets: ["#6b3fa0", "#2a67c9", "#e0245e", "#2fbf9b", "#ff8a3d", "#14141c"] },
+  { id: "hair_pompadour", price: 500, name: "Pompadour", color: "#1b1b1b", presets: ["#1b1b1b", "#4a2c1a", "#c9873a", "#f2f4fa", "#d94436", "#4b7bff"] },
+  { id: "hair_braids", price: 250, name: "Braids", color: "#5a3420", presets: [...NATURAL, "#a64dff"] },
+  { id: "hair_rainbow", price: 5000, name: "Rainbow Ombre", color: "#ff3b6b", glow: true, presets: ["#ff3b6b", "#ffb84d", "#4db8ff", "#b84dff", "#3ddc84", "#ffffff"] },
+  { id: "hair_sidepart", price: 500, name: "Side Part", color: "#4a2c1a", presets: [...NATURAL, "#4b7bff"] },
+  { id: "hair_spacebuns", price: 500, name: "Space Buns", color: "#ff6fb5", presets: ["#ff6fb5", "#a64dff", "#35e0e0", "#1b1b1b", "#f1d27a", "#d94436"] },
+  { id: "hair_crystal", price: 25000, name: "Crystal Shards", color: "#7fe3ff", glow: true, presets: ["#7fe3ff", "#c58bff", "#7dffb0", "#ff8ad8", "#ffffff", "#ffd36b"] },
+  { id: "hair_wolfcut", price: 1000, name: "Wolf Cut", color: "#7a7f8c", presets: ["#7a7f8c", "#1b1b1b", "#f2f4fa", "#4a2c1a", "#e0245e", "#35a3e0"] },
 ]);
 
 const BY_ID = new Map(HAIR_STYLES.map((s) => [s.id, s]));
+// Oofbux price of each style (owner-set 2026-11-13). Hair is bought once and owned forever.
+export function hairPrice(id) {
+  const st = HAIR_STYLES.find((x) => x.id === id);
+  return st ? st.price : null;
+}
+
 export const HAIR_IDS = Object.freeze(HAIR_STYLES.map((s) => s.id));
 
 export function getHairStyle(id) {

@@ -7,7 +7,7 @@
 import { buildRig } from "./avatar/rig.js";
 import { DEFAULT_FACE_ID } from "./avatar/faces.js";
 import { AVATAR_TUNING } from "./avatar/animator.js";
-import { HAIR_STYLES, isHairId } from "./avatar/hair.js";
+import { HAIR_STYLES, isHairId, hairPrice } from "./avatar/hair.js";
 import {
   BASE_SWATCHES, DEFAULT_BODY_COLORS, DEFAULT_OWNED, getItem, getItemsByType,
 } from "./avatar/catalog-data.js";
@@ -68,6 +68,7 @@ function defaultState() {
     equipped: emptyEquipped(),
     owned: [...DEFAULT_OWNED],
     sources,
+    hairOwned: [],
   };
 }
 
@@ -129,7 +130,18 @@ function sanitize(raw) {
     equipped.hairColor = rawEquipped.hairColor.toLowerCase();
   }
 
-  return { schemaVersion: SCHEMA_VERSION, bodyColors, equipped, owned, sources };
+  // Hair is bought with Oofbux (2026-11-13). hairOwned is an optional key: a save from the
+  // free-hair days has none, and the style it was wearing is kept as owned so nobody loses
+  // the hair they already had on.
+  const hairOwned = [];
+  if (Array.isArray(raw.hairOwned)) {
+    for (const id of raw.hairOwned) if (isHairId(id) && !hairOwned.includes(id)) hairOwned.push(id);
+  } else if (equipped.hair) {
+    hairOwned.push(equipped.hair);
+  }
+  if (equipped.hair && !hairOwned.includes(equipped.hair)) equipped.hair = null;
+
+  return { schemaVersion: SCHEMA_VERSION, bodyColors, equipped, owned, sources, hairOwned };
 }
 
 // saves.js hands out the cached domain object and expects callers to mutate it in
@@ -376,13 +388,32 @@ export function grantItem(itemId, sourceSlug) {
 }
 
 // ---- hair (§5.12) -------------------------------------------------------------------
-// Every style is free and wearable from the first boot: no Oofbux, no ownership, nothing
-// added to `owned`. Writes go through the same validate -> save -> onChange path.
+// Styles cost Oofbux (hairPrice) and are tracked in state.hairOwned, not the Catalog's
+// `owned` list (hair is not a Catalog item). Writes go through the same validate -> save -> onChange path.
 
-// setHair(styleId | null) — null takes the hair off.
+export function ownsHair(styleId) {
+  return Boolean(state) && Array.isArray(state.hairOwned) && state.hairOwned.includes(styleId);
+}
+
+// buyHair(styleId) — spends the style's Oofbux price and owns it forever. Never auto-wears.
+export function buyHair(styleId) {
+  requireInit();
+  const price = hairPrice(styleId);
+  if (!isHairId(styleId) || price === null) return { ok: false, reason: "invalid" };
+  if (ownsHair(styleId)) return { ok: false, reason: "owned" };
+  const paid = Boolean(deps.economy) && deps.economy.spend(price, "hair:" + styleId);
+  if (!paid) return { ok: false, reason: "broke" };
+  if (!Array.isArray(state.hairOwned)) state.hairOwned = [];
+  state.hairOwned.push(styleId);
+  commit();
+  return { ok: true };
+}
+
+// setHair(styleId | null) — null takes the hair off. Only an owned style can be worn.
 export function setHair(styleId) {
   requireInit();
   if (styleId !== null && !isHairId(styleId)) return { ok: false, reason: "invalid" };
+  if (styleId !== null && !ownsHair(styleId)) return { ok: false, reason: "unowned" };
   if (state.equipped.hair === styleId) return { ok: true };
   state.equipped.hair = styleId;
   commit();
