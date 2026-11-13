@@ -130,17 +130,8 @@ export function mountSettingsRows(body, deps = {}) {
       writeSetting("quality", tier);
     },
   }));
-  // Row 6 is aesthetic-only (§5.5): the Hub itself listens for platform:settingsChanged
-  // and re-applies the lighting preset (spec 06 §5.5, §5.6.9.6) — no engine call here,
-  // and no-op harmlessly while a non-Hub Place is loaded (the listener lives in hub
-  // game.js, so it simply doesn't fire until the player is back in the Hub).
-  body.appendChild(segmentedRow("Hub ambience", {
-    options: [
-      { id: "day", label: "Day" }, { id: "dusk", label: "Dusk" }, { id: "night", label: "Night" },
-    ],
-    value: settings.ambience,
-    onChange: (preset) => writeSetting("ambience", preset),
-  }));
+  // Row 6 ("Hub ambience") is retired with the Hub (spec 06 §5.7.6): nothing is left for
+  // it to light. The stored `settings.ambience` key stays in the profile, harmless and unread.
 
   // ---- CONTROLS (rows 7-10) ------------------------------------------------
   body.appendChild(el("div", "oof-section-label", "CONTROLS"));

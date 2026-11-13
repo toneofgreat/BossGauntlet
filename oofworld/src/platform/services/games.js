@@ -5,6 +5,17 @@
 // them. This file fetches, and reports failures in words a person can read rather than
 // throwing raw status codes at the UI.
 
+// A { key: count } map from the wire, keeping only non-negative integers. Anything else
+// (an old server's error body, a proxy's HTML) yields null — never a guessed number.
+function countMap(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (Number.isInteger(v) && v >= 0) out[k] = v;
+  }
+  return out;
+}
+
 export function createGames(deps = {}) {
   const d = { account: null, ...deps };
 
@@ -93,6 +104,55 @@ export function createGames(deps = {}) {
       } catch {
         // A visit that could not be recorded must never stop the game from opening.
         return { visits: null, counted: false };
+      }
+    },
+
+    // spec 14 §5.7.1 — built-in Place popularity. All three DEGRADE TO NULL rather than
+    // throw: with no server, with a server that is down, and with a deployed server older
+    // than these endpoints (it answers 404). The front page treats null as "no true
+    // number available" and falls back to an honest fixed order — it must never fill
+    // the gap with a made-up count.
+    //
+    // placeVisits() -> { slug: uniqueVisits } | null
+    async placeVisits() {
+      if (!available()) return null;
+      try {
+        const out = await call("/api/places/visits", undefined, "GET");
+        return countMap(out && out.visits);
+      } catch {
+        return null;
+      }
+    },
+
+    // visitPlace(slug) -> { visits, counted } | null. Recorded once per account per
+    // Place, server-side; a guest comes back `counted: false`, which is not an error.
+    async visitPlace(slug) {
+      if (!available() || typeof slug !== "string" || !slug) return null;
+      const acc = account();
+      try {
+        const out = await call(`/api/places/${encodeURIComponent(slug)}/visit`, {
+          token: acc && acc.signedIn() ? acc.token() : null,
+        });
+        if (!out || !Number.isFinite(out.visits)) return null;
+        return { visits: out.visits, counted: !!out.counted };
+      } catch {
+        return null;
+      }
+    },
+
+    // rooms() -> { slug: livePlayers } | null. The sockets open on the server right now;
+    // a published game's room appears as `studio-<id>` only while somebody is in it.
+    async rooms() {
+      if (!available()) return null;
+      try {
+        // The token lets the server include a friends-only game's room for a friend
+        // who may open it (spec 14 §5.8.1), so its live count is true, not a missing 0.
+        const acc = account();
+        const tok = acc && acc.signedIn() ? `?token=${encodeURIComponent(acc.token())}` : "";
+        const out = await call(`/api/rooms${tok}`, undefined, "GET");
+        return countMap(out && out.rooms);
+      } catch {
+        return null;
       }
     },
 

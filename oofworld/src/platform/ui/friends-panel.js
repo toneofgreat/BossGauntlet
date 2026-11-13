@@ -15,8 +15,78 @@
 import { el, button } from "./kit.js";
 import { avatarThumb } from "./avatar-thumb.js";
 
+// The room key the front page joins (spec 06 §5.7): a friend whose presence says "hub"
+// is on OofWorld's front page, which is not a game anybody can join them in.
+export const FRONT_ROOM = "hub";
+const STUDIO_ROOM_RE = /^studio-([A-Za-z0-9]{1,32})$/;
+
+// friendWhereabouts(friend, lookup) -> { online, label, canJoin, reason, target }
+//
+// The one place that turns a friend's server-reported `{ online, place }` into words and
+// a Join decision, shared by the Friends panel and the front page so both say the same
+// true thing. `lookup`:
+//   placeName(slug)   -> the name of a visible built-in Place, or null if this build has
+//                        no such (visible) Place
+//   publishedName(id) -> the name of a PUBLIC published game this client has listed,
+//                        null when the list is loaded and it is not in it, or undefined
+//                        when no list was loaded (so nothing can be said either way)
+// `target` is { kind: "place", slug, name } or { kind: "published", id, name } when Join
+// can go somewhere, else null — and `reason` then says why not.
+export function friendWhereabouts(friend, lookup = {}) {
+  const f = friend || {};
+  const placeName = typeof lookup.placeName === "function" ? lookup.placeName : () => null;
+  const publishedName = typeof lookup.publishedName === "function" ? lookup.publishedName : () => undefined;
+  const who = f.username || "They";
+  if (!f.online) {
+    return { online: false, label: "Offline", canJoin: false, reason: `${who} is offline right now.`, target: null };
+  }
+  const place = typeof f.place === "string" ? f.place : null;
+  if (!place) {
+    return { online: true, label: "Online", canJoin: false, reason: `${who} is online but not in a game.`, target: null };
+  }
+  if (place === FRONT_ROOM) {
+    return {
+      online: true, label: "On the front page", canJoin: false,
+      reason: `${who} is browsing the front page, not playing a game.`, target: null,
+    };
+  }
+  const builtIn = placeName(place);
+  if (builtIn) {
+    return {
+      online: true, label: `Playing ${builtIn}`, canJoin: true, reason: "",
+      target: { kind: "place", slug: place, name: builtIn },
+    };
+  }
+  const m = STUDIO_ROOM_RE.exec(place);
+  if (m) {
+    const name = publishedName(m[1]);
+    if (name) {
+      return {
+        online: true, label: `Playing ${name}`, canJoin: true, reason: "",
+        target: { kind: "published", id: m[1], name },
+      };
+    }
+    if (name === null) {
+      return {
+        online: true, label: "Playing a published game", canJoin: false,
+        reason: "That game is friends-only or private, so it is not open to join from here.", target: null,
+      };
+    }
+    // No list to check against: offer it, and let the server say no if it is not open.
+    return {
+      online: true, label: "Playing a published game", canJoin: true, reason: "",
+      target: { kind: "published", id: m[1], name: "a published game" },
+    };
+  }
+  return {
+    online: true, label: "In a place this version doesn't know", canJoin: false,
+    reason: "They are somewhere this version of OofWorld cannot open.", target: null,
+  };
+}
+
 export function mountFriendsPanel(body, deps = {}) {
   const { friends, account, onJoin, toast } = deps;
+  const lookup = deps.lookup || {};
 
   const status = el("div", null, "");
   status.setAttribute("style", "font-size:var(--oof-size-sm);color:var(--oof-text-dim);margin-bottom:8px");
@@ -76,7 +146,9 @@ export function mountFriendsPanel(body, deps = {}) {
       + "text-overflow:ellipsis;white-space:nowrap");
     t.appendChild(nm);
 
-    const where = el("div", null, f.online ? (f.place || "online") : "offline");
+    const info = friendWhereabouts(f, lookup);
+    const where = el("div", null, info.label);
+    where.title = info.reason || info.label;
     where.setAttribute("style",
       `font-size:var(--oof-size-sm);color:${f.online ? "var(--oof-good,#3ddc84)" : "var(--oof-text-dim)"}`);
     t.appendChild(where);
@@ -88,13 +160,16 @@ export function mountFriendsPanel(body, deps = {}) {
       label: "Join",
       variant: "primary",
       onClick: () => {
-        if (!f.online || !f.place) { if (toast) toast(`${f.username} is not in a game right now`); return; }
-        if (typeof onJoin === "function") onJoin(f);
+        if (!info.canJoin) { if (toast) toast(info.reason); return; }
+        if (typeof onJoin === "function") onJoin(f, info.target);
       },
     });
     // Offered but disabled, with the reason on the tile above it: hiding the button
     // would leave people wondering where it went.
-    if (!f.online || !f.place) join.disabled = true;
+    if (!info.canJoin) {
+      join.disabled = true;
+      join.title = info.reason;
+    }
 
     const invite = button({
       label: "Invite",

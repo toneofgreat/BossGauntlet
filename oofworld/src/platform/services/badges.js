@@ -173,6 +173,12 @@ export const BADGES = Object.freeze([
   B("pighide.new-look", "New Look", "🎨", "Buy your first pig skin or hunter skin."),
   B("pighide.decoy-duty", "Decoy Duty", "🥸", "Have the hunter catch your clone instead of you.", true),
   B("pighide.close-call", "Close Call", "😅", "Win as a pig with 20 HP or less left.", true),
+  // spec 28 §9 — Find The Cats. Each fires once, when the found count first crosses it.
+  B("cats.first-cat", "Here Kitty", "🐱", "Find your first cat in Find The Cats."),
+  B("cats.cats-25", "Cat Collector", "🧶", "Find 25 cats in Find The Cats."),
+  B("cats.cats-50", "Crazy Cat Person", "😼", "Find 50 cats in Find The Cats."),
+  B("cats.cats-75", "Purrfectionist", "🏅", "Find 75 cats in Find The Cats."),
+  B("cats.cats-100", "You Are The AI Now", "🤖", "Find all 100 cats in Find The Cats."),
 ]);
 
 const defsById = new Map();

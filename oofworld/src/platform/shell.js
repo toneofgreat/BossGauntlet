@@ -17,7 +17,7 @@ import { createHud } from "./ui/hud.js";
 import * as saves from "./services/saves.js";
 import * as economy from "./services/economy.js";
 import * as badges from "./services/badges.js";
-import { createNet, resolveRelayUrl } from "./services/net.js";
+import { createNet, resolveRelayUrl, isOfficialHost } from "./services/net.js";
 import { createRemotePlayers } from "./services/remote-players.js";
 import { createAccount } from "./services/account.js";
 import { createGames } from "./services/games.js";
@@ -26,7 +26,7 @@ import { createChat } from "./ui/chat.js";
 import { mountGamesPanel } from "./ui/games-panel.js";
 import { createFriends } from "./services/friends.js";
 import { mountPlayerList } from "./ui/playerlist.js";
-import { mountFriendsPanel } from "./ui/friends-panel.js";
+import { mountFriendsPanel, FRONT_ROOM } from "./ui/friends-panel.js";
 import { createInviteToast } from "./ui/invite-toast.js";
 import { createBoombox } from "./ui/boombox.js";
 import { createCrate } from "./ui/crate.js";
@@ -36,6 +36,11 @@ import { mountOofTools } from "./ui/ooftools.js";
 import { getAllItems, getItem } from "./services/avatar/catalog-data.js";
 import { mountSettingsRows } from "./ui/settings.js";
 import { openAvatarEditor, closeAvatarEditor } from "./ui/avatar-editor.js";
+// The namespace too: the front page mounts the editor inline when avatar-editor.js
+// exports a mount function (spec 05 §5.10, 2026-11-12), and a named import of an export
+// that is not there would fail this whole module at link time.
+import * as avatarEditorMod from "./ui/avatar-editor.js";
+import { createFrontPage } from "./ui/front-page.js";
 
 // ---------------------------------------------------------------------------
 // tuning constants — spec 06 §6 (the single source for these numbers)
@@ -61,11 +66,11 @@ const SCRIPT_STEPS_MAX = 4000;
 // Loading tips — spec 06 §5.2.3, exact strings and order.
 const TIPS = [
   "Tip: Oofbux earned in any Place spend everywhere.",
-  "Tip: Touch a glowing portal in the Hub to travel.",
+  "Tip: Tap ☆ on a game on the front page to pin it to the very top.",
   "Tip: Saves live in this browser — export a save code from Settings before switching devices.",
   "Tip: Drag the right half of the screen to look around.",
-  "Tip: Some Badges are hidden. The clouds above the Hub look suspicious…",
-  "Tip: The Catalog storefront in the Hub sells faces, gear, and auras.",
+  "Tip: Some Badges are secret. Keep exploring every Place…",
+  "Tip: Scroll to the bottom of the front page to customize your character — hair included.",
   "Tip: Falling into the void just respawns you. Oof.",
   "Tip: Choppy? Lower the quality tier in Settings.",
   "Tip: Rebirths in Weight Lifting Simulator reset gains but multiply everything.",
@@ -73,45 +78,76 @@ const TIPS = [
 ];
 
 // The single merged Place registry — spec 06 §5.2.1 / spec 04 §5.6 (validate 04:V5
-// parses THIS literal). Portals are built for every row with portalColor !== null and
-// hidden !== true, in array order: adding a Place is adding one row. The Hub's own
-// buildPortals (hub/scripts/layout.js) reads this array generically — it lays out
-// however many rows pass the filter, so the `lifting` row below produces its portal
-// arch with no Hub-side change (verified by reading buildPortals: nothing there names
-// a slug or a row count).
+// parses THIS literal). The front page (spec 06 §5.7, 2026-11-12) lists every row with
+// hidden !== true as a game card; adding a Place is adding one row. `portalColor` is now
+// the card's thumbnail colour (it was the Hub's portal arch, and the Hub is gone), and
+// `description` is the card's blurb — a copy of the Place's own meta.description,
+// because importing every game module just to read one string would load them all.
+// There is no "hub" row any more: the front page is not a Place (spec 06 §5.7).
 const PLACES = [
-  { slug: "hub",     hidden: true,  name: "The Hub",                  icon: "🏙️", portalColor: null,
-    module: "./hub/game.js",           data: "./hub/place.json" },
   { slug: "obby",    hidden: false, name: "Difficulty Chart Obby",    icon: "🗼", portalColor: "#e74c3c",
+    description: "Climb the difficulty chart one stage at a time. Every checkpoint saves — the gold podium waits at the top!",
     module: "../games/obby/game.js",   data: "../games/obby/place.json" },
   { slug: "lifting", hidden: false, name: "Weight Lifting Simulator", icon: "🏋️", portalColor: "#f5c542",
+    description: "Tap to lift. Get huge. Lift the Moon.",
     module: "../games/lifting/game.js", data: "../games/lifting/place.json" },
   { slug: "tycoon",  hidden: false, name: "Boss Tycoon",              icon: "🏭", portalColor: "#3ddc84",
+    description: "Droppers, upgrades, secret codes — become the Boss.",
     module: "../games/tycoon/game.js", data: "../games/tycoon/place.json" },
   { slug: "overtime", hidden: false, name: "Overtime",                 icon: "⏱️", portalColor: "#f7c948",
+    description: "A point a second for as long as you stay. Leave and you lose the lot.",
     module: "../games/overtime/game.js", data: "../games/overtime/place.json" },
   { slug: "trollobby", hidden: false, name: "Troll Obby",               icon: "😈", portalColor: "#ff36c8",
+    description: "Long, hard, and cheating. No checkpoints — one death and you start again.",
     module: "../games/trollobby/game.js", data: "../games/trollobby/place.json" },
   { slug: "bossfight", hidden: false, name: "Boss Battles",             icon: "⚔️", portalColor: "#ff5a1f",
+    description: "Three bosses, one valley: grass, wood, lava. First kills pay out.",
     module: "../games/bossfight/game.js", data: "../games/bossfight/place.json" },
   { slug: "speed",     hidden: false, name: "Speed Simulator",          icon: "🏃", portalColor: "#22d3ee",
+    description: "Train, steal a crate, and out-run the Keepers back to safety. Buffs, abilities, 17 treadmills.",
     module: "../games/speed/game.js",   data: "../games/speed/place.json" },
   { slug: "battles",   hidden: false, name: "Battles",                  icon: "⚔️", portalColor: "#c0392b",
+    description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and three swords no kill can buy.",
     module: "../games/battles/game.js", data: "../games/battles/place.json" },
   // Spec 25 §18: landed hidden and flipped visible once validate was green (0 errors) and
-  // scenario:showdown passed every check but this machine's load-budget gate, which core,
-  // demo and battles all trip at clean HEAD too. buildPortals filters on
-  // portalColor && !hidden, so the Hub grows its arch and NEW! ribbon from this row.
+  // scenario:showdown passed every check but this machine's load-budget gate.
   { slug: "showdown", hidden: false, name: "Showdown",                 icon: "🏆", portalColor: "#9b59b6",
+    description: "Vote for a ground, fight until one fighter is left standing, and climb six stages of lobby obby while you wait.",
     module: "../games/showdown/game.js", data: "../games/showdown/place.json" },
   // Spec 27 §16: landed hidden while src/games/pighide/ was the registration stub, and
-  // was flipped visible once validate was green and scenario:pighide passed. buildPortals
-  // grows the pink arch and NEW! ribbon from this row alone.
+  // was flipped visible once validate was green and scenario:pighide passed.
   { slug: "pighide", hidden: false, name: "PIG HIDE",                icon: "🐷", portalColor: "#ff8fb1",
+    description: "Pigs hide all over the city, one hunter seeks. Survive five minutes or catch every pig, then upgrade your pig or your hunter.",
     module: "../games/pighide/game.js", data: "../games/pighide/place.json" },
+  // Find The Cats (added 2026-11-12): a find-the-X collectathon Place with its own spec.
+  { slug: "cats",    hidden: false, name: "Find The Cats",            icon: "🐱", portalColor: "#f39c12",
+    description: "Cats are hiding all over the world. Find every one — some take a puzzle to reach.",
+    module: "../games/cats/game.js",   data: "../games/cats/place.json" },
   { slug: "demo",    hidden: true,  name: "Demo Yard",                icon: "🧪", portalColor: null,
     module: "../games/demo/game.js",   data: "../games/demo/place.json" }, // smoke fixture
 ];
+
+// The front page's room key and route name. The front page joins this relay room so a
+// friend sees you as online (and an invite can reach you) while you browse; it is not a
+// Place, and friendWhereabouts() says so rather than offering Join into it. The value is
+// "hub" so every saved "#/hub" link, and Studio's own route back, still land here.
+const HOME = FRONT_ROOM;
+const HOME_HASHES = new Set(["", "#", "#/", "#/hub", "#/home"]);
+
+// Brick Legend — a sibling game on platyfy, not a Place (spec 06 §5.7). From an OofWorld
+// page served on platyfy (platyfy.com/oofworld/) it is the relative ../brick-legend.html;
+// anywhere else (a dev checkout, which has no such file) it is the live page on platyfy.
+// Its popularity is counted on the server under the allow-listed key "bricklegend".
+const BRICK_LEGEND = Object.freeze({
+  key: "bricklegend",
+  name: "Brick Legend",
+  icon: "🧱",
+  color: "#b5462f",
+  author: "platyfy",
+  description: "The brick adventure over on platyfy. Opens in a new tab — OofWorld stays where it is.",
+});
+const BRICK_LEGEND_REL = "../brick-legend.html";
+const BRICK_LEGEND_ABS = "https://www.platyfy.com/brick-legend.html";
 
 const smokeMode = new URLSearchParams(location.search).has("smoke");
 
@@ -145,8 +181,13 @@ let toaster = null;
 let bootScreen = null;
 let transitionOverlay = null;
 
+// "hub" is the FRONT PAGE state (spec 06 §5.7): no Place is loaded and the front page is
+// up. The name is kept from the retired Hub Place because spec 04 §5.6's state machine and
+// every smoke scenario key on it; nothing about it is a 3D world any more.
 let state = "loading";    // hub | loading | playing | disposing (spec 04 §5.6) | studio (spec 11 §5.9)
 let currentSlug = null;
+let frontPage = null;     // ui/front-page.js, built once in buildUi
+let shelfMod = null;      // studio/shelf.js once the Oof Studio corner button has loaded it
 // Spec 13. One net service for the whole session — it outlives Places, because the
 // connection does: walking a portal changes room, not socket. `remotes` is per-Place,
 // since the rigs it draws belong to the Place's scene.
@@ -197,7 +238,8 @@ const debugHandle = {
   placeReady: false,
   bootSteps: 0,
   lastError: null,
-  hub: null,
+  hub: null,         // the retired Hub's facts; always null now (spec 06 §5.7)
+  front: null,       // () => the front page's debug facts (ui/front-page.js debug())
   state,
   slug: null,
   time: 0,
@@ -336,11 +378,11 @@ function showError(err, opts = {}) {
   row.append(
     button({ label: "Copy error", variant: "secondary", onClick: () => copyError(message, stack) }),
     button({
-      label: "Back to Hub",
+      label: "Back to OofWorld",
       variant: "primary",
       onClick: () => {
-        // A full reload guarantees a clean engine (§5.2.6).
-        location.replace(location.pathname + location.search + "#/hub");
+        // A full reload guarantees a clean engine (§5.2.6); it lands on the front page.
+        location.replace(location.pathname + location.search + "#/");
         location.reload();
       },
     })
@@ -455,8 +497,18 @@ function pumpDialogs() {
   };
   document.addEventListener("keydown", onKey, true);
   if (cancelable) {
+    // A tap on the backdrop cancels — but only a tap that STARTED on it. A dialog opened
+    // from a pointerup (a game's on-screen [E] button, a tapped keypad) appears under the
+    // finger before the browser's trailing click, which then lands on this backdrop and
+    // cancelled the dialog the same instant it opened, so on a phone the code box never
+    // stayed up. preventDefault on that stray mousedown also keeps the focused field focused.
+    let pressedHere = false;
+    overlay.addEventListener("pointerdown", (ev) => { pressedHere = ev.target === overlay; });
+    overlay.addEventListener("mousedown", (ev) => { if (ev.target === overlay && !pressedHere) ev.preventDefault(); });
     overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) finish("cancel");
+      const fromHere = pressedHere;
+      pressedHere = false;
+      if (ev.target === overlay && fromHere) finish("cancel");
     });
   }
   document.body.appendChild(overlay);
@@ -495,6 +547,14 @@ function openExternal(url, opts = {}) {
     console.warn("[oof] openExternal refused an off-site URL:", resolved.href);
     return Promise.resolve(false);
   }
+  return confirmAndOpen(resolved, opts);
+}
+
+// The dialog + new-tab half of openExternal, shared with the front page's Brick Legend
+// card. That one caller may name the single absolute URL below (BRICK_LEGEND_ABS — a dev
+// checkout has no ../brick-legend.html beside it); a Place never can, because a Place
+// only reaches openExternal, which keeps its same-origin rule.
+function confirmAndOpen(resolved, opts = {}) {
   return dialog({
     title: opts.title || "Leaving OofWorld",
     body: opts.body || `This opens ${resolved.pathname} in a new tab.`,
@@ -504,7 +564,16 @@ function openExternal(url, opts = {}) {
     ],
   }).then((id) => {
     if (id !== "go") return false;
-    const win = window.open(resolved.href, "_blank", "noopener");
+    if (typeof opts.onConfirm === "function") {
+      try { opts.onConfirm(); } catch (err) { console.warn("[oof] openExternal onConfirm threw", err); }
+    }
+    // Not the "noopener" window feature: with it, window.open always returns null, so
+    // every successful open was being reported as a blocked popup. Cutting `opener` on
+    // the returned handle gives the new tab the same lack of a handle on this window.
+    const win = window.open(resolved.href, "_blank");
+    if (win) {
+      try { win.opener = null; } catch { /* a cross-origin handle may refuse; it has none anyway */ }
+    }
     if (!win) {
       // A blocked popup is the common case on a phone, and silence here reads as a
       // broken button — so say what happened and leave the door findable.
@@ -869,13 +938,186 @@ function openFriends() {
     friends: friendsService(),
     account: accountService(),
     toast: uiToast,
-    onJoin: (friend) => {
+    lookup: friendLookup(),
+    onJoin: (friend, target) => {
       panel.close();
-      // Joining a friend is just going where they are. Published games get their own
-      // dynamic slug, and those are already routable, so this needs no special case.
-      goTo(friend.place).catch(() => uiToast(`Could not join ${friend.username}`));
+      joinFriend(friend, target);
     },
   });
+}
+
+// What a friend's `place` means, for friendWhereabouts (ui/friends-panel.js): a visible
+// built-in Place by name, and — for a published game — no list here, so undefined ("we
+// cannot tell"), and the server answers for whether it is open.
+function friendLookup() {
+  return {
+    placeName: (slug) => {
+      const row = PLACES.find((p) => p.slug === slug && !p.hidden);
+      return row ? row.name : null;
+    },
+    publishedName: () => undefined,
+  };
+}
+
+// Joining a friend is going where they are — through the same doors a card's PLAY uses,
+// so the visit is recorded the same way.
+function joinFriend(friend, target) {
+  const who = (friend && friend.username) || "your friend";
+  if (!target) { uiToast(`Could not join ${who}`); return; }
+  if (target.kind === "place") {
+    playPlace(target.slug);
+    return;
+  }
+  if (target.kind === "published") {
+    playPublishedGame({ id: target.id, name: target.name });
+    return;
+  }
+  uiToast(`Could not join ${who}`);
+}
+
+// ---- the front page's doors (spec 06 §5.7) ------------------------------------------
+
+// spec 14 §5.7.1: opening a built-in Place records a visit, fire-and-forget. A visit that
+// cannot be counted (no server, a guest, an old server) must never stop the game opening.
+function recordPlaceVisit(key) {
+  const g = gamesService();
+  try {
+    if (!g.available() || typeof g.visitPlace !== "function") return;
+    Promise.resolve(g.visitPlace(key)).catch(() => {});
+  } catch { /* never in the way of playing */ }
+}
+
+function playPlace(slug) {
+  const entry = placeEntry(slug);
+  if (!entry || entry.hidden) { uiToast("That game is not available."); return; }
+  recordPlaceVisit(slug);
+  navigate(slug);
+}
+
+function brickLegendUrl() {
+  return isOfficialHost(location.hostname)
+    ? new URL(BRICK_LEGEND_REL, location.href)
+    : new URL(BRICK_LEGEND_ABS);
+}
+
+function openBrickLegend() {
+  return confirmAndOpen(brickLegendUrl(), {
+    title: "Brick Legend",
+    body: "Brick Legend opens in a new tab — OofWorld stays right here.",
+    confirmLabel: "Play Brick Legend",
+    onConfirm: () => recordPlaceVisit(BRICK_LEGEND.key),
+  });
+}
+
+function goHome() {
+  if (state === "hub") return;
+  navigate(HOME);
+}
+
+// The Oof Studio corner button (spec 06 §5.7): from the front page it opens the My Places
+// shelf straight away; from inside a Place it asks first, then leaves the Place through
+// the normal teardown before the shelf opens — Studio and a running Place never overlap.
+async function openStudioCorner() {
+  if (state === "studio" || loadInFlight) return;
+  if (state === "playing" && currentSlug) {
+    const entry = placeEntry(currentSlug);
+    const name = entry ? entry.name : "this game";
+    const ok = await confirmDialog("Open Oof Studio?", `You'll leave ${name} first.`);
+    if (!ok) return;
+    await goTo(HOME).catch(reportFatal);
+    if (state !== "hub") return;
+  }
+  try {
+    shelfMod = await import("./studio/shelf.js");
+    shelfMod.openMyPlacesShelf({ services: studioServices() });
+  } catch (err) {
+    console.warn("[oof] Oof Studio is not installed", err);
+    uiToast({ variant: "error", title: "Oof Studio isn't available" });
+  }
+}
+
+function closeShelf() {
+  if (shelfMod && typeof shelfMod.closeMyPlacesShelf === "function") {
+    try { shelfMod.closeMyPlacesShelf(); } catch { /* already closed */ }
+  }
+}
+
+// Favorites (spec 06 §5.7): a list in the profile domain, oofcubes.v1.profile, through the
+// saves service — so they persist like every other local fact and ride along in a save
+// code. Each is { key, name, icon, by } so a starred published game that has fallen out
+// of the top list still has a card.
+const FAVORITES_MAX = 100;
+const favoritesStore = {
+  get() {
+    const profile = saves.getDomain("profile");
+    return profile && Array.isArray(profile.favorites) ? profile.favorites.slice() : [];
+  },
+  set(list) {
+    const profile = saves.getDomain("profile");
+    if (!profile) return;
+    profile.favorites = (Array.isArray(list) ? list : [])
+      .filter((f) => f && typeof f.key === "string")
+      .slice(0, FAVORITES_MAX)
+      .map((f) => ({
+        key: String(f.key).slice(0, 48),
+        name: String(f.name || "").slice(0, 60),
+        icon: String(f.icon || "").slice(0, 8),
+        by: f.by ? String(f.by).slice(0, 40) : null,
+      }));
+    saves.markDirty("profile");
+  },
+};
+
+// The avatar editor inline at the foot of the front page. avatar-editor.js (spec 05
+// §5.10) may export mountAvatarEditor(container, deps); without it, or if it throws, the
+// front page shows its fallback card and the full-screen editor is one tap away.
+function mountInlineEditor(container) {
+  if (!avatarService) return null;
+  const mount = avatarEditorMod.mountAvatarEditor;
+  if (typeof mount !== "function") return null;
+  const handle = mount(container, { avatar: avatarService, economy, ui, confirmDialog, initialTab: "hat" });
+  if (handle && typeof handle.then === "function") {
+    // An async mount: keep a disposer that works whenever it resolves.
+    let late = null;
+    let gone = false;
+    handle.then((h) => { late = h; if (gone && h) disposeHandle(h); }, () => {});
+    return { dispose() { gone = true; if (late) disposeHandle(late); } };
+  }
+  return handle || null;
+}
+
+function disposeHandle(h) {
+  try {
+    if (typeof h.dispose === "function") h.dispose();
+    else if (typeof h.close === "function") h.close();
+  } catch (err) {
+    console.warn("[oof] avatar editor dispose threw", err);
+  }
+}
+
+function buildFrontPage() {
+  frontPage = createFrontPage({
+    places: () => PLACES.filter((p) => !p.hidden),
+    externals: () => [{ ...BRICK_LEGEND, open: () => openBrickLegend() }],
+    games: gamesService(),
+    account: accountService(),
+    friends: friendsService(),
+    avatar: avatarService,
+    badges,
+    favorites: favoritesStore,
+    playPlace,
+    playPublished: (game) => playPublishedGame(game),
+    joinFriend,
+    openCatalog: (tab) => openCatalog(tab),
+    openSettings: () => openSettings(),
+    openGamesBrowser: () => openGames(),
+    openFriendsPanel: () => openFriends(),
+    openSignIn: () => openSignInNow(),
+    openPanel: (opts) => openPanel(opts),
+    mountEditor: mountInlineEditor,
+    toast: (msg) => uiToast(msg),
+  });
+  debugHandle.front = () => (frontPage ? frontPage.debug() : null);
 }
 
 function openGames() {
@@ -953,16 +1195,18 @@ function openSettings() {
     net: netService(), // spec 13 §5.1 — the relay + display-name rows
   });
 
-  // Not a §5.6.9 row: the slice's only way out of a Place on a phone (a game's own
-  // exit button is per-game-spec, §5.2.4). Removed when the Hub's own exits land.
-  panel.bodyEl.appendChild(el("div", "oof-section-label", "PLACE"));
-  panel.bodyEl.appendChild(button({
-    label: "Back to the Hub", variant: "secondary",
-    onClick: () => {
-      panel.close();
-      navigate("hub");
-    },
-  }));
+  // Not a §5.6.9 row: a second way out of a Place beside the HUD's 🏠 button (spec 06
+  // §5.7), for the player who looks for "leave" in Settings. Only while a Place is up.
+  if (state === "playing" && currentSlug) {
+    panel.bodyEl.appendChild(el("div", "oof-section-label", "PLACE"));
+    panel.bodyEl.appendChild(button({
+      label: "Leave this game", variant: "secondary",
+      onClick: () => {
+        panel.close();
+        navigate(HOME);
+      },
+    }));
+  }
 }
 
 let settingsTimer = null;
@@ -1040,6 +1284,9 @@ const ui = {
   // voice, and the URL is resolved against the page so a Place cannot name a host. It
   // resolves true if the tab was opened, false if the player said no.
   openExternal: (url, opts) => safely(() => openExternal(url, opts), Promise.resolve(false)),
+  // Spec 06 §5.7 (2026-11-12): the HUD's 🏠 button and the Oof Studio corner button.
+  goHome: () => safely(() => goHome(), undefined),
+  openStudio: () => safely(() => { openStudioCorner().catch(reportFatal); }, undefined),
   setHudTitle: (text) => safely(() => (hud ? hud.setTitle(text) : undefined), undefined),
   setHudStat: (key, chip) => safely(() => (hud ? hud.setStat(key, chip) : undefined), undefined),
   removeHudStat: (key) => safely(() => (hud ? hud.removeStat(key) : undefined), undefined),
@@ -1145,26 +1392,8 @@ function makePartsApi() {
   return { ...parts, load: (defs) => parts.load(defs.map((d) => JSON.parse(JSON.stringify(d)))) };
 }
 
-// ENGINE DEFECT SHIM 3 (this task). place.js's loadPlace builds its fetch URL as
-// "src/games/<slug>/place.json" (place.js §5.3 step 2, and its own comment reports the
-// gap), which cannot reach the Hub's data — ARCHITECTURE §3 and spec 06 §3.3 put it at
-// src/platform/hub/place.json. deps carries no data-path override, so the Hub's single
-// fetch is redirected here for the duration of that one load. Delete when loadPlace
-// accepts the registry row's `data` URL.
-async function withPlaceDataUrl(entry, run) {
-  if (entry.slug !== "hub") return run();
-  const realFetch = window.fetch.bind(window);
-  const target = new URL(entry.data, import.meta.url).href;
-  window.fetch = (resource, init) => {
-    const url = typeof resource === "string" ? resource : (resource && resource.url) || "";
-    return realFetch(url.endsWith("src/games/hub/place.json") ? target : resource, init);
-  };
-  try {
-    return await run();
-  } finally {
-    window.fetch = realFetch;
-  }
-}
+// (ENGINE DEFECT SHIM 3 — the Hub's place.json fetch redirect — was deleted with the Hub
+// on 2026-11-12: every remaining Place lives at src/games/<slug>/, where loadPlace looks.)
 
 async function importEngine() {
   // Promise.all, not eight sequential awaits: the engine modules do not depend on each
@@ -1236,7 +1465,10 @@ function accountService() {
       // signed-in-nowhere: chat would be attributed to a placeholder name and an invite
       // could not find you, because invites are addressed to an account rather than a
       // connection (spec 15 §3.3).
-      if (who.signedIn && net && currentSlug) { net.leave(); net.join(currentSlug); }
+      const room = currentRoom();
+      if (who.signedIn && net && room) { net.leave(); net.join(room); }
+      // Who you are changes what the front page can show (friends, the sign-in chip).
+      if (frontPage && frontPage.isShown()) frontPage.refresh();
     },
     getRelayUrl: () => {
       const resolved = resolveRelayUrl(location.search, profileSettings().relayUrl, location.protocol, location.hostname);
@@ -1297,6 +1529,13 @@ async function maybeSignIn() {
   // Only the DIALOG is suppressed under smoke: a modal nobody can answer would stall
   // every other scenario. `?signin` opts back in for the one that tests it.
   if (smokeMode && !new URLSearchParams(location.search).has("signin")) return;
+  openSignInNow();
+}
+
+// The front page's "Sign in" chip and button come straight here: the player asked.
+function openSignInNow() {
+  const acc = accountService();
+  if (!acc.available() || acc.signedIn() || signInShown) return;
   signInShown = true;
   openSignIn({
     account: acc,
@@ -1311,7 +1550,9 @@ async function maybeSignIn() {
         uiToast(`Welcome, ${username}`);
         // The room is told who we are now: re-join so presence and chat carry the
         // account name rather than the placeholder we joined with.
-        if (net && currentSlug) { net.leave(); net.join(currentSlug); }
+        const room = currentRoom();
+        if (net && room) { net.leave(); net.join(room); }
+        if (frontPage && frontPage.isShown()) frontPage.refresh();
         return;
       }
       // No name means the dialog was closed some other way (the shell can call close()).
@@ -1336,6 +1577,9 @@ function installChatHotkey() {
     const tag = active && active.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable)) return;
     if (!chatUi) return;
+    // The chat box sits under the front page (spec 06 §5.7); focusing a box nobody can
+    // see would swallow the next keystrokes. Chat is a thing you do inside a game.
+    if (state === "hub") return;
     e.preventDefault();
     chatUi.focus();
   });
@@ -1349,6 +1593,13 @@ function ensureChat(n) {
   });
   chatUi.mount();
   return chatUi;
+}
+
+// The relay room this client should be in right now: the Place's slug, or the front
+// page's room while the front page is up, or none (Studio, mid-load).
+function currentRoom() {
+  if (state === "hub") return HOME;
+  return currentSlug;
 }
 
 function netService() {
@@ -1633,18 +1884,85 @@ async function goTo(slug) {
     pendingSlug = slug;
     return;
   }
-  if (slug === currentSlug && (state === "playing" || state === "hub")) return;
-  const entry = placeEntry(slug);
-  if (!entry) throw new Error("Unknown Place: " + slug);
+  if (slug === HOME) {
+    if (state === "hub") return;
+  } else if (slug === currentSlug && state === "playing") {
+    return;
+  }
+  const entry = slug === HOME ? null : placeEntry(slug);
+  if (slug !== HOME && !entry) throw new Error("Unknown Place: " + slug);
   loadInFlight = true;
   try {
-    await loadPlaceInto(entry, slug);
+    if (slug === HOME) enterFrontPage();
+    else await loadPlaceInto(entry, slug);
   } finally {
     loadInFlight = false;
   }
   const next = pendingSlug;
   pendingSlug = null;
   if (next !== null && next !== slug) await goTo(next);
+}
+
+// The front page (spec 06 §5.7) — where boot lands and every Place returns to. It is
+// not a Place: nothing is loaded into the scene, physics is off, the avatar is hidden,
+// and the render loop skips drawing (renderFrame) while the opaque page covers it. The
+// state is "hub" (see `state` above) and the relay room is HOME, so friends see you
+// online and invites still reach you.
+function enterFrontPage() {
+  hideError();
+  updateHalted = false;
+  debugHandle.placeReady = false;
+  teardown();
+  closeShelf();
+  physics.setEnabled(false);
+  if (rigRoot) rigRoot.visible = false;
+  setState("hub");
+  currentSlug = null;
+  debugHandle.currentSlug = null;
+  debugHandle.slug = HOME;
+  // The same per-transition service view a Place gets, keyed HOME: economy's per-source
+  // caps and badges' place-enter counter both already treat "hub" as not-a-Place.
+  if (serviceView) serviceView.clear();
+  serviceView = createServiceView();
+  saves.bindEvents(serviceView, HOME);
+  economy.bindEvents(serviceView, HOME);
+  badges.bindEvents(serviceView, HOME);
+  if (avatarService && typeof avatarService.bindEvents === "function") avatarService.bindEvents(serviceView, HOME);
+  // The Hub Place's load used to emit place:loaded (slug "hub"), and badges re-test their
+  // thresholds on it (no place-enter is counted for "hub"). Keep that: without it a badge
+  // already earned on paper (oof.first-oofbux after a daily claim) would only pay out on
+  // the next unrelated economy change, inside someone else's award.
+  platformBus.emit("place:loaded", { slug: HOME, partCount: 0, loadMs: 0 });
+
+  const n = netService();
+  n.join(HOME);
+  friendsService(); // built here too: an invite can arrive while you browse
+  if (chatUi) chatUi.clear();
+  // No music of its own: the front page is a page, not a world, and the Place that was
+  // just left stopped its track in disposePlace. (The boombox still plays here.)
+
+  if (hud) {
+    hud.setTitle(null);
+    hud.setHome(false);
+    hud.setStudioCorner(true);
+  }
+  if (frontPage) frontPage.show();
+  writeHash(HOME);
+  debugHandle.placeReady = true;
+}
+
+// Leaving the front page for a Place or for Studio: hide it, and drop its service view
+// (teardown() only clears a Place's, and the front page is not one).
+function leaveFrontPage() {
+  if (frontPage) frontPage.hide();
+  if (state !== "hub") return;
+  if (serviceView) {
+    serviceView.clear();
+    serviceView = null;
+  }
+  // net.join() opens a fresh socket without closing the old one, so the front page's
+  // room has to be left here, exactly as teardown() leaves a Place's.
+  if (net) net.leave();
 }
 
 // The body of one transition (§5.6 steps 2-7 / §5.2.5 steps 1-10). Returns after the
@@ -1655,6 +1973,9 @@ async function loadPlaceInto(entry, slug) {
   debugHandle.placeReady = false;
   transitionOverlay = miniLoading("Teleporting to " + entry.name + "…");
   sfx("teleport");
+  leaveFrontPage();
+  closeShelf();
+  if (hud) hud.setStudioCorner(false);
   teardown();
   setState("loading");
 
@@ -1685,7 +2006,7 @@ async function loadPlaceInto(entry, slug) {
   };
   const result = entry.placeData
     ? placeApi.loadPlaceData(entry.placeData, loadDeps)
-    : await withPlaceDataUrl(entry, () => placeApi.loadPlace(slug, loadDeps));
+    : await placeApi.loadPlace(slug, loadDeps);
   if (!result.ok) {
     finishTransition();
     showLoadError(entry, "E_LOAD", result.errors);
@@ -1755,23 +2076,23 @@ async function loadPlaceInto(entry, slug) {
   // rather than being a mystery key.
   refreshGearButton();
   refreshHammerButton(); // re-assert the hammer button for the Place we just entered
-  setState(slug === "hub" ? "hub" : "playing");
+  setState("playing");
 
   writeHash(slug);
   markVisited(slug);
   // The registry never reaches a Place by import (validate forbids it), so the shell
-  // publishes it on the Place emitter right after init — this is how the Hub builds
-  // one portal per row. Payload documented in the task report as a spec gap: 06 §9
-  // names the `platform:places` bridge but not its shape or direction.
-  // `settings` rides along for the same reason: a Place's ctx.services.saves is
-  // place-scoped (no door to the "profile" domain), and the Hub's §5.3.4 step 5 needs
-  // profile.settings.ambience at boot — this one-shot bridge is the only way it can
-  // reach it (hub/scripts/ambience.js's own task report flagged the gap; live changes
-  // after boot already reach the Hub through platform:settingsChanged below).
+  // publishes it on the Place emitter right after init. The Hub built its portals from
+  // it; no Place reads it today, and it is kept because the bridge is documented API
+  // (spec 06 §5.2.5) and costs one emit. `settings` rides along: a Place's
+  // ctx.services.saves is place-scoped and has no door to profile.settings.
   events.emit("platform:places", { places: getPlaces(), visited: visitedPlaces().slice(), settings: profileSettings() });
   // §5.2.5 step 10's payload is `{ slug }`; `name` rides along because §5.6.3 hangs
   // the HUD title on this same event and the HUD has no registry access.
-  events.emit("platform:placeLoaded", { slug, name: slug === "hub" ? null : entry.name });
+  events.emit("platform:placeLoaded", { slug, name: entry.name });
+  if (hud) {
+    hud.setHome(true);
+    hud.setStudioCorner(true);
+  }
   finishTransition();
   debugHandle.placeReady = true;
 }
@@ -1824,6 +2145,23 @@ function studioRouteId(hash) {
 // task): `avatar` (rigRoot, so edit mode can hide it) and `camera` (cameraCtl, so
 // physics can read a camera yaw during playtest and playtest's own contact events stay
 // on its private sandbox emitter instead of a platform one).
+// Also what the Oof Studio corner button hands the My Places shelf (shelf.js reads only
+// `ui` today; the rest is the same shape a Place's ctx.services has).
+function studioServices() {
+  return {
+    economy: economy.createCtxApi(),
+    // Unused today — store.js persists creations through saves.js directly, per its
+    // own task's report — carried only for shape parity with a Place's ctx.services.
+    saves: saves.placeSaves("studio"),
+    badges: createBadgesCtxApi("studio"),
+    avatar: createAvatarCtxApi(),
+    ui,
+    net: netService(),
+    account: accountService(),
+    games: gamesService(), // spec 23: the AI block endpoint rides the games service
+  };
+}
+
 function studioDeps() {
   return {
     scene: renderer.scene,
@@ -1832,18 +2170,7 @@ function studioDeps() {
     partsApi,
     audio,
     input,
-    services: {
-      economy: economy.createCtxApi(),
-      // Unused today — store.js persists creations through saves.js directly, per its
-      // own task's report — carried only for shape parity with a Place's ctx.services.
-      saves: saves.placeSaves("studio"),
-      badges: createBadgesCtxApi("studio"),
-      avatar: createAvatarCtxApi(),
-      ui,
-      net: netService(),
-      account: accountService(),
-      games: gamesService(), // spec 23: the AI block endpoint rides the games service
-    },
+    services: studioServices(),
     events: studioEmitter,
     avatar: rigRoot,
     camera: cameraCtl,
@@ -1864,11 +2191,21 @@ async function goToStudio(id) {
   }
   loadInFlight = true;
   try {
+    leaveFrontPage();
+    closeShelf();
+    if (hud) { hud.setHome(false); hud.setStudioCorner(false); }
     teardown(); // dispose any active Place — the same path goTo takes (spec 04 §5.6)
     setState("studio");
     debugHandle.currentSlug = null;
     debugHandle.slug = "studio";
     studioEmitter = placeApi.createEmitter();
+    // The editor builds its scene through parts.js, which needs physics + parts inited.
+    // A Place load is what used to do that, and the retired Hub Place always loaded
+    // first; from the front page nothing has, so init both here exactly as
+    // loadPlaceInto does (Studio re-points them at its playtest emitter itself).
+    physics.init({ audio, events: studioEmitter, input, camera: cameraCtl });
+    parts.init({ scene: renderer.scene, physics: physicsForParts, audio, events: studioEmitter, lights: renderer.lights });
+    physics.setEnabled(false);
     studioMod = await import("./studio/studio.js");
     await studioMod.openStudio({ id, deps: studioDeps() });
   } finally {
@@ -1888,17 +2225,30 @@ async function goToStudio(id) {
 
 const PLACE_HASH_RE = /^#\/place\/([a-z][a-z0-9-]{1,23})$/;
 
-// Returns a known slug, or null for an unknown route/slug.
+// Returns a known slug (HOME for the front page), or null for an unknown route/slug.
+// "", "#/", "#/hub" and "#/home" all mean the front page (spec 06 §5.7): "#/hub" because
+// every link and bookmark made before the Hub was retired says it, and Studio's own
+// route back is still "#/hub".
 function routeSlug(hash) {
   const h = hash || "";
-  if (h === "" || h === "#" || h === "#/" || h === "#/hub") return "hub";
+  if (HOME_HASHES.has(h)) return HOME;
   const m = PLACE_HASH_RE.exec(h);
   if (m && placeEntry(m[1])) return m[1];
   return null;
 }
 
 function writeHash(slug) {
-  const want = slug === "hub" ? "#/hub" : "#/place/" + slug;
+  if (slug === HOME) {
+    // Any front-page alias already in the bar is left alone (rewriting "#/hub" to "#/"
+    // would only add a history entry); anything else becomes the canonical "#/".
+    if (!HOME_HASHES.has(location.hash)) {
+      suppressNextHash = true;
+      location.hash = "#/";
+    }
+    debugHandle.route = location.hash;
+    return;
+  }
+  const want = "#/place/" + slug;
   if (location.hash !== want) {
     suppressNextHash = true;
     location.hash = want;
@@ -1919,9 +2269,9 @@ function applyRoute() {
   if (slug === null) {
     uiToast({ variant: "error", title: "Unknown place", body: hash });
     suppressNextHash = true;
-    location.replace(location.pathname + location.search + "#/hub");
-    debugHandle.route = "#/hub";
-    return goTo("hub");
+    location.replace(location.pathname + location.search + "#/");
+    debugHandle.route = "#/";
+    return goTo(HOME);
   }
   debugHandle.route = hash;
   return goTo(slug);
@@ -2001,7 +2351,9 @@ function renderFrame(alpha, frameDt) {
   // exactly the "studio.getActiveCamera() ?? engineCamera" §5.9 point 2 asks for.
   if (state === "studio" && studioMod) studioMod.frame(frameDt);
   const activeCamera = (state === "studio" && studioMod && studioMod.getActiveCamera()) || cameraCtl.three;
-  renderer.render(activeCamera);
+  // The front page is an opaque page over an empty stage (spec 06 §5.7): drawing that
+  // stage at display rate would only spend a phone's battery on pixels nobody sees.
+  if (state !== "hub") renderer.render(activeCamera);
   renderer.notifyFps(engineLoop.getStats().fps);
   if (fadeBootOnNextFrame) {
     fadeBootOnNextFrame = false;
@@ -2092,6 +2444,7 @@ function buildUi(warnings) {
   // half of that step is badge:awarded -> the `badge` sfx, and ONLY the sfx: badges.js
   // owns the toast, so playing one here as well would double it.
   hud = createHud({ economy, avatar: hudAvatarAdapter(), audio, ui }, platformBus);
+  buildFrontPage(); // spec 06 §5.7 — hidden until the first route lands on it
   buildHammerButton(); // the cross-Place Time Hammer button (shown only when owned + equipped)
   platformBus.on("platform:navigate", (payload) => {
     if (payload && payload.slug) navigate(payload.slug);
@@ -2209,6 +2562,9 @@ if (smokeMode) {
   debugHandle.grant = (n) => economy.award(n, "smoke:grant");
   debugHandle.balance = () => economy.getBalance();
   debugHandle.hasBadge = (id) => (ctx ? ctx.services.badges.has(id) : false);
+  // The front page has no ctx, so a scenario that left a Place asks the net service here
+  // whether anybody is still hidden (spec 13 §5.4: hiding never outlives its Place).
+  debugHandle.isPeerHidden = (id) => (net ? net.isPeerHidden(id) : false);
   debugHandle.clearEvents = () => {
     debugHandle.debug.eventLog.length = 0;
   };

@@ -46,6 +46,10 @@ export const SOURCE_CAPS = Object.freeze({
   // bonuses ride the uncapped `badge` token, so neither counts here. 100 covers one
   // hunter win with 2.5x headroom and is stated explicitly rather than inherited from "*".
   pighide: 100,
+  // spec 28 §9. The top tier pays 500 per find (reason `cats:find`) and two neighbouring
+  // finds can land in one window, so 1000 is the honest ceiling. Under the "*" fallback
+  // of 100 a late-tier cat would silently pay a fifth of what its card promises.
+  cats: 1000,
 });
 
 const REASON_RE = /^[a-z][a-z0-9:._-]*$/;

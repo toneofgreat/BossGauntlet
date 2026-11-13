@@ -7,11 +7,16 @@
 import { buildRig } from "./avatar/rig.js";
 import { DEFAULT_FACE_ID } from "./avatar/faces.js";
 import { AVATAR_TUNING } from "./avatar/animator.js";
+import { HAIR_STYLES, isHairId } from "./avatar/hair.js";
 import {
   BASE_SWATCHES, DEFAULT_BODY_COLORS, DEFAULT_OWNED, getItem, getItemsByType,
 } from "./avatar/catalog-data.js";
 
-const SCHEMA_VERSION = 1;                 // §3.1 — v1 has no migrations
+// §3.1. Still 1 after hair (§5.12, 2026-11-12): hair is two OPTIONAL keys on
+// `equipped`, so a v1 save without them loads as "no hair" and an older build reading a
+// save with them simply ignores them. A bump would have made saves.js (spec 07 §5.1's
+// newer-version guard) refuse every save this build writes on any older open tab.
+const SCHEMA_VERSION = 1;
 const DOMAIN = "avatar";                  // saves domain name (spec 07 §5.1)
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 const LIMB_KEYS = Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg"]);
@@ -21,6 +26,11 @@ const LIMB_KEYS = Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLe
 // missing HERE, so a saved shirt equip was silently dropped on every load.
 const EQUIP_SLOTS = Object.freeze(["face", "hat", "gear", "aura", "trail", "shirt", "pants"]);
 const CLEARABLE_SLOTS = Object.freeze(["hat", "gear", "aura", "trail", "shirt", "pants"]);
+// §5.12: hair is free and never owned, so it is not a Catalog slot — these two keys live
+// on `equipped` (which is what the room is sent) but only setHair/setHairColor write them.
+function emptyEquipped() {
+  return { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null, hair: null, hairColor: null };
+}
 const BUY_REASON_PREFIX = "catalog:";     // spec 07 §5.5's source token for purchases
 
 // ---- module state (private) --------------------------------------------------------
@@ -55,7 +65,7 @@ function defaultState() {
   return {
     schemaVersion: SCHEMA_VERSION,
     bodyColors: { ...DEFAULT_BODY_COLORS },
-    equipped: { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null },
+    equipped: emptyEquipped(),
     owned: [...DEFAULT_OWNED],
     sources,
   };
@@ -104,7 +114,7 @@ function sanitize(raw) {
   const rawColors = raw.bodyColors && typeof raw.bodyColors === "object" ? raw.bodyColors : {};
   for (const limb of LIMB_KEYS) bodyColors[limb] = normalizeLimb(limb, rawColors[limb], ownedSet);
 
-  const equipped = { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null };
+  const equipped = emptyEquipped();
   const rawEquipped = raw.equipped && typeof raw.equipped === "object" ? raw.equipped : {};
   for (const slot of EQUIP_SLOTS) {
     const id = rawEquipped[slot];
@@ -114,6 +124,10 @@ function sanitize(raw) {
     equipped[slot] = id;
   }
   if (!equipped.face) equipped.face = DEFAULT_FACE_ID;
+  if (isHairId(rawEquipped.hair)) equipped.hair = rawEquipped.hair;
+  if (typeof rawEquipped.hairColor === "string" && HEX_RE.test(rawEquipped.hairColor)) {
+    equipped.hairColor = rawEquipped.hairColor.toLowerCase();
+  }
 
   return { schemaVersion: SCHEMA_VERSION, bodyColors, equipped, owned, sources };
 }
@@ -235,12 +249,13 @@ function randomGhostState() {
   const face = faces.length ? pick(faces).id : DEFAULT_FACE_ID;
   const hat = hats.length && Math.random() < AVATAR_TUNING.GHOST_HAT_CHANCE ? pick(hats).id : null;
   const owned = hat ? [face, hat] : [face];
+  const hairStyle = !hat && Math.random() < 0.5 ? pick(HAIR_STYLES) : null;
   const sources = {};
   for (const id of owned) sources[id] = "default";
   return {
     schemaVersion: SCHEMA_VERSION,
     bodyColors,
-    equipped: { face, hat, gear: null, aura: null, trail: null, shirt: null, pants: null },
+    equipped: { ...emptyEquipped(), face, hat, hair: hairStyle ? hairStyle.id : null },
     owned,
     sources,
   };
@@ -316,6 +331,7 @@ export function unequip(type) {
     commit();
     return { ok: true };
   }
+  if (type === "hair") return setHair(null);
   if (!CLEARABLE_SLOTS.includes(type)) return { ok: false };
   state.equipped[type] = null;
   commit();
@@ -357,4 +373,29 @@ export function grantItem(itemId, sourceSlug) {
   }
   if (deps.ui && typeof deps.ui.toast === "function") deps.ui.toast("Unlocked: " + item.name + "!");
   return { ok: true, alreadyOwned: false };
+}
+
+// ---- hair (§5.12) -------------------------------------------------------------------
+// Every style is free and wearable from the first boot: no Oofbux, no ownership, nothing
+// added to `owned`. Writes go through the same validate -> save -> onChange path.
+
+// setHair(styleId | null) — null takes the hair off.
+export function setHair(styleId) {
+  requireInit();
+  if (styleId !== null && !isHairId(styleId)) return { ok: false, reason: "invalid" };
+  if (state.equipped.hair === styleId) return { ok: true };
+  state.equipped.hair = styleId;
+  commit();
+  return { ok: true };
+}
+
+// setHairColor("#rrggbb" | null) — any colour at all; null returns to the style default.
+export function setHairColor(hex) {
+  requireInit();
+  if (hex !== null && (typeof hex !== "string" || !HEX_RE.test(hex))) return { ok: false, reason: "invalid" };
+  const next = hex === null ? null : hex.toLowerCase();
+  if (state.equipped.hairColor === next) return { ok: true };
+  state.equipped.hairColor = next;
+  commit();
+  return { ok: true };
 }

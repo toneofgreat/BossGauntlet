@@ -12,6 +12,7 @@ import { paintFace, DEFAULT_FACE_ID } from "./faces.js";
 import { createAnimator, AVATAR_TUNING } from "./animator.js";
 import { getItem, DEFAULT_BODY_COLORS } from "./catalog-data.js";
 import { createAura, createTrail } from "./effects.js";
+import { buildHair, hairMode, isHairId, normalizeHairColor } from "./hair.js";
 
 const FACE_CANVAS_SIZE = AVATAR_TUNING.FACE_CANVAS_SIZE;
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -86,6 +87,10 @@ function readEquipped(state) {
     // one silently ate shirts: a slot missing here reads as null and never draws.
     shirt: eq.shirt || null,
     pants: eq.pants || null,
+    // Hair (spec 05 §5.12) rides on `equipped` too, but is not a Catalog slot: a style
+    // id from hair.js and a free "#rrggbb" colour.
+    hair: isHairId(eq.hair) ? eq.hair : null,
+    hairColor: typeof eq.hairColor === "string" ? eq.hairColor : null,
   };
 }
 
@@ -160,6 +165,9 @@ export function buildRig(scene, state) {
     gear: makeAnchor("GearAnchor", GEAR_ANCHOR),
     shirt: makeAnchor("ShirtAnchor", SHIRT_ANCHOR),
     pants: makeAnchor("PantsAnchor", PANTS_ANCHOR),
+    // Head-mesh-local, at the head's centre: hair.js builds in head space. Its own anchor
+    // (not the HatAnchor) so hats and hair never share a child list.
+    hair: makeAnchor("HairAnchor", [0, 0, 0]),
   };
   // Per-limb anchors for `limb`-routed clothing prims (pant legs). On the JOINTS, not
   // the meshes, so they inherit the walk swing.
@@ -168,6 +176,7 @@ export function buildRig(scene, state) {
     rightLeg: makeAnchor("PantsRightLegAnchor", [0, 0, 0]),
   };
   meshes.head.add(anchors.hat);
+  meshes.head.add(anchors.hair);
   joints.rightArm.add(anchors.gear);
   meshes.torso.add(anchors.shirt);
   meshes.torso.add(anchors.pants);
@@ -178,6 +187,8 @@ export function buildRig(scene, state) {
     group, joints, meshes, anchors,
     faceId: DEFAULT_FACE_ID,     // the id currently PAINTED (spec 05 §8's probe field)
     gearEquipped: false,         // read by the animator for §5.2 step 5's hold pose
+    hairId: null,                // the hair style currently built (null = bald)
+    hairTucked: false,           // true while a hat hides the crown of the hair
   };
   const animator = createAnimator(rig);
 
@@ -383,6 +394,29 @@ export function buildRig(scene, state) {
     }));
   }
 
+  // §5.12 hair: rebuilt only when the STYLE changes; a colour change recolours the
+  // materials in place (the editor's hue slider fires on every drag step), and a hat
+  // change only toggles the crown.
+  let hair = null;
+  function applyHair(next) {
+    if (!next.hair) {
+      if (hair) { hair.dispose(); hair = null; }
+    } else if (!hair || hair.id !== next.hair) {
+      if (hair) hair.dispose();
+      hair = buildHair(next.hair, next.hairColor);
+      if (hair) anchors.hair.add(hair.group);
+    } else {
+      hair.setColor(normalizeHairColor(next.hair, next.hairColor));
+    }
+    rig.hairId = hair ? hair.id : null;
+    // Only a hat that actually DRAWS tucks the hair: a remote peer's unknown hat id
+    // builds nothing, and must not shave the crown off a head with no hat on it.
+    const hatItem = next.hat ? getItem(next.hat) : null;
+    const hatShown = Boolean(hatItem && hatItem.type === "hat");
+    rig.hairTucked = Boolean(hair) && hatShown && hairMode(next.hat) === "tucked";
+    if (hair) hair.setTucked(rig.hairTucked);
+  }
+
   // setState(avatarState) — §5.1: re-apply colors/face/hat/gear/aura/trail; idempotent,
   // and only what actually changed is rebuilt.
   function setState(avatarState) {
@@ -401,6 +435,7 @@ export function buildRig(scene, state) {
     // gear, shirts and pants. Found by equipping all 28 items in a row and counting the
     // meshes that actually reached the scene; scenario:avatar now does that too.
     applyAttachments(nextEquipped);
+    applyHair(nextEquipped);
     equipped = nextEquipped;
     if (auraChanged) applyEffect("aura", nextEquipped.aura);
     if (trailChanged) applyEffect("trail", nextEquipped.trail);
@@ -434,6 +469,7 @@ export function buildRig(scene, state) {
       }
     }
     stepAttachments(step);
+    if (hair) hair.update(step);
     if (step > 0) {
       const dx = group.position.x - lastPos.x;
       const dz = group.position.z - lastPos.z;
@@ -450,6 +486,9 @@ export function buildRig(scene, state) {
   function dispose() {
     clearAttachment("hat");
     clearAttachment("gear");
+    clearAttachment("shirt");
+    clearAttachment("pants");
+    if (hair) { hair.dispose(); hair = null; }
     applyEffect("aura", null);
     applyEffect("trail", null);
     if (group.parent) group.parent.remove(group);

@@ -139,6 +139,8 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Tanks card */
 .bg-tnk{background:linear-gradient(135deg,#ffffff 0%,#f2f6fc 55%,#dbe7fd 100%)}
 .bg-tnk canvas{width:100%;height:100%}
+.bg-cat{background:radial-gradient(ellipse at 50% 35%,#3a2a6a 0%,#1a1030 60%,#07040f 100%)}
+.bg-cat canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -146,6 +148,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="oofworld/index.html#/place/cats" class="card" data-plays-key="find-the-cats-html" data-launched="2026-11-13">
+    <div class="card-img bg-cat"><canvas id="c43"></canvas></div>
+    <div class="card-body">
+      <h2>FIND THE CATS</h2>
+      <p>100 cats are hiding across 7 zones: Cozy Meadow, Catford Town, Haunted Litterbox Manor, Mount Hairball, The nil Void, The Meme Dimension and The End Of Cats. Some sit in plain sight. Others are behind parkour, lava obbies, lights-out boards, sliding tiles, ciphers, invisible paths and puzzles that look impossible. There are 17 difficulties, from Easy through nil, Obama, HAHAHAHA, Eat My Shorts and Aleph Nil up to <b>You Have To Be AI To Do This</b>. Every cat you find unlocks its cringe, goofy story in the Index. Cats you haven't found stay black and say UNOBTAINED. Plays in OofWorld. PC + mobile.</p>
+      <span class="tag" style="background:#2a1a4a;color:#ffd84a">3D PUZZLE HUNT &middot; 100 CATS &middot; 17 DIFFICULTIES</span>
+    </div>
+  </a>
   <a href="spooky-blasters.html" class="card" data-launched="2026-10-30">
     <div class="card-img bg-spk"><canvas id="c42"></canvas></div>
     <div class="card-body">
@@ -488,6 +498,35 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <script>
 // Animated preview canvases
 const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
+
+// ---- Find The Cats preview: a bobbing cat silhouette that flickers into colour, with tier sparkles ----
+(function(){
+  const c=document.getElementById('c43'); if(!c) return;
+  const ctx=c.getContext('2d');
+  let w,h,t=0;const tiers=['#4cc850','#ffcd00','#ff7d00','#d71e1e','#0050ff','#96005a','#1e3c96','#ff00aa','#00ffff','#ffffff'];
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  function cat(x,y,s,col){ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(x,y+s*.55,s*.7,s*.5,0,0,PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(x,y-s*.15,s*.45,0,PI*2);ctx.fill();
+    ctx.beginPath();ctx.moveTo(x-s*.42,y-s*.3);ctx.lineTo(x-s*.32,y-s*.8);ctx.lineTo(x-s*.08,y-s*.52);ctx.fill();
+    ctx.beginPath();ctx.moveTo(x+s*.42,y-s*.3);ctx.lineTo(x+s*.32,y-s*.8);ctx.lineTo(x+s*.08,y-s*.52);ctx.fill();
+    ctx.lineWidth=s*.14;ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(x+s*.6,y+s*.7);ctx.quadraticCurveTo(x+s*1.2,y+s*.6,x+s*1.0,y);ctx.stroke();}
+  function draw(){
+    t+=0.03;ctx.clearRect(0,0,w,h);
+    for(let i=0;i<14;i++){const a=t*.5+i*PI*2/14,r=Math.min(w,h)*.42;ctx.fillStyle=tiers[i%tiers.length];ctx.globalAlpha=.5+.5*sin(t*3+i);
+      ctx.fillRect(w/2+cos(a)*r*1.3-2,h/2+sin(a)*r*.8-2,4,4);}
+    ctx.globalAlpha=1;
+    const s=Math.min(w,h)*.22,y=h*.5+sin(t*2)*s*.08;
+    const found=(t%6)>3;
+    cat(w*.32,y+s*.1,s*.8,'#000');
+    cat(w*.6,y,s,found?'#ff9a3c':'#000');
+    if(found){ctx.fillStyle='#000';ctx.beginPath();ctx.arc(w*.6-s*.17,y-s*.18,s*.07,0,PI*2);ctx.arc(w*.6+s*.17,y-s*.18,s*.07,0,PI*2);ctx.fill();}
+    ctx.font='bold '+Math.round(s*.28)+'px sans-serif';ctx.textAlign='center';
+    ctx.fillStyle=found?'#ffd84a':'#888';ctx.fillText(found?'FOUND!':'UNOBTAINED',w*.6,y+s*1.35);
+    ctx.fillStyle='#666';ctx.fillText('UNOBTAINED',w*.32,y+s*1.35);
+    requestAnimationFrame(draw);}
+  draw();
+})();
 
 // ---- Spooky Blasters preview: crowned blaster shooting a bobbing jack-o-lantern under a blood moon ----
 (function(){

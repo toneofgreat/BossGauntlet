@@ -7,6 +7,13 @@
 //
 // The proportions match spec 05's rig so the drawing reads as the same character: a wide
 // head, a torso two thirds its width, arms either side, two legs.
+//
+// Hair (spec 05 §5.12) is the real 3D hairstyle projected face-on by hair.js's paintHair
+// — still no WebGL. It is drawn in two layers, the half behind the head first (so a long
+// back curtain shows around the body) and the half in front of it after the head.
+
+import { paintHair, hairMode, isHairId } from "../services/avatar/hair.js";
+import { getItem } from "../services/avatar/catalog-data.js";
 
 const LIMBS = ["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg"];
 const FALLBACK = Object.freeze({
@@ -34,6 +41,14 @@ function faceOf(config) {
   return FACES[id] || FACES.smile;
 }
 
+function hairOf(config) {
+  const eq = config && config.equipped;
+  if (!eq || !isHairId(eq.hair)) return null;
+  const hat = eq.hat ? getItem(eq.hat) : null; // an unknown id is no hat at all
+  const tucked = Boolean(hat && hat.type === "hat") && hairMode(eq.hat) === "tucked";
+  return { id: eq.hair, color: eq.hairColor || null, tucked };
+}
+
 // Returns a <canvas> sized `size` x `size`, ready to append.
 export function avatarThumb(config, size = 72) {
   const canvas = document.createElement("canvas");
@@ -54,6 +69,22 @@ export function avatarThumb(config, size = 72) {
     g.fillRect(Math.round(x * u), Math.round(y * u), Math.round(w * u), Math.round(h * u));
   };
 
+  // The head box spans 6.4 x 4.6 grid units for a 1.2 x 1 stud head, centred on (8, 3.9).
+  const hair = hairOf(config);
+  const hairOpts = hair
+    ? { cx: 8 * u, cy: 3.9 * u, scale: [(6.4 * u) / 1.2, 4.6 * u], tucked: hair.tucked }
+    : null;
+  const drawHair = (layer) => {
+    if (!hair) return;
+    try {
+      paintHair(g, hair.id, hair.color, { ...hairOpts, layer });
+    } catch (err) {
+      // a thumbnail is never worth an exception in a friends list
+      console.warn("[oof] hair thumbnail failed", err && err.message);
+    }
+  };
+
+  drawHair("back");
   // legs, torso, arms, head — back to front so nothing needs clipping
   box(5.5, 11, 2.2, 4, c.leftLeg);
   box(8.3, 11, 2.2, 4, c.rightLeg);
@@ -61,6 +92,7 @@ export function avatarThumb(config, size = 72) {
   box(3.2, 6.6, 2, 4.2, c.leftArm);
   box(10.8, 6.6, 2, 4.2, c.rightArm);
   box(4.8, 1.6, 6.4, 4.6, c.head);
+  drawHair("front");
 
   // the face, drawn as the same emoji the HUD uses
   g.font = `${Math.round(u * 3.1)}px system-ui, sans-serif`;

@@ -50,7 +50,9 @@ function makeLabel(THREE, text, color) {
   const canvas = document.createElement("canvas");
   canvas.width = LABEL_W;
   canvas.height = LABEL_H;
-  const g = canvas.getContext("2d");
+  // CPU-backed: a 256x72 label gains nothing from the GPU, and a GPU-backed 2D canvas makes
+  // every read of it (and every texture upload) wait for the WebGL frame queue to drain.
+  const g = canvas.getContext("2d", { willReadFrequently: true });
   paintLabel(g, text, color);
   const tex = new THREE.CanvasTexture(canvas);
   if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
