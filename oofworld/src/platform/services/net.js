@@ -13,6 +13,7 @@
 // that is nobody.
 
 import { randomUsername } from "./names.js";
+import { censor, cleanName } from "./censor.js";
 
 // §6 tuning.
 const SEND_HZ = 12;
@@ -102,7 +103,8 @@ export function createNet(deps = {}) {
   let url = null;
   let place = null;
   let selfId = null;
-  let name = d.getName() || null;
+  const name0 = d.getName() || null;
+  let name = typeof name0 === "string" && cleanName(name0, null) === null ? null : name0;
   let publishedState = null;
   let publishedJson = "null";
   let lastSent = { pos: null, yaw: 0, anim: "idle" };
@@ -232,7 +234,18 @@ export function createNet(deps = {}) {
     retryTimer = setTimeout(() => { retryTimer = null; connect(); }, delay * 1000);
   }
 
+  // Every name and chat line from the server is filtered again here (2026-11-13), so a
+  // curse word never shows on screen even while the deployed relay runs an older filter.
+  function scrub(m) {
+    if (!m || typeof m !== "object") return;
+    if (typeof m.name === "string") m.name = cleanName(m.name);
+    if (m.t === "chat" && typeof m.text === "string") m.text = censor(m.text);
+    if (m.record && typeof m.record.name === "string") m.record.name = cleanName(m.record.name);
+    if (Array.isArray(m.peers)) for (const r of m.peers) if (r && typeof r.name === "string") r.name = cleanName(r.name);
+  }
+
   function handle(m) {
+    scrub(m);
     switch (m.t) {
       case "welcome": {
         selfId = m.id;
@@ -482,6 +495,7 @@ export function createNet(deps = {}) {
       send({ t: "state", state: publishedState });
     },
     setName(next) {
+      if (typeof next === "string" && next.trim() && cleanName(next.trim(), null) === null) return false;
       name = typeof next === "string" && next.trim() ? next.trim().slice(0, 24) : name;
       send({ t: "name", name });
     },

@@ -14,6 +14,7 @@
 // and is a spec 06/07 wording mismatch this task did not introduce; see the report.
 
 import { el, button, slider, segmented, toggle } from "./kit.js";
+import { cleanName } from "../services/censor.js";
 import { mountSaveCodeRows } from "./savecode.js";
 import { isOfficialHost } from "../services/net.js";
 

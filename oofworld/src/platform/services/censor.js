@@ -43,7 +43,46 @@ const WORDS = Object.freeze([
   // they are listed rather than reached for with a looser match.
   "fuk", "fck", "phuck", "biatch", "azz", "arsehat", "shite", "wtf",
   "tits", "titties", "twat", "vagina", "wank", "wanker", "whore",
+  // Added 2026-11-13 (owner report): plurals/forms that are words on their own.
+  "cums", "cumming", "cummed", "cumshot", "cumslut", "porn", "porno", "fucked", "fucks",
+  "shits", "bitches", "dicks", "cocks", "motherfucker", "motherfucking", "pussies", "sluts",
 ]);
+
+// ---------------------------------------------------------------------------------
+// Glued-on words (amended 2026-11-13, owner report)
+// ---------------------------------------------------------------------------------
+// The whole-word rule above let "hellofuck" through: type any word, no space, then the
+// curse word. So these UNAMBIGUOUS words are also looked for INSIDE every word. Each one
+// was checked against English words that contain it; the few innocent ones are listed in
+// INNOCENT and cut out of the word before looking, so "saltwater" stays fine while
+// "saltwaterfuck" does not.
+const CONTAINED = Object.freeze([
+  "fuck", "fuk", "fck", "phuck", "shit", "cunt", "bitch", "biatch", "nigger", "nigga",
+  "faggot", "whore", "dildo", "wank", "slut", "pussy", "penis", "vagina", "retard",
+  "bastard", "jizz", "twat", "asshole", "bollock", "porn", "cumshot", "cumslut", "rimjob",
+  "handjob", "blowjob", "dickhead", "bullshit", "motherf",
+]);
+const INNOCENT = Object.freeze([
+  "scunthorpe", "penistone", "shiitake", "shitake", "pussycat", "pussywillow", "retardant",
+  "swank", "saltwater", "outwater", "whorl", "fuchsia", "snigger", "mishit",
+]);
+// "cum" and "dick" are too short/common to look for everywhere ("document", "cucumber",
+// "dickens"), so they are only caught on the END of a word ("hellocum", "nicedick"), minus
+// the real words that end in them.
+const END_BAD = Object.freeze({
+  cum: ["talcum", "modicum", "vademecum", "tecum", "slocum"],
+  dick: ["benedick"],
+});
+
+function containsBad(n) {
+  let rest = n;
+  for (const ok of INNOCENT) rest = rest.split(ok).join("_");
+  if (CONTAINED.some((bad) => rest.includes(bad))) return true;
+  for (const bad of Object.keys(END_BAD)) {
+    if (n.length > bad.length && n.endsWith(bad) && !END_BAD[bad].some((ok) => n.endsWith(ok))) return true;
+  }
+  return false;
+}
 
 const BAD = new Set(WORDS);
 
@@ -84,7 +123,7 @@ export function isBadWord(word) {
   const forms = new Set([raw, raw.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "")]);
   for (const form of forms) {
     const n = normalizeWord(form);
-    if (n && variants(n).some((v) => BAD.has(v))) return true;
+    if (n && variants(n).some((v) => BAD.has(v) || containsBad(v))) return true;
   }
   return false;
 }
@@ -99,6 +138,12 @@ function words(text) {
 // Is there anything to censor? Checks each word, and also each run of short pieces
 // joined together, which is how spaced-out spelling gets through a word-at-a-time check.
 export function hasBadWord(text) {
+  const squeezed = String(text).replace(/(?<=[A-Za-z0-9])[*._~'"-]+(?=[A-Za-z0-9])/g, "");
+  if (squeezed !== String(text) && hasBadWordPlain(squeezed)) return true;
+  return hasBadWordPlain(text);
+}
+
+function hasBadWordPlain(text) {
   const w = words(text);
   for (const one of w) if (isBadWord(one)) return true;
   // Join runs of 1-2 character pieces: "f u c k" -> "fuck". Longer pieces are left alone,
@@ -139,6 +184,10 @@ export function censor(text, mask = "*") {
     else { flush(); out += ch; }
   }
   flush();
+  // Spelled out across pieces ("f u c k", "f*ck", "f-u-c-k") gets past the word-by-word
+  // masking above but not hasBadWord: then every letter and digit is masked. A whole line
+  // of stars is the right outcome for a line that was built to sneak a word through.
+  if (hasBadWord(out)) out = out.replace(/[A-Za-z0-9]/g, mask);
   return out;
 }
 
@@ -167,4 +216,11 @@ export function nameIsAllowed(name) {
   if (NAME_ALLOW.includes(n)) return true;
   if (hasBadWord(name)) return false;
   return !STRONG.some((bad) => n.includes(bad));
+}
+
+// cleanName(name, fallback) — a name that may be shown as-is, or the fallback. Used by the
+// client on every name it receives, so a bad name never appears even from an older server.
+export function cleanName(name, fallback = "Player") {
+  if (typeof name !== "string" || !name.trim()) return name;
+  return nameIsAllowed(name) && nameIsAllowed(name.replace(/[\s._*-]+/g, "")) ? name : fallback;
 }
