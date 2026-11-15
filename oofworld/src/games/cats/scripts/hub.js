@@ -2,11 +2,11 @@
 // every static part of the hub (floor, fountain, portals, walls, decor) and gets instanced; this
 // file adds what place.json cannot: the giant cat statue (a catkit Group), and every piece of
 // TEXT - the plaque, each portal's name and "Found 3/14" / "LOCKED: need 6" line, the difficulty
-// chart wall, the how-to board and your own progress board - as canvas planes redrawn only when
-// your cat count changes. Nothing here invents a player: the progress board is yours alone.
+// chart wall, the how-to board and the TOP CAT FINDERS board - as canvas planes redrawn only when
+// your cat count changes. Nothing here invents a player: the leaderboard shows only real server rows.
 //
 //   createHub(ctx, K, deps) -> { refresh(), update(dt), tap(x, y) -> bool, dispose() }
-//   deps = { has(n), count(), zoneUnlocked(k) }
+//   deps = { has(n), count(), zoneUnlocked(k), leaders() -> { status, rows, signedIn } }
 
 import * as R from "./roster.js";
 
@@ -150,21 +150,35 @@ export function createHub(ctx, K, deps) {
     fit(g, "100 cats are hiding in 7 zones.\nTouch or tap a cat to collect it.\nFind cats to unlock new portals.\nCaged cats need a puzzle solved first.\nSome cats are invisible... until they aren't.\nINDEX = your cats.  CHART = difficulties.", w * 0.04, h * 0.17, w * 0.92, h * 0.8, "#ffffff");
   });
   const PR = R.HUB.progress;
+  // The TOP CAT FINDERS board: the real top 10 from the server
+  // (deps.leaders()), never invented rows. When there is no board to show it says why.
   const progressBoard = board(PR.size[0], PR.size[1], frontOf(PR.pos, PR.size, R.yawToward(-PR.pos[0], -PR.pos[2]) + 180), 20, (g, w, h) => {
     g.fillStyle = "#1e2846";
     g.fillRect(0, 0, w, h);
-    fit(g, `YOUR CATS: ${deps.count()}/${R.TOTAL}`, 0, 0, w, h * 0.14, "#ffdc78");
-    const rows = R.ZONES.length - 1;
-    for (let k = 1; k <= rows; k++) {
-      const z = R.ZONES[k];
-      let f = 0;
-      for (let n = z.first; n <= z.last; n++) if (deps.has(n)) f++;
-      const lock = deps.zoneUnlocked(k) ? "" : " 🔒";
-      fit(g, `${k}. ${z.name}${lock}   ${f}/${z.last - z.first + 1}`, w * 0.05, h * (0.16 + (k - 1) * 0.12), w * 0.9, h * 0.1, "#ffffff", { align: "left" });
+    fit(g, "TOP CAT FINDERS", 0, h * 0.01, w, h * 0.12, "#ffdc78");
+    const lb = deps.leaders ? deps.leaders() : { status: "offline" };
+    const rowH = h * 0.068;
+    const y0 = h * 0.14;
+    if (lb.rows && lb.rows.length) {
+      lb.rows.forEach((r, i) => {
+        const y = y0 + i * rowH * 1.07;
+        if (r.isPlayer) { g.fillStyle = "rgba(255,220,120,0.18)"; g.fillRect(w * 0.03, y - rowH * 0.04, w * 0.94, rowH * 1.04); }
+        const medal = r.rank === 1 ? "#ffd84a" : r.rank === 2 ? "#dfe6ee" : r.rank === 3 ? "#e8a060" : "#ffffff";
+        fit(g, `${r.rank}. ${r.name}`, w * 0.05, y, w * 0.66, rowH * 0.92, medal, { align: "left" });
+        fit(g, `${r.value} 🐱`, w * 0.7, y, w * 0.26, rowH * 0.92, medal, { align: "right" });
+      });
+    } else {
+      const msg = lb.status === "loading" ? "Loading the leaderboard..."
+        : lb.status === "empty" ? "Nobody is on the board yet.\nFind a cat to be first!"
+          : "Leaderboard offline right now.";
+      fit(g, msg, w * 0.06, h * 0.3, w * 0.88, h * 0.3, "#c8c8d2");
     }
+    const foot = lb.signedIn === false ? `YOUR CATS: ${deps.count()}/${R.TOTAL}  (sign in to join the board)` : `YOUR CATS: ${deps.count()}/${R.TOTAL}`;
+    fit(g, foot, w * 0.04, h * 0.88, w * 0.92, h * 0.09, "#7dff8a");
   });
 
   return {
+    refreshBoard() { progressBoard.redraw(); },
     refresh() {
       for (const b of portalBoards) b.redraw();
       chart.redraw();

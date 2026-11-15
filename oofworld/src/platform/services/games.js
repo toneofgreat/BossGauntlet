@@ -86,6 +86,17 @@ export function createGames(deps = {}) {
       if (!acc || !acc.signedIn()) return null; // nothing to attach the row to
       return call("/api/battles/score", { token: acc.token(), kills, swords });
     },
+    // Find The Cats' Top 10: most cats found.
+    async catsTop() {
+      const acc = account();
+      const tok = acc && acc.signedIn() ? `?token=${encodeURIComponent(acc.token())}` : "";
+      return call(`/api/cats/top${tok}`, undefined, "GET");
+    },
+    async catsScore(cats) {
+      const acc = account();
+      if (!acc || !acc.signedIn()) return null; // nothing to attach the row to
+      return call("/api/cats/score", { token: acc.token(), cats });
+    },
     async liftingScore(strength) {
       const acc = account();
       if (!acc || !acc.signedIn()) return null; // nothing to attach the row to

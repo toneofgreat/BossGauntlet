@@ -148,14 +148,6 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
-  <a href="oofworld/index.html#/place/cats" class="card" data-plays-key="find-the-cats-html" data-launched="2026-11-13">
-    <div class="card-img bg-cat"><canvas id="c43"></canvas></div>
-    <div class="card-body">
-      <h2>FIND THE CATS</h2>
-      <p>100 cats are hiding across 7 zones: Cozy Meadow, Catford Town, Haunted Litterbox Manor, Mount Hairball, The nil Void, The Meme Dimension and The End Of Cats. Some sit in plain sight. Others are behind parkour, lava obbies, lights-out boards, sliding tiles, ciphers, invisible paths and puzzles that look impossible. There are 17 difficulties, from Easy through nil, Obama, HAHAHAHA, Eat My Shorts and Aleph Nil up to <b>You Have To Be AI To Do This</b>. Every cat you find unlocks its cringe, goofy story in the Index. Cats you haven't found stay black and say UNOBTAINED. Plays in OofWorld. PC + mobile.</p>
-      <span class="tag" style="background:#2a1a4a;color:#ffd84a">3D PUZZLE HUNT &middot; 100 CATS &middot; 17 DIFFICULTIES</span>
-    </div>
-  </a>
   <a href="spooky-blasters.html" class="card" data-launched="2026-10-30">
     <div class="card-img bg-spk"><canvas id="c42"></canvas></div>
     <div class="card-body">
@@ -282,14 +274,6 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
       <h2>FIND THE LETTUCES</h2>
       <p>3D exploration game across a lettuce farm, obby, skyscraper, and sewers. Hunt all 16 hidden lettuces — including a secret one needing a 4-letter code!</p>
       <span class="tag" style="background:#1a3a1a;color:#4f4">3D EXPLORATION</span>
-    </div>
-  </a>
-  <a href="oofworld/index.html#/place/pighide" class="card" data-plays-key="pig-hide-html" data-launched="2026-11-07">
-    <div class="card-img bg-pig"><canvas id="c6"></canvas></div>
-    <div class="card-body">
-      <h2>PIG HIDE</h2>
-      <p>Hide-and-seek in OofWorld, rebuilt from scratch. Get 2+ players in the city lobby and hit START: one player is the HUNTER, everyone else is a PIG with 5 minutes to stay hidden in dumpsters, wardrobes, haystacks, phone booths, sewer pipes and dozens of other spots. Survive and you earn a pig win; catch every pig and you earn a hunter win. Wins unlock new classes: Speedy, Strong, Creeper, Flying (it summons a plane), Casoh, Wild Boar and Mad Scientist pigs, and a hunter ladder from fists to a wooden sword, a toy blaster, bombs, an RPG, a pig detector and THE AMAZING HUNTER. Buy pig and hunter skins at the lobby kiosks. Real multiplayer. PC + mobile.</p>
-      <span class="tag" style="background:#2a0a1a;color:#f4a">3D HIDE &amp; SEEK &middot; ONLINE MULTIPLAYER</span>
     </div>
   </a>
   <a href="superhero-tycoon.html" class="card">
@@ -716,7 +700,7 @@ const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
 
 // ---- Pig Hide preview: pig chasing people in 3D world ----
 (function(){
-  const c=document.getElementById('c6'),ctx=c.getContext('2d');
+  const c=document.getElementById('c6'); if(!c) return; const ctx=c.getContext('2d');
   let w,h,t=0;
   function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
   resize();window.addEventListener('resize',resize);

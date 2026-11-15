@@ -975,7 +975,7 @@ export function drawFitText(canvas, text, color, bg, opts = {}) {
   }
   const lh = size * 1.15;
   const y0 = H / 2 - ((lines.length - 1) * lh) / 2;
-  const x = g.textAlign === "left" ? pad : W / 2;
+  const x = g.textAlign === "left" ? pad : g.textAlign === "right" ? W - pad : W / 2;
   lines.forEach((l, i) => {
     if (opts.stroke) g.strokeText(l, x, y0 + i * lh);
     g.fillText(l, x, y0 + i * lh);

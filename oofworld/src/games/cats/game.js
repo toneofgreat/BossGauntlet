@@ -269,7 +269,8 @@ export function init(ctx) {
     onLeaveZone: (k) => goHub(k),
     ui: { prompt: (v) => G && G.ui.prompt(v), input: (opts) => G.ui.input(opts) },
   });
-  G.hub = createHub(ctx, K, { has, count, zoneUnlocked });
+  G.lb = { status: "loading", rows: null, signedIn: null, sent: 0, fetchT: -1e9, submitT: -1e9, t: 0, busy: false };
+  G.hub = createHub(ctx, K, { has, count, zoneUnlocked, leaders: () => G.lb });
 
   for (let k = 1; k < R.ZONES.length; k++) {
     G.offs.push(ctx.events.on(`touch:portal${k}`, () => { if (G && !G.kit.current()) enterZone(k); }));
@@ -292,7 +293,54 @@ export function update(dt, ctx) {
   if (G.pendingZone && G.zoneState[G.pendingZone] !== "loading") enterZone(G.pendingZone);
   try { G.kit.update(step); } catch (err) { console.warn("[cats] zone update", err); }
   try { G.hub.update(step); } catch (err) { console.warn("[cats] hub update", err); }
+  try { tickBoard(step); } catch (err) { console.warn("[cats] leaderboard", err); }
   try { G.ui.update(step); } catch (err) { console.warn("[cats] ui update", err); }
+}
+
+// ---- TOP CAT FINDERS (the hub leaderboard) ----------------------------------------------------
+// Signed-in players send their cat count (the server keeps the max per account); everyone sees the
+// real top 10. Nothing is made up: no server -> the board says it is offline.
+const BOARD_FETCH_S = 30;
+const BOARD_SUBMIT_S = 10;
+function boardName() {
+  const a = G.ctx.services && G.ctx.services.account;
+  try { return a && a.signedIn && a.signedIn() && typeof a.username === "function" ? a.username() : null; } catch { return null; }
+}
+function tickBoard(dt) {
+  const lb = G.lb;
+  lb.t += dt;
+  const games = G.ctx.services && G.ctx.services.games;
+  let up = false;
+  try { up = !!(games && typeof games.catsTop === "function" && games.available()); } catch { up = false; }
+  if (!up) {
+    if (lb.status !== "offline") { lb.status = "offline"; lb.rows = null; G.hub.refreshBoard(); }
+    return;
+  }
+  const me = boardName();
+  if (lb.signedIn !== !!me) { lb.signedIn = !!me; G.hub.refreshBoard(); }
+  if (me && G.count > lb.sent && lb.t - lb.submitT >= BOARD_SUBMIT_S) {
+    lb.submitT = lb.t;
+    const c = G.count;
+    games.catsScore(c).then(() => { if (G && G.lb === lb) { lb.sent = Math.max(lb.sent, c); lb.fetchT = -1e9; } }).catch(() => { /* retry later */ });
+  }
+  if (!lb.busy && lb.t - lb.fetchT >= BOARD_FETCH_S) {
+    lb.fetchT = lb.t;
+    lb.busy = true;
+    games.catsTop().then((out) => {
+      if (!G || G.lb !== lb) return;
+      if (!out || !Array.isArray(out.top)) throw new Error("bad board");
+      const rows = out.top.filter((r) => r && r.value > 0).slice(0, 10)
+        .map((r, i) => ({ name: String(r.name || "?").slice(0, 24), value: r.value | 0, rank: i + 1, isPlayer: !!(me && r.name === me) }));
+      // past the cut, you still see yourself on the last row with your true rank
+      if (out.you && out.you.rank > rows.length && rows.length >= 10) rows[9] = { name: "You", value: out.you.value | 0, rank: out.you.rank, isPlayer: true };
+      lb.rows = rows;
+      lb.status = rows.length ? "ok" : "empty";
+      G.hub.refreshBoard();
+    }).catch(() => {
+      if (!G || G.lb !== lb) return;
+      if (!lb.rows) { lb.status = "offline"; G.hub.refreshBoard(); }
+    }).finally(() => { lb.busy = false; });
+  }
 }
 
 export function dispose(ctx) {
