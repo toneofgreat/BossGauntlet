@@ -1872,19 +1872,24 @@ function buildGlassMaterial(colorHex, tBucket) {
   });
 }
 
-function buildNeonMaterial(colorHex) {
-  // Pure glow, unaffected by scene lights. Excluded from the general
-  // "non-glass, non-neon materials honor part transparency" rule (spec 03
-  // §5.1) — transparency>=1 -> mesh.visible=false is handled at the
-  // mesh-build layer (M1-T11), not here.
-  return new THREE.MeshLambertMaterial({
-    color: "#000000", emissive: colorHex, emissiveIntensity: 1.0, flatShading: false,
-  });
+function buildNeonMaterial(colorHex, tBucket = 0) {
+  // Pure glow, unaffected by scene lights. transparency>=1 -> mesh.visible=false is
+  // handled at the mesh-build layer (M1-T11), not here.
+  // Amended 2026-11-15 (owner report): neon now honours 0<t<1 like every other material. It used
+  // to ignore transparency, so a blinking laser or lava jet that dims to 0.88 to say
+  // "safe now" kept glowing at full strength and looked permanently on.
+  const fields = { color: "#000000", emissive: colorHex, emissiveIntensity: 1.0, flatShading: false };
+  if (tBucket > 0 && tBucket < 1) {
+    fields.transparent = true;
+    fields.opacity = 1 - tBucket;
+    fields.depthWrite = tBucket < 0.5;
+  }
+  return new THREE.MeshLambertMaterial(fields);
 }
 
 function buildMaterial(name, colorHex, tBucket) {
   if (name === "glass") return buildGlassMaterial(colorHex, tBucket);
-  if (name === "neon") return buildNeonMaterial(colorHex);
+  if (name === "neon") return buildNeonMaterial(colorHex, tBucket);
 
   const map = getTexture(name);
   const fields = { color: colorHex, map, flatShading: false };

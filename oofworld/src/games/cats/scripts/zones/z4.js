@@ -1752,7 +1752,8 @@ export function build(z) {
     part({ shape: "cylinder", size: [22, 0.6, 22], at: [tx, 0.3, tz], color: C(60, 60, 80), material: "metal" });
     for (let k = 0; k <= 13; k++) {
       const a = (k / 14) * Math.PI * 2;
-      NE("TimeRing", [3.4, 1.2, 1.2], mul(cf(tx + Math.cos(a) * 7, 8 + Math.sin(a) * 7, tz), K.angles(0, 0, a + Math.PI / 2)), C(120, 255, 255));
+      const seg = NE("TimeRing", [3.4, 1.2, 1.2], mul(cf(tx + Math.cos(a) * 7, 8 + Math.sin(a) * 7, tz), K.angles(0, 0, a + Math.PI / 2)), C(120, 255, 255), k % 2 === 0 ? { dynamic: true } : {});
+      if (k % 2 === 0) z.tag(seg, "Blink", { period: 1.2 });
     }
     const vortex = part({ shape: "cylinder", size: [12, 0.4, 12], cf: mul(cf(tx, 8, tz), K.angles(Math.PI / 2, 0, 0)), color: C(100, 60, 200), material: "neon", transparency: 0.5, decor: true,
       light: lightOf(C(150, 100, 255), 30, 2) });
