@@ -10,7 +10,8 @@
 //
 //   createUi(ctx, deps) -> { update(dt), refresh(), setZone(k), prompt(view|null), input(opts),
 //                            found(n, reward), openIndex(), openChart(), openZones(), closeAll(),
-//                            isOpen() -> "index"|"chart"|"zones"|"popup"|null, dispose() }
+//                            isOpen() -> "index"|"chart"|"zones"|"popup"|"movie"|"movies"|null,
+//                            setMoviesBadge(bool), dispose() }
 //   deps = { CATS, R (roster), thumbs, has(n), count(), zoneUnlocked(k), currentZone(),
 //            go(k) (0 = hub), respawn(), interact() }
 
@@ -34,6 +35,11 @@ const CSS = `
  background:rgba(30,18,40,.82);color:#fff;font:700 14px ${FONT};cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.4);display:flex;align-items:center;gap:6px;justify-content:center}
 .ftc-btn:active{transform:scale(.95)}
 .ftc-btn .ftc-ico{font-size:20px}
+.ftc-btn{position:relative}
+.ftc-btn .ftc-dot{position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#ff5f8f;border:2px solid #fff;box-shadow:0 0 8px #ff5f8f;display:none;animation:ftc-dotp 1.2s ease-in-out infinite}
+.ftc-btn.ftc-has-new .ftc-dot{display:block}
+@keyframes ftc-dotp{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+body.oof-reduced-motion .ftc-btn .ftc-dot{animation:none}
 .ftc-prompt{position:absolute;left:50%;bottom:170px;transform:translateX(-50%);pointer-events:auto;min-height:52px;padding:10px 18px;border-radius:16px;
  background:rgba(20,14,28,.9);border:2px solid #ffd75a;font:700 17px ${FONT};cursor:pointer;display:none;max-width:86vw;text-align:center}
 .ftc-prompt .ftc-key{display:inline-block;background:#ffd75a;color:#2a1a00;border-radius:7px;padding:0 7px;margin-right:8px}
@@ -126,6 +132,7 @@ function tap(node, fn) {
 
 export function createUi(ctx, deps) {
   const { CATS, R, thumbs } = deps;
+  const moviesOpen = () => { try { return (typeof deps.moviesOpen === "function" && deps.moviesOpen()) || null; } catch { return null; } };
   const ui = ctx.services.ui;
   const sfx = (name, opts) => { try { ctx.engine.audio.playSfx(name, opts || {}); } catch { /* optional */ } };
 
@@ -149,6 +156,10 @@ export function createUi(ctx, deps) {
     return b;
   };
   mkBtn("📖", "INDEX", () => openIndex());
+  // Biscuit's Story (scripts/movies.js, owned by game.js): one movie per 5 cats found
+  const moviesBtn = mkBtn("🎬", "MOVIES", () => { closeModal(); if (typeof deps.openMovies === "function") deps.openMovies(); });
+  moviesBtn.appendChild(el("span", "ftc-dot"));
+  const setMoviesBadge = (on) => moviesBtn.classList.toggle("ftc-has-new", !!on);
   mkBtn("📊", "CHART", () => openChart());
   mkBtn("🌀", "ZONES", () => openZones());
   const hubBtn = mkBtn("🏠", "HUB", () => deps.go(0));
@@ -560,8 +571,12 @@ export function createUi(ctx, deps) {
   return {
     update, refresh, setZone, prompt, input, found, openIndex, openChart, openZones,
     openDetail: (n) => { if (!modal || modal.kind !== "index") openIndex(); openDetail(n); },
-    closeAll() { closePopup(); popQueue.length = 0; closeModal(); },
-    isOpen: () => (pop ? "popup" : modal ? (modal.detail ? "detail" : modal.kind) : null),
+    closeAll() {
+      closePopup(); popQueue.length = 0; closeModal();
+      try { if (typeof deps.closeMovies === "function") deps.closeMovies(); } catch (err) { console.warn("[cats] close movies", err); }
+    },
+    isOpen: () => (pop ? "popup" : modal ? (modal.detail ? "detail" : modal.kind) : moviesOpen()),
+    setMoviesBadge,
     pendingPopups: () => popQueue.length + (pop ? 1 : 0),
     dispose() {
       document.removeEventListener("keydown", onKey, true);

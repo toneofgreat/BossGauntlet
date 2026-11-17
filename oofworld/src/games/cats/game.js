@@ -24,6 +24,7 @@ import { createZoneKit } from "./scripts/zonekit.js";
 import { createThumbs } from "./scripts/thumbs.js";
 import { createUi } from "./scripts/ui.js";
 import { createHub } from "./scripts/hub.js";
+import { createMovies } from "./scripts/movies.js";
 
 export const meta = {
   slug: "cats",
@@ -60,13 +61,15 @@ function readSave(ctx) {
   try { raw = ctx.services.saves.load(); } catch { raw = null; }
   let found = raw && typeof raw.found === "string" ? raw.found.replace(/[^01]/g, "0") : "";
   found = (found + blankFound()).slice(0, R.TOTAL);
-  return { v: SAVE_VERSION, found };
+  // optional (added with the movies): which of the 21 movies were watched, "0"/"1" each
+  const films = raw && typeof raw.films === "string" ? raw.films.replace(/[^01]/g, "0").slice(0, 64) : "";
+  return { v: SAVE_VERSION, found, films };
 }
 
 function writeSave() {
   if (!G) return;
   try {
-    G.ctx.services.saves.save({ v: SAVE_VERSION, found: G.found.join("") });
+    G.ctx.services.saves.save({ v: SAVE_VERSION, found: G.found.join(""), films: G.films || "" });
   } catch (err) {
     console.warn("[cats] save failed", err);
   }
@@ -152,6 +155,7 @@ function award(n, how) {
   G.lastFound = { n, how, t: G.ctx.time };
   G.ui.found(n, reward);
   G.ui.refresh();
+  try { if (G.movies) G.movies.onCount(G.count); } catch (err) { console.warn("[cats] movies unlock", err); }
   G.hub.refresh();
   G.kit.notifyFound(n);
   for (let k = 1; k < R.ZONES.length; k++) {
@@ -251,7 +255,7 @@ export function init(ctx) {
   const save = readSave(ctx);
   const K = createCatKit(ctx.engine.THREE);
   G = {
-    ctx, K, found: save.found.split(""), count: 0, looks: new Map(), mods: [], zoneState: [],
+    ctx, K, found: save.found.split(""), films: save.films, movies: null, count: 0, looks: new Map(), mods: [], zoneState: [],
     reports: [], pendingZone: 0, down: null, offs: [], lastFound: null,
     kit: null, hub: null, ui: null, thumbs: null,
   };
@@ -262,7 +266,27 @@ export function init(ctx) {
     currentZone: () => (G ? G.kit.current() : 0),
     go, respawn,
     interact: () => (G ? G.kit.interact() : false),
+    openMovies: () => { if (G && G.movies) G.movies.openGallery(); },
+    closeMovies: () => { if (G && G.movies) G.movies.closeAll(); },
+    // the small unlock prompt does not block world taps; the player and the gallery do
+    moviesOpen: () => { const o = G && G.movies ? G.movies.isOpen() : null; return o === "movie-prompt" ? null : o; },
   });
+  try {
+    G.movies = createMovies(ctx, {
+      count: () => (G ? G.count : 0),
+      isBusy: () => {
+        if (!G) return true;
+        const o = G.ui.isOpen();
+        return !!(o && o !== "movie" && o !== "movies") || G.ui.pendingPopups() > 0;
+      },
+      loadSeen: () => (G ? G.films : ""),
+      saveSeen: (str) => { if (!G) return; G.films = String(str); writeSave(); },
+      setBadge: (on) => { if (G && G.ui) G.ui.setMoviesBadge(on); },
+    });
+  } catch (err) {
+    console.warn("[cats] movies unavailable", err);
+    G.movies = null;
+  }
   G.kit = createZoneKit(ctx, {
     K, has, award, foundCount: count, getLook,
     lookSpins: (n) => { const e = lookEntry(n); return e ? e.spin : true; },
@@ -295,6 +319,7 @@ export function update(dt, ctx) {
   try { G.hub.update(step); } catch (err) { console.warn("[cats] hub update", err); }
   try { tickBoard(step); } catch (err) { console.warn("[cats] leaderboard", err); }
   try { G.ui.update(step); } catch (err) { console.warn("[cats] ui update", err); }
+  try { if (G.movies) G.movies.update(step); } catch (err) { console.warn("[cats] movies update", err); }
 }
 
 // ---- TOP CAT FINDERS (the hub leaderboard) ----------------------------------------------------
@@ -351,6 +376,7 @@ export function dispose(ctx) {
   writeSave();
   try { G.kit.dispose(); } catch (err) { console.warn("[cats] dispose kit", err); }
   try { G.hub.dispose(); } catch (err) { console.warn("[cats] dispose hub", err); }
+  try { if (G.movies) G.movies.dispose(); } catch (err) { console.warn("[cats] dispose movies", err); }
   try { G.ui.dispose(); } catch (err) { console.warn("[cats] dispose ui", err); }
   try { G.thumbs.dispose(); } catch (err) { console.warn("[cats] dispose thumbs", err); }
   try { G.K.dispose(); } catch (err) { console.warn("[cats] dispose catkit", err); }
@@ -382,5 +408,12 @@ export const debug = Object.freeze({
     else G.ui.closeAll();
   },
   z: () => (G ? G.kit.z() : null),
+  movies: Object.freeze({
+    list: () => (G && G.movies ? G.movies.debug.list() : []),
+    play: (id) => (G && G.movies ? G.movies.play(id) : false),
+    renderAt: (id, t, canvas) => (G && G.movies ? G.movies.debug.renderAt(id, t, canvas) : Promise.resolve(-1)),
+    state: () => (G && G.movies ? G.movies.debug.state() : null),
+    close: () => { if (G && G.movies) G.movies.closeAll(); },
+  }),
   thumbsOk: () => (G ? G.thumbs.ok() : false),
 });
