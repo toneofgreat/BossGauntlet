@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- No referrer from this page: "Go to platyfy" must never be bounced back into a snapshot by tt-sw.js. -->
+<meta name="referrer" content="no-referrer">
+<title>Platyfy · Lost in time</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:radial-gradient(ellipse at 50% 30%,#1a1240 0%,#0a0a12 60%);color:#fff;font-family:'Courier New',monospace;text-align:center}
+.card{max-width:520px;width:100%;background:linear-gradient(145deg,#151520,#1a1a2e);border:2px solid #2a2a3e;border-radius:16px;padding:32px 22px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.big{font-size:64px;line-height:1;margin-bottom:12px;display:inline-block}
+.spin{animation:spin 1.6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+h1{font-size:clamp(20px,5vw,28px);letter-spacing:3px;margin:0 0 10px;background:linear-gradient(90deg,#ff6644,#ffcc22,#44ccff,#aa66ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+p{color:#9a9ab0;font-size:14px;line-height:1.6;margin:0 0 12px}
+code{color:#ffcc22;word-break:break-all}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:18px}
+a.btn,button.btn{font:inherit;font-weight:bold;letter-spacing:1px;padding:10px 16px;border-radius:10px;border:2px solid #333;background:#1d1d30;color:#fff;text-decoration:none;cursor:pointer}
+a.btn:hover,button.btn:hover,a.btn:focus-visible,button.btn:focus-visible{border-color:#ffcc22;outline:none}
+.pri{background:linear-gradient(90deg,#aa66ff,#44ccff)!important;border-color:transparent!important;color:#0a0a12!important}
+.bar{height:6px;border-radius:3px;background:#222;overflow:hidden;margin:16px auto 0;max-width:260px}
+.bar i{display:block;height:100%;width:40%;background:linear-gradient(90deg,#ff6644,#ffcc22,#44ccff,#aa66ff);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="card" id="card">
+  <div id="warp" hidden>
+    <div class="big spin" aria-hidden="true">🕰️</div>
+    <h1>WARMING UP THE TIME MACHINE</h1>
+    <p id="warp-msg">Spinning up the flux engine so you can visit the past&hellip;</p>
+    <div class="bar" aria-hidden="true"><i></i></div>
+  </div>
+  <div id="nosw" hidden>
+    <div class="big" aria-hidden="true">🧭</div>
+    <h1>TIME TRAVEL UNAVAILABLE</h1>
+    <p>This link points into platyfy's past, but this browser won't let the time machine run here (private mode and some in-app browsers block it).</p>
+    <p>Try opening it in a regular browser window.</p>
+    <div class="row"><button class="btn pri" type="button" id="retry">Try again</button><a class="btn" href="/" rel="noreferrer" referrerpolicy="no-referrer">Go to platyfy</a></div>
+  </div>
+  <div id="notborn" hidden>
+    <div class="big" aria-hidden="true">🥚</div>
+    <h1>PLATYFY WASN'T BORN YET</h1>
+    <p id="notborn-msg">Platyfy was born on March 10, 2026.</p>
+    <div class="row"><a class="btn pri" id="born-link" href="/">Visit its first day</a><a class="btn" href="/" rel="noreferrer" referrerpolicy="no-referrer">Go to platyfy</a></div>
+  </div>
+  <div id="lost">
+    <div class="big" aria-hidden="true">🦆</div>
+    <h1>404 · PAGE NOT FOUND</h1>
+    <p>There's nothing at <code id="lost-path"></code>.</p>
+    <p>Maybe it moved, or maybe it only exists in another time. Use the time machine in the corner to look around platyfy's past.</p>
+    <div class="row"><a class="btn pri" href="/" rel="noreferrer" referrerpolicy="no-referrer">Back to platyfy</a></div>
+  </div>
+</main>
+<script>
+(function () {
+  "use strict";
+  var path = location.pathname;
+  var TT_FULL = /^\/tt\/([0-9a-f]{40})(\/|$)/;
+  var TT_LOOSE = /^\/tt\/([^\/]+)(\/.*)?$/;
+  var $ = function (id) { return document.getElementById(id); };
+  function show(id) {
+    ["warp", "nosw", "notborn", "lost"].forEach(function (k) { $(k).hidden = k !== id; });
+    if (id === "lost") loadTimeMachine();
+  }
+  // The time machine button only belongs on the plain 404. On the /tt/ bootstrap screens it
+  // would claim "you are viewing <day>" while nothing from the past has loaded yet.
+  var tmLoaded = false;
+  function loadTimeMachine() {
+    if (tmLoaded) return; tmLoaded = true;
+    var sc = document.createElement("script"); sc.src = "/timemachine.js"; sc.defer = true;
+    document.body.appendChild(sc);
+  }
+  document.getElementById("lost-path").textContent = decodeURI(path);
+
+  function nyToday() {
+    try { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
+    catch (e) { return new Date().toISOString().slice(0, 10); }
+  }
+  function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } }
+
+  // 1) Full snapshot URL: cold start -> install the time machine worker, then reload.
+  if (TT_FULL.test(path)) {
+    show("warp");
+    var key = "tt:coldstart:" + location.href;
+    var tries = +(ss(key) || 0);
+    if (!("serviceWorker" in navigator) || tries >= 3) { ss(key, null); show("nosw"); return; }
+    ss(key, String(tries + 1));
+    var reloaded = false;
+    var reload = function () { if (reloaded) return; reloaded = true; location.reload(); };
+    var timer = setTimeout(function () { ss(key, null); show("nosw"); }, 20000);
+    try { localStorage.setItem("platyfy-tm-last", String(Date.now())); } catch (e) {}
+    navigator.serviceWorker.register("/tt-sw.js", { scope: "/" }).then(function () {
+      return navigator.serviceWorker.ready;
+    }).then(function (reg) {
+      // Once a worker covering "/" is ACTIVE, a normal reload goes through it, whether or not
+      // this page is controlled (after Ctrl+Shift+R it is not, and controllerchange never fires).
+      if (reg && reg.active) { clearTimeout(timer); reload(); }
+    }).catch(function () { clearTimeout(timer); ss(key, null); show("nosw"); });
+    $("retry").onclick = function () { ss(key, null); location.reload(); };
+    return;
+  }
+
+  // 2) Friendly shortcuts: /tt/<short-sha>/..., /tt/YYYY-MM-DD/..., /tt/ -> resolve via history.json.
+  var loose = TT_LOOSE.exec(path);
+  if (loose || path === "/tt" || path === "/tt/") {
+    var token = loose ? loose[1] : "";
+    var rest = loose && loose[2] ? loose[2] : "/";
+    show("warp");
+    $("warp-msg").textContent = "Looking that moment up in platyfy's history…";
+    fetch("/timetravel/history.json", { cache: "no-cache" }).then(function (r) { return r.json(); }).then(function (h) {
+      var cs = h.commits || [];
+      var hit = null;
+      if (/^[0-9a-f]{4,39}$/i.test(token)) {
+        token = token.toLowerCase();
+        for (var i = 0; i < cs.length; i++) if (cs[i].sha.indexOf(token) === 0) { hit = cs[i]; break; }
+      } else if (/^\d{4}-\d{2}-\d{2}$/.test(token)) {
+        // No visiting days that haven't happened yet: clamp to today, and today is the present.
+        var today = nyToday();
+        if (token >= today) { location.replace("/" + rest.replace(/^\/+/, "") + location.search + location.hash); return; }
+        if (token < h.born) {
+          show("notborn");
+          var b = h.born.split("-");
+          var nice = new Date(Date.UTC(+b[0], +b[1] - 1, +b[2], 12)).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });
+          $("notborn-msg").textContent = "Platyfy didn't exist on " + token + " — it was born on " + nice + ".";
+          $("born-link").href = "/tt/" + h.born + "/";
+          return;
+        }
+        for (var j = 0; j < cs.length; j++) if (cs[j].day <= token) hit = cs[j];
+        if (hit) { try { sessionStorage.setItem("tt:day:" + hit.sha, token); sessionStorage.setItem("tt:go:" + hit.sha, token + "|" + Date.now()); } catch (e) {} }
+      }
+      if (!hit) { show("lost"); return; }
+      location.replace("/tt/" + hit.sha + rest + location.search + location.hash);
+    }).catch(function () { show("lost"); });
+    return;
+  }
+
+  // 3) A genuinely unknown present-day path.
+  show("lost");
+})();
+</script>
+</body>
+</html>
