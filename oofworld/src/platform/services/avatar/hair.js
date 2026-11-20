@@ -54,6 +54,11 @@ export const HAIR_STYLES = Object.freeze([
   { id: "hair_spacebuns", price: 500, name: "Space Buns", color: "#ff6fb5", presets: ["#ff6fb5", "#a64dff", "#35e0e0", "#1b1b1b", "#f1d27a", "#d94436"] },
   { id: "hair_crystal", price: 25000, name: "Crystal Shards", color: "#7fe3ff", glow: true, presets: ["#7fe3ff", "#c58bff", "#7dffb0", "#ff8ad8", "#ffffff", "#ffd36b"] },
   { id: "hair_wolfcut", price: 1000, name: "Wolf Cut", color: "#7a7f8c", presets: ["#7a7f8c", "#1b1b1b", "#f2f4fa", "#4a2c1a", "#e0245e", "#35a3e0"] },
+  // §5.13 (2026-11-19): the first GRANT-ONLY style. `price: null` means no amount of Oofbux
+  // buys it (buyHair refuses a null price); a Place hands it over through
+  // avatar.grantItem(id, slug) — Battles does, at its fifth rebirth (spec 26 §14). The
+  // editor shows it only once it is owned, and files it under the Grass tab (`set`).
+  { id: "hair_grass", price: null, grantOnly: true, source: "Battles — rebirth 5", set: "grass", name: "Grass Hair", color: "#3ddc84", presets: ["#3ddc84", "#8be04a", "#2f8f4a", "#c9d92e", "#35e0e0", "#f1d27a"] },
 ]);
 
 const BY_ID = new Map(HAIR_STYLES.map((s) => [s.id, s]));
@@ -83,7 +88,9 @@ export function normalizeHairColor(id, hex) {
 // Every Catalog hat sits on the head top (spec 05 §5.4's HatAnchor), so under any hat the
 // crown volume would swallow the hat or poke through it. The halo floats clear of the
 // head and is the one exception. An unknown/new hat defaults to "tucked" — the safe side.
-const HATS_OVER_HAIR = new Set(["hat_halo"]);
+// The Grass Crown is a circlet WIDER than a hair scalp (radius 0.74 against 0.66), so hair
+// rises through the middle of it the way it does through a real crown.
+const HATS_OVER_HAIR = new Set(["hat_halo", "hat_grasscrown"]);
 export function hairMode(hatId) {
   if (!hatId) return "full";
   return HATS_OVER_HAIR.has(hatId) ? "full" : "tucked";
@@ -814,6 +821,39 @@ const BUILDERS = {
     }
     for (const [x, z] of [[-0.3, -0.1], [0.3, 0.0], [0, 0.3], [-0.45, 0.35], [0.45, 0.35]]) {
       k.spike(k.crown, main, [x, 0.6, z], [x, 0.7, 0.6], 0.42, 0.18);
+    }
+  },
+
+  // A lawn, worn. A turf cap, then forty-odd blades standing off it at every lean a real
+  // tuft has (seeded, so the same head grows the same grass on every client), a ragged
+  // fringe over the forehead, and three daisies that keep their own colours whatever the
+  // grass is dyed.
+  hair_grass(k) {
+    const turf = k.tinted((h) => shade(h, -0.14));
+    const blade = k.tinted((h) => h);
+    const light = k.tinted((h) => shade(h, 0.14));
+    scalp(k, turf, { lift: 0.04 });
+    backPanel(k, turf, 0.05, 0.1);
+    sides(k, turf, 0.2, -0.45);
+    const r = rng(4242);
+    for (let i = 0; i < 44; i++) {
+      const x = (r() - 0.5) * 1.16, z = (r() - 0.5) * 1.16;
+      const len = 0.34 + r() * 0.42;
+      k.spike(k.crown, i % 3 ? blade : light, [x, 0.6, z], [x * 0.55 + (r() - 0.5) * 0.35, 1, z * 0.55 + (r() - 0.5) * 0.35], len, 0.07 + r() * 0.03);
+    }
+    // the fringe and the edges stay in `flow`, so a hat still leaves a grassy brim
+    for (let i = 0; i < 9; i++) {
+      const x = -0.56 + i * 0.14;
+      k.spike(k.flow, i % 2 ? blade : light, [x, 0.52, -0.6], [(r() - 0.5) * 0.3, -0.55 - r() * 0.3, -1], 0.2 + r() * 0.14, 0.07);
+    }
+    for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) {
+      k.spike(k.flow, i % 2 ? light : blade, [sx * 0.62, 0.48, -0.35 + i * 0.2], [sx, -0.4 - r() * 0.3, (r() - 0.5) * 0.4], 0.2 + r() * 0.12, 0.07);
+    }
+    const petal = k.lambert({ color: "#ffffff" });
+    const heart = k.lambert({ color: "#ffd23a" });
+    for (const [x, z] of [[-0.3, -0.25], [0.34, 0.1], [-0.05, 0.38]]) {
+      k.ball(k.crown, petal, [x, 0.92, z], 0.11, [1, 0.35, 1]);
+      k.ball(k.crown, heart, [x, 0.95, z], 0.05);
     }
   },
 };

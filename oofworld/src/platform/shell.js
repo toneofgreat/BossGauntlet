@@ -107,7 +107,7 @@ const PLACES = [
     description: "Train, steal a crate, and out-run the Keepers back to safety. Buffs, abilities, 17 treadmills.",
     module: "../games/speed/game.js",   data: "../games/speed/place.json" },
   { slug: "battles",   hidden: false, name: "Battles",                  icon: "⚔️", portalColor: "#c0392b",
-    description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and three swords no kill can buy.",
+    description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and four swords no kill can buy. Five rebirths grow you a grass god.",
     module: "../games/battles/game.js", data: "../games/battles/place.json" },
   // Spec 25 §18: landed hidden and flipped visible once validate was green (0 errors) and
   // scenario:showdown passed every check but this machine's load-budget gate.
@@ -1635,7 +1635,12 @@ function netAnimState() {
   return speed >= 0.5 ? "walk" : "idle";
 }
 
+// A Place that covers the whole stage with its own opaque screen (a film player) says so, and
+// the stage is not drawn underneath it. Cleared whenever a Place context is built.
+let stageCovered = false;
+
 function buildCtx(emitter, slug) {
+  stageCovered = false;
   return {
     engine: {
       THREE,
@@ -1657,6 +1662,7 @@ function buildCtx(emitter, slug) {
       // read-only reporting for a Place that wants to say how many of its lamps are lit.
       renderer: {
         applyLighting: (cfg) => renderer.applyLighting(cfg),
+        setCovered: (on) => { stageCovered = !!on; },
         lights: {
           poolSize: () => renderer.lights.poolSize(),
           activeCount: () => renderer.lights.activeCount(),
@@ -2353,7 +2359,7 @@ function renderFrame(alpha, frameDt) {
   const activeCamera = (state === "studio" && studioMod && studioMod.getActiveCamera()) || cameraCtl.three;
   // The front page is an opaque page over an empty stage (spec 06 §5.7): drawing that
   // stage at display rate would only spend a phone's battery on pixels nobody sees.
-  if (state !== "hub") renderer.render(activeCamera);
+  if (state !== "hub" && !stageCovered) renderer.render(activeCamera);
   renderer.notifyFps(engineLoop.getStats().fps);
   if (fadeBootOnNextFrame) {
     fadeBootOnNextFrame = false;

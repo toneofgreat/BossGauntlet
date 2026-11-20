@@ -12,6 +12,7 @@
 // returning save finds its doors already open and its bridges already hung.
 
 import { FLOOR_TOP, RING_CENTER, CLOUD_STEPS, CLOUD_LEAD, STAR_STEPS, SKY_ISLE, SKY_COORDS, CRATER, LOBBY_SPAWN } from "./layout.js";
+import { REBIRTH_TIERS, REBIRTH_MAX, nextRebirth } from "./swords.js";
 
 const DIGS_NEEDED = 6;
 
@@ -342,30 +343,60 @@ export function createQuest(deps) {
   }
 
   // ---- rebirth ------------------------------------------------------------------------
+  // §14: FIVE rebirths now, not one. `save.rb` is the lifetime tier; each tier has a kill
+  // PRICE that must be in hand (tier 1 keeps its old bargain: any kill at all), and every
+  // one of them takes the lot — kills to 0, streak to 0, the rack relocked — while the
+  // flag blades, the quest and every earlier tier's reward stay. Each still mints one
+  // spendable `rebirths` shard for the rocket. The panel says all of that BEFORE the
+  // button: the tier you hold, what the next costs, what it grows, and what it eats.
   function openRebirth() {
     if (isPanelOpen()) return;
     const s = save();
+    const tier = s.rb || 0;
+    const next = nextRebirth(s);
     setPanelOpen(true);
     const panel = ctx.services.ui.openPanel({ title: "⭐ The fallen star", onClose: () => setPanelOpen(false) });
     const body = panel.bodyEl || panel.el;
-    const p = document.createElement("p");
-    p.style.cssText = "font:400 15px/1.5 system-ui;color:#e8e0f0;";
-    p.textContent = s.kills > 0
-      ? `The star metal answers only emptiness. Offer EVERY kill you have — all ${s.kills} of them — and it will let you take a piece. Your swords will lock again behind their numbers. This is a REBIRTH. It cannot be undone.`
-      : "The star wants what you carry, and you carry nothing. Come back with kills worth losing.";
-    body.append(p);
-    if (s.kills > 0) {
-      const go = bigBtn(`⭐ Rebirth — give up ${s.kills} kills`, "width:100%;background:linear-gradient(180deg,#c0392b,#7d1f16);margin-top:8px;");
-      go.addEventListener("click", () => {
-        const s2 = save();
-        s2.rebirths += 1; s2.kills = 0;
-        if (deps.onRebirth) deps.onRebirth();
-        saveNow(); sfx("badge");
-        try { panel.close(); } catch { /* fine */ }
-        toast("REBORN. A shard of star metal is yours — the rocket kiosk in the courtyard will want it.", "⭐", 6000);
-      });
-      body.append(go);
+    const line = (text, css) => { const p = document.createElement("p"); p.style.cssText = "margin:0 0 10px;font:400 15px/1.5 system-ui;color:#e8e0f0;" + (css || ""); p.textContent = text; body.append(p); return p; };
+    line(`Rebirth tier: ${tier} / ${REBIRTH_MAX}`, "font:800 18px system-ui;color:#ffe6a0;");
+    // the whole ladder, so nobody rebirths blind
+    const list = document.createElement("div");
+    list.style.cssText = "margin:0 0 12px;padding:8px 10px;background:#1a1226;border-radius:10px;font:400 13px/1.6 system-ui;color:#c9b8e0;";
+    for (const t of REBIRTH_TIERS) {
+      const row = document.createElement("div");
+      const mark = t.n <= tier ? "✅" : next && t.n === next.n ? "👉" : "🔒";
+      row.textContent = `${mark} ${t.n}. ${t.n === 1 ? "any kills" : t.cost.toLocaleString() + " kills"} — ${t.icon} ${t.reward}`;
+      if (next && t.n === next.n) row.style.cssText = "color:#ffe6a0;font-weight:700;";
+      list.append(row);
     }
+    body.append(list);
+    if (!next) {
+      line("The star has nothing left to teach you. Five times you gave it everything, and five times the grass grew back thicker. There is no sixth rebirth.");
+      return;
+    }
+    const enough = s.kills >= next.cost;
+    if (!enough) {
+      line(next.n === 1
+        ? "The star wants what you carry, and you carry nothing. Come back with kills worth losing."
+        : `Rebirth ${next.n} asks for ${next.cost.toLocaleString()} kills in hand. You carry ${s.kills.toLocaleString()} — ${(next.cost - s.kills).toLocaleString()} short. Come back heavier.`);
+      return;
+    }
+    line(`Rebirth ${next.n} unlocks: ${next.icon} ${next.reward}.`);
+    line(`⚠️ It takes EVERYTHING you carry — all ${s.kills.toLocaleString()} kills, not just ${next.n === 1 ? "one" : next.cost.toLocaleString()} — and your killstreak. Every kill-sword on the rack locks again behind its number. You keep your secret blades, your quest, and every earlier rebirth's reward. It cannot be undone.`, "color:#ffb4a0;");
+    const go = bigBtn(`⭐ Rebirth ${next.n} — give up ${s.kills.toLocaleString()} kills`, "width:100%;background:linear-gradient(180deg,#c0392b,#7d1f16);margin-top:8px;");
+    go.addEventListener("click", () => {
+      const s2 = save();
+      const n2 = nextRebirth(s2);
+      if (!n2 || s2.kills < n2.cost) return; // the save moved under the panel: do nothing
+      s2.rb = n2.n; s2.rebirths += 1; s2.kills = 0; s2.streak = 0;
+      saveNow(); sfx("badge");
+      try { panel.close(); } catch { /* fine */ }
+      // game.js owns the rewards (Catalog grants, labels, the fanfare) — it answers true
+      // when it has said its own piece, so the star only speaks for tier 1
+      const told = deps.onRebirth ? deps.onRebirth(n2.n) : false;
+      if (!told) toast("REBORN. A shard of star metal is yours — the rocket kiosk in the courtyard will want it.", "⭐", 6000);
+    });
+    body.append(go);
   }
 
   // ---- the rocket ---------------------------------------------------------------------
@@ -580,5 +611,5 @@ export function createQuest(deps) {
   // browser apply the pre-transition style before we flip it.
   function requestAnimationFrameSafe(fn) { Promise.resolve().then(fn); }
 
-  return { onTouch, update, refreshWorld, dispose };
+  return { onTouch, update, refreshWorld, dispose, openRebirth };
 }

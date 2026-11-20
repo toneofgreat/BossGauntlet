@@ -129,10 +129,29 @@ let PX = 1;
 export function setPixelScale(s) { PX = Number.isFinite(s) && s > 0 ? s : 1; }
 export function pixelScale() { return PX; }
 
-export function makeCanvas(w, h) {
+// ---- CPU mode ------------------------------------------------------------------------------------
+// cpuMode(fn): run fn with every kit scratch canvas and cat texture CPU-backed. For PROBES: code that
+// paints something offscreen and reads it back with getImageData (find the ear tips, the eyes...).
+// On a GPU canvas that read-back stalls the whole page for 0.1-6 s; on a CPU canvas it is a memcpy.
+// Create the canvas you read with getContext("2d", { willReadFrequently: true }) and paint it inside
+// cpuMode. Never wrap per-frame drawing in it: CPU painting is slower than the GPU for big fills.
+let CPU = false;
+export function cpuMode(fn) { const was = CPU; CPU = true; try { return fn(); } finally { CPU = was; } }
+export function isCpuMode() { return CPU; }
+export function ctx2d(canvas) { return CPU ? canvas.getContext("2d", { willReadFrequently: true }) : canvas.getContext("2d"); }
+
+function rawCanvas(w, h) {
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.ceil(w));
   c.height = Math.max(1, Math.ceil(h));
+  return c;
+}
+// Every canvas a film makes for itself hands out softAdd() contexts (see softAdd): films repaint
+// their own scratch canvases every frame. sprite() bakes once, so it keeps a plain canvas.
+export function makeCanvas(w, h) {
+  const c = rawCanvas(w, h);
+  const get = c.getContext;
+  c.getContext = function (type, o) { const g = get.call(this, type, o); return type === "2d" ? softAdd(g) : g; };
   return c;
 }
 
@@ -151,10 +170,36 @@ export function hasFilter() {
 const LAYERS = new Map();
 const STATS = { layerMiss: 0, spriteMiss: 0, spriteKeys: [] };
 // cacheStats() -> cache sizes and miss counters (debug aid: a miss on every frame means a cache key varies with t)
-export function cacheStats() { return { layers: LAYERS.size, sprites: SPRITES.size, layerMiss: STATS.layerMiss, spriteMiss: STATS.spriteMiss, recent: STATS.spriteKeys.slice(-8) }; }
+// softAdd(g) - on this context, "lighter" (additive) blending is carried out as "screen". Additive
+// draws under a moving camera cost integrated graphics ~100 ms a frame (the scene dropped to 9 fps);
+// screen is the same light-over-dark look without that path. Only the per-frame canvases get this
+// (the film frame and layer()s): sprites are baked once and keep true additive blending.
+const GCO = typeof CanvasRenderingContext2D === "function" ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "globalCompositeOperation") : null;
+export function softAdd(g) {
+  if (!g || !GCO || !GCO.set || Object.prototype.hasOwnProperty.call(g, "globalCompositeOperation")) return g;
+  try {
+    Object.defineProperty(g, "globalCompositeOperation", {
+      configurable: true,
+      get() { return GCO.get.call(this); },
+      set(v) { GCO.set.call(this, v === "lighter" ? "screen" : v); },
+    });
+  } catch { /* plain additive then */ }
+  return g;
+}
+// qblur(px) - snaps a ctx.filter blur radius onto a short ladder (third-octave steps). The graphics
+// card builds a separate blur program for every distinct radius (100 ms and up each on integrated
+// graphics), so a radius that changes every frame stalls playback; a ladder keeps it to a handful.
+export function qblur(px) {
+  const n = +px;
+  if (!(n > 0)) return 0;
+  return +(2 ** (Math.round(Math.log2(Math.max(0.25, n)) * 3) / 3)).toFixed(2);
+}
+function cacheMB() { let n = 0; for (const c of SPRITES.values()) n += c.width * c.height * 4; for (const L of LAYERS.values()) n += L.canvas.width * L.canvas.height * 4; return Math.round(n / 1048576); }
+export function cacheStats() { return { mb: cacheMB(), layers: LAYERS.size, sprites: SPRITES.size, layerMiss: STATS.layerMiss, spriteMiss: STATS.spriteMiss, recent: STATS.spriteKeys.slice(-8) }; }
 // layer(W, H, key) -> { canvas, g, W, H }: a reusable offscreen canvas at device resolution,
 // CLEARED, with its context already scaled so you draw in the same logical W x H units.
-export function layer(W, H, key = "main") {
+// opts.read: the caller reads pixels back from this layer, so create it CPU-backed (decided on first use of the key).
+export function layer(W, H, key = "main", opts) {
   const k = key + "@" + PX;
   let L = LAYERS.get(k);
   const pw = Math.ceil(W * PX);
@@ -163,7 +208,7 @@ export function layer(W, H, key = "main") {
     STATS.layerMiss++;
     if (LAYERS.size > 48) LAYERS.clear();
     const canvas = makeCanvas(pw, ph);
-    L = { canvas, g: canvas.getContext("2d"), W, H };
+    L = { canvas, g: softAdd(opts && opts.read ? canvas.getContext("2d", { willReadFrequently: true }) : canvas.getContext("2d")), W, H };
     LAYERS.set(k, L);
   }
   if (L.canvas.width !== pw || L.canvas.height !== ph) { L.canvas.width = pw; L.canvas.height = ph; }
@@ -182,16 +227,17 @@ export function layer(W, H, key = "main") {
 const SPRITES = new Map();
 // sprite(key, w, h, paint) -> canvas painted ONCE by paint(g, w, h) in logical units and cached.
 // Draw it with g.drawImage(c, x, y, w, h). Use for static art (trees, houses, cloud puffs).
-export function sprite(key, w, h, paint) {
+// opts.read: the painter reads pixels back (getImageData), so make the canvas CPU-backed.
+export function sprite(key, w, h, paint, opts) {
   const k = key + "@" + PX + ":" + Math.round(w) + "x" + Math.round(h);
   let c = SPRITES.get(k);
   if (c) return c;
   STATS.spriteMiss++;
   STATS.spriteKeys.push(k);
   if (STATS.spriteKeys.length > 32) STATS.spriteKeys.splice(0, 16);
-  if (SPRITES.size > 400) SPRITES.clear();
-  c = makeCanvas(w * PX, h * PX);
-  const g = c.getContext("2d");
+  if (SPRITES.size > 1000) SPRITES.clear(); // one film can hold ~400 after its pre-warm: never drop them mid-film
+  c = rawCanvas(w * PX, h * PX);
+  const g = opts && opts.read ? c.getContext("2d", { willReadFrequently: true }) : c.getContext("2d");
   g.setTransform(PX, 0, 0, PX, 0, 0);
   try { paint(g, w, h); } catch (err) { console.warn("[filmkit] sprite paint failed", key, err); }
   c.lw = w;
@@ -364,15 +410,16 @@ export function ik(ax, ay, bx, by, l1, l2, bend = 1) {
 // silhouette, overlapping sub-shapes never produce internal edges. Shift AWAY from a light to
 // get a rim on the lit side; shift TOWARD it to get a core shadow on the far side.
 // `box` = [x0, y0, x1, y1] local bounds of the path. `mode` = composite for the result.
-let SCRATCH = null;
+let SCRATCH = null, SCRATCH_GPU = null, SCRATCH_CPU = null;
 export function crescent(g, path, dx, dy, color, alpha, box, mode = "source-over", steps = 1) {
   if (alpha <= 0.003) return;
   const T = g.getTransform ? g.getTransform() : null;
   if (!T) return;
   const cw = g.canvas.width, ch = g.canvas.height;
-  if (!SCRATCH) SCRATCH = makeCanvas(cw, ch);
+  SCRATCH = CPU ? SCRATCH_CPU : SCRATCH_GPU;
+  if (!SCRATCH) { SCRATCH = makeCanvas(cw, ch); if (CPU) SCRATCH_CPU = SCRATCH; else SCRATCH_GPU = SCRATCH; }
   if (SCRATCH.width < cw || SCRATCH.height < ch) { SCRATCH.width = Math.max(SCRATCH.width, cw); SCRATCH.height = Math.max(SCRATCH.height, ch); }
-  const s = SCRATCH.getContext("2d");
+  const s = CPU ? SCRATCH.getContext("2d", { willReadFrequently: true }) : SCRATCH.getContext("2d");
   const pad = Math.abs(dx) + Math.abs(dy) + 2;
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
   for (const [px, py] of [[box[0] - pad, box[1] - pad], [box[2] + pad, box[1] - pad], [box[0] - pad, box[3] + pad], [box[2] + pad, box[3] + pad]]) {

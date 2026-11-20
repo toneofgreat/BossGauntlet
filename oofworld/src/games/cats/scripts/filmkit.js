@@ -43,6 +43,14 @@
 //           lensFlare(g,x,y,W,H,strength)  chromatic(g,W,H,amount)  letterbox(g,W,H,amount,bar=0.085)
 //           fadeBlack(g,W,H,a)  fadeColor(g,W,H,a,color)  title(g,W,H,text,sub,alpha,{y,size})
 //           subtitle(g,W,H,text,alpha)  finish(g,W,H,t,{bloom,tint,tintAlpha,mode,vignette,grain,letterbox})
+//  v2 realism (see ../REALISM.md for recipes):
+//  textures texture(name,o) texRect(g,name,x,y,w,h,o) texFill(g,name,path,o) texPattern texAvg texBake(key,w,h,fn)
+//           texPrewarm(list,budgetMs) texNoise texFbm texRidged texVoronoi TEXTURE_NAMES texCacheStats
+//           groundPlane(g,W,H,{tex,horizon,scale,camX,camZ,fog,wet,sky,puddles,...})
+//  light    cloudLayer3d volumetricBeam lightPool shadowBlob aoEdge bokehLights heatShimmer reflectStreak
+//  lens     the player runs every frame through a GPU lens (filmlens.js): bloom/vignette/grain/chromatic
+//           calls on the main context become lens hints; film.grade / film.gradeAt(t) set the look.
+//           setLensTarget(g) lensActive(g) takeLensHints() are for the player and tools only.
 
 export * from "./filmcore.js";
 export * from "./filmcat.js";

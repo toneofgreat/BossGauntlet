@@ -48,6 +48,19 @@ const SHIRT_ANCHOR = [0, 0, 0];
 // local, pivot at the hip, the leg mesh spanning y 0..-2 at x ±0.5 within a 1x2x1
 // box — so pant legs swing with the walk cycle instead of standing rigid.
 const PANTS_ANCHOR = [0, 0, 0];
+// §5.13 (2026-11-19). A `back` item (wings) hangs off the torso like a shirt does: torso-
+// local, and the rig faces -Z, so the back is the +Z side (prims sit at z >= 0.55).
+const BACK_ANCHOR = [0, 0, 0];
+// A `pet` does not ride a limb at all. Its anchor is a child of the rig ROOT (so it is
+// removed with the rig and scales with it), but update() re-places it every step so the
+// pet trails its own WORLD-space position toward this root-local spot — over the right
+// shoulder and a step behind (the root faces +Z). That lag is what makes it follow you
+// rather than being bolted to you.
+const PET_OFFSET = [1.9, 4.5, -1.7];
+const PET_FOLLOW = 5;        // 1/s — how hard the pet chases its spot (higher = stiffer)
+const PET_SNAP = 30;         // studs — past this (a teleport) it simply arrives
+const PET_BOB = 0.22;        // studs of idle hover, at PET_BOB_HZ
+const PET_BOB_HZ = 0.55;
 
 // BoxGeometry material slots run +X, -X, +Y, -Y, +Z, -Z; the rig faces -Z, so the face
 // texture belongs to slot 5.
@@ -87,6 +100,8 @@ function readEquipped(state) {
     // one silently ate shirts: a slot missing here reads as null and never draws.
     shirt: eq.shirt || null,
     pants: eq.pants || null,
+    pet: eq.pet || null,
+    back: eq.back || null,
     // Hair (spec 05 §5.12) rides on `equipped` too, but is not a Catalog slot: a style
     // id from hair.js and a free "#rrggbb" colour.
     hair: isHairId(eq.hair) ? eq.hair : null,
@@ -168,6 +183,8 @@ export function buildRig(scene, state) {
     // Head-mesh-local, at the head's centre: hair.js builds in head space. Its own anchor
     // (not the HatAnchor) so hats and hair never share a child list.
     hair: makeAnchor("HairAnchor", [0, 0, 0]),
+    back: makeAnchor("BackAnchor", BACK_ANCHOR),
+    pet: makeAnchor("PetAnchor", PET_OFFSET),
   };
   // Per-limb anchors for `limb`-routed clothing prims (pant legs). On the JOINTS, not
   // the meshes, so they inherit the walk swing.
@@ -180,6 +197,8 @@ export function buildRig(scene, state) {
   joints.rightArm.add(anchors.gear);
   meshes.torso.add(anchors.shirt);
   meshes.torso.add(anchors.pants);
+  meshes.torso.add(anchors.back);
+  group.add(anchors.pet);
   joints.leftLeg.add(limbAnchors.leftLeg);
   joints.rightLeg.add(limbAnchors.rightLeg);
 
@@ -228,7 +247,9 @@ export function buildRig(scene, state) {
   // changes nothing on the avatar. Moving these three functions into attachments.js
   // later is a file move, not a rewrite: they touch only `anchors`, never the rig
   // skeleton, the state or the item schema.
-  const attached = { hat: null, gear: null }; // { group, prims: [{ mesh, base, spin, bob, flicker }] }
+  const attached = { hat: null, gear: null, shirt: null, pants: null, back: null, pet: null }; // { group, prims: [{ mesh, base, spin, bob, flicker }] }
+  const ANIMATED_SLOTS = ["hat", "gear", "back", "pet"]; // the slots whose prims spin/bob
+  const petWorld = { x: 0, y: 0, z: 0, has: false };     // where the pet actually is
 
   // §5.5's two effect slots. An aura is parented to the rig, so it rides along; a trail
   // is world-space, because the whole point of a trail is that it stays where you were.
@@ -345,14 +366,18 @@ export function buildRig(scene, state) {
     applySlot("gear", next.gear);
     applySlot("shirt", next.shirt);
     applySlot("pants", next.pants);
+    applySlot("back", next.back);
+    const hadPet = Boolean(attached.pet);
+    applySlot("pet", next.pet);
+    if (!hadPet) petWorld.has = false; // a pet just put on appears AT its spot, not from afar
     rig.gearEquipped = Boolean(next.gear);
   }
 
   // §5.4's prim animation, advanced on SIM time only (never wall clock).
   function stepAttachments(step) {
-    if (!attached.hat && !attached.gear) return;
+    if (!attached.hat && !attached.gear && !attached.back && !attached.pet) return;
     attachTime += step;
-    for (const slot of ["hat", "gear"]) {
+    for (const slot of ANIMATED_SLOTS) {
       const current = attached[slot];
       if (!current) continue;
       for (const record of current.prims) {
@@ -367,6 +392,31 @@ export function buildRig(scene, state) {
         }
       }
     }
+  }
+
+  // §5.13 — the pet follows. Its world position chases the shoulder spot exponentially
+  // (frame-rate independent), then is written back in ROOT-local terms, because the
+  // anchor is the root's child. Scalars only: this runs for every rig every step.
+  function stepPet(step) {
+    if (!attached.pet) return;
+    const yaw = group.rotation.y, s = group.scale.x || 1;
+    const c = Math.cos(yaw), sn = Math.sin(yaw);
+    const tx = group.position.x + (PET_OFFSET[0] * c + PET_OFFSET[2] * sn) * s;
+    const ty = group.position.y + PET_OFFSET[1] * s;
+    const tz = group.position.z + (-PET_OFFSET[0] * sn + PET_OFFSET[2] * c) * s;
+    const dx = tx - petWorld.x, dy = ty - petWorld.y, dz = tz - petWorld.z;
+    if (!petWorld.has || dx * dx + dy * dy + dz * dz > PET_SNAP * PET_SNAP) {
+      petWorld.x = tx; petWorld.y = ty; petWorld.z = tz; petWorld.has = true;
+    } else {
+      const k = 1 - Math.exp(-PET_FOLLOW * step);
+      petWorld.x += dx * k; petWorld.y += dy * k; petWorld.z += dz * k;
+    }
+    const wx = (petWorld.x - group.position.x) / s, wz = (petWorld.z - group.position.z) / s;
+    anchors.pet.position.set(
+      wx * c - wz * sn,
+      (petWorld.y - group.position.y) / s + PET_BOB * Math.sin(2 * Math.PI * PET_BOB_HZ * attachTime),
+      wx * sn + wz * c
+    );
   }
 
   // §5.5 — swap one effect slot. Effects are disposed and rebuilt on change rather than
@@ -469,6 +519,7 @@ export function buildRig(scene, state) {
       }
     }
     stepAttachments(step);
+    stepPet(step);
     if (hair) hair.update(step);
     if (step > 0) {
       const dx = group.position.x - lastPos.x;
@@ -488,6 +539,8 @@ export function buildRig(scene, state) {
     clearAttachment("gear");
     clearAttachment("shirt");
     clearAttachment("pants");
+    clearAttachment("back");
+    clearAttachment("pet");
     if (hair) { hair.dispose(); hair = null; }
     applyEffect("aura", null);
     applyEffect("trail", null);

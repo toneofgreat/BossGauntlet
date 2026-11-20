@@ -1,8 +1,23 @@
 // src/games/cats/scripts/filmpost.js - camera, lens and grading: withCamera, depth of field, bloom,
 // lens flare, vignette, grain, colour grading, letterbox, fades and the title/subtitle typography.
-// Re-exported by filmkit.js. All passes are pure functions of their arguments.
+// Re-exported by filmkit.js. All passes are pure functions of their arguments. With the GPU lens on
+// (setLensTarget), bloom/vignette/grain/chromatic on the frame context become recorded hints.
 
 import { TAU, clamp, lerp, hash, noise, rng, mix, rgba, makeCanvas, layer, sprite, glow, hasFilter, pixelScale } from "./filmcore.js";
+
+// ---- GPU lens hand-off ---------------------------------------------------------------------------------
+// When the player (or a tool) runs the frame through the GPU lens (filmlens.js), it calls
+// setLensTarget(g) with the frame's main context before film.draw. Calls of bloom / vignette / grain /
+// chromatic on THAT context then only record what the film asked for (the lens does it better, per
+// pixel, for free); letterbox still paints and also records the bar height so the lens keeps the bars
+// clean. Calls on any other context (an inset photo, a memory layer) still paint in 2D as before.
+// lensActive(g?) tells a film whether the lens is on (for g: whether g is the lens's frame).
+let LENS_CTX = null;
+let HINTS = null;
+export function setLensTarget(g) { LENS_CTX = g || null; HINTS = g ? {} : null; }
+export function lensActive(g) { return !!LENS_CTX && (g === undefined || g === LENS_CTX); }
+export function takeLensHints() { const h = HINTS; HINTS = LENS_CTX ? {} : null; return h; }
+const onLens = (g) => !!LENS_CTX && g === LENS_CTX && !!HINTS;
 
 // withCamera(g, W, H, {x, y, zoom, rot, shakeT, shakeAmt}, fn) - runs fn(g) with a camera that
 // looks at world point (x, y) (default the frame centre), zoomed and rotated about the frame
@@ -29,16 +44,21 @@ const SCRATCH = new Map();
 function scratch(w, h) {
   const key = w + "x" + h;
   let c = SCRATCH.get(key);
-  if (!c) { if (SCRATCH.size > 12) SCRATCH.clear(); c = makeCanvas(w, h); SCRATCH.set(key, c); }
+  if (!c) { if (SCRATCH.size > 24) SCRATCH.clear(); c = makeCanvas(w, h); SCRATCH.set(key, c); }
   return c;
 }
-function blurred(src, px) {
+const BLUR_SIGMA = 2.2;
+function blurred(src, px, r) {
   const ps = pixelScale();
-  const k = Math.max(1, (px * ps) / 2.2);
-  const w = Math.max(1, Math.ceil(src.width / k)), h = Math.max(1, Math.ceil(src.height / k));
+  // ONE blur radius for every amount of defocus (the amount comes from how far the copy is shrunk,
+  // along a ladder of sizes): each new radius makes the graphics card build a new blur program, and
+  // a rack focus that swept the radius stalled playback for seconds on integrated graphics
+  const k = Math.max(1, 2 ** (Math.round(Math.log2(Math.max(1, (px * ps) / BLUR_SIGMA)) * 8) / 8));
+  const sx = r ? r.x : 0, sy = r ? r.y : 0, sw = r ? r.w : src.width, sh = r ? r.h : src.height;
+  const w = Math.max(1, Math.ceil(sw / k)), h = Math.max(1, Math.ceil(sh / k));
   const key = w + "x" + h;
   let c = BLUR.get(key);
-  if (!c) { if (BLUR.size > 12) BLUR.clear(); c = makeCanvas(w, h); BLUR.set(key, c); }
+  if (!c) { if (BLUR.size > 24) BLUR.clear(); c = makeCanvas(w, h); BLUR.set(key, c); }
   const s = c.getContext("2d");
   s.setTransform(1, 0, 0, 1, 0, 0);
   s.globalCompositeOperation = "source-over";
@@ -54,25 +74,46 @@ function blurred(src, px) {
     ts.globalCompositeOperation = "copy";
     ts.globalAlpha = 1;
     ts.imageSmoothingEnabled = true;
-    ts.drawImage(src, 0, 0, w, h);
+    ts.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
     ts.globalCompositeOperation = "source-over";
-    s.filter = `blur(${Math.min(6, (px * ps) / k).toFixed(2)}px)`;
+    s.filter = `blur(${BLUR_SIGMA.toFixed(2)}px)`;
     s.drawImage(tmp, 0, 0);
     s.filter = "none";
-  } else s.drawImage(src, 0, 0, w, h);
+  } else s.drawImage(src, sx, sy, sw, sh, 0, 0, w, h);
   return c;
 }
 
-// dof(g, layerCanvas, blurPx, alpha) - draws an offscreen layer (from layer()) blurred by ~blurPx:
-// paint foreground/background into a layer, then dof() it into the frame.
-export function dof(g, src, blurPx = 4, alpha = 1) {
+// dof(g, layerCanvas, blurPx, alpha, box) - draws an offscreen layer (from layer()) blurred by ~blurPx:
+// paint foreground/background into a layer, then dof() it into the frame. box = [x, y, w, h] (logical
+// units) limits the work to the part of the layer that has anything in it: every full-frame blur is
+// two more full-frame passes, and a shot with five of them ran at 8 fps on integrated graphics.
+export function dof(g, src, blurPx = 4, alpha = 1, box) {
   if (!src) return;
-  const W = src.width / pixelScale(), H = src.height / pixelScale();
+  const ps = pixelScale();
+  const W = src.width / ps, H = src.height / ps;
+  let x = 0, y = 0, w = W, h = H, r = null;
+  if (box) {
+    // padded by the blur's reach and snapped to a 16-unit grid, so a moving box keeps one canvas size
+    const pad = blurPx * 3 + 2;
+    x = Math.max(0, Math.floor((box[0] - pad) / 16) * 16);
+    y = Math.max(0, Math.floor((box[1] - pad) / 16) * 16);
+    w = Math.min(W - x, Math.ceil((box[2] + pad * 2) / 16) * 16 + 16);
+    h = Math.min(H - y, Math.ceil((box[3] + pad * 2) / 16) * 16 + 16);
+    if (w <= 0 || h <= 0) return;
+    r = { x: Math.round(x * ps), y: Math.round(y * ps), w: Math.round(w * ps), h: Math.round(h * ps) };
+  }
+  const sharp = () => { if (r) g.drawImage(src, r.x, r.y, r.w, r.h, x, y, w, h); else g.drawImage(src, 0, 0, W, H); };
   g.save();
   g.globalAlpha *= alpha;
   g.imageSmoothingEnabled = true;
-  if (blurPx <= 0.3) g.drawImage(src, 0, 0, W, H);
-  else g.drawImage(blurred(src, blurPx), 0, 0, W, H);
+  const amt = (blurPx * ps) / BLUR_SIGMA;
+  if (blurPx <= 0.3) sharp();
+  else if (amt < 1) {
+    // less than the one radius: the sharp layer with the blurred one faded over it
+    sharp();
+    g.globalAlpha *= amt;
+    g.drawImage(blurred(src, blurPx, r), x, y, w, h);
+  } else g.drawImage(blurred(src, blurPx, r), x, y, w, h);
   g.restore();
 }
 // blurLayer(W, H, key, blurPx, fn) - convenience: paint fn(g) into a layer and return it ready
@@ -91,6 +132,10 @@ export function focus(g, W, H, blurPx, fn, key = "focus") {
 
 // bloom(g, amount, {threshold}) - glow from the bright parts of what is already drawn.
 export function bloom(g, amount = 0.5, o = {}) {
+  if (onLens(g)) {
+    if (amount > 0) { HINTS.bloom = Math.max(HINTS.bloom || 0, amount); if (o.threshold != null) HINTS.threshold = o.threshold; }
+    return;
+  }
   if (amount <= 0) return;
   const cv = g.canvas;
   const w = Math.max(1, Math.ceil(cv.width / 8)), h = Math.max(1, Math.ceil(cv.height / 8));
@@ -128,6 +173,12 @@ export function bloom(g, amount = 0.5, o = {}) {
 
 // vignette(g, W, H, strength, color) - darkened, slightly soft corners.
 export function vignette(g, W, H, strength = 0.55, color = "#000000") {
+  if (onLens(g)) {
+    const prev = HINTS.vignette || 0;
+    HINTS.vignette = 1 - (1 - prev) * (1 - clamp(strength));
+    if (color && color !== "#000000" && color !== "#000") HINTS.vignetteColor = color;
+    return;
+  }
   const gr = g.createRadialGradient(W / 2, H * 0.52, Math.min(W, H) * 0.32, W / 2, H * 0.52, Math.hypot(W, H) * 0.58);
   gr.addColorStop(0, rgba(color, 0));
   gr.addColorStop(0.6, rgba(color, strength * 0.35));
@@ -156,6 +207,7 @@ function grainTile(i) {
   return GRAIN[i];
 }
 export function grain(g, W, H, t = 0, amount = 0.06) {
+  if (onLens(g)) { HINTS.grain = Math.max(HINTS.grain || 0, Math.max(0, amount)); return; }
   if (amount <= 0) return;
   const f = Math.floor(t * 24);
   const tile = grainTile(((f % 4) + 4) % 4);
@@ -223,6 +275,7 @@ export function lensFlare(g, x, y, W, H, strength = 0.6, o = {}) {
 
 // chromatic(g, W, H, amount) - cheap edge fringing: a red-tinted copy scaled up a hair, blended in.
 export function chromatic(g, W, H, amount = 1) {
+  if (onLens(g)) { HINTS.ca = Math.max(HINTS.ca || 0, Math.max(0, amount)); return; }
   if (amount <= 0) return;
   const cv = g.canvas;
   const L = layer(W, H, "chroma");
@@ -244,6 +297,12 @@ export function chromatic(g, W, H, amount = 1) {
 // letterbox(g, W, H, amount, bar) - black bars; default bar = 0.085 H (FILMS.md), amount 0..1.
 export function letterbox(g, W, H, amount = 1, bar = 0.085) {
   const h = H * bar * clamp(amount);
+  if (onLens(g) && H > 0) {
+    // only an untransformed letterbox is the frame's (scale is fine: the player scales the context)
+    const m = typeof g.getTransform === "function" ? g.getTransform() : null;
+    const flat = !m || (Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6 && Math.abs(m.f) < 1e-3 && Math.abs(m.e) < 1e-3);
+    if (flat) { HINTS.barTop = Math.max(HINTS.barTop || 0, h / H); HINTS.barBottom = Math.max(HINTS.barBottom || 0, h / H); }
+  }
   if (h <= 0) return;
   g.fillStyle = "#000";
   g.fillRect(0, 0, W, h);

@@ -411,6 +411,9 @@ export const debug = Object.freeze({
   movies: Object.freeze({
     list: () => (G && G.movies ? G.movies.debug.list() : []),
     play: (id) => (G && G.movies ? G.movies.play(id) : false),
+    playForced: (id) => (G && G.movies ? G.movies.debug.playForced(id) : false),
+    jump: (t, o) => (G && G.movies ? G.movies.debug.jump(t, o) : false),
+    scan: (step, from, to) => (G && G.movies ? G.movies.debug.scan(step, from, to) : null),
     renderAt: (id, t, canvas) => (G && G.movies ? G.movies.debug.renderAt(id, t, canvas) : Promise.resolve(-1)),
     state: () => (G && G.movies ? G.movies.debug.state() : null),
     close: () => { if (G && G.movies) G.movies.closeAll(); },

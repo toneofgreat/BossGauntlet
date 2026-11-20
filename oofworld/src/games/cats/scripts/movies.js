@@ -10,8 +10,15 @@
 // shows a "coming soon" poster and can never take the game down. draw(g, t, W, H) is a pure
 // function of t, so the player can seek anywhere. NO BROWSER TIMERS (rule 04:V6): playback,
 // fades, the score scheduler and the narrator are all driven by update(dt).
+//
+// GPU lens (filmlens.js): while the player or the gallery is open, ONE WebGL context (WebGL2, else
+// WebGL1) is created lazily and shared; every film frame is painted into an offscreen 2D canvas and
+// run through it (tone mapping, bloom, halation, grade, grain, weave). The lens canvas sits under the
+// player's 2D canvas, which then only carries the subtitles. The context is released (lose_context)
+// once both are closed. No WebGL, a failed shader or a lost context falls back to the 2D post path.
 
 import * as K from "./filmkit.js";
+import { createLens, lensParams } from "./filmlens.js";
 
 const FILM_LOADERS = [
   () => import("./films/f00.js"),
@@ -82,6 +89,10 @@ const CSS = `
 .ftc-mv-range::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #ff9ad8}
 .ftc-mv-big{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;background:rgba(20,10,30,.6);border:3px solid rgba(255,255,255,.7);display:none;align-items:center;justify-content:center;font-size:40px;pointer-events:none}
 .ftc-mv.paused .ftc-mv-big{display:flex}
+.ftc-mv.loading .ftc-mv-big{display:none}
+.ftc-mv-load{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:12px;color:#fff;font-size:17px;letter-spacing:1px;text-shadow:0 2px 6px #000;pointer-events:none}
+.ftc-mv-load-bar{width:min(260px,60%);height:6px;border-radius:3px;background:rgba(255,255,255,.22);overflow:hidden}
+.ftc-mv-load-bar i{display:block;height:100%;width:0;background:#ff9ad8;border-radius:3px}
 .ftc-mv-end{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(0,0,0,.55)}
 .ftc-mv.ended .ftc-mv-end{display:flex}
 .ftc-mv.ended .ftc-mv-big{display:none}
@@ -459,9 +470,46 @@ export function createMovies(ctx, deps) {
   let prompt = null;
   let gallery = null;
   let player = null;
+  // the player is an opaque full-screen page: ask the platform not to draw the 3D stage under it
+  const coverStage = (on) => { try { ctx.engine.renderer.setCovered(on); } catch { /* older platform */ } };
   let voiceOn = true;
   let badge = null;
   let disposed = false;
+  let lens = null;
+  let lensFailed = false;
+  let posterSrc = null;
+
+  // ---- GPU lens -------------------------------------------------------------------------------------
+  function dropLens() {
+    if (!lens) return;
+    try { lens.dispose(); } catch { /* fine */ }
+    lens = null;
+  }
+  function getLens() {
+    if (lens && !lens.ok()) { dropLens(); lensFailed = true; }
+    if (lens || lensFailed || disposed) return lens;
+    try { lens = createLens(); } catch { lens = null; }
+    if (!lens) lensFailed = true;
+    return lens;
+  }
+  function releaseLensIfIdle() {
+    if (player || gallery) return;
+    dropLens();
+    lensFailed = false; // a later session may try again (a lost context can come back)
+    posterSrc = null;
+  }
+  // paints film at t into src (a 2D canvas) with the lens recording the film's post requests, then runs
+  // the lens. Returns drawFilm's result (true, or the error whose card was painted) once the lens canvas
+  // holds the frame, or null when the lens could not render.
+  function lensFrame(L, src, film, t) {
+    const sg = src.getContext("2d");
+    let res, hints = null;
+    K.setLensTarget(sg);
+    try { res = drawFilm(sg, film, t, src.width / LW); hints = K.takeLensHints(); } finally { K.setLensTarget(null); }
+    let ok = false;
+    try { ok = L.render(src, lensParams(film, t, hints), t); } catch { ok = false; }
+    return ok ? res : null;
+  }
 
   function safeCount() { try { return Math.max(0, deps.count() | 0); } catch { return 0; } }
   const unlocked = (id, n = safeCount()) => id === 0 || n >= id * PER_MOVIE;
@@ -526,6 +574,8 @@ export function createMovies(ctx, deps) {
 
   // ---- drawing helpers ----------------------------------------------------------------------------
   function drawFilm(g, film, t, scale) {
+    K.softAdd(g);
+    K.catFrame();
     g.setTransform(scale, 0, 0, scale, 0, 0);
     g.globalAlpha = 1;
     g.globalCompositeOperation = "source-over";
@@ -575,8 +625,24 @@ export function createMovies(ctx, deps) {
   function renderPoster(cv, id) {
     const rec = films[id];
     if (rec.status !== "ready") { comingSoon(cv, id); return; }
+    const t = rec.film.poster == null ? rec.film.duration * 0.4 : rec.film.poster;
+    // gallery posters go through the lens once each (never while the player is showing it)
+    const L = gallery && !player ? getLens() : null;
+    if (L) {
+      if (!posterSrc || posterSrc.width !== cv.width || posterSrc.height !== cv.height) posterSrc = K.makeCanvas(cv.width, cv.height);
+      const r = lensFrame(L, posterSrc, rec.film, t);
+      if (r === true) {
+        const g = cv.getContext("2d");
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.drawImage(L.canvas, 0, 0, cv.width, cv.height);
+        return;
+      }
+      if (r !== null) { comingSoon(cv, id); return; } // the film threw: same card as the 2D path
+      dropLens();
+      lensFailed = true;
+    }
     const g = cv.getContext("2d");
-    const res = drawFilm(g, rec.film, rec.film.poster == null ? rec.film.duration * 0.4 : rec.film.poster, cv.width / LW);
+    const res = drawFilm(g, rec.film, t, cv.width / LW);
     if (res !== true) comingSoon(cv, id);
   }
 
@@ -662,6 +728,7 @@ export function createMovies(ctx, deps) {
     if (!gallery) return;
     gallery.node.remove();
     gallery = null;
+    releaseLensIfIdle();
     if (!silent) sfx("ui_close");
   }
 
@@ -737,7 +804,7 @@ export function createMovies(ctx, deps) {
     // "Next movie" goes player -> player: keep the game track to restore later, never restart it in between
     const inheritedTrack = player ? player.prevTrack : undefined;
     if (player) player.prevTrack = null;
-    closePlayer(true);
+    closePlayer(true, true);
     const node = el("div", "ftc-mv paused");
     node.dataset.ftc = "movie";
     const scale = pickScale();
@@ -787,6 +854,7 @@ export function createMovies(ctx, deps) {
     node.append(cv, big, top, bar, end);
     document.body.appendChild(node);
 
+    coverStage(true);
     player = {
       id, intro, node, canvas: cv, g, scale, film: null, t: 0, playing: false, ended: false,
       acc: FRAME_S, drawMs: 8, dirty: true, idle: 0, nextVoice: 0, subs: [], score: createScore(),
@@ -824,7 +892,74 @@ export function createMovies(ctx, deps) {
     sfx("ui_open");
   }
 
+  // ---- pre-warm ------------------------------------------------------------------------------------
+  // A film bakes its sprites, layers and textures the first time each scene is drawn; those bakes cost
+  // 0.1-6 s each, which is a frozen picture mid-film. So before playback starts the film is drawn once
+  // per WARM_STEP_S of its running time into the frame canvas (same pixel scale as playback, so every
+  // cache key matches) behind a "getting the film ready" card. Done once per film and scale.
+  // Automated browsers skip it (a software canvas would spend its whole test budget here) unless
+  // window.__ftcWarm is true.
+  const WARM_STEP_S = 0.5;
+  const WARM_SLICE_MS = 0; // one frame per tick: the graphics card only does the work for frames that reach the screen loop
+  const WARM_SLOW_MS = 30;
+  const WARM_REPEAT_MAX = 40;
+  const warmed = new Set();
   function attachFilm(film) {
+    if (!player) return;
+    const p = player;
+    const useLens = !p.lensOff && !!getLens();
+    const key = p.id + "@" + p.canvas.width + (useLens ? "L" : "P");
+    let force = false;
+    try { force = window.__ftcWarm === true; } catch { force = false; }
+    if (p.warming) return;
+    if (warmed.has(key) || (automated && !force)) { startFilm(film); return; }
+    p.warming = true;
+    const card = el("div", "ftc-mv-load");
+    const label = el("div", "", "Getting the film ready…");
+    const track = el("div", "ftc-mv-load-bar");
+    const fill = el("i");
+    track.append(fill);
+    card.append(label, track);
+    p.node.classList.add("loading");
+    p.node.append(card);
+    const src = (p.src && p.src.width === p.canvas.width && p.src.height === p.canvas.height) ? p.src : (p.src = K.makeCanvas(p.canvas.width, p.canvas.height));
+    const sg = src.getContext("2d");
+    const scale = useLens ? src.width / LW : p.scale;
+    const d = film.duration;
+    const n = Math.max(1, Math.ceil(d / WARM_STEP_S));
+    const t00 = performance.now();
+    let i = 0, again = 0, wait = 2;
+    const finish = () => {
+      // wait here, behind the card, for the graphics card to work through everything the loop queued:
+      // otherwise that backlog lands on the first second of the film as a freeze
+      try { const L = useLens ? getLens() : null; if (L && L.finish) L.finish(); } catch { /* fine */ }
+      try { sg.getImageData(0, 0, 1, 1); } catch { /* fine */ }
+      p.warming = false;
+      card.remove();
+      p.node.classList.remove("loading");
+      p.warmMs = performance.now() - t00;
+      if (player !== p || disposed) return;
+      startFilm(film);
+    };
+    const step = () => {
+      if (player !== p || disposed) { p.warming = false; p.warmStep = null; return; }
+      if (wait > 0) { wait--; return; } // let the card paint first
+      const t0 = performance.now();
+      do {
+        const t = Math.min(Math.max(0, d - 0.02), i * WARM_STEP_S + 0.02);
+        const f0 = performance.now();
+        // through the lens too: uploading the frame makes the graphics card really rasterise it now
+        try { const L = useLens ? getLens() : null; if (L) lensFrame(L, src, film, t); else drawFilm(sg, film, t, scale); } catch { /* the real frame reports it */ }
+        // films queue their own bakes a few per frame: stay on this moment until its frame is cheap
+        if (performance.now() - f0 > WARM_SLOW_MS && again < WARM_REPEAT_MAX) again++;
+        else { again = 0; i++; }
+      } while (i < n && performance.now() - t0 < WARM_SLICE_MS);
+      fill.style.width = Math.round((i / n) * 100) + "%";
+      if (i >= n) { p.warmStep = null; warmed.add(key); sg.setTransform(1, 0, 0, 1, 0, 0); sg.fillStyle = "#000"; sg.fillRect(0, 0, src.width, src.height); finish(); }
+    };
+    p.warmStep = step; // driven by update(dt), one slice per tick
+  }
+  function startFilm(film) {
     if (!player) return;
     player.film = film;
     player.subs = Array.isArray(film.subs) ? film.subs.filter((s) => Array.isArray(s) && s.length >= 3) : [];
@@ -893,13 +1028,16 @@ export function createMovies(ctx, deps) {
     player.els.nextB.style.display = canNext ? "" : "none";
     player.els.endT.textContent = player.id === 0 ? "Find him." : n < COUNT && !canNext ? `Find ${n * PER_MOVIE} cats for the next movie` : meta(player.id).title;
   }
-  function closePlayer(silent) {
+  function closePlayer(silent, keepLens) {
     if (!player) return;
     const p = player;
     player = null;
+    coverStage(false);
     cancelSpeech();
     try { p.score.close(); } catch { /* fine */ }
     p.node.remove();
+    p.src = null;
+    if (!keepLens) releaseLensIfIdle();
     if (p.prevTrack) { try { ctx.engine.audio.playMusic(p.prevTrack); } catch { /* optional */ } }
     if (!silent) sfx("ui_close");
   }
@@ -966,7 +1104,7 @@ export function createMovies(ctx, deps) {
       p.acc = 0;
       p.dirty = false;
       const t0 = performance.now();
-      const res = drawFilm(p.g, p.film, p.t, p.scale);
+      const res = paintPlayer(p);
       p.drawMs = p.drawMs * 0.8 + (performance.now() - t0) * 0.2;
       if (res !== true && !p.warned) { p.warned = true; console.warn(`[movies] film ${p.id} draw failed at t=${p.t.toFixed(2)}`, res); }
       // subtitles: every line is shown, fading over SUB_FADE_S at each end
@@ -979,8 +1117,30 @@ export function createMovies(ctx, deps) {
     }
   }
 
+  // one player frame: through the lens when it is available, else the plain 2D path into p.g
+  function paintPlayer(p) {
+    const L = p.lensOff ? null : getLens();
+    if (L) {
+      if (!p.src || p.src.width !== p.canvas.width || p.src.height !== p.canvas.height) p.src = K.makeCanvas(p.canvas.width, p.canvas.height);
+      if (L.canvas.parentNode !== p.node) p.node.insertBefore(L.canvas, p.canvas);
+      const r = lensFrame(L, p.src, p.film, p.t);
+      if (r !== null) {
+        p.g.setTransform(1, 0, 0, 1, 0, 0);
+        p.g.clearRect(0, 0, p.canvas.width, p.canvas.height); // the 2D canvas only carries the subtitles
+        p.g.setTransform(p.scale, 0, 0, p.scale, 0, 0);
+        return r;
+      }
+      // no lens frame: lost context or a failed render -> plain 2D for the rest of this film
+      p.lensOff = true;
+      dropLens();
+      lensFailed = true;
+    }
+    return drawFilm(p.g, p.film, p.t, p.scale);
+  }
+
   function update(dt) {
     if (disposed) return;
+    if (player && player.warmStep) { player.warmStep(); return; }
     const step = Number.isFinite(dt) && dt > 0 ? Math.min(dt, 0.25) : 0;
     let busy = false;
     try { busy = !!deps.isBusy(); } catch { busy = false; }
@@ -1049,12 +1209,36 @@ export function createMovies(ctx, deps) {
       closePlayer(true);
       closePrompt();
       closeGallery(true);
+      dropLens();
       style.remove();
       K.clearCaches();
     },
     debug: {
       list: () => films.map((r) => ({ id: r.id, status: r.status, title: meta(r.id).title, chapter: meta(r.id).chapter, unlocked: unlocked(r.id), seen: seen[r.id] === "1", err: r.err })),
       loaded: (id) => !!(films[id] && films[id].status === "ready"),
+      // test hooks: play a film whatever the cat count; scan(step) redraws the open film every `step`
+      // seconds exactly as playback does and reports the frames that took over 50 ms
+      playForced: (id) => play(id, { force: true }),
+      // jump(t, {lens:false}) - continue real playback from t (optionally without the lens)
+      jump(t, o = {}) { if (!player || !player.film) return false; if (o.lens === false) player.lensOff = true; seek(t); setPlaying(true); return true; },
+      scan(step = 0.25, from = 0.13, to = Infinity) {
+        const p = player;
+        if (!p || !p.film) return null;
+        setPlaying(false);
+        const useLens = !p.lensOff && !!getLens() && !!p.src;
+        const cv = useLens ? p.src : p.canvas, sg = cv.getContext("2d"), scale = useLens ? cv.width / LW : p.scale;
+        const slow = [];
+        let max = 0, n = 0, sum = 0;
+        for (let t = from; t < Math.min(to, p.film.duration); t += step) {
+          const t0 = performance.now();
+          if (useLens) K.setLensTarget(sg);
+          try { drawFilm(sg, p.film, t, scale); if (useLens) K.takeLensHints(); } finally { if (useLens) K.setLensTarget(null); }
+          const ms = performance.now() - t0;
+          n++; sum += ms; if (ms > max) max = ms;
+          if (ms > 50) slow.push([Math.round(t * 100) / 100, Math.round(ms)]);
+        }
+        return { n, max: Math.round(max), avg: Math.round((sum / n) * 10) / 10, slow, lens: useLens, cache: K.cacheStats ? K.cacheStats() : null };
+      },
       // renders film `id` at time t into `canvas` (any size, 16:9 is best); resolves to the draw ms
       renderAt(id, t, canvas) {
         return load(id).then((f) => {
@@ -1066,7 +1250,7 @@ export function createMovies(ctx, deps) {
       },
       state: () => ({
         open: player ? "movie" : prompt ? "movie-prompt" : gallery ? "movies" : null,
-        playing: !!(player && player.playing), id: player ? player.id : null, t: player ? player.t : 0,
+        playing: !!(player && player.playing), warming: !!(player && player.warming), warmMs: player ? player.warmMs || 0 : 0, id: player ? player.id : null, t: player ? player.t : 0,
         seen, prompt: prompt ? prompt.id : null, queued: promptQueue.slice(), badge: hasNew(),
       }),
     },

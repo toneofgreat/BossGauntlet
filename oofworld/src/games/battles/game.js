@@ -8,6 +8,11 @@
 // TARGET subtracts its own HP and, when it dies, broadcasts who killed it so that
 // client can score — a client only ever moves/harms its own avatar. Training dummies
 // are local props so the arena is never empty and the game is playable solo.
+//
+// §14 (2026-11-19): FIVE rebirths. `save.rb` is the lifetime tier; tier 2 grows the Grass
+// Sword, tiers 3-5 grant avatar-shop items (armor, a pet, a hammer, hair, wings) whose
+// in-arena powers — the grass trail, GRASS AWAKEN, flight, the infecting slam — live in
+// scripts/grass.js.
 
 import {
   buildWorld, FLOOR_TOP, LOBBY_SPAWN, LOBBY_YAW, ARENA_CENTER, ARENA_RADIUS, VOID_Y,
@@ -16,8 +21,10 @@ import {
 import {
   SWORDS, HP_MAX, ABILITY_CD_S, CHEESE_CD_S, CHEESE_SLOW_S, BASE_WALK, BASE_JUMP,
   TW_STOP_CD_S, TW_STOP_R, TW_STOP_S, TW_FLING, TW_PORTAL_LIFE_S, TW_PORTAL_CD_S,
+  VINES_R, VINES_DMG, VINES_ROOT_S, REBIRTH_TIERS, REBIRTH_MAX, nextRebirth,
   swordById, isOwned, ownedSwords, INTRO_PAGES,
 } from "./scripts/swords.js";
+import { createGrass, buildMechSuit, disposeMechSuit, buildGrassShell, MECH_SCALE, CROWN_ID, CROWN_NEED } from "./scripts/grass.js";
 import { createQuest } from "./scripts/quest.js";
 import { createTimewarp } from "./scripts/timewarp.js";
 import { createBoards, rankRows } from "./scripts/board.js";
@@ -27,8 +34,8 @@ export const meta = {
   slug: "battles",
   name: "Battles",
   icon: "⚔️",
-  description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and three swords no kill can buy.",
-  version: "1.3.0",
+  description: "Lobby, sword, arena. Kills unlock blades up to the one-shot Meteorbrand — and four swords no kill can buy.",
+  version: "1.4.0",
 };
 
 const SAVE_V = 2;
@@ -55,6 +62,7 @@ const GLOBAL_SUBMIT_S = 30;
 
 let S = null;
 let dom = null;
+let debugCtx = null; // the live Place ctx, kept only for the debugGrass test seam
 
 function fresh() {
   return {
@@ -69,6 +77,10 @@ function fresh() {
     ksCd: { tp: 0, gr: 0 },
     flying: false,
     frozenT: 0,                   // §13: seconds of TIME STOP left on ME
+    rootedT: 0,                   // §14: seconds of VINES left on ME (feet held, sword free)
+    grass: null,                  // §14: scripts/grass.js — the pet, wings and hammer powers
+    gshells: new Map(),           // rig root uuid -> group (the turf coat of the infected)
+    mechs: new Map(),             // rig root uuid -> suit (the 3x grass mech)
     fling: null,                  // §13: {x0,y0,z0,dx,dz,t,dur} — I am mid-air, evicted
     portal: { a: null, b: null, aIds: [], bIds: [], life: 0, cd: 0, grace: 0 },
     stopSeq: 0,
@@ -108,6 +120,7 @@ function loadSave(ctx) {
     cheese: false, ks: false, streak: 0, bestStreak: 0, ksClaimed: false, rebirths: 0,
     quest: freshQuest(),
     tw: false, twTower: false, twl: freshLettuces(),
+    rb: 0, gInf: 0, crown: false, // §14: rebirth tier 0-5, fighters turned by my hammer, the crown
   };
   if (s && typeof s === "object") {
     if (Number.isFinite(s.kills)) d.kills = Math.max(0, Math.floor(s.kills));
@@ -122,7 +135,13 @@ function loadSave(ctx) {
     if (s.quest && typeof s.quest === "object") for (const k of Object.keys(d.quest)) d.quest[k] = !!s.quest[k];
     d.tw = !!s.tw; d.twTower = !!s.twTower;
     if (s.twl && typeof s.twl === "object") for (const k of LETTUCE_KEYS) d.twl[k] = !!s.twl[k];
+    if (Number.isFinite(s.rb)) d.rb = Math.max(0, Math.min(REBIRTH_MAX, Math.floor(s.rb)));
+    if (Number.isFinite(s.gInf)) d.gInf = Math.max(0, Math.floor(s.gInf));
+    d.crown = !!s.crown || d.gInf >= CROWN_NEED;
   }
+  // §14: saves from before the tier existed. A shard in hand, or a rocket already built
+  // with one, proves the first rebirth happened — so the NEXT one is tier 2, not tier 1.
+  if (d.rebirths > 0 || d.quest.rocket) d.rb = Math.max(d.rb, 1);
   if (!isOwned(d.equipped, d)) d.equipped = "basic";
   return d;
 }
@@ -134,6 +153,7 @@ function saveNow(ctx) {
       seenIntro: s.seenIntro, cheese: s.cheese, ks: s.ks, streak: s.streak,
       bestStreak: s.bestStreak, ksClaimed: s.ksClaimed, rebirths: s.rebirths, quest: { ...s.quest },
       tw: s.tw, twTower: s.twTower, twl: { ...s.twl },
+      rb: s.rb, gInf: s.gInf, crown: s.crown,
     });
   } catch { /* fine */ }
 }
@@ -224,7 +244,7 @@ function pagedPanel(ctx, title, pages, opts = {}) {
   const body = panel.bodyEl || panel.el;
   let i = 0;
   const heading = document.createElement("h3"); heading.style.cssText = "margin:2px 0 8px;font:800 19px system-ui;color:#ffe6a0;";
-  const text = document.createElement("p"); text.style.cssText = "margin:0 0 14px;font:400 15px/1.5 system-ui;color:#e8e0f0;min-height:120px;";
+  const text = document.createElement("p"); text.style.cssText = "margin:0 0 14px;font:400 15px/1.5 system-ui;color:#e8e0f0;min-height:120px;white-space:pre-line;";
   const nav = document.createElement("div"); nav.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:10px;";
   const left = btn("◀", "background:#3a2740;width:56px;font-size:20px;");
   const count = document.createElement("span"); count.style.cssText = "font:700 14px system-ui;color:#c9b8e0;";
@@ -281,7 +301,7 @@ function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcT
 function labelText(sw) {
   if (sw.id === "killstreak" && !own("killstreak")) return "❓ ???\nthe plaque is\nscratched out";
   if (sw.id === "timewarp" && !own("timewarp")) return "⌛ ???\nthe pedestal ticks\nthe tower decides";
-  const cost = sw.cost === null ? (sw.id === "cheese" ? "WIN THE OBBY" : sw.id === "timewarp" ? "TEN LETTUCES" : "???") : sw.cost === 0 ? "FREE" : sw.cost + " kills";
+  const cost = sw.cost === null ? (sw.id === "cheese" ? "WIN THE OBBY" : sw.id === "timewarp" ? "TEN LETTUCES" : sw.id === "grass" ? "REBIRTH TWICE" : "???") : sw.cost === 0 ? "FREE" : sw.cost + " kills";
   const ab = sw.ability ? " • ⚡ ability" : (sw.passive ? " • buff" : "");
   const dmg = sw.id === "killstreak" ? "1+streak dmg" : `${sw.damage} dmg`;
   return `${sw.emoji} ${sw.name}\n${cost} • ${dmg}${ab}`;
@@ -289,10 +309,11 @@ function labelText(sw) {
 function refreshLabels(ctx) {
   for (let i = 0; i < S.labels.length; i++) {
     const sw = SWORDS[i], owned = own(sw.id);
-    const col = owned ? "#3ddc84" : sw.id === "killstreak" ? "#ff5a3a" : sw.id === "timewarp" ? "#7ec8ff" : "#e0b23a";
+    const col = owned ? "#3ddc84" : sw.id === "killstreak" ? "#ff5a3a" : sw.id === "timewarp" ? "#7ec8ff" : sw.id === "grass" ? "#8be04a" : "#e0b23a";
     let txt = labelText(sw);
     if (owned) txt += "\n✅ owned";
     else if (sw.cost !== null) txt += `\n🔒 you have ${S.save.kills}`;
+    else if (sw.id === "grass") txt += `\n🔒 rebirth tier ${S.save.rb} / 2`;
     const L = S.labels[i];
     if (L.text !== txt || L.color !== col) { L.paint(txt, col); L.tex.needsUpdate = true; L.text = txt; L.color = col; }
   }
@@ -325,7 +346,8 @@ function spawnDummy(ctx, x, z, temp) {
 }
 function hitDummy(ctx, d, dmg) {
   d.hp -= dmg;
-  for (const id of d.parts) { try { ctx.engine.parts.setColor(id, "#ff5a3a"); } catch { /* gone */ } }
+  // (a §14 grass dummy bruises lime, not red — it has to stay readable as grass)
+  for (const id of d.parts) { try { ctx.engine.parts.setColor(id, d.grass ? "#b6f26a" : "#ff5a3a"); } catch { /* gone */ } }
   const at = [d.x, FLOOR_TOP + 3.4, d.z];
   if (S.fx) {
     // straw flies off with every whack, and the number tells you what the blade did
@@ -354,13 +376,16 @@ function facing(ctx) {
 }
 function swingDamage() {
   const sw = swordById(S.equipped);
-  return sw.id === "killstreak" ? 1 + S.save.streak : sw.damage;
+  // §14: the grass mech hits three times as hard as whatever it is holding
+  return (sw.id === "killstreak" ? 1 + S.save.streak : sw.damage) * (S.grass ? S.grass.dmgMult() : 1);
 }
 // In reach = inside MELEE_R AND roughly in front (the old check hit things behind you).
+// (§14: a mech's arms are three times as long, so its reach stretches with them.)
 function inReach(me, fx, fz, tx, tz) {
   const dx = tx - me[0], dz = tz - me[2];
   const dd = dx * dx + dz * dz;
-  if (dd > MELEE_R * MELEE_R) return -1;
+  const reach = MELEE_R * (S.grass ? S.grass.reachMult() : 1);
+  if (dd > reach * reach) return -1;
   const len = Math.sqrt(dd) || 1;
   if ((dx * fx + dz * fz) / len < MELEE_DOT) return -1;
   return dd;
@@ -488,6 +513,26 @@ function useAbility(ctx) {
   } else if (sw.ability === "bush") {
     spawnBush(ctx, me[0], me[2]);
     sfx(ctx, "sparkle"); toast(ctx, "A thorn bush bursts up — 10 damage to anyone near it!", "🌹", 2000);
+  } else if (sw.ability === "vines") {
+    // §14: VINES — roots through the sand in a ring. It rides the aoe channel with one
+    // extra field: every victim in range takes the damage AND roots ITSELF for `root` s.
+    const ids = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2, r = 3 + (i % 4) * 2.5, h = 2.6 + (i % 3) * 1.2;
+      const vx = me[0] + Math.cos(a) * r, vz = me[2] + Math.sin(a) * r;
+      try { const id = uid("bt_vine_"); ctx.engine.parts.create({ id, shape: "cylinder", size: [0.38, h, 0.38], position: [vx, me[1] + h / 2 - 0.5, vz], rotation: [(i % 2 ? 14 : -14), 0, (i % 3 - 1) * 16], color: i % 2 ? "#2f8f4a" : "#6b4423", material: "wood", canCollide: false }); ids.push(id); } catch { /* fine */ }
+      try { const id = uid("bt_vine_"); ctx.engine.parts.create({ id, shape: "sphere", size: [0.8, 0.5, 0.8], position: [vx, me[1] + h - 0.4, vz], color: i % 2 ? "#8be04a" : "#3ddc84", material: "plastic", canCollide: false }); ids.push(id); } catch { /* fine */ }
+    }
+    S.vfx.push({ ids, t: VINES_ROOT_S });
+    if (S.fx) {
+      S.fx.ring([me[0], me[1] + 0.2, me[2]], { color: "#3ddc84", r1: VINES_R + 2, life: 0.6 });
+      S.fx.ring([me[0], me[1] + 0.12, me[2]], { color: "#2f8f4a", r1: VINES_R, life: VINES_ROOT_S, fill: true, opacity: 0.35 });
+      S.fx.burst([me[0], me[1] + 0.5, me[2]], { count: 18, colors: ["#3ddc84", "#8be04a", "#6b4423", "#b09a68"], shapes: ["shard", "box"], speed: 10, up: 9, size: 0.34, life: 0.8, grav: 26 });
+    }
+    shake(ctx, 0.4, 0.35);
+    S.aoeSeq++; S.myState.aoe = { id: S.aoeSeq, x: me[0], z: me[2], r: VINES_R, dmg: VINES_DMG, root: VINES_ROOT_S }; publishSoon();
+    for (const d of S.dummies) { if (!d.dead && (d.x - me[0]) ** 2 + (d.z - me[2]) ** 2 <= VINES_R * VINES_R) hitDummy(ctx, d, VINES_DMG); }
+    sfx(ctx, "sparkle"); toast(ctx, `VINES! ${VINES_DMG} damage — and nobody near you is going anywhere.`, "🌱", 2000);
   } else if (sw.ability === "timestop") {
     // §13: TIME STOP — everyone but ME, within TW_STOP_R, stands still for TW_STOP_S.
     // The stop travels the presence channel like an aoe; each victim freezes ITSELF.
@@ -743,6 +788,19 @@ function applyFrozen(ctx) {
   screenFlash("#7ec8ff", 0.25, 500);
   sfx(ctx, "denied");
   toast(ctx, "⌛ Someone stopped time. You are a statue for three seconds.", "🧊", 2600);
+}
+// §14: the Grass Sword's vines have my boots. I can still swing — I just cannot leave.
+function applyRooted(ctx, secs) {
+  S.rootedT = Math.max(S.rootedT, Math.min(5, Number(secs) || 0));
+  if (S.rootedT <= 0) return;
+  applyPassives(ctx);
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.ring([me[0], me[1] + 0.2, me[2]], { color: "#2f8f4a", r1: 3, life: 0.5 });
+    for (let s = 0; s < 8; s++) { const a = s * 0.785; S.fx.spawn([me[0] + Math.cos(a) * 0.9, me[1] + 0.2, me[2] + Math.sin(a) * 0.9], { shape: "box", color: s % 2 ? "#2f8f4a" : "#6b4423", size: 0.3, vel: [0, 2.2, 0], grav: 0, spin: 1, life: S.rootedT, stretch: 4 }); }
+  }
+  sfx(ctx, "denied");
+  toast(ctx, "🌱 ROOTED — vines have your boots. Swing, but you are not going anywhere.", "🌱", 2400);
 }
 function clearFrozen(ctx) {
   if (S.frozenT <= 0 && dom && dom.frzO.style.display === "none") return;
@@ -1016,6 +1074,7 @@ function publishSoon() { if (S) S.pubT = Math.min(S.pubT, 0); }
 function takeDamage(ctx, dmg, poison, attackerId) {
   if (!S.inArena) return;
   S.lastAttacker = attackerId || S.lastAttacker;
+  if (S.grass) dmg = Math.ceil(dmg * S.grass.armor()); // §14: the mech shrugs off half
   S.hp -= dmg;
   if (poison) S.poison = { left: 3, t: 1.0 };
   // being hit HURTS: red pop, camera kick, a spray of red off my own avatar
@@ -1147,6 +1206,11 @@ function refreshHud(ctx) {
   // §13: the lettuce count rides the HUD from the first tower win to the tenth find
   if (S.save.twTower && !S.save.tw && S.tw) ctx.services.ui.setHudStat("bt-lett", { icon: "🥬", label: "Lettuces", value: `${S.tw.count()} / 10` });
   else { try { ctx.services.ui.removeHudStat("bt-lett"); } catch { /* fine */ } }
+  // §14: the rebirth tier, once there is one; and the hammer's tally until the crown
+  if (S.save.rb > 0) ctx.services.ui.setHudStat("bt-rb", { icon: "⭐", label: "Rebirth", value: `${S.save.rb} / ${REBIRTH_MAX}` });
+  else { try { ctx.services.ui.removeHudStat("bt-rb"); } catch { /* fine */ } }
+  if (S.save.rb >= REBIRTH_MAX && !S.save.crown) ctx.services.ui.setHudStat("bt-inf", { icon: "🌿", label: "Infected", value: `${S.save.gInf} / ${CROWN_NEED}` });
+  else { try { ctx.services.ui.removeHudStat("bt-inf"); } catch { /* fine */ } }
   try { ctx.events.emit("bt:state", debugState()); } catch { /* no place */ }
 }
 function showCombatUi(on) {
@@ -1155,15 +1219,21 @@ function showCombatUi(on) {
   dom.atkBtn.style.display = on ? "block" : "none";
   if (!on) disarmCheese();
   refreshAbilityBtn();
+  if (S.grass) S.grass.refreshButtons();
 }
 
 // ---- lobby / arena travel ------------------------------------------------------------
 function applyPassives(ctx) {
   if (S.frozenT > 0) return; // §13: stopped time outranks every buff — stay a statue
+  if (S.rootedT > 0) { // §14: vines hold the feet (and a held foot cannot jump)
+    try { ctx.player.setWalkSpeed(0); ctx.player.setJumpPower(0); } catch { /* fine */ }
+    return;
+  }
   const sw = swordById(S.equipped);
   const p = sw.passive || {};
   const slow = S.cheesedT > 0 ? 0.45 : 1; // §10: splatted fighters wade through fondue
-  try { ctx.player.setWalkSpeed(BASE_WALK * (p.speed || 1) * slow); } catch { /* fine */ }
+  const grassSpeed = S.grass ? S.grass.speedMult() : 1; // §14: the mech strides, the wings rush
+  try { ctx.player.setWalkSpeed(BASE_WALK * (p.speed || 1) * slow * grassSpeed); } catch { /* fine */ }
   try { ctx.player.setJumpPower(S.flying ? 44 : BASE_JUMP + (p.jump || 0)); } catch { /* fine */ }
 }
 function clearPassives(ctx) {
@@ -1175,7 +1245,7 @@ function enterArena(ctx, swordId) {
   S.equipped = swordId; S.save.equipped = swordId; saveNow(ctx);
   S.inArena = true; S.hp = HP_MAX; S.poison = null; S.swingCd = 0; S.abilityCd = 0;
   S.ksCd.tp = 0; S.ksCd.gr = 0;
-  clearFrozen(ctx); S.fling = null; clearPortals(ctx, true); S.portal.cd = 0;
+  clearFrozen(ctx); S.fling = null; clearPortals(ctx, true); S.portal.cd = 0; S.rootedT = 0;
   if (S.tw) S.tw.leaveRealmState();
   const sp = S.world.arenaSpawns[Math.floor(S.runT * 3) % S.world.arenaSpawns.length];
   try { ctx.player.teleport([sp[0], sp[1], sp[2]], 0); } catch { /* fine */ }
@@ -1198,15 +1268,22 @@ function toLobby(ctx) {
   S.inArena = false;
   endFly(ctx);
   S.frozenT = 0; if (dom) dom.frzO.style.display = "none";
-  S.fling = null;
+  S.fling = null; S.rootedT = 0;
   clearPortals(ctx, true);
   if (S.tw) S.tw.leaveRealmState();
+  // §14: death and the leave pad both end here — the mech, the wings, a slam in flight,
+  // and the infection ("grass for however long it takes them to die") all stop with it
+  if (S.grass) S.grass.onLeaveArena();
   clearPassives(ctx);
   try { ctx.player.teleport([LOBBY_SPAWN[0], LOBBY_SPAWN[1], LOBBY_SPAWN[2]], LOBBY_YAW); } catch { /* fine */ }
   try { ctx.player.setCheckpoint([LOBBY_SPAWN[0], LOBBY_SPAWN[1], LOBBY_SPAWN[2]]); } catch { /* fine */ }
   S.myState.inArena = false; publishSoon();
   showCombatUi(false); refreshHud(ctx);
   try { ctx.engine.audio.playMusic("chill"); } catch { /* fine */ }
+}
+// §14: the five rebirths as one page of text — what each costs, what each grows.
+function rebirthLadderText() {
+  return REBIRTH_TIERS.map((t) => `${t.n <= S.save.rb ? "✅" : "🔒"} Rebirth ${t.n} (${t.n === 1 ? "any kills" : t.cost.toLocaleString() + " kills"}): ${t.icon} ${t.reward}`).join("\n");
 }
 function openSwordPanel(ctx, i) {
   const sw = SWORDS[i];
@@ -1215,12 +1292,23 @@ function openSwordPanel(ctx, i) {
     const pages = sw.lore.map((body, k) => ({ heading: k === 0 ? `${sw.emoji} ${sw.name}` : sw.name, body }));
     const dmgLine = sw.id === "killstreak" ? `1 damage, +1 for every kill of your streak (now ${S.save.streak} — ${1 + S.save.streak} damage a hit)` : `${sw.damage} damage a hit`;
     pages.push({ heading: "Ready", body: `${dmgLine}${sw.ability && sw.ability !== "streak" ? ", plus a ⚡ ability" : sw.passive ? ", plus a passive buff" : sw.id === "killstreak" ? ". Its powers wake at 10, 50, 100 and 250 streak." : ""}. Step into the arena and put it to work.` });
+    // §14: the Grass Sword's owner still has rebirths to make — the ladder stays on its pedestal
+    if (sw.id === "grass") pages.push({ heading: "🌿 What the grass grows", body: rebirthLadderText() + (nextRebirth(S.save) ? "\n\nThe star island takes the offering — every kill you carry, every time." : "\n\nYou have made all five. The lawn is yours.") });
     pagedPanel(ctx, `${sw.emoji} ${sw.name}`, pages, { doneLabel: "Close", actionLabel: "⚔️ Enter Arena", onAction: () => enterArena(ctx, sw.id) });
   } else if (sw.id === "cheese") {
     pagedPanel(ctx, `${sw.emoji} ${sw.name}`, [{ heading: `${sw.emoji} ${sw.name}`, body: `${sw.blurb}\n\n🔒 No number of kills will unlock this one. The Obby of Oof's cheese arch stands at the WEST end of this hall. One stage. No mercy. Fall once and you're back here.` }], { doneLabel: "Close" });
     sfx(ctx, "denied");
   } else if (sw.id === "killstreak") {
     pagedPanel(ctx, "❓ The scratched pedestal", [{ heading: "❓ ???", body: "The plaque is scratched out. The pedestal is warm. Whatever stood here was BURIED somewhere, and nothing in this lobby says where — though the Meteorbrand's last page is said to whisper about it." }], { doneLabel: "Close" });
+    sfx(ctx, "denied");
+  } else if (sw.id === "grass") {
+    // §14: the mossy pedestal doubles as the rebirth ladder's noticeboard — and, for
+    // anyone who has already found the star once, a shortcut to the star's bargain.
+    const nx = nextRebirth(S.save);
+    pagedPanel(ctx, `${sw.emoji} ${sw.name}`, [
+      { heading: `${sw.emoji} ${sw.name}`, body: `${sw.blurb}\n\n🔒 You are at rebirth tier ${S.save.rb} of ${REBIRTH_MAX}. ${S.save.rb < 1 ? "The first rebirth waits on a star island at the end of a very long riddle. After that, the grass will hear you from here." : "Every rebirth takes ALL your kills and your streak, and relocks the rack."}` },
+      { heading: "🌿 What the grass grows", body: rebirthLadderText() },
+    ], S.save.rb >= 1 && nx ? { doneLabel: "Close", actionLabel: `⭐ Rebirth ${nx.n}…`, onAction: () => { try { S.quest.openRebirth(); } catch { /* fine */ } } } : { doneLabel: "Close" });
     sfx(ctx, "denied");
   } else if (sw.id === "timewarp") {
     pagedPanel(ctx, "⌛ The ticking pedestal", [{ heading: "⌛ ???", body: "The pedestal ticks like something impatient. A clock is inlaid around its base and the sword above it blurs when you look straight at it — it is here and NOT here.\n\nThe CLOCK ARCH beside it leads to a tower of lava and tiny footholds, and past the tower, they say, a realm where ten lettuces hide. Bring all ten home and time will hold still for you." }], { doneLabel: "Close" });
@@ -1276,11 +1364,22 @@ function findAnchor(root) {
   try { anchor = root.getObjectByName("GearAnchor"); } catch { anchor = null; }
   return anchor || root;
 }
+// Where the held blade goes. Normally the right hand (the rig's GearAnchor) — but if that
+// hand already holds Catalog gear (§14: the Grass Hammer has to be WORN to work), the
+// blade moves to the left hand instead of fusing with it: same joint-local spot, other arm.
+function mountSword(root, group) {
+  const anchor = findAnchor(root);
+  let busy = false;
+  for (const c of anchor.children) { if (c.name !== "bt-heldsword") { busy = true; break; } }
+  let left = null;
+  if (busy && anchor !== root) { try { left = root.getObjectByName("OofJoint_leftArm"); } catch { left = null; } }
+  if (left) { group.position.set(0, -2, 0); left.add(group); } else anchor.add(group);
+}
 function refreshAttachments(ctx) {
   const THREE = ctx.engine.THREE;
-  const wanted = new Map(); // uuid -> {root, swordId|null, cheesed}
+  const wanted = new Map(); // uuid -> {root, swordId|null, cheesed, grass, mech}
   const myRoot = ctx.player.avatar;
-  if (myRoot) wanted.set(myRoot.uuid, { root: myRoot, swordId: S.inArena ? S.equipped : null, cheesed: S.cheesedT > 0 });
+  if (myRoot) wanted.set(myRoot.uuid, { root: myRoot, swordId: S.inArena ? S.equipped : null, cheesed: S.cheesedT > 0, grass: !!S.grass && S.grass.infected(), mech: !!S.grass && S.grass.mechOn() });
   // pair scene rigs with roster peers by proximity (both stand at the same feet point)
   const peers = rosterSafe(ctx).filter((p) => p.pos && p.state);
   if (peers.length) {
@@ -1289,7 +1388,7 @@ function refreshAttachments(ctx) {
         if (o.name !== "OofRig" || o === myRoot || wanted.has(o.uuid)) return;
         let best = null, bd = 16;
         for (const p of peers) { const dd = (o.position.x - p.pos[0]) ** 2 + (o.position.z - p.pos[2]) ** 2; if (dd < bd) { bd = dd; best = p; } }
-        if (best) wanted.set(o.uuid, { root: o, swordId: best.state.inArena ? (best.state.sword || "basic") : null, cheesed: !!best.state.cheesed });
+        if (best) wanted.set(o.uuid, { root: o, swordId: best.state.inArena ? (best.state.sword || "basic") : null, cheesed: !!best.state.cheesed, grass: !!best.state.inArena && !!best.state.grass, mech: !!best.state.inArena && !!best.state.mech });
       });
     } catch { /* scene unavailable: solo attachments still work */ }
   }
@@ -1302,7 +1401,7 @@ function refreshAttachments(ctx) {
     if (want.swordId && !S.heldSwords.has(uuidKey)) {
       const sw = swordById(want.swordId);
       const group = buildMiniSword(THREE, sw);
-      findAnchor(want.root).add(group);
+      mountSword(want.root, group);
       S.heldSwords.set(uuidKey, { swordId: want.swordId, group });
     }
   }
@@ -1318,11 +1417,86 @@ function refreshAttachments(ctx) {
       S.shells.set(uuidKey, shell);
     }
   }
+  // §14: the turf coat of the infected — same reconcile as the cheese
+  for (const [uuidKey, shell] of S.gshells) {
+    const want = wanted.get(uuidKey);
+    if (!want || !want.grass) { disposeGroup(shell); S.gshells.delete(uuidKey); }
+  }
+  for (const [uuidKey, want] of wanted) {
+    if (want.grass && !S.gshells.has(uuidKey)) {
+      const shell = buildGrassShell(THREE);
+      want.root.add(shell);
+      S.gshells.set(uuidKey, shell);
+    }
+  }
+  // §14: the grass mech — armour on the rig's own joints, and the whole rig at 3x. The
+  // scale is OURS to put back: the platform never writes a rig's scale.
+  for (const [uuidKey, suit] of S.mechs) {
+    const want = wanted.get(uuidKey);
+    if (!want || !want.mech) { dropMech(suit); S.mechs.delete(uuidKey); }
+  }
+  for (const [uuidKey, want] of wanted) {
+    if (want.mech && !S.mechs.has(uuidKey)) {
+      const suit = buildMechSuit(THREE, want.root);
+      want.root.scale.setScalar(MECH_SCALE);
+      S.mechs.set(uuidKey, suit);
+      // a PEER waking up gets the shout over their head (mine is grass.js's own banner)
+      if (want.root !== myRoot && S.fx) S.fx.burst([want.root.position.x, want.root.position.y + 6, want.root.position.z], { count: 18, colors: ["#3ddc84", "#8be04a", "#b6f26a", "#6b4423"], shapes: ["shard", "box"], speed: 12, up: 9, size: 0.45, life: 0.9, grav: 22 });
+    }
+  }
+}
+function dropMech(suit) {
+  try { suit.root.scale.setScalar(1); } catch { /* the rig is gone */ }
+  disposeMechSuit(suit);
 }
 function clearAttachments() {
   for (const [, held] of S.heldSwords) disposeGroup(held.group);
   for (const [, shell] of S.shells) disposeGroup(shell);
-  S.heldSwords.clear(); S.shells.clear();
+  for (const [, shell] of S.gshells) disposeGroup(shell);
+  for (const [, suit] of S.mechs) dropMech(suit);
+  S.heldSwords.clear(); S.shells.clear(); S.gshells.clear(); S.mechs.clear();
+}
+
+// ---- §14: what a rebirth GROWS -------------------------------------------------------
+// Tier rewards are platform Catalog rows; a grant is idempotent (spec 05 §5.9 rule 3), so
+// this runs on every load and after every rebirth and simply tops the wardrobe up. The
+// avatar service raises its own "Unlocked: …" toast the one time a row is new.
+function grantGrassRewards(ctx) {
+  const give = (id) => { try { ctx.services.avatar.grantItem(id, "battles"); } catch { /* headless */ } };
+  for (const t of REBIRTH_TIERS) { if (t.n <= S.save.rb) for (const id of t.grants) give(id); }
+  if (S.save.crown) give(CROWN_ID);
+}
+// The fanfare for rebirths 2-5 (tier 1 keeps the star's own line). Returns true when it
+// has spoken, so quest.js stays quiet.
+function rebirthFanfare(ctx, n) {
+  grantGrassRewards(ctx);
+  const tier = REBIRTH_TIERS[n - 1];
+  if (!tier || n < 2) return false;
+  if (n === 2) { try { ctx.services.badges.award("sword_grass"); } catch { /* fine */ } }
+  if (S.fx) {
+    const me = ctx.player.position();
+    S.fx.ring([me[0], me[1] + 0.3, me[2]], { color: "#3ddc84", r1: 14, life: 0.9 });
+    for (let w = 0; w < 4; w++) later(w * 0.28, () => { if (!S || !S.fx) return; const p = ctx.player.position(); S.fx.burst([p[0], p[1] + 4 + w * 1.6, p[2]], { count: 14, colors: ["#3ddc84", "#8be04a", "#b6f26a", "#ffffff"], shapes: ["box", "shard"], speed: 9, up: 7, size: 0.32, life: 1.1, grav: 10, spin: 7 }); });
+  }
+  screenFlash("#3ddc84", 0.3, 800);
+  shake(ctx, 0.4, 0.5);
+  const where = n === 2 ? "It stands on the mossy pedestal by the lobby's north wall." : "Open the avatar shop — it is on the 🌿 Grass tab. Wear it and come back to the arena.";
+  toast(ctx, `REBORN ×${n}. The grass grows you ${tier.icon} ${tier.reward}. ${where}`, tier.icon, 9000);
+  return true;
+}
+// Ten fighters turned through MY hammer: the mythical crown (persisted as save.crown).
+function crownEarned(ctx) {
+  grantGrassRewards(ctx);
+  if (S.fx) {
+    const me = ctx.player.position();
+    for (let w = 0; w < 5; w++) later(w * 0.22, () => { if (!S || !S.fx) return; const p = ctx.player.position(); S.fx.burst([p[0], p[1] + 5 + w * 1.5, p[2]], { count: 14, colors: ["#ff4fd8", "#eaff8a", "#3ddc84", "#ffffff"], shapes: ["sphere", "shard"], speed: 10, up: 8, size: 0.34, life: 1.1, grav: 10 }); S.fx.ring([p[0], p[1] + 0.3, p[2]], { color: w % 2 ? "#ff4fd8" : "#3ddc84", r1: 8 + w * 3, life: 0.7 }); });
+    S.fx.text([me[0], me[1] + 8, me[2]], "GRASS CROWN", { color: "#ff4fd8", scale: 1.6, life: 2.4 });
+  }
+  screenFlash("#ff4fd8", 0.3, 900);
+  shake(ctx, 0.5, 0.6);
+  sfx(ctx, "win");
+  toast(ctx, `${CROWN_NEED} fighters turned to grass by YOUR hammer. The MYTHICAL Grass Crown is yours — it is in the avatar shop, on the 🌿 Grass tab.`, "👑", 9000);
+  refreshHud(ctx);
 }
 
 // ---- the two lobby leaderboards (§12) ------------------------------------------------
@@ -1426,6 +1600,7 @@ function winObby(ctx) {
 // ---- lifecycle -----------------------------------------------------------------------
 export function init(ctx) {
   S = fresh();
+  debugCtx = ctx;
   S.save = loadSave(ctx);
   S.equipped = S.save.equipped;
   S.world = buildWorld();
@@ -1471,13 +1646,45 @@ export function init(ctx) {
       try { ctx.services.badges.award("sword_killstreak"); } catch { /* fine */ }
       refreshLabels(ctx); refreshHud(ctx);
     },
-    onRebirth: () => {
+    // §14: `tier` is the rebirth just made (1-5). Answers true when the fanfare here has
+    // already told the player what they got.
+    onRebirth: (tier) => {
       if (!own(S.equipped)) { S.equipped = "basic"; S.save.equipped = "basic"; }
       S.myState.kills = S.save.kills;
+      saveNow(ctx);
       refreshLabels(ctx); refreshHud(ctx); publishSoon();
+      return rebirthFanfare(ctx, tier);
     },
   });
   S.quest.refreshWorld();
+
+  // §14: the grass — the pet's trail and mech, the wings, the hammer and its infection
+  try {
+    S.grass = createGrass({
+      ctx,
+      getSave: () => S.save,
+      saveNow: () => { saveNow(ctx); refreshHud(ctx); },
+      toast: (t, icon, dur) => toast(ctx, t, icon, dur),
+      sfx: (n) => sfx(ctx, n),
+      shake: (i, d) => shake(ctx, i, d),
+      flash: (c, a, ms) => screenFlash(c, a, ms),
+      later, uid,
+      fx: () => (S ? S.fx : null),
+      inArena: () => S.inArena,
+      frozen: () => S.frozenT > 0,
+      roster: () => rosterSafe(ctx),
+      myId: () => { try { const s = ctx.services.net.self(); return s ? s.id : null; } catch { return null; } },
+      dummies: () => S.dummies,
+      takeDamage: (dmg, attackerId) => takeDamage(ctx, dmg, 0, attackerId),
+      applyPassives: () => applyPassives(ctx),
+      publishSoon,
+      refreshRigs: () => { S.attachT = 0; },
+      ksFlying: () => S.flying,
+      endKsFly: () => { if (S.flying) { endFly(ctx); refreshKsButtons(); } },
+      onCrown: () => crownEarned(ctx),
+    });
+  } catch { S.grass = null; /* headless: the swords still work */ }
+  grantGrassRewards(ctx); // tops the wardrobe up on every load (idempotent, silent when owned)
 
   // §13: the Time Warp questline
   S.tw = createTimewarp({
@@ -1550,6 +1757,9 @@ export function update(dt, ctx) {
   }
   stepFling(ctx, dt);
   stepPortals(ctx, dt);
+  // §14: vines let go; the grass does its growing
+  if (S.rootedT > 0) { S.rootedT = Math.max(0, S.rootedT - dt); if (S.rootedT === 0) applyPassives(ctx); }
+  if (S.grass) { try { S.grass.update(dt); } catch { /* fine */ } }
 
   if (S.inArena) {
     stepMeteors(ctx, dt);
@@ -1561,7 +1771,7 @@ export function update(dt, ctx) {
     const me = ctx.player.position();
     if (me[1] < VOID_Y) die(ctx);
     // dummy respawns
-    for (const d of S.dummies) { if (d.dead && !d.temp) { d.respawnT -= dt; if (d.respawnT <= 0) { d.dead = false; d.hp = DUMMY_HP; spawnDummyReuse(ctx, d); } } }
+    for (const d of S.dummies) { if (d.dead && !d.temp) { d.respawnT -= dt; if (d.respawnT <= 0) { d.dead = false; d.grass = false; d.hp = DUMMY_HP; spawnDummyReuse(ctx, d); } } }
   } else {
     // the display swords turn while you browse the lobby — throttled (the angle tracks
     // runT, so a skipped frame just jumps to the right place; ~12 updates/sec is smooth)
@@ -1584,7 +1794,7 @@ export function update(dt, ctx) {
       const st = p.state; if (!st) continue;
       if (st.hit && st.hit.target === myId) { const key = p.id + ":h" + st.hit.id; if (!S.seenHit.has(key)) { S.seenHit.add(key); takeDamage(ctx, st.hit.dmg, st.hit.poison, p.id); if (st.hit.fl && S.inArena) startFling(ctx, st.hit.fl); } }
       if (st.stop) { const key = p.id + ":s" + st.stop.id; if (!S.seenStop.has(key)) { S.seenStop.add(key); const me = ctx.player.position(); if (S.inArena && (me[0] - st.stop.x) ** 2 + (me[2] - st.stop.z) ** 2 <= TW_STOP_R * TW_STOP_R) applyFrozen(ctx); } }
-      if (st.aoe) { const key = p.id + ":a" + st.aoe.id; if (!S.seenAoe.has(key)) { S.seenAoe.add(key); const me = ctx.player.position(); if (S.inArena && (me[0] - st.aoe.x) ** 2 + (me[2] - st.aoe.z) ** 2 <= st.aoe.r * st.aoe.r) takeDamage(ctx, st.aoe.dmg, 0, p.id); } }
+      if (st.aoe) { const key = p.id + ":a" + st.aoe.id; if (!S.seenAoe.has(key)) { S.seenAoe.add(key); const me = ctx.player.position(); if (S.inArena && (me[0] - st.aoe.x) ** 2 + (me[2] - st.aoe.z) ** 2 <= st.aoe.r * st.aoe.r) { takeDamage(ctx, st.aoe.dmg, 0, p.id); if (st.aoe.root && S.inArena) applyRooted(ctx, st.aoe.root); } } }
       if (st.cheese && st.cheese.target === myId) { const key = p.id + ":c" + st.cheese.id; if (!S.seenCheese.has(key)) { S.seenCheese.add(key); if (S.inArena) applyCheesed(ctx); } }
       if (st.death && st.death.killer === myId) { const key = p.id + ":d" + st.death.id; if (!S.seenDeath.has(key)) { S.seenDeath.add(key); scoreKill(ctx, p.name || "a fighter"); } }
     }
@@ -1597,6 +1807,7 @@ export function update(dt, ctx) {
     S.myState.hp = Math.max(0, Math.ceil(S.hp)); S.myState.kills = S.save.kills; S.myState.sword = S.equipped; S.myState.inArena = S.inArena;
     S.myState.cheesed = S.cheesedT > 0;
     S.myState.tk = S.save.totalKills; S.myState.sw = ownedSwords(S.save).length; S.myState.streak = S.save.streak;
+    if (S.grass) S.grass.fillState(S.myState); // §14: grass (my infection's owner), mech, gp, gslam, awk
     try { const n = ctx.services.net; if (n && n.publish) n.publish({ ...S.myState }); } catch { /* solo */ }
   }
 
@@ -1615,6 +1826,7 @@ function spawnDummyReuse(ctx, d) {
 export function dispose(ctx) {
   if (S) {
     endFly(ctx);
+    if (S.grass) { try { S.grass.dispose(); } catch { /* fine */ } } // (restores gravity and the camera)
     clearPassives(ctx);
     clearAttachments();
     if (S.quest) { try { S.quest.dispose(); } catch { /* fine */ } }
@@ -1637,6 +1849,8 @@ export function dispose(ctx) {
   }
   if (dom) { for (const k of ["hpWrap", "atkBtn", "abBtn", "tpBtn", "grBtn", "flyBtn", "claimBtn", "pgBtn", "frzO", "aimLayer", "flashO", "vignO"]) { try { dom[k].remove(); } catch { /* fine */ } } dom = null; }
   try { ctx.services.ui.removeHudStat("bt-kills"); ctx.services.ui.removeHudStat("bt-sword"); ctx.services.ui.removeHudStat("bt-streak"); ctx.services.ui.removeHudStat("bt-lett"); } catch { /* fine */ }
+  try { ctx.services.ui.removeHudStat("bt-rb"); ctx.services.ui.removeHudStat("bt-inf"); } catch { /* fine */ }
+  debugCtx = null;
   S = null;
 }
 
@@ -1650,5 +1864,47 @@ export function debugState() {
     cheesedT: Math.ceil(S.cheesedT), quest: { ...S.save.quest }, panelOpen: S.panelOpen,
     tw: S.save.tw, twTower: S.save.twTower, lettuces: S.tw ? S.tw.count() : 0,
     frozenT: Math.ceil(S.frozenT), portals: !!(S.portal.a && S.portal.b), portalCd: Math.ceil(S.portal.cd),
+    // §14
+    rb: S.save.rb, gInf: S.save.gInf, crown: S.save.crown, rootedT: Math.ceil(S.rootedT),
+    grassDummies: S.dummies.filter((d) => !d.dead && d.grass).length,
+    grass: S.grass ? S.grass.debug() : null,
   };
+}
+
+// Test seam (spec 26 §14.7), the showdown Place's debugAdvance pattern: a browser console
+// or a smoke scenario imports THIS module and calls it. Every field is optional.
+//   kills: n            set the kill count (the rack re-evaluates)
+//   rb: 0-5             set the rebirth tier and grant that tier's Catalog rewards
+//   rebirth: true       make the next rebirth exactly as the star would (needs the kills)
+//   force: {pet,wings,hammer} | null   act as if those items were equipped (null = read the avatar)
+//   cooldowns: true     zero the awaken / fly / slam cooldowns
+//   press: "awaken" | "fly" | "slam"   press that power's button
+//   infectMe: true      turn ME into a grass person (as if a hammer landed on me)
+//   gInf: n             set the hammer's infection tally (10 grants the crown)
+export function debugGrass(o = {}) {
+  if (!S || !debugCtx) return null;
+  const ctx = debugCtx;
+  if (Number.isFinite(o.kills)) { S.save.kills = Math.max(0, Math.floor(o.kills)); S.save.totalKills = Math.max(S.save.totalKills, S.save.kills); }
+  if (Number.isFinite(o.rb)) { S.save.rb = Math.max(0, Math.min(REBIRTH_MAX, Math.floor(o.rb))); grantGrassRewards(ctx); }
+  if (o.rebirth) {
+    const nx = nextRebirth(S.save);
+    if (nx && S.save.kills >= nx.cost) {
+      S.save.rb = nx.n; S.save.rebirths += 1; S.save.kills = 0; S.save.streak = 0;
+      if (!own(S.equipped)) { S.equipped = "basic"; S.save.equipped = "basic"; }
+      rebirthFanfare(ctx, nx.n);
+    }
+  }
+  if (Number.isFinite(o.gInf)) {
+    S.save.gInf = Math.max(0, Math.floor(o.gInf));
+    if (S.save.gInf >= CROWN_NEED && !S.save.crown) { S.save.crown = true; crownEarned(ctx); }
+  }
+  if (S.grass) {
+    if ("force" in o) S.grass.debugForce(o.force);
+    if (o.cooldowns) S.grass.debugCooldowns();
+    if (o.infectMe) S.grass.debugInfect();
+    if (o.press && S.grass.press[o.press]) S.grass.press[o.press]();
+  }
+  S.myState.kills = S.save.kills;
+  saveNow(ctx); refreshLabels(ctx); refreshHud(ctx); publishSoon();
+  return debugState();
 }

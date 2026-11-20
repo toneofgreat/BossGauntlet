@@ -19,8 +19,27 @@ export const TW_STOP_S = 3;       // frozen fighters stand still this long; the 
 export const TW_FLING = 50;       // every Time Warp hit also throws the victim this many studs
 export const TW_PORTAL_LIFE_S = 30; // a cut portal pair holds this long
 export const TW_PORTAL_CD_S = 45;   // and the gun needs this long before it can cut a new pair
+// §14: the Grass Sword's ⚡ VINES — everyone within VINES_R is hit and ROOTED where they stand.
+export const VINES_R = 11;
+export const VINES_DMG = 12;
+export const VINES_ROOT_S = 2.5;
 
-// ability: "spikes" | "meteor" | "dummies" | "bush" | "cheese" | "streak" | null
+// §14: the five REBIRTHS. `save.rb` is the lifetime tier (0-5) — separate from the
+// SPENDABLE `save.rebirths` count the rocket eats. Tier n needs `cost` kills in hand and
+// takes ALL of them (and the streak); tier 1 keeps its original bargain of "any kill at
+// all". `grants` are platform Catalog ids handed over through avatar.grantItem — re-called
+// on every load, since a grant is idempotent (spec 05 §5.9 rule 3).
+export const REBIRTH_TIERS = Object.freeze([
+  Object.freeze({ n: 1, cost: 1, icon: "⭐", reward: "a shard of star metal (the courtyard rocket wants it)", grants: Object.freeze([]) }),
+  Object.freeze({ n: 2, cost: 100, icon: "🌱", reward: "the GRASS SWORD and its ⚡ vines", grants: Object.freeze([]) }),
+  Object.freeze({ n: 3, cost: 500, icon: "🛡️", reward: "GRASS ARMOR — a top and legs, in the avatar shop", grants: Object.freeze(["shirt_grass", "pants_grass"]) }),
+  Object.freeze({ n: 4, cost: 1500, icon: "🐾", reward: "the GRASS GOD pet — it follows you, grows grass where you walk, and wakes the GRASS MECH", grants: Object.freeze(["pet_grassgod"]) }),
+  Object.freeze({ n: 5, cost: 30000, icon: "🔨", reward: "the GRASS HAMMER, GRASS HAIR and GRASS WINGS", grants: Object.freeze(["gear_grasshammer", "hair_grass", "back_grasswings"]) }),
+]);
+export const REBIRTH_MAX = REBIRTH_TIERS.length;
+export function nextRebirth(save) { return REBIRTH_TIERS[Math.max(0, Math.min(REBIRTH_MAX, save.rb || 0))] || null; }
+
+// ability: "spikes" | "meteor" | "dummies" | "bush" | "cheese" | "streak" | "timestop" | "vines" | null
 //   ("cheese" = tap-a-target splat; "streak" = the Killstreak's growing button row)
 // passive: { speed?:mult, jump?:+power, poison?:true } | null
 // cost: a KILL threshold, or null for the secret blades (unlock: "obby" | "quest" |
@@ -29,7 +48,9 @@ export const TW_PORTAL_CD_S = 45;   // and the gun needs this long before it can
 // The two secret blades come FIRST so the rack parks them on the LEFT of the ten. The
 // Time Warp comes LAST and carries offRack: true — the rack skips it (so the classic
 // twelve keep their pads and indexes) and layout.js raises it a bespoke pedestal by the
-// clock arch instead.
+// clock arch instead. The Grass Sword (§14) follows it, also offRack: it is owned by
+// REBIRTH TIER (unlock: "rebirth", `rb` = the tier needed), and grows from a mossy
+// pedestal of its own on the north wall.
 export const SWORDS = Object.freeze([
   Object.freeze({
     id: "cheese", name: "Cheese Blade", emoji: "🧀", cost: null, unlock: "obby", damage: 3,
@@ -236,6 +257,28 @@ export const SWORDS = Object.freeze([
       + "dares you to step through.",
     ],
   }),
+  Object.freeze({
+    id: "grass", name: "Grass Sword", emoji: "🌱", cost: null, unlock: "rebirth", rb: 2, damage: 6,
+    ability: "vines", passive: null, ornament: "grass", offRack: true,
+    blurb: "6 damage. ⚡ VINES: roots burst out of the sand around you — 12 damage to everyone "
+      + "within eleven studs, and they are ROOTED to the spot for 2.5 seconds. Kills cannot "
+      + "buy it. It grows for anyone who has been REBORN twice.",
+    colors: { blade: "#3fae4a", edge: "#b6f26a", hilt: "#4a2f18", guard: "#2f8f4a", gem: "#eaff8a" },
+    lore: [
+      "Nobody forged the Grass Sword and nobody planted it. The first fighter to give up "
+      + "every kill they had TWICE came back from the star island and found a blade "
+      + "standing in the moss by the north wall, still wet with dew, as if the lobby had "
+      + "simply decided they were owed one.",
+      "It cuts a little deeper than honest steel — six points a swing — because it is "
+      + "still growing while you hold it. Its real gift is underfoot: wake it and the roots "
+      + "come up through the sand in a ring, twelve points of thorn to everyone near you, "
+      + "and for two and a half long seconds their boots belong to the ground.",
+      "The grass does not stop at a sword. Three rebirths and it grows you ARMOR. Four, and "
+      + "something small and green and very old starts following you around. Five — and the "
+      + "price of five is thirty thousand kills — and it hands you a hammer, and wings, and "
+      + "asks what you would like to turn into a lawn.",
+    ],
+  }),
 ]);
 
 const BY_ID = new Map(SWORDS.map((s) => [s.id, s]));
@@ -249,6 +292,7 @@ export function isOwned(id, save) {
   if (s.cost === null) {
     if (s.unlock === "obby") return !!save.cheese;
     if (s.unlock === "lettuce") return !!save.tw;
+    if (s.unlock === "rebirth") return (save.rb || 0) >= s.rb; // §14: a tier, not a flag
     return !!save.ks;
   }
   return (save.kills || 0) >= s.cost;

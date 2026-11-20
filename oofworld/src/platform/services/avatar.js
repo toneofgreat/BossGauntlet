@@ -7,7 +7,7 @@
 import { buildRig } from "./avatar/rig.js";
 import { DEFAULT_FACE_ID } from "./avatar/faces.js";
 import { AVATAR_TUNING } from "./avatar/animator.js";
-import { HAIR_STYLES, isHairId, hairPrice } from "./avatar/hair.js";
+import { HAIR_STYLES, isHairId, hairPrice, getHairStyle } from "./avatar/hair.js";
 import {
   BASE_SWATCHES, DEFAULT_BODY_COLORS, DEFAULT_OWNED, getItem, getItemsByType,
 } from "./avatar/catalog-data.js";
@@ -24,12 +24,15 @@ const LIMB_KEYS = Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLe
 // `equipped[item.type] = id` in equip() well-defined.
 // shirt/pants joined 2026-09-05 — shirt existed as an item type since M11 but was
 // missing HERE, so a saved shirt equip was silently dropped on every load.
-const EQUIP_SLOTS = Object.freeze(["face", "hat", "gear", "aura", "trail", "shirt", "pants"]);
-const CLEARABLE_SLOTS = Object.freeze(["hat", "gear", "aura", "trail", "shirt", "pants"]);
+// pet/back joined 2026-11-19 (§5.13: the Grass God and the Grass Wings). Like hair they
+// are OPTIONAL keys on `equipped`, so the schema version stays 1: an older save loads
+// with neither, and an older build ignores them.
+const EQUIP_SLOTS = Object.freeze(["face", "hat", "gear", "aura", "trail", "shirt", "pants", "pet", "back"]);
+const CLEARABLE_SLOTS = Object.freeze(["hat", "gear", "aura", "trail", "shirt", "pants", "pet", "back"]);
 // §5.12: hair is free and never owned, so it is not a Catalog slot — these two keys live
 // on `equipped` (which is what the room is sent) but only setHair/setHairColor write them.
 function emptyEquipped() {
-  return { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null, hair: null, hairColor: null };
+  return { face: DEFAULT_FACE_ID, hat: null, gear: null, aura: null, trail: null, shirt: null, pants: null, pet: null, back: null, hair: null, hairColor: null };
 }
 const BUY_REASON_PREFIX = "catalog:";     // spec 07 §5.5's source token for purchases
 
@@ -261,7 +264,8 @@ function randomGhostState() {
   const face = faces.length ? pick(faces).id : DEFAULT_FACE_ID;
   const hat = hats.length && Math.random() < AVATAR_TUNING.GHOST_HAT_CHANCE ? pick(hats).id : null;
   const owned = hat ? [face, hat] : [face];
-  const hairStyle = !hat && Math.random() < 0.5 ? pick(HAIR_STYLES) : null;
+  // a ghost never wears a grant-only style: that hair is somebody's trophy
+  const hairStyle = !hat && Math.random() < 0.5 ? pick(HAIR_STYLES.filter((h) => !h.grantOnly)) : null;
   const sources = {};
   for (const id of owned) sources[id] = "default";
   return {
@@ -369,8 +373,11 @@ export function buy(itemId) {
 
 // grantItem(itemId, sourceSlug) — §5.9's grant contract: idempotent, never auto-equips,
 // so a Place may safely re-call it on every load.
+// A grant-only HAIR style (§5.13: hair.js rows with `grantOnly`) is granted through this
+// same door — hair is not a Catalog item, but a Place should not have to know that.
 export function grantItem(itemId, sourceSlug) {
   requireInit();
+  if (isHairId(itemId)) return grantHair(itemId, sourceSlug);
   const item = getItem(itemId);
   if (!item) {
     console.warn("[oof] avatar.grantItem: unknown item", itemId);
@@ -390,6 +397,21 @@ export function grantItem(itemId, sourceSlug) {
 // ---- hair (§5.12) -------------------------------------------------------------------
 // Styles cost Oofbux (hairPrice) and are tracked in state.hairOwned, not the Catalog's
 // `owned` list (hair is not a Catalog item). Writes go through the same validate -> save -> onChange path.
+
+// The hair half of grantItem: same contract (idempotent, never auto-wears, one toast),
+// but the ownership record is `hairOwned`, which has no `sources` map to write.
+function grantHair(styleId, sourceSlug) {
+  if (ownsHair(styleId)) return { ok: true, alreadyOwned: true };
+  if (!Array.isArray(state.hairOwned)) state.hairOwned = [];
+  state.hairOwned.push(styleId);
+  commit();
+  if (emitter && typeof emitter.emit === "function") {
+    emitter.emit("avatar:itemGranted", { itemId: styleId, sourceSlug });
+  }
+  const style = getHairStyle(styleId);
+  if (deps.ui && typeof deps.ui.toast === "function") deps.ui.toast("Unlocked: " + (style ? style.name : "new hair") + "!");
+  return { ok: true, alreadyOwned: false };
+}
 
 export function ownsHair(styleId) {
   return Boolean(state) && Array.isArray(state.hairOwned) && state.hairOwned.includes(styleId);

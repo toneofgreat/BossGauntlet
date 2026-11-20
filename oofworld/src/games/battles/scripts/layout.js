@@ -33,6 +33,9 @@ export const ROCKET_POS = Object.freeze([132, 30]);              // the courtyar
 // ---- §13: the Time Warp — the clock arch, the tower, and the Lettuce Realm ----------
 export const TW_GATE = Object.freeze([96, FLOOR_TOP, -14]);      // the clock arch's floor pad
 export const TW_PED = Object.freeze([110, FLOOR_TOP, -12]);      // the off-rack pedestal
+export const GRASS_PED = Object.freeze([70.5, FLOOR_TOP, -12]);  // §14: the Grass Sword's mossy pedestal (north wall)
+// Where each offRack blade stands (x, _, z) — its pad sits toward the aisle at z -4.6.
+const OFF_RACK = Object.freeze({ timewarp: TW_PED, grass: GRASS_PED });
 export const TW_TOWER = Object.freeze([-80, 120]);               // tower centre (x, z), base high in the sky
 export const TW_START = Object.freeze([-80, 61.3, 131]);         // where the gate drops you (on the base disc)
 export const TW_TOP = Object.freeze([-80, 146, 120]);            // the summit platform's top
@@ -138,6 +141,13 @@ function swordModel(parts, key, cx, cy, cz, c, ornament, spin) {
   } else if (ornament === "meteor") {
     for (let i = 0; i < 6; i++) { const a = i * 1.05, y = 0.8 + (i % 3) * 1.0; add({ shape: "wedge", size: [0.4, 0.4, 0.4], off: [Math.cos(a) * 0.5, y, Math.sin(a) * 0.5], rotation: [0, i * 60, i * 20], color: c.hilt, material: "metal" }); add({ shape: "sphere", size: [0.2, 0.2, 0.2], off: [Math.cos(a) * 0.62, y, Math.sin(a) * 0.62], color: c.gem, material: "neon" }); }
     for (let i = 0; i < 5; i++) add({ shape: "wedge", size: [0.2, 0.5, 0.2], off: [Math.cos(i * 1.26) * 0.34, -1.5, Math.sin(i * 1.26) * 0.34], color: "#ff8c1a", material: "lava" }); // flaming crown
+  } else if (ornament === "grass") {
+    // still growing: leaves up both edges, a vine wound round the grip, a flower for a pommel
+    for (let s = 0; s < 5; s++) { const y = 0.7 + s * 0.62; for (const sx of [-1, 1]) add({ shape: "wedge", size: [0.46, 0.2, 0.14], off: [sx * 0.3, y + (sx > 0 ? 0.2 : 0), 0], rotation: [0, 0, sx > 0 ? -55 : 55], color: s % 2 ? "#8be04a" : "#3ddc84", material: "plastic" }); }
+    for (let s = 0; s < 6; s++) { const a = s * 1.2; add({ shape: "sphere", size: [0.16, 0.16, 0.16], off: [Math.cos(a) * 0.2, -1.0 + s * 0.17, Math.sin(a) * 0.2], color: "#2f8f4a", material: "plastic" }); }
+    for (let i = 0; i < 5; i++) { const a = i * 1.257; add({ shape: "sphere", size: [0.22, 0.1, 0.22], off: [Math.cos(a) * 0.26, -1.5, Math.sin(a) * 0.26], color: "#ffffff", material: "plastic" }); }
+    add({ shape: "sphere", size: [0.2, 0.16, 0.2], off: [0, -1.46, 0], color: "#ffd23a", material: "neon" });
+    add({ shape: "sphere", size: [0.3, 0.3, 0.3], off: [0, 3.95, 0], color: "#eaff8a", material: "neon" }); // a dewdrop on the tip
   } else if (ornament === "timewarp") {
     // a clock caught mid-tick: a dial of twelve floating hour marks ringing the blade,
     // two golden hands, three drifting gears and a spiral of escaping seconds-sand
@@ -200,10 +210,11 @@ function buildLobby(parts, out) {
     const sw = SWORDS[i];
     // §13: offRack blades leave the classic twelve their pads and indexes; the Time
     // Warp's pedestal stands across the aisle instead, beside its clock arch.
-    const x = sw.offRack ? TW_PED[0] : X0 + (i - 2) * DX;
-    const pz = sw.offRack ? TW_PED[2] : PED_Z;
-    const padZ = sw.offRack ? -4.6 : PAD_Z;
-    const pedCol = sw.id === "timewarp" ? "#141028" : sw.id === "killstreak" ? "#0a0710" : sw.id === "cheese" ? "#7a5310" : "#1d1826";
+    const off = sw.offRack ? (OFF_RACK[sw.id] || TW_PED) : null;
+    const x = off ? off[0] : X0 + (i - 2) * DX;
+    const pz = off ? off[2] : PED_Z;
+    const padZ = off ? -4.6 : PAD_Z;
+    const pedCol = sw.id === "timewarp" ? "#141028" : sw.id === "killstreak" ? "#0a0710" : sw.id === "cheese" ? "#7a5310" : sw.id === "grass" ? "#24402a" : "#1d1826";
     parts.push(P({ shape: "cylinder", size: [4.8, 3, 4.8], position: [x, FLOOR_TOP + 1.5, pz], color: pedCol, material: "metal" }));
     parts.push(P({ shape: "cylinder", size: [4, 0.4, 4], position: [x, FLOOR_TOP + 3.05, pz], color: sw.id === "killstreak" ? "#1a1220" : "#2a2336", material: "metal", canCollide: false }));
     parts.push(P({ shape: "cylinder", size: [5.4, 0.3, 5.4], position: [x, FLOOR_TOP + 3.15, pz], color: sw.colors.gem, material: "neon", canCollide: false }));
@@ -218,11 +229,15 @@ function buildLobby(parts, out) {
       parts.push(P({ shape: "cylinder", size: [7.4, 0.14, 7.4], position: [x, FLOOR_TOP + 0.1, pz], color: "#1a1433", material: "metal", canCollide: false }));
       for (let k = 0; k < 12; k++) { const a = k * 0.5236; parts.push(P({ size: [0.5, 0.12, 0.22], position: [x + Math.cos(a) * 3.2, FLOOR_TOP + 0.2, pz + Math.sin(a) * 3.2], rotation: [0, -a * 57.29578, 0], color: k % 3 === 0 ? "#e0b23a" : "#7ec8ff", material: "neon", canCollide: false })); }
     }
+    if (sw.id === "grass") { // §14: a lawn that should not be indoors — a moss disc, and tufts in a ring
+      parts.push(P({ shape: "cylinder", size: [7.4, 0.14, 7.4], position: [x, FLOOR_TOP + 0.1, pz], color: "#2f8f4a", material: "plastic", canCollide: false }));
+      for (let k = 0; k < 10; k++) { const a = k * 0.6283 + 0.2; parts.push(P({ shape: "wedge", size: [0.22, 0.5 + (k % 3) * 0.22, 0.22], position: [x + Math.cos(a) * 3.1, FLOOR_TOP + 0.4 + (k % 3) * 0.1, pz + Math.sin(a) * 3.1], rotation: [0, k * 47, 0], color: k % 2 ? "#8be04a" : "#3ddc84", material: "plastic", canCollide: false })); }
+    }
     const cy = FLOOR_TOP + 4.6;
     const spin = [];
     swordModel(parts, sw.id, x, cy, pz, sw.colors, sw.ornament, spin);
     const padId = `bt_sword${i}`;
-    parts.push({ id: padId, shape: "cylinder", size: [4.8, 0.3, 4.8], position: [x, FLOOR_TOP + 0.2, padZ], color: sw.id === "timewarp" ? "#7ec8ff" : sw.id === "killstreak" ? "#4a0f14" : sw.id === "cheese" ? "#ffd23a" : "#e0b23a", material: "neon", canCollide: false, behaviors: [{ type: "touchEvent", event: padId, cooldownS: 0.8 }] });
+    parts.push({ id: padId, shape: "cylinder", size: [4.8, 0.3, 4.8], position: [x, FLOOR_TOP + 0.2, padZ], color: sw.id === "timewarp" ? "#7ec8ff" : sw.id === "killstreak" ? "#4a0f14" : sw.id === "cheese" ? "#ffd23a" : sw.id === "grass" ? "#3ddc84" : "#e0b23a", material: "neon", canCollide: false, behaviors: [{ type: "touchEvent", event: padId, cooldownS: 0.8 }] });
     out.swordPads.push({ i, id: sw.id, padId, x, center: [x, cy, pz], spin, labelPos: [x, FLOOR_TOP + 8.4, pz] });
   }
 

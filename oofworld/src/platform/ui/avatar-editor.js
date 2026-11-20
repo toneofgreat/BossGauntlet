@@ -17,7 +17,7 @@ import * as THREE from "../../../assets/vendor/three.module.js";
 import { buildRig } from "../services/avatar/rig.js";
 import { paintFace } from "../services/avatar/faces.js";
 import {
-  getItemsByType, getItem, BASE_SWATCHES, DEFAULT_BODY_COLORS,
+  getItemsByType, getItem, getAllItems, BASE_SWATCHES, DEFAULT_BODY_COLORS,
 } from "../services/avatar/catalog-data.js";
 import {
   HAIR_STYLES, getHairStyle, normalizeHairColor, paintHair, hexToHsl, hslToHex, hairMode,
@@ -33,9 +33,13 @@ const TABS = [
   { id: "pants", label: "Pants" },
   { id: "aura", label: "Auras" },
   { id: "trail", label: "Trails" },
+  // §5.13: not an item TYPE but a SET — every row carrying `set: "grass"` (a shirt, pants,
+  // a pet, gear, wings, a crown) plus the grant-only Grass Hair, in one place.
+  { id: "grass", label: "🌿 Grass" },
 ];
 const RARITY = {
   common: "#9aa3b8", uncommon: "#7ac74f", rare: "#35a3e0", epic: "#6b3fa0", legendary: "#f7c948",
+  mythical: "#ff4fd8", // §5.13: above legendary; one row wears it (the Grass Crown)
 };
 const LIMBS = [
   { key: "head", label: "Head" }, { key: "torso", label: "Torso" },
@@ -459,6 +463,7 @@ function createCustomizer(deps, opts) {
     const node = el("div", "background:#171a21;border-radius:12px;border:2px solid " + border + ";"
       + "padding:6px;cursor:pointer;display:flex;flex-direction:column;gap:4px;");
     node.dataset.item = item.id;
+    if (item.rarity === "mythical") node.style.boxShadow = "0 0 12px 1px " + RARITY.mythical; // it should LOOK like the only one
     const img = document.createElement("img");
     img.src = thumbFor(item);
     img.alt = "";
@@ -476,15 +481,61 @@ function createCustomizer(deps, opts) {
     return node;
   }
 
+  // §5.13: a `secret` row is not offered — not even as a locked tile — until it is owned.
+  const offered = (item) => !item.secret || avatar.owns(item.id);
+
   function renderGrid() {
     grid.textContent = "";
     grid.style.display = "grid";
-    const items = getItemsByType(tab).slice().sort((a, b) => {
+    const pool = tab === "grass" ? getAllItems().filter((i) => i.set === "grass") : getItemsByType(tab);
+    const items = pool.filter(offered).sort((a, b) => {
       if (!!a.grantOnly !== !!b.grantOnly) return a.grantOnly ? 1 : -1;
       if ((a.price || 0) !== (b.price || 0)) return (a.price || 0) - (b.price || 0);
       return a.name.localeCompare(b.name);
     });
+    if (tab === "grass") renderGrassHead(pool.length - items.length);
     for (const item of items) grid.appendChild(tile(item));
+    if (tab === "grass") {
+      for (const s of HAIR_STYLES) if (s.set === "grass" && avatar.ownsHair && avatar.ownsHair(s.id)) grid.appendChild(setHairTile(s));
+    }
+  }
+
+  // The Grass tab's banner: what this shelf is, and (without naming prices, because
+  // there are none) that the rest of it is still growing somewhere.
+  function renderGrassHead(lockedCount) {
+    const hairLocked = HAIR_STYLES.some((s) => s.set === "grass" && !(avatar.ownsHair && avatar.ownsHair(s.id)));
+    const locked = lockedCount + (hairLocked ? 1 : 0);
+    const note = el("div", "grid-column:1/-1;font-size:12px;color:#9aa3b8;margin:2px 0 4px;line-height:1.5;",
+      locked
+        ? "🌱 Grass gear is never sold — it GROWS. Rebirth in Battles (the sword game) to earn it: "
+          + locked + " more thing" + (locked === 1 ? "" : "s") + " still to grow here."
+        : "🌿 Every grass thing there is. Tap one to equip it — the pet, the wings and the hammer wake their powers in Battles.");
+    note.dataset.grassNote = "1";
+    grid.appendChild(note);
+  }
+
+  // A grant-only hair style shown outside the Hair tab (the Grass tab's Grass Hair):
+  // one tap wears it, a second takes it off. Colour is still picked on the Hair tab.
+  function setHairTile(s) {
+    const eq = equippedIds();
+    const on = eq.hair === s.id;
+    const node = el("div", "background:#171a21;border-radius:12px;border:2px solid "
+      + (on ? "#00a2ff" : "transparent") + ";padding:6px;cursor:pointer;display:flex;"
+      + "flex-direction:column;gap:4px;");
+    node.dataset.hair = s.id;
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = hairThumb(s.id, normalizeHairColor(s.id, eq.hairColor), headHexOf(avatar.getState()));
+    img.setAttribute("style", "width:100%;aspect-ratio:1;border-radius:8px;background:#0c0e14;");
+    node.append(img,
+      el("div", "font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;", s.name),
+      el("div", "font-size:11px;color:" + (on ? "#00a2ff" : "#9aa3b8") + ";", on ? "Wearing" : "Owned"));
+    node.addEventListener("click", () => {
+      avatar.setHair(on ? null : s.id);
+      selected = null;
+      render();
+    });
+    return node;
   }
 
   // §5.10 step 6 — the Body tab is a colour picker, not a grid of things to own.
@@ -698,6 +749,7 @@ function createCustomizer(deps, opts) {
     mk(null, "No hair", "Free");
     for (const s of HAIR_STYLES) {
       const have = typeof avatar.ownsHair === "function" ? avatar.ownsHair(s.id) : true;
+      if (s.grantOnly && !have) continue; // §5.13: a grant-only style is not offered until earned
       mk(s.id, s.name, (have ? "Owned" : "⬡ " + s.price.toLocaleString()) + (s.glow ? " · ✨" : ""));
     }
     grid.appendChild(tiles);

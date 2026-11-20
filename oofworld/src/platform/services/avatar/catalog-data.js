@@ -1772,6 +1772,189 @@ export const PLACE_REWARDS = [
       ],
     },
   },
+  {
+    // Spec 26 §14: Battles' REBIRTH 3 reward — the Grass Armor, top half. A moss-green
+    // cuirass with a living core gem, leaf pauldrons that sprout real blades, and a bark belt.
+    // `secret` hides the row from the editor until it is owned; `set` files it under the
+    // editor's Grass tab as well as Shirts (spec 05 §5.13).
+    id: "shirt_grass", name: "Grass Armor Top", type: "shirt",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — rebirth 3",
+    secret: true, set: "grass",
+    appearance: {
+      prims: [
+        { shape: "box", size: [2.1, 2.06, 1.1], offset: [0, 0, 0], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.5, 1.1, 0.12], offset: [0, 0.25, -0.58], rotation: [0, 0, 0], color: "#3ddc84", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.5, 0.5, 0.5], offset: [0, 0.3, -0.62], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "dome", size: [0.95, 0.5, 1.15], offset: [-1.05, 1, 0], rotation: [0, 0, 0], color: "#1f6b34", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.22, 0.6, 0.22], offset: [-0.95, 1.5, -0.22], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.75, 0.2], offset: [-1.15, 1.55, 0.05], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [-0.9, 1.45, 0.28], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.5, 0.12, 0.1], offset: [-0.45, -0.3, -0.58], rotation: [0, 0, -28], color: "#b6f26a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "dome", size: [0.95, 0.5, 1.15], offset: [1.05, 1, 0], rotation: [0, 0, 0], color: "#1f6b34", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.22, 0.6, 0.22], offset: [0.95, 1.5, -0.22], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.75, 0.2], offset: [1.15, 1.55, 0.05], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [0.9, 1.45, 0.28], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.5, 0.12, 0.1], offset: [0.45, -0.3, -0.58], rotation: [0, 0, 28], color: "#b6f26a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [2.14, 0.22, 1.14], offset: [0, -0.85, 0], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.3, 0.3, 0.3], offset: [0, -0.85, -0.6], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.16, 1.9, 0.16], offset: [0, 0, 0.62], rotation: [0, 0, 22], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // Spec 26 §14: the Grass Armor's greaves (rebirth 3, granted with the top). The leg
+    // prims ride the leg joints (`limb`), so the armour walks instead of standing rigid.
+    id: "pants_grass", name: "Grass Armor Legs", type: "pants",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — rebirth 3",
+    secret: true, set: "grass",
+    appearance: {
+      prims: [
+        { shape: "box", size: [2.08, 0.74, 1.08], offset: [0, -0.66, 0], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [2.12, 0.16, 1.12], offset: [0, -0.3, 0], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.08, 1.92, 1.08], offset: [0, -0.98, 0], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null, limb: "leftLeg" },
+        { shape: "sphere", size: [0.5, 0.5, 0.5], offset: [0, -0.95, -0.4], rotation: [0, 0, 0], color: "#8be04a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null, limb: "leftLeg" },
+        { shape: "box", size: [1.14, 0.3, 1.14], offset: [0, -1.84, 0], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null, limb: "leftLeg" },
+        { shape: "box", size: [0.6, 0.7, 0.1], offset: [0, -1.4, -0.56], rotation: [0, 0, 0], color: "#3ddc84", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null, limb: "leftLeg" },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [0.34, -1.5, -0.6], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null, limb: "leftLeg" },
+        { shape: "cone", size: [0.2, 0.4, 0.2], offset: [-0.34, -1.55, -0.6], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null, limb: "leftLeg" },
+        { shape: "box", size: [1.08, 1.92, 1.08], offset: [0, -0.98, 0], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null, limb: "rightLeg" },
+        { shape: "sphere", size: [0.5, 0.5, 0.5], offset: [0, -0.95, -0.4], rotation: [0, 0, 0], color: "#8be04a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null, limb: "rightLeg" },
+        { shape: "box", size: [1.14, 0.3, 1.14], offset: [0, -1.84, 0], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null, limb: "rightLeg" },
+        { shape: "box", size: [0.6, 0.7, 0.1], offset: [0, -1.4, -0.56], rotation: [0, 0, 0], color: "#3ddc84", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null, limb: "rightLeg" },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [0.34, -1.5, -0.6], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null, limb: "rightLeg" },
+        { shape: "cone", size: [0.2, 0.4, 0.2], offset: [-0.34, -1.55, -0.6], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null, limb: "rightLeg" },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // Spec 26 §14: Battles' REBIRTH 4 reward — the Grass God, the Catalog's first PET (type
+    // `pet`, spec 05 §5.13): rig.js floats it over your shoulder and lets it lag behind you
+    // in world space, so it visibly FOLLOWS. Pet-local space, face on +Z (the way the rig
+    // root faces). While it is equipped, Battles grows grass where you walk and offers the
+    // GRASS AWAKEN mech — the powers are that Place's, the pet is worn everywhere.
+    id: "pet_grassgod", name: "Grass God", type: "pet",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — rebirth 4",
+    secret: true, set: "grass",
+    appearance: {
+      prims: [
+        { shape: "sphere", size: [1.3, 1.3, 1.3], offset: [0, 0, 0], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.9, 0.9, 0.9], offset: [0, 0.3, -0.05], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.55, 0.2], offset: [0.3, 0.86, -0.05], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.69, 0.2], offset: [0.15, 0.86, 0.21], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.83, 0.2], offset: [-0.15, 0.86, 0.21], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.55, 0.2], offset: [-0.3, 0.86, -0.05], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.69, 0.2], offset: [-0.15, 0.86, -0.31], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.83, 0.2], offset: [0.15, 0.86, -0.31], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.24, 0.95, 0.24], offset: [0, 1, -0.05], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.26, 0.26, 0.26], offset: [-0.27, 0.1, 0.56], rotation: [0, 0, 0], color: "#12141c", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.1, 0.1, 0.1], offset: [-0.3, 0.17, 0.66], rotation: [0, 0, 0], color: "#ffffff", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.18, 0.18, 0.18], offset: [-0.46, -0.1, 0.48], rotation: [0, 0, 0], color: "#ff9ecb", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.7, 0.34, 0.07], offset: [-0.9, 0.12, -0.1], rotation: [0, 0, -28], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.3, 0.3, 0.3], offset: [-0.34, -0.66, 0.1], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.26, 0.26, 0.26], offset: [0.27, 0.1, 0.56], rotation: [0, 0, 0], color: "#12141c", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.1, 0.1, 0.1], offset: [0.3, 0.17, 0.66], rotation: [0, 0, 0], color: "#ffffff", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.18, 0.18, 0.18], offset: [0.46, -0.1, 0.48], rotation: [0, 0, 0], color: "#ff9ecb", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.7, 0.34, 0.07], offset: [0.9, 0.12, -0.1], rotation: [0, 0, 28], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.3, 0.3, 0.3], offset: [0.34, -0.66, 0.1], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.3, 0.07, 0.06], offset: [0, -0.17, 0.63], rotation: [0, 0, 0], color: "#12141c", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "torus", size: [0.62, 0.06, 0], offset: [0, 1.55, 0], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 60, bob: { amp: 0.06, hz: 0.6 }, flicker: null },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // Spec 26 §14: Battles' REBIRTH 5 reward — the Grass Hammer. Worn as gear anywhere;
+    // in Battles it adds the SLAM button (leap, land, and whoever is under you turns to
+    // grass — an infection that spreads by touch). Clears 20:G1's gear floor on its own.
+    id: "gear_grasshammer", name: "Grass Hammer", type: "gear",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — rebirth 5",
+    secret: true, set: "grass",
+    appearance: {
+      prims: [
+        { shape: "sphere", size: [0.32, 0.32, 0.32], offset: [0, -0.16, 0], rotation: [0, 0, 0], color: "#1f6b34", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.18, 2, 0.18], offset: [0, 0.95, 0], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.24, 0.3, 0.24], offset: [0, 0.45, 0], rotation: [0, 0, 0], color: "#4a2f18", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1, 0.8, 1.9], offset: [0, 2.3, 0], rotation: [0, 0, 0], color: "#2f8f4a", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.06, 0.3, 1.5], offset: [0, 2.3, 0], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.9, 0.16, 0.9], offset: [0, 2.3, -0.98], rotation: [90, 0, 0], color: "#3ddc84", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.5, 0.5, 0.12], offset: [0, 2.3, -1.06], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cylinder", size: [0.9, 0.16, 0.9], offset: [0, 2.3, 0.98], rotation: [90, 0, 0], color: "#3ddc84", material: "metal", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [0.5, 0.5, 0.12], offset: [0, 2.3, 1.06], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [-0.25, 2.9, -0.7], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.7, 0.2], offset: [0.25, 2.98, -0.35], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [-0.25, 2.9, 0], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.7, 0.2], offset: [0.25, 2.98, 0.35], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.2, 0.5, 0.2], offset: [-0.25, 2.9, 0.7], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "torus", size: [0.3, 0.05, 0], offset: [0, 1.5, 0], rotation: [0, 0, 0], color: "#8be04a", material: "neon", transparency: 0, spin: 80, bob: null, flicker: null },
+        { shape: "sphere", size: [0.2, 0.2, 0.2], offset: [0.28, 1.2, 0], rotation: [0, 0, 0], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // Spec 26 §14: Battles' REBIRTH 5 reward — the Grass Wings, the first item of type
+    // `back` (spec 05 §5.13: a BackAnchor on the torso, which is what `wings_champion`
+    // above had to be an aura for want of). Two fans of five leaf-feathers with glowing
+    // ribs. In Battles they add ten seconds of free flight every two minutes.
+    id: "back_grasswings", name: "Grass Wings", type: "back",
+    price: null, rarity: "legendary", grantOnly: true, sourcePlace: "Battles — rebirth 5",
+    secret: true, set: "grass",
+    appearance: {
+      prims: [
+        { shape: "box", size: [0.5, 1, 0.2], offset: [0, 0.3, 0.6], rotation: [0, 0, 0], color: "#6b4423", material: "wood", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.32, 0.32, 0.32], offset: [0, 0.55, 0.74], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [2.3, 0.46, 0.08], offset: [-0.91, 1.33, 0.66], rotation: [0, 0, -58], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.84, 0.07, 0.1], offset: [-0.91, 1.33, 0.7], rotation: [0, 0, -58], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [2.1, 0.43, 0.08], offset: [-1.17, 0.94, 0.69], rotation: [0, 0, -34], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.68, 0.07, 0.1], offset: [-1.17, 0.94, 0.73], rotation: [0, 0, -34], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.8, 0.4, 0.08], offset: [-1.19, 0.51, 0.72], rotation: [0, 0, -10], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.44, 0.07, 0.1], offset: [-1.19, 0.51, 0.76], rotation: [0, 0, -10], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.4, 0.37, 0.08], offset: [-0.98, 0.18, 0.75], rotation: [0, 0, 14], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1, 0.34, 0.08], offset: [-0.7, 0.06, 0.78], rotation: [0, 0, 36], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [2.3, 0.46, 0.08], offset: [0.91, 1.33, 0.66], rotation: [0, 0, 58], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.84, 0.07, 0.1], offset: [0.91, 1.33, 0.7], rotation: [0, 0, 58], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [2.1, 0.43, 0.08], offset: [1.17, 0.94, 0.69], rotation: [0, 0, 34], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.68, 0.07, 0.1], offset: [1.17, 0.94, 0.73], rotation: [0, 0, 34], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.8, 0.4, 0.08], offset: [1.19, 0.51, 0.72], rotation: [0, 0, 10], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.44, 0.07, 0.1], offset: [1.19, 0.51, 0.76], rotation: [0, 0, 10], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1.4, 0.37, 0.08], offset: [0.98, 0.18, 0.75], rotation: [0, 0, -14], color: "#b6f26a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "box", size: [1, 0.34, 0.08], offset: [0.7, 0.06, 0.78], rotation: [0, 0, -36], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+      ],
+      particles: null,
+    },
+  },
+  {
+    // Spec 26 §14: the Grass Crown — the Catalog's only MYTHICAL. Granted once the Grass
+    // Hammer's owner has turned ten fighters to grass through their own hammer (their slam
+    // victims plus everyone the infection then spreads to). A wide leaf circlet that sits
+    // OVER hair (hair.js HATS_OVER_HAIR), under a slow magenta star.
+    id: "hat_grasscrown", name: "Grass Crown", type: "hat",
+    price: null, rarity: "mythical", grantOnly: true, sourcePlace: "Battles — 10 grass infections",
+    secret: true, set: "grass",
+    appearance: {
+      prims: [
+        { shape: "torus", size: [0.74, 0.09, 0], offset: [0, 0.1, 0], rotation: [0, 0, 0], color: "#2f8f4a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "torus", size: [0.74, 0.05, 0], offset: [0, 0.26, 0], rotation: [0, 0, 0], color: "#f7c948", material: "gold", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.85, 0.26], offset: [0.74, 0.66, 0], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.2, 0.2, 0.2], offset: [0.84, 0.18, 0], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.55, 0.26], offset: [0.52, 0.52, 0.52], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.85, 0.26], offset: [0, 0.66, 0.74], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.2, 0.2, 0.2], offset: [0, 0.18, 0.84], rotation: [0, 0, 0], color: "#ff4fd8", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.55, 0.26], offset: [-0.52, 0.52, 0.52], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.85, 0.26], offset: [-0.74, 0.66, 0], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.2, 0.2, 0.2], offset: [-0.84, 0.18, 0], rotation: [0, 0, 0], color: "#eaff8a", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.55, 0.26], offset: [-0.52, 0.52, -0.52], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.85, 0.26], offset: [0, 0.66, -0.74], rotation: [0, 0, 0], color: "#3ddc84", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "sphere", size: [0.2, 0.2, 0.2], offset: [0, 0.18, -0.84], rotation: [0, 0, 0], color: "#ff4fd8", material: "neon", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "cone", size: [0.26, 0.55, 0.26], offset: [0.52, 0.52, -0.52], rotation: [0, 0, 0], color: "#8be04a", material: "plastic", transparency: 0, spin: 0, bob: null, flicker: null },
+        { shape: "ring", size: [2, 2, 0.05], offset: [0, 0.12, 0], rotation: [90, 0, 0], color: "#eaff8a", material: "neon", transparency: 0.55, spin: 0, bob: null, flicker: null },
+        { shape: "star", size: [0.46, 0.46, 0.12], offset: [0, 1.5, 0], rotation: [0, 0, 0], color: "#ff4fd8", material: "neon", transparency: 0, spin: 90, bob: { amp: 0.08, hz: 0.5 }, flicker: null },
+      ],
+      particles: null,
+    },
+  },
   // region:place-rewards:end
 ];
 
