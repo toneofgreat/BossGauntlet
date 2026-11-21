@@ -119,6 +119,7 @@ export function createLevel(ctx) {
   const songBeat = () => songT / BEAT;
   // The shots are composed for 16:9. On a tall (phone portrait) screen keep at least ~60 % of that width in
   // view by opening the vertical fov, so both performers stay in frame.
+  const narrow = () => (ctx.camera.aspect || 1.78) < 1;
   function fovA(f) {
     const asp = ctx.camera.aspect || 1.78;
     if (asp >= 1.5) return f;
@@ -477,13 +478,17 @@ export function createLevel(ctx) {
   function actCamera(n, instant) {
     const d = instant ? 0.01 : n === 1 ? 2.2 : 3;
     if (n === 1) cinema.shot({ to: { pos: [0.8, 1.75, 1.7], look: [0.8, 0.05, -2.5], fov: fovA(40) }, dur: d, ease: "inOut", hand: 0.25 });
-    else if (n === 2) cinema.shot({ to: { pos: [5.4, 2.9, 8.6], look: [0, 0.2, 3], fov: fovA(48) }, dur: d, ease: "inOut", hand: 0.25 });
+    else if (n === 2 && narrow()) cinema.shot({ to: { pos: [8.6, 3.4, 5.6], look: [-1, 0, 3], fov: fovA(48) }, dur: d, ease: "inOut", hand: 0.25 }); // down the pool's length
+    else if (n === 2) cinema.shot({ to: { pos: [5.4, 2.9, 8.8], look: [0, 0.2, 3], fov: fovA(54) }, dur: d, ease: "inOut", hand: 0.25 });
+    else if (narrow()) cinema.shot({ to: { pos: [-1.1, 1.6, -6.4], look: [0, 0.35, -1.5], fov: fovA(44) }, dur: d, ease: "inOut", hand: 0.25 });
     else cinema.shot({ to: { pos: [-3.2, 1.5, -5.7], look: [0, 0.35, 0.5], fov: fovA(44) }, dur: d, ease: "inOut", hand: 0.25 });
     camT = d + 0.15;
   }
   function actDrift(n) {
     if (n === 1) cinema.shot({ to: { pos: [0.8, 1.5, 1.0], look: [0.8, 0.05, -2.5] }, dur: 30, ease: "linear", hand: 0.25 });
-    else if (n === 2) cinema.shot({ to: { pos: [-5.4, 2.9, 8.6], look: [0, 0.2, 3] }, dur: 36, ease: "linear", hand: 0.25 });
+    else if (n === 2 && narrow()) cinema.shot({ to: { pos: [8.6, 3.4, 1.2], look: [-1, 0, 3] }, dur: 36, ease: "linear", hand: 0.25 });
+    else if (n === 2) cinema.shot({ to: { pos: [-5.4, 2.9, 8.8], look: [0, 0.2, 3] }, dur: 36, ease: "linear", hand: 0.25 });
+    else if (narrow()) cinema.shot({ to: { pos: [1.1, 1.6, -6.4], look: [0, 0.35, -1.5] }, dur: 30, ease: "linear", hand: 0.25 });
     else cinema.shot({ to: { pos: [3.2, 1.5, -5.7], look: [0, 0.35, 0.5] }, dur: 30, ease: "linear", hand: 0.25 });
   }
   function beginAct(n, instant) {
@@ -839,7 +844,9 @@ export function createLevel(ctx) {
     ui.setTrickState(3, { want: true });
     ui.setObjective("JUMP on the fourth beat!", ctx.touch ? "tap JUMP!" : "4 or Space");
     ui.call("3 - 2 - 1 - JUMP!", "Wait for the last beat");
-    cinema.shot({ to: { pos: [-3.0, 2.2, 8.7], look: [-3.5, 1.75, 2.3], fov: fovA(52) }, dur: 2, ease: "inOut", hand: 0.2 });
+    // tower on the left, flaming hoop on the right; a tall screen only has room for the tower and the jumper
+    if (narrow()) cinema.shot({ to: { pos: [-5.4, 2.2, 8.7], look: [-5.9, 1.75, 2.3], fov: fovA(52) }, dur: 2, ease: "inOut", hand: 0.2 });
+    else cinema.shot({ to: { pos: [-3.0, 2.2, 8.7], look: [-3.5, 1.75, 2.3], fov: fovA(52) }, dur: 2, ease: "inOut", hand: 0.2 });
     const t0 = Math.ceil((songBeat() + LEAD + 1.5) / 4) * 4;
     roll.t0 = t0; roll.goT = (t0 + 3) * BEAT; roll.n = 0; roll.done = false; roll.early = false;
     for (let i = 0; i < 4; i++) roll.ids[i] = -1;
@@ -997,7 +1004,7 @@ export function createLevel(ctx) {
     const b = SP.bow;
     cinema.shot({ to: { pos: [2.4, 1.2, 8.9], look: [0, 0.35, b.z], fov: fovA(42) }, dur: instant ? 0.01 : 3, ease: "inOut", hand: 0.3 });
     const go = () => { if (g === gen) bowNow(); };
-    if (instant) { if (bonus === 0) bonus = 5; putBoth(b.x - 0.7, b.z + 0.1, 0, b.x + 0.7, b.z + 0.1, 0); go(); }
+    if (instant) { if (bonus === 0) bonus = 5; putBoth(b.x - 0.7, b.z + 0.1, 0, b.x + 0.7, b.z + 0.1, 0); ctx.after(0.1, go); } // (after the camera has snapped)
     else meetAt(b.x - 0.7, b.z + 0.1, 0, b.x + 0.7, b.z + 0.1, 0, 8, 0.85, go);
   }
   function bowNow() {

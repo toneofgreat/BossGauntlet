@@ -86,6 +86,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       s.ffloor = fl(f.x, f.z);
       s.fgy = f.group.position.y;
       s.keeper = { x: L.keeper.x, z: L.keeper.z, visible: !!L.keeper.visible };
+      const o = { x: 0, y: 0, visible: false };
+      d.ctx.project(d.platypus.group, o, 0.15); s.scrP = { x: o.x, y: o.y, visible: o.visible };
+      d.ctx.project(f.group, o, 0.15); s.scrF = { x: o.x, y: o.y, visible: o.visible };
+      s.vw = innerWidth; s.vh = innerHeight;
     }
     return s;
   });
@@ -127,6 +131,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (strict && !s.acting && !s.leaping && !s.ringLeap && Math.abs(dp) > 0.3) fallback("player not on the ground at " + label + ": " + dp.toFixed(2));
     if (strict && Math.abs(df) > 0.45) fallback("friend not on the ground at " + label + ": " + df.toFixed(2));
   };
+  // both performers must be inside the picture (with a margin) in the fixed-camera beats
+  const framed = (s, label) => {
+    if (!s || !s.scrP) return;
+    const m = 0.04 * s.vw, bad = [];
+    for (const [who, p] of [["player", s.scrP], ["Pip", s.scrF]]) if (!p.visible || p.x < m || p.x > s.vw - m || p.y < 0.1 * s.vh || p.y > 0.92 * s.vh) bad.push(who + " at " + p.x.toFixed(0) + "," + p.y.toFixed(0));
+    log("  framing " + label + ": player " + s.scrP.x.toFixed(0) + "," + s.scrP.y.toFixed(0) + " Pip " + s.scrF.x.toFixed(0) + "," + s.scrF.y.toFixed(0) + " of " + s.vw + "x" + s.vh);
+    if (bad.length) fallback("out of frame at " + label + ": " + bad.join("; "));
+  };
   const reached = (beat) => ORDER.indexOf(beat);
   // shoot every `every` ms while cond(s) holds
   async function filmWhile(name, cond, every, maxMs, each) {
@@ -145,21 +157,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ------------------------------------------------------------------ the rhythm bot (real key presses)
   // plan: { "act:i": "skip" | "late" | "wrong" | "space" }
-  const bot = { on: false, plan: {}, done: new Set(), presses: 0, p: null };
+  const bot = { on: false, plan: {}, done: new Map(), presses: 0, p: null };
   async function botLoop() {
     while (bot.on) {
       let nx = null;
       try { nx = await page.evaluate(() => { const L = window.__platy && window.__platy.level4; return L ? L.pending() : null; }); } catch (_) { break; }
       if (shotQ.length) {
-        const q = shotQ[0], gap = Date.now() - q.t > 4000 ? 0.4 : 0.7;
-        const free = !nx || (bot.done.has(nx.act + ":" + nx.i) ? true : nx.d > gap);
+        const q = shotQ[0], gap = Date.now() - q.t > 3500 ? 0.85 : 1.3; // a screenshot can stall the page for up to ~1 s
+        const free = !nx || nx.d > gap || nx.d < -0.3;
         if (free) { shotQ.shift(); q.res(await shotNow(q.name)); continue; }
       }
       if (nx) {
         const key = nx.act + ":" + nx.i, what = bot.plan[key] || "hit";
         const at = what === "late" ? -0.17 : 0.012;
-        if (!bot.done.has(key) && nx.d <= at && nx.d > -0.28) {
-          bot.done.add(key);
+        if (!(Date.now() - (bot.done.get(key) || 0) < 1500) && nx.d <= at && nx.d > -0.28) {
+          bot.done.set(key, Date.now());
           if (what === "skip") { /* a child looks away */ }
           else if (what === "space") { await page.keyboard.press("Space"); bot.presses++; }
           else if (what === "wrong") { await page.keyboard.press("Digit" + (((nx.lane + 1) % 4) + 1)); bot.presses++; }
@@ -206,8 +218,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const t = await filmWhile("act" + k, (x) => x.step === "act" + k, every || 2600, 90000, async (x) => {
       if (x.ringLeap && ring < 3) { ring++; await sleep(330); await shot("act" + k + "-ring-leap-" + ring); }
       if (k === 2 && !sw && x.actBeat > 31.5) { sw = true; await shot("act2-swap-sides"); }
-      if (x.act === k && !x.acting && !x.ringLeap && grounded < 2 && x.actBeat > (grounded ? 30 : -2)) { grounded++; ground(x, "act " + k + " beat " + x.actBeat.toFixed(0), k !== 2); }
-      if (!fpsP && x.act === k && x.actBeat > (k === 2 ? 8 : 20)) fpsP = fpsMeasure(1).then((f) => { fps = f; });
+      if (x.act === k && !x.acting && !x.ringLeap && grounded < 2 && x.actBeat > (grounded ? 30 : -2)) { grounded++; ground(x, "act " + k + " beat " + x.actBeat.toFixed(0), k !== 2); framed(x, "act " + k + " beat " + x.actBeat.toFixed(0)); }
+      if (!fpsP && x.act === k && x.actBeat > (k === 2 ? 8 : 20)) fpsP = fpsMeasure(2).then((f) => { fps = f; });
     });
     if (fpsP) { await fpsP; s = await st(); fpsLine("act" + k, fps, s); }
     s = await st();
@@ -219,7 +231,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     botStart({});
     let leapShots = 0, rollShots = 0;
     const t = await filmWhile("finale", (x) => x.step === "finale", 1500, 60000, async (x) => {
-      if (x.rolling && rollShots < 1) { rollShots++; ground(x, "tower top", true); }
+      if (x.rolling && rollShots < 1) { rollShots++; ground(x, "tower top", true); await sleep(2100); framed(await st(), "finale count"); }
       if (x.leaping && leapShots < 7) { leapShots++; await shot("finale-leap-" + leapShots); await sleep(260); }
     });
     s = await st();
@@ -231,7 +243,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     let fpsP = null, fps = null, g = false;
     const t = await filmWhile("bows", (x) => x.step === "bows", 1300, 40000, async (x) => {
       if (!fpsP && x.bowPhase >= 1) fpsP = fpsMeasure(1).then((f) => { fps = f; });
-      if (!g && x.bowPhase >= 3) { g = true; ground(x, "bows", true); report.stars = x.stars; report.coins = x.coins; report.score = x.score; log("  result: " + x.stars + " stars, score " + x.score + "/" + x.maxScore + ", coins " + x.coins + ", hits " + x.hits + " perfect " + x.perfects + " misses " + x.misses + " of " + x.notes); }
+      if (!g && x.bowPhase >= 3) { g = true; ground(x, "bows", true); framed(x, "bows"); report.stars = x.stars; report.coins = x.coins; report.score = x.score; log("  result: " + x.stars + " stars, score " + x.score + "/" + x.maxScore + ", coins " + x.coins + ", hits " + x.hits + " perfect " + x.perfects + " misses " + x.misses + " of " + x.notes); }
     });
     if (fpsP) { await fpsP; s = await st(); fpsLine("bows", fps, s); }
     log("bows ran " + t.toFixed(1) + " s");
@@ -357,11 +369,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       for (const b of ["act1", "act2", "act3", "finale"]) {
         await page.evaluate((x) => window.__platy.skipTo(x), b);
         await sleep(b === "finale" ? 3200 : 7500);
-        await shot("phone-portrait-" + b);
+        await shot("phone-portrait-" + b); framed(await st(), "phone portrait " + b);
       }
       await botStop();
       await page.evaluate(() => window.__platy.skipTo("bows"));
-      await sleep(6500); await shot("phone-portrait-bows-result");
+      await sleep(6500); await shot("phone-portrait-bows-result"); framed(await st(), "phone portrait bows");
       await page.evaluate(() => window.__platy.skipTo("home"));
       await sleep(9000); await shot("phone-portrait-home");
       // phone landscape
