@@ -65,6 +65,17 @@ export function createLevel(ctx) {
   const leadRoute = [{ x: 0, z: 0 }];
   const sleepSpot = { x: 0, z: 0, yaw: 0 };
   const groundWater = (x, z) => { const w = zoo.waterAt(x, z); return w > -1e6 ? w : null; };
+  // The directed shots are composed for 16:9. On a tall (phone portrait) screen the vertical field of view opens
+  // so the middle of the composition (the timer text, both sleepers, the leap) is not cut off at the sides.
+  function F(v) {
+    const a = ctx.camera.aspect || 1.78;
+    if (a >= 1.3) return v;
+    return Math.min(80, (2 * Math.atan((Math.tan((v * PI) / 360) * 1.3) / a) * 180) / PI);
+  }
+  // open sand in front of the burrow: the day starts here (the follow camera cannot see into the burrow)
+  const OPEN = { x: 6.4, z: -2.6, yaw: -PI / 2 - 0.15 }, OPEN_PIP = { x: 5.6, z: -3.8 };
+  const bed = { x: 0, z: 0, yaw: 0 };   // where Pip sleeps tonight: right beside the player's nest spot
+  const mouth = { x: 0, z: 0 };          // just outside the burrow mouth (people come and go this way)
 
   // =====================================================================================================
   // state
@@ -82,13 +93,13 @@ export function createLevel(ctx) {
   // slide
   let slidePts = null, slideCum = null, slideLen = 1;
   const slide = { on: false, t: 0, splashed: false, pipOn: false, x: 0, y: 0, z: 0 };
-  let hoopGoal = null, hoopJump = null, goalArmed = true, ballWetT = 0, fetchCd = 0;
+  let hoopGoal = null, hoopJump = null, goalArmed = true, ballWetT = 0, fetchCd = 0, strayT = 0;
   let resting = false;
   const picnic = { state: 0, eatT: -1, pipBiteT: -1 }; // 0 not yet, 1 keeper on the way, 2 bowl is down, 3 finished
   // ---- bedtime ----
   let sleepSeq = false;
   // ---- the night ----
-  const night = { on: false, carried: false, scared: false, scaredT: 0, chase: false, chaseT: 0, lookPip: false, fp: false,
+  const night = { on: false, carried: false, scared: false, scaredT: 0, chase: false, chaseT: 0, lookPip: false, lookMan: false, fp: false,
     atNest: false, out: false, corner: false, leapt: false, glass: false, landed: false, moteT: 0, motes: false };
   // ---- hope ----
   let talkT = 0, blipT = 0, tickT = -1, tickN = 0;
@@ -162,6 +173,12 @@ export function createLevel(ctx) {
       slideCum[i] = slideCum[i - 1] + Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
     }
     slideLen = slideCum[slidePts.length - 1] || 1;
+    {
+      // the burrow's axis (out of its mouth) and the two spots derived from it
+      const ne = Z.nest, ax = Math.sin(ne.yaw), az = Math.cos(ne.yaw);
+      bed.x = ne.x + ax * 0.22 + az * 0.5; bed.z = ne.z + az * 0.22 - ax * 0.5; bed.yaw = ne.yaw + 0.3;
+      mouth.x = ne.x + ax * 2.3; mouth.z = ne.z + az * 2.3;
+    }
     colW.x = L.wizard.x; colW.z = L.wizard.z;
     colD.x = L.dummy.x; colD.z = L.dummy.z;
     if (ctx.debug) ctx.debug.level5 = { zoo, lair, friend, crowd, props, joys, joy, night, picnic };
@@ -202,7 +219,7 @@ export function createLevel(ctx) {
     dayAct = null; resting = false; slide.on = false; slide.pipOn = false; bal.on = false; tr.on = false; sleepSeq = false;
     picnic.eatT = picnic.pipBiteT = -1;
     pip = null; pipTarget = -1;
-    night.on = night.carried = night.scared = night.chase = night.lookPip = night.fp = night.motes = false;
+    night.on = night.carried = night.scared = night.chase = night.lookPip = night.lookMan = night.fp = night.motes = false;
     night.atNest = night.out = night.corner = night.leapt = night.glass = night.landed = false;
     talkT = 0; tickT = -1; tickN = 0;
     slapT = -1; slapCd = 0; holding = false; holdSub = ""; throwT = -1; thrown = false; misses = 0; trainIdle = 0;
@@ -258,7 +275,7 @@ export function createLevel(ctx) {
   }
   function dayObjective() {
     const n = joyCount();
-    if (n >= 6) ui.setObjective("The best day ever!", "play as long as you like");
+    if (n >= 6) ui.setObjective("The best day ever!", "the sun is going down");
     else if (n >= 4) ui.setObjective("What a day! Keep playing with Pip", "the sun is getting low");
     else ui.setObjective("Best day ever: pick any joy from the list  " + n + " / 4", "follow the glowing rings");
   }
@@ -271,7 +288,7 @@ export function createLevel(ctx) {
     pip = null; pipT = 0; pipThink = 0; pipTarget = -1; bubbleT = 0; introCallT = 0.4;
     tr.on = false; tr.last = ""; tr.endAt = -99; tr.combo = 1; tr.scored = true;
     watchersWant = 3; gathered = false; crowdIdle = 0; lingerT = 0; lingerArmed = true; hintedUnseen = false; ballSlot = false;
-    goalArmed = true; ballWetT = 0; fetchCd = 0;
+    goalArmed = true; ballWetT = 0; fetchCd = 0; strayT = 0;
     picnic.state = 0;
     ui.setCoins(0);
 
@@ -313,13 +330,22 @@ export function createLevel(ctx) {
       if (g !== gen || step !== "intro") return;
       const c = Z.camNest;
       cinema.play([
-        { shot: { pos: [c.pos.x, c.pos.y, c.pos.z], look: friend.group, lookY: 0.2, fov: 40,
+        { shot: { pos: [c.pos.x, c.pos.y, c.pos.z], look: friend.group, lookY: 0.2, fov: F(40),
           to: { pos: [c.pos.x - 0.5, c.pos.y - 0.15, c.pos.z + 0.7] }, dur: 7 }, hold: false },
         { fade: "clear", dur: 1.4 },
         { wait: 0.4 },
         { caption: "Today is going to be the best day ever.", dur: 4, narr: true },
         { call: () => friend.emote("happy") },
         { wait: 0.9 },
+        // out they come, Pip first
+        { call: () => {
+          friend.do("goto", { x: OPEN_PIP.x, z: OPEN_PIP.z, run: true });
+          player.walkTo(mouth.x, mouth.z, { speed: 0.75, then: () => { if (g === gen && step === "intro") player.walkTo(OPEN.x, OPEN.z, { speed: 0.75, face: OPEN.yaw }); } });
+        } },
+        { shot: { pos: [3.6, 1.15, -0.9], look: platypus.group, lookY: 0.25, fov: F(30), dur: 0 } },
+        { wait: 0.5 },
+        { until: () => !player.walking, max: 5 },
+        { wait: 0.3 },
       ], { skippable: true, onDone: () => { if (g === gen) beginDay(); } });
     });
   }
@@ -334,6 +360,12 @@ export function createLevel(ctx) {
 
   function beginDay() {
     step = "day";
+    // always in the open, looking across the habitat (also after a skipped intro)
+    if (dist2(player.x, player.z, OPEN.x, OPEN.z) > 0.7) {
+      player.stop();
+      player.teleport(OPEN.x, OPEN.z, OPEN.yaw);
+      friend.place(OPEN_PIP.x, OPEN_PIP.z, -PI / 2);
+    } else { cam.yaw = OPEN.yaw; cam.manualT = 1.5; }
     ui.showHud(true);
     ui.setCoins(ui.coins);
     ui.setFriendship(joyCount() / 6, "Happiness");
@@ -785,10 +817,16 @@ export function createLevel(ctx) {
         if (joy.goals >= 3) completeJoy(1);
       } else ui.call("GOAL!", "", "good");
       // Pip passes it back
-      if (!joys[1] && pip === "follow") { pip = "fetch"; pipT = 0; friend.do("fetch", { ball: B }); }
+      if (!joys[1] && (pip === "follow" || pip === "lead")) { pip = "fetch"; pipT = 0; fetchCd = 5; strayT = 0; friend.do("fetch", { ball: B }); }
     }
     // the ball never gets lost: out of the water it comes
     if (fetchCd > 0) fetchCd -= dt;
+    // ... and when it has rolled off into a corner, Pip dribbles it back to you
+    const pb = dist2(player.x, player.z, B.x, B.z);
+    if (!joys[1] && pip === "follow" && fetchCd <= 0 && !friend.busy && dh > 4.2 && pb > 1.8 && pb < 7 && !moving && !player.swimming) {
+      strayT += dt;
+      if (strayT > 2.5) { strayT = 0; fetchCd = 8; pip = "fetch"; pipT = 0; friend.do("fetch", { ball: B }); friend.emote("call"); }
+    } else strayT = 0;
     const wet = zoo.waterAt(B.x, B.z) - zoo.heightAt(B.x, B.z) > 0.3;
     ballWetT = wet ? ballWetT + dt : 0;
     if (ballWetT > 9 && !joys[1]) {
@@ -886,7 +924,7 @@ export function createLevel(ctx) {
     let act = null;
     if (!dayBusy() && !bal.on && player.lock <= 0) {
       if (picnic.state === 2 && !joys[5] && props.bowl.left > 0 && dist2(player.x, player.z, props.bowl.x, props.bowl.z) < 1.5) act = "eat";
-      else if (player.y > Z.fallTop.y - 0.6 && nearPlayer(Z.fallTop, 1.7)) act = "slide";
+      else if ((player.grounded || player.swimming || player.inWater) && player.y > Z.fallTop.y - 0.4 && nearPlayer(Z.fallTop, 1.7)) act = "slide";
       else if (!joys[4] && nearPlayer(Z.sunRock, 1.7)) act = "rest";
     } else if (resting) act = "rest";
     if (act !== dayAct) {
@@ -959,7 +997,7 @@ export function createLevel(ctx) {
     ui.banner("BEDTIME", "What a perfect day.", 3.5);
     ui.setObjective("Go to sleep next to Pip", "the nest is glowing");
     pip = "sleep";
-    friend.do("sleep", { at: Z.nestFriend });
+    friend.do("sleep", { at: bed });
     markT = 0;
   }
   function startBedtime() {
@@ -967,8 +1005,8 @@ export function createLevel(ctx) {
     toZoo();
     setupDay();
     for (let i = 0; i < 4; i++) joys[i] = true;
-    player.teleport(Z.lookoutFoot ? Z.lookoutFoot.x : 3.5, Z.lookoutFoot ? Z.lookoutFoot.z : -4.5, 1.2);
-    friend.place(Z.nestFriend.x - 1.5, Z.nestFriend.z + 1.5, 0);
+    player.teleport(OPEN.x - 1.5, OPEN.z + 1.2, Math.atan2(Z.nest.x - OPEN.x + 1.5, Z.nest.z - OPEN.z - 1.2));
+    friend.place(OPEN_PIP.x, OPEN_PIP.z, 0);
     ui.showHud(true);
     ui.setCoins(ui.coins);
     ui.setFriendship(joyCount() / 6, "Happiness");
@@ -984,16 +1022,16 @@ export function createLevel(ctx) {
     ui.setAction(null); dayAct = null;
     ui.setObjective(null);
     player.enabled = false;
-    const nf = Z.nestFriend, ne = Z.nest;
+    const nf = bed, ne = Z.nest;
     // Pip must be there, whatever it was doing
     if (friend.behaviour !== "sleep" || friend.distTo(nf.x, nf.z) > 2.5) { friend.place(nf.x, nf.z, nf.yaw); friend.do("sleep", { at: nf }); }
-    const mx = (ne.x + nf.x) / 2, mz = (ne.z + nf.z) / 2, my = Math.max(ne.y, nf.y) + 0.14;
+    const mx = (ne.x + nf.x) / 2, mz = (ne.z + nf.z) / 2, my = ne.y + 0.12;
     const c = Z.camNest.pos;
     const fx0 = Math.sin(ne.yaw), fz0 = Math.cos(ne.yaw);
     cinema.play([
       { call: () => player.walkTo(ne.x, ne.z, { speed: 0.5, face: ne.yaw }) },
-      { shot: { pos: [c.x, c.y, c.z], look: [mx, my, mz], fov: 38,
-        to: { pos: [c.x + (mx - c.x) * 0.5, c.y + (my + 0.35 - c.y) * 0.6, c.z + (mz - c.z) * 0.5], fov: 34 }, dur: 9, ease: "out" }, hold: false },
+      { shot: { pos: [c.x, c.y, c.z], look: [mx, my, mz], fov: F(36),
+        to: { pos: [c.x + (mx - c.x) * 0.3, c.y + (my + 0.5 - c.y) * 0.4, c.z + (mz - c.z) * 0.3], fov: F(32) }, dur: 9, ease: "out" }, hold: false },
       { until: () => !player.walking, max: 4 },
       { call: () => {
         player.stop();
@@ -1005,7 +1043,7 @@ export function createLevel(ctx) {
       { caption: "For once, you fall asleep right next to each other.", dur: 4, narr: true },
       // through your own eye: Pip, close, already dreaming
       { call: () => { player.hidden = true; } },
-      { shot: { pos: [ne.x + fx0 * 0.28, ne.y + 0.2, ne.z + fz0 * 0.28], look: [nf.x, nf.y + 0.13, nf.z], fov: 58, dur: 0 } },
+      { shot: { pos: [ne.x - fx0 * 0.05 - fz0 * 0.2, ne.y + 0.2, ne.z - fz0 * 0.05 + fx0 * 0.2], look: [nf.x + fx0 * 0.1, ne.y + 0.12, nf.z + fz0 * 0.1], fov: 58, dur: 0 } },
       { eye: "close", duration: 6, tint: "night" },
       { fade: "black", dur: 2 },
       { call: () => A("lullaby", false) },
@@ -1128,7 +1166,8 @@ export function createLevel(ctx) {
   function segTaken(S) {
     const g = gen;
     const ne = Z.nest, di = Z.doorIn, dout = Z.doorOut;
-    const nl = Math.hypot(di.x - ne.x, di.z - ne.z) || 1, nx = (di.x - ne.x) / nl, nz = (di.z - ne.z) / nl;
+    // people come in round the rocks to the mouth of the burrow and stand in it, in front of the player
+    const nx = Math.sin(ne.yaw), nz = Math.cos(ne.yaw);
     S.push(
       { call: () => {
         step = "taken";
@@ -1138,23 +1177,28 @@ export function createLevel(ctx) {
         keeper.hold(false);
         handler.walkTo(di.x, di.z, () => {
           if (g !== gen) return;
-          handler.walkTo(ne.x + nx * 0.78, ne.z + nz * 0.78, () => { if (g === gen) night.atNest = true; }, true);
+          handler.walkTo(mouth.x + 0.5, mouth.z + 0.4, () => {
+            if (g !== gen) return;
+            handler.walkTo(ne.x + nx * 0.85, ne.z + nz * 0.85, () => { if (g === gen) night.atNest = true; }, true);
+          }, true);
         }, true);
         keeper.walkTo(di.x + 0.2, di.z + 0.7, () => {
           if (g !== gen) return;
-          keeper.walkTo(ne.x + nx * 2.1 - nz * 0.9, ne.z + nz * 2.1 + nx * 0.9, null, true);
+          keeper.walkTo(mouth.x + nx * 0.5 + nz * 1.5, mouth.z + nz * 0.5 - nx * 1.5, null, true);
         }, true);
-        // the eye goes to the door
+        // footsteps: the eye goes to the mouth of the burrow, Pip shrinks back beside you
         night.lookPip = false;
-        lookWant.set(di.x, 1.2, di.z);
+        lookWant.set(mouth.x + 0.6, 0.9, mouth.z + 0.5);
+        friend.do("goto", { x: ne.x + nx * 0.7 - nz * 0.75, z: ne.z + nz * 0.7 + nx * 0.75, yaw: Math.atan2(mouth.x - ne.x, mouth.z - ne.z), run: true });
       } },
-      { wait: 1.2 },
-      { call: () => { handler.lookAt(player); lookWant.set(ne.x + nx * 1.6, 1.25, ne.z + nz * 1.6); } },
-      { until: () => night.atNest, max: 8 },
+      { wait: 1.6 },
+      { call: () => { handler.lookAt(player); night.lookMan = true; } },
+      { until: () => night.atNest, max: 9 },
       { call: () => {
         night.atNest = true;
+        night.lookMan = false;
         handler.reach({ x: player.x, y: player.y + 0.15, z: player.z });
-        lookWant.set(ne.x + nx * 0.78, 1.45, ne.z + nz * 0.78);
+        lookWant.set(ne.x + nx * 0.85, 1.45, ne.z + nz * 0.85);
         friend.emote("scared");
       } },
       { wait: 0.7 },
@@ -1184,13 +1228,16 @@ export function createLevel(ctx) {
           if (g !== gen) return;
           keeper.walkTo(dout.x, dout.z, () => { if (g === gen) keeper.walkTo(Z.outside.x + 0.9, Z.outside.z - 2, null, true); }, true);
         }, true);
-        handler.walkTo(di.x, di.z, () => {
+        handler.walkTo(mouth.x + 0.5, mouth.z + 0.4, () => {
           if (g !== gen) return;
-          handler.walkTo(dout.x, dout.z, () => { if (g === gen) night.out = true; });
+          handler.walkTo(di.x, di.z, () => {
+            if (g !== gen) return;
+            handler.walkTo(dout.x, dout.z, () => { if (g === gen) night.out = true; });
+          });
         });
       } },
-      { shot: { track: handler.group, trackYaw: true, pos: [0.42, 1.62, 1.25], look: friend.group, lookY: 0.2, fov: 46, dur: 0, hand: 0.5 } },
-      { until: () => night.out, max: 12 },
+      { shot: { track: handler.group, trackYaw: true, pos: [-1.05, 1.85, 2.0], look: friend.group, lookY: 0.55, fov: F(50), dur: 0, hand: 0.5 } },
+      { until: () => night.out, max: 14 },
       { call: () => {
         night.out = true;
         night.chase = false;
@@ -1234,7 +1281,7 @@ export function createLevel(ctx) {
         if (fr > 9) friend.place(Z.leapFrom.x + 2.5, Z.leapFrom.z + 0.3, -PI / 2);
       } },
       // carried along the glass: through it, Pip racing to keep level
-      { shot: { track: eyeObj, pos: [0, 0, 0], look: lookObj, fov: 50, dur: 0, hand: 0.6 } },
+      { shot: { track: eyeObj, pos: [0, 0, 0], look: lookObj, fov: 42, dur: 0, hand: 0.6 } },
       { until: () => night.leapt, max: 7 },
       // side-on and wide, from inside the habitat: the leap in slow motion
       { call: () => {
@@ -1242,7 +1289,7 @@ export function createLevel(ctx) {
         player.hidden = false;
         night.fp = false;
         const cy = Math.max(1.25, zoo.heightAt(0.6, 7.0) + 0.7);
-        cinema.shot({ pos: [0.6, cy, 7.0], look: [5.4, 1.25, 10.4], fov: 50, to: { pos: [1.5, cy - 0.05, 7.5], look: [5.6, 1.0, 11.2], fov: 46 }, dur: 9, ease: "linear" });
+        cinema.shot({ pos: [0.6, cy, 7.0], look: [5.4, 1.25, 10.4], fov: F(50), to: { pos: [1.5, cy - 0.05, 7.5], look: [5.6, 1.0, 11.2], fov: F(46) }, dur: 9, ease: "linear" });
       } },
       { until: () => night.glass, max: 7 },
       { until: () => night.landed, max: 7 },
@@ -1265,7 +1312,7 @@ export function createLevel(ctx) {
         night.motes = true; night.moteT = 0.2;
         lookWant.set(friend.x, friend.y + 0.1, friend.z);
         lookObj.position.copy(lookWant);
-        cinema.shot({ track: eyeObj, pos: [0, 0, 0], look: lookObj, fov: 40, dur: 0, hand: 0.25 });
+        cinema.shot({ track: eyeObj, pos: [0, 0, 0], look: lookObj, fov: 31, dur: 0, hand: 0.25 });
       } },
       { wait: 3 }, // silence
       { call: () => {
@@ -1273,7 +1320,7 @@ export function createLevel(ctx) {
         // you reach for Pip: the view pushes in ten centimetres
         eyeObj.getWorldPosition(v1);
         v2.set(friend.x - v1.x, friend.y + 0.1 - v1.y, friend.z - v1.z).normalize().multiplyScalar(0.1);
-        cinema.shot({ track: eyeObj, pos: [0, 0, 0], look: lookObj, fov: 40, to: { pos: [v2.x, v2.y, v2.z], fov: 36 }, dur: 7, ease: "inOut", hand: 0.2 });
+        cinema.shot({ track: eyeObj, pos: [0, 0, 0], look: lookObj, fov: 31, to: { pos: [v2.x, v2.y, v2.z], fov: 26 }, dur: 7, ease: "inOut", hand: 0.2 });
       } },
       { wait: 7 },
       // you are put to sleep
@@ -1317,7 +1364,7 @@ export function createLevel(ctx) {
       crowd.panic(true);
       pipLooksOn();
       ensureLanded();
-      S.push({ shot: { pos: [1.5, 1.25, 7.5], look: [5.6, 1.0, 11.2], fov: 46, dur: 0 } }, { fade: "clear", dur: 0.8 });
+      S.push({ shot: { pos: [1.5, 1.25, 7.5], look: [5.6, 1.0, 11.2], fov: F(46), dur: 0 } }, { fade: "clear", dur: 0.8 });
       segStill(S);
     }
     const g = gen;
@@ -1358,6 +1405,7 @@ export function createLevel(ctx) {
       }
     }
     if (night.lookPip) lookWant.set(friend.x, friend.y + 0.16, friend.z);
+    else if (night.lookMan) lookWant.set(handler.x, handler.y + 1.2, handler.z);
     eyeObj.position.lerp(eyeWant, Math.min(1, raw * 9));
     lookObj.position.lerp(lookWant, Math.min(1, raw * (night.leapt && !night.landed ? 9 : 2.2)));
     if (night.motes) {
@@ -1373,8 +1421,8 @@ export function createLevel(ctx) {
     const c = L.camWizard;
     S.push(
       { call: () => { step = "wizard"; lair.setVoid(true); lair.setGlow(0); } },
-      { shot: { pos: [c.pos.x, c.pos.y, c.pos.z], look: [c.look.x, c.look.y, c.look.z], fov: 40,
-        to: { pos: [c.pos.x - 0.25, c.pos.y + 0.03, c.pos.z + 0.45], fov: 36 }, dur: 11, ease: "out" }, hold: false },
+      { shot: { pos: [c.pos.x, c.pos.y, c.pos.z], look: [c.look.x, c.look.y, c.look.z], fov: F(40),
+        to: { pos: [c.pos.x - 0.25, c.pos.y + 0.03, c.pos.z + 0.45], fov: F(36) }, dur: 11, ease: "out" }, hold: false },
       { wait: 1.0 },
       { call: () => {
         wizard.group.visible = true;
@@ -1391,7 +1439,7 @@ export function createLevel(ctx) {
     );
   }
   function segReveal(S) {
-    const r0 = L.camRise0, r1 = L.camTimer, cc = L.camCell, cl = L.camLava;
+    const r0 = L.camRise0, r1 = L.camTimer;
     S.push(
       { call: () => {
         step = "reveal";
@@ -1404,19 +1452,21 @@ export function createLevel(ctx) {
         if (lair.timer && lair.timer.text !== "8 DAYS") lair.timer.setText("8 DAYS");
       } },
       // one continuous crane, up past the chains to the timer
-      { shot: { pos: [r0.pos.x, r0.pos.y, r0.pos.z], look: [r0.look.x, r0.look.y, r0.look.z], fov: 46,
-        to: { pos: [r1.pos.x, r1.pos.y, r1.pos.z], look: [r1.look.x, r1.look.y, r1.look.z], fov: 40 }, dur: 7, ease: "inOut" } },
+      { shot: { pos: [r0.pos.x, r0.pos.y, r0.pos.z], look: [r0.look.x, r0.look.y, r0.look.z], fov: F(46),
+        to: { pos: [r1.pos.x, r1.pos.y, r1.pos.z], look: [r1.look.x, r1.look.y, r1.look.z], fov: F(40) }, dur: 7, ease: "inOut" } },
       { call: () => { tickT = 0; tickN = 3; } },
       { wait: 3 },
       // inside the cell: Pip. Curled up. Breathing.
-      { shot: { pos: [cc.pos.x, cc.pos.y, cc.pos.z], look: [cc.look.x, cc.look.y, cc.look.z], fov: 30,
-        to: { pos: [cc.pos.x - 0.35, cc.pos.y - 0.05, cc.pos.z + 0.5], fov: 27 }, dur: 5, ease: "out" }, hold: false },
+      // (straight on through the door side and from above the middle rail: Pip is clear between the bars)
+      { shot: { pos: [0.15, L.cell.y + 1.4, L.cell.z - 4.4], look: [0, L.cell.y + 0.2, L.cell.z], fov: F(22),
+        to: { pos: [0.05, L.cell.y + 1.32, L.cell.z - 3.9], fov: F(20) }, dur: 5, ease: "out" }, hold: false },
       { wait: 1.2 },
       { call: () => { A("chainCreak"); lair.cell.sway(0.3); if (friend.body && friend.body.blink) friend.body.blink(); } },
       { wait: 3.6 },
       // far below: the lava, and the tiny cell above it
-      { shot: { pos: [cl.pos.x, cl.pos.y, cl.pos.z], look: [cl.look.x, cl.look.y, cl.look.z], fov: 52,
-        to: { pos: [cl.pos.x + 0.4, cl.pos.y + 0.25, cl.pos.z - 0.3] }, dur: 5.5, ease: "linear" }, hold: false },
+      // from high up: the cell on its chain, and far below it nothing but lava
+      { shot: { pos: [3.6, L.cell.y + 4.9, L.cell.z - 5.6], look: [0, L.cell.y - 1.7, L.cell.z + 0.5], fov: F(52),
+        to: { pos: [4.3, L.cell.y + 5.8, L.cell.z - 6.5], fov: F(56) }, dur: 5.5, ease: "linear" }, hold: false },
       { wait: 0.8 },
       { caption: "Eight days.", dur: 3.6, narr: true },
       { wait: 0.6 },
@@ -1699,7 +1749,15 @@ export function createLevel(ctx) {
     ], () => {
       if (g !== gen) return;
       endLook = true;
-      ctx.after(3.4, () => {
+      ui.showHud(false);
+      // low behind the player, looking up past it: the cell on its chain and the timer above
+      const dx = L.cell.x - player.x, dz = L.cell.z - player.z, dl = Math.hypot(dx, dz) || 1, ux = dx / dl, uz = dz / dl;
+      const side = (L.wizard.x - player.x) * uz - (L.wizard.z - player.z) * ux > 0 ? -1 : 1; // keep clear of the wizard
+      const cx = player.x - ux * 3.3 + uz * 0.5 * side, cz = player.z - uz * 3.3 - ux * 0.5 * side;
+      cinema.letterbox(true);
+      cinema.shot({ pos: [cx, 1.15, cz], look: [L.cell.x, L.cell.y - 1.6, L.cell.z], fov: F(62),
+        to: { pos: [cx + ux * 0.3, 1.15, cz + uz * 0.3], look: [L.cell.x, L.cell.y - 1.4, L.cell.z] }, dur: 5.5, ease: "inOut" });
+      ctx.after(5, () => {
         if (g !== gen || step !== "end") return;
         step = "done";
         cinema.endCard("TO BE CONTINUED", { hold: 4 }, () => ctx.complete());
@@ -1711,10 +1769,6 @@ export function createLevel(ctx) {
     if (!endLook) return;
     // you turn and look up at the cell
     const want = Math.atan2(L.cell.x - player.x, L.cell.z - player.z);
-    cam.manualT = 1;
-    cam.yaw += wrap(want - cam.yaw) * Math.min(1, dt * 1.1);
-    cam.pitch += (0.1 - cam.pitch) * Math.min(1, dt * 1.1);
-    cam.wantDist += (4.6 - cam.wantDist) * Math.min(1, dt);
     player.face = want;
     player.lock = Math.max(player.lock, 0.3);
     if (!creaked) { creaked = true; A("chainCreak"); lair.cell.sway(0.25); platypus.lookAt(v1.set(L.cell.x, L.cell.y + 0.6, L.cell.z)); }

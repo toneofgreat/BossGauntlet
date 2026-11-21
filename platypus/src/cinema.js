@@ -149,13 +149,18 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     // body (flat, same colour as the block behind it), a warm rim where light glows through the skin, then the fringe.
     // The whole SVG is blurred in CSS: a lid this close to the eye is far out of focus.
     const rim = "M100," + base + " C78," + cy + " 22," + cy + " 0," + base;
+    // The blur is baked into the SVG (a filter inside it, rastered once): a CSS blur on these two huge
+    // layers was recomputed by the compositor on every frame of a blink and cost ~10 fps on the target GPU.
+    const fid = upper ? "lidBlurU" : "lidBlurL";
     return '<svg class="' + (upper ? "up" : "lo") + '" viewBox="0 0 100 200" preserveAspectRatio="none">' +
+      '<defs><filter id="' + fid + '" filterUnits="userSpaceOnUse" x="-10" y="-10" width="120" height="220"><feGaussianBlur stdDeviation="0.42 1"/></filter></defs>' +
+      '<g filter="url(#' + fid + ')">' +
       '<path d="' + d + '" style="fill:var(--lid-deep)"/>' +
       '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity=".3" stroke-width="' + (upper ? 34 : 22) + '" transform="translate(0,' + (dir * (upper ? 15 : 10)) + ')"/>' +
       '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity=".45" stroke-width="' + (upper ? 22 : 14) + '" transform="translate(0,' + (dir * (upper ? 9.5 : 6.5)) + ')"/>' +
       '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity=".7" stroke-width="' + (upper ? 11 : 7) + '" transform="translate(0,' + (dir * (upper ? 4.5 : 3)) + ')"/>' +
       '<path d="' + rim + '" fill="none" style="stroke:var(--lid-edge)" stroke-width="' + (upper ? 3.2 : 2.2) + '" stroke-opacity=".8" transform="translate(0,' + (dir * 1.2) + ')"/>' +
-      '<path d="' + lash + '" style="fill:var(--lid-lash)"/></svg>';
+      '<path d="' + lash + '" style="fill:var(--lid-lash)"/></g></svg>';
   }
   // each lid = the curved SVG edge (scaled to flatten the arch as it closes) + a plain block behind it
   eyeEl.innerHTML = '<div class="vig"></div><div class="blk u"></div><div class="blk l"></div>' + lidSvg(true) + lidSvg(false);
