@@ -117,6 +117,14 @@ export function createLevel(ctx) {
   const popV = new THREE.Vector3();
 
   const songBeat = () => songT / BEAT;
+  // The shots are composed for 16:9. On a tall (phone portrait) screen keep at least ~60 % of that width in
+  // view by opening the vertical fov, so both performers stay in frame.
+  function fovA(f) {
+    const asp = ctx.camera.aspect || 1.78;
+    if (asp >= 1.5) return f;
+    const t = Math.tan(f * Math.PI / 360) * 1.778 * 0.62 / asp;
+    return Math.min(88, Math.max(f, Math.atan(t) * 360 / Math.PI));
+  }
 
   // =================================================================================== build / enter / exit
   function build() {
@@ -129,6 +137,17 @@ export function createLevel(ctx) {
     keeper = crowd.staff[0];
     SP = stage.P; ZP = zoo.P;
     audience.build(stage.seats);
+    if (ctx.debug) ctx.debug.level4 = { stage, zoo, friend, crowd, props, keeper, audience, pending };
+  }
+  // test hook: the next thing the player has to press -> { act, i, lane, d (seconds until it is due) } or null
+  function pending() {
+    if (roll.on) return { act: 9, i: 0, lane: 3, d: roll.goT - songT };
+    if (!act.live) return null;
+    for (let i = act.first; i < act.notes.length; i++) {
+      const n = act.notes[i];
+      if (!n.judged) return { act: act.n, i, lane: n.lane, d: n.beat * BEAT - songT };
+    }
+    return null;
   }
 
   function resetState() {
@@ -430,10 +449,10 @@ export function createLevel(ctx) {
         audience.wave();
         meetAt(c.x, c.z, 0, f.x, f.z, 0, 9, 0.55, null);
       },
-      { shot: { pos: cr.pos, look: [0, 0.6, -3.5], fov: 46, to: { pos: [cw.pos.x, cw.pos.y - 1.5, cw.pos.z - 3], look: [0, 0.8, -2] }, dur: 7.5, ease: "inOut" }, hold: false },
+      { shot: { pos: cr.pos, look: [0, 0.6, -3.5], fov: fovA(46), to: { pos: [cw.pos.x, cw.pos.y - 1.5, cw.pos.z - 3], look: [0, 0.8, -2] }, dur: 7.5, ease: "inOut" }, hold: false },
       { caption: "Ladies and gentlemen... PLATYPUS TRICKS!", dur: 3.6, who: "Announcer" },
       { until: () => !meet.on, max: 9 },
-      { shot: { pos: [0.8, 1.0, 1.6], look: [0.8, 0.3, -2.5], fov: 38, to: { pos: [0.8, 1.2, 2.6] }, dur: 5, ease: "out", hand: 0.3 }, hold: false },
+      { shot: { pos: [0.8, 1.0, 1.6], look: [0.8, 0.3, -2.5], fov: fovA(38), to: { pos: [0.8, 1.2, 2.6] }, dur: 5, ease: "out", hand: 0.3 }, hold: false },
       { wait: 0.4 },
       () => {
         platypus.trick("bow"); friend.trick("bow");
@@ -457,14 +476,14 @@ export function createLevel(ctx) {
   // =================================================================================== 3-6. THE ACTS
   function actCamera(n, instant) {
     const d = instant ? 0.01 : n === 1 ? 2.2 : 3;
-    if (n === 1) cinema.shot({ to: { pos: [0.8, 2.3, 3.4], look: [0.8, -0.2, -2.5], fov: 40 }, dur: d, ease: "inOut", hand: 0.25 });
-    else if (n === 2) cinema.shot({ to: { pos: [5.2, 2.6, 8.0], look: [0, -0.7, 3], fov: 46 }, dur: d, ease: "inOut", hand: 0.25 });
-    else cinema.shot({ to: { pos: [-3.2, 1.5, -5.7], look: [0, 0.35, 0.5], fov: 44 }, dur: d, ease: "inOut", hand: 0.25 });
+    if (n === 1) cinema.shot({ to: { pos: [0.8, 1.75, 1.7], look: [0.8, 0.05, -2.5], fov: fovA(40) }, dur: d, ease: "inOut", hand: 0.25 });
+    else if (n === 2) cinema.shot({ to: { pos: [5.4, 2.9, 8.6], look: [0, 0.2, 3], fov: fovA(48) }, dur: d, ease: "inOut", hand: 0.25 });
+    else cinema.shot({ to: { pos: [-3.2, 1.5, -5.7], look: [0, 0.35, 0.5], fov: fovA(44) }, dur: d, ease: "inOut", hand: 0.25 });
     camT = d + 0.15;
   }
   function actDrift(n) {
-    if (n === 1) cinema.shot({ to: { pos: [0.8, 1.8, 2.4], look: [0.8, -0.2, -2.5] }, dur: 30, ease: "linear", hand: 0.25 });
-    else if (n === 2) cinema.shot({ to: { pos: [-5.2, 2.6, 8.0], look: [0, -0.7, 3] }, dur: 36, ease: "linear", hand: 0.25 });
+    if (n === 1) cinema.shot({ to: { pos: [0.8, 1.5, 1.0], look: [0.8, 0.05, -2.5] }, dur: 30, ease: "linear", hand: 0.25 });
+    else if (n === 2) cinema.shot({ to: { pos: [-5.4, 2.9, 8.6], look: [0, 0.2, 3] }, dur: 36, ease: "linear", hand: 0.25 });
     else cinema.shot({ to: { pos: [3.2, 1.5, -5.7], look: [0, 0.35, 0.5] }, dur: 30, ease: "linear", hand: 0.25 });
   }
   function beginAct(n, instant) {
@@ -792,10 +811,10 @@ export function createLevel(ctx) {
           meetAt(LEAP_FROM.x, LEAP_FROM.z, LEAP_YAW, PIP_WAIT.x, PIP_WAIT.z, LEAP_YAW, 6, 0.6, null);
         });
       },
-      { shot: { to: { pos: [-3.5, 3.4, 6.4], look: [-6.5, 1.2, -0.5], fov: 44 }, dur: 3.5, ease: "inOut", hand: 0.3 }, hold: false },
+      { shot: { to: { pos: [-4.4, 2.5, 3.4], look: [-7.7, 1.0, -1.0], fov: fovA(46) }, dur: 3.0, ease: "inOut", hand: 0.3 }, hold: false },
       { caption: "And now... THE FLAMING HOOP!", dur: 3.4, who: "Announcer" },
       { until: () => !meet.on && Math.abs(player.x - LEAP_FROM.x) < 0.4 && Math.abs(player.z - LEAP_FROM.z) < 0.4, max: 13 },
-      { shot: { pos: [SP.camHero.pos.x - 1.5, SP.camHero.pos.y, SP.camHero.pos.z], look: [HOOP3.x, HOOP3.y, HOOP3.z], fov: 34, to: { pos: [-1.2, 1.5, 8.4], look: [-5, 1.9, 2.2], fov: 46 }, dur: 3.2, ease: "inOut" } },
+      { shot: { pos: [SP.camHero.pos.x - 1.5, SP.camHero.pos.y, SP.camHero.pos.z], look: [HOOP3.x, HOOP3.y, HOOP3.z], fov: fovA(34), to: { pos: [-1.2, 1.5, 8.4], look: [-5, 1.9, 2.2], fov: fovA(46) }, dur: 3.2, ease: "inOut" } },
     ], {
       skippable: true, release: null,
       onSkip() {
@@ -820,7 +839,7 @@ export function createLevel(ctx) {
     ui.setTrickState(3, { want: true });
     ui.setObjective("JUMP on the fourth beat!", ctx.touch ? "tap JUMP!" : "4 or Space");
     ui.call("3 - 2 - 1 - JUMP!", "Wait for the last beat");
-    cinema.shot({ to: { pos: [2.6, 2.3, 8.6], look: [-3.6, 1.9, 2.3], fov: 50 }, dur: 2, ease: "inOut", hand: 0.3 });
+    cinema.shot({ to: { pos: [-3.0, 2.2, 8.7], look: [-3.5, 1.75, 2.3], fov: fovA(52) }, dur: 2, ease: "inOut", hand: 0.2 });
     const t0 = Math.ceil((songBeat() + LEAD + 1.5) / 4) * 4;
     roll.t0 = t0; roll.goT = (t0 + 3) * BEAT; roll.n = 0; roll.done = false; roll.early = false;
     for (let i = 0; i < 4; i++) roll.ids[i] = -1;
@@ -864,6 +883,9 @@ export function createLevel(ctx) {
     ui.setTrickState(3, { want: false });
     ui.flashTrick(3, true);
     ui.setObjective(null);
+    ui.beat.show(false);
+    ui.setTricks(null);
+    ui.setCombo(0);
     bonus = rating === 2 ? 30 : rating === 1 ? 15 : 5;
     lp.rating = rating;
     lp.on = true; lp.k = 0; lp.crossed = false; lp.slow2 = false; lp.pipGo = false; lp.pipT = 0; lp.pDone = false; lp.fDone = false; lp.endT = 0; lp.after = 0;
@@ -877,7 +899,7 @@ export function createLevel(ctx) {
     audio.showMusic.sting(rating === 2 ? "perfect" : "good");
     audio.crowd("gasp", 0.8, false);
     ctx.setTimeScale(0.25, 0.2);
-    cinema.shot({ to: { pos: [SP.camHero.pos.x + 0.6, SP.camHero.pos.y + 0.2, SP.camHero.pos.z + 0.3], look: platypus.group, fov: 46 }, look: platypus.group, lookY: 0.15, dur: 0.6, ease: "out" });
+    cinema.shot({ to: { pos: [SP.camHero.pos.x + 0.6, SP.camHero.pos.y + 0.2, SP.camHero.pos.z + 0.3], look: platypus.group, fov: fovA(46) }, look: platypus.group, lookY: 0.15, dur: 0.6, ease: "out" });
     friendEv = (type) => {
       if (type !== "landed" || lp.fDone) return;
       lp.fDone = true;
@@ -964,6 +986,7 @@ export function createLevel(ctx) {
     ui.beat.clear();
     ui.beat.show(false);
     ui.setTricks(null);
+    ui.setCombo(0);
     ui.setObjective("Take a bow!");
     stage.setCue("finale", 1);
     stage.setHoopFlame(false);
@@ -972,7 +995,7 @@ export function createLevel(ctx) {
     stage.spots[1].follow(friend.group);
     bows.phase = 0; bows.t = 0;
     const b = SP.bow;
-    cinema.shot({ to: { pos: [2.4, 1.2, 8.9], look: [0, 0.35, b.z], fov: 42 }, dur: instant ? 0.01 : 3, ease: "inOut", hand: 0.3 });
+    cinema.shot({ to: { pos: [2.4, 1.2, 8.9], look: [0, 0.35, b.z], fov: fovA(42) }, dur: instant ? 0.01 : 3, ease: "inOut", hand: 0.3 });
     const go = () => { if (g === gen) bowNow(); };
     if (instant) { if (bonus === 0) bonus = 5; putBoth(b.x - 0.7, b.z + 0.1, 0, b.x + 0.7, b.z + 0.1, 0); go(); }
     else meetAt(b.x - 0.7, b.z + 0.1, 0, b.x + 0.7, b.z + 0.1, 0, 8, 0.85, go);
@@ -1129,18 +1152,18 @@ export function createLevel(ctx) {
         ui.beat.show(false); ui.setTricks(null); ui.setCombo(0); ui.setExcitement(null);
         switchToZoo();
       },
-      { shot: { pos: [9.0, 1.35, -0.4], look: keeper.group, lookY: 1.15, fov: 40, hand: 0.3, dur: 0 } },
+      { shot: { pos: [9.0, 1.35, -0.4], look: keeper.group, lookY: 0.85, fov: fovA(46), hand: 0.3, dur: 0 } },
       { caption: "Later that night...", dur: 2.6, narr: true },
       homeWalk,
       { fade: "clear", dur: 1.6 },
       { wait: 1.6 },
-      { shot: { pos: [7.4, 1.0, -3.6], look: keeper.group, lookY: 1.05, fov: 42, hand: 0.3, dur: 0 } },
+      { shot: { pos: [7.4, 1.0, -3.6], look: keeper.group, lookY: 0.8, fov: fovA(48), hand: 0.3, dur: 0 } },
       { caption: "What a show.", dur: 2.4, narr: true, hold: false },
       { until: () => home.down, max: 9 },
       () => { if (g === gen) setDown(); },
-      { shot: { pos: ZP.camNest.pos, look: platypus.group, lookY: 0.2, fov: 38, to: { pos: [ZP.camNest.pos.x + 0.5, ZP.camNest.pos.y + 0.15, ZP.camNest.pos.z + 0.4] }, dur: 4, ease: "out" }, hold: false },
+      { shot: { pos: ZP.camNest.pos, look: platypus.group, lookY: 0.2, fov: fovA(38), to: { pos: [ZP.camNest.pos.x + 0.5, ZP.camNest.pos.y + 0.15, ZP.camNest.pos.z + 0.4] }, dur: 4, ease: "out" }, hold: false },
       { caption: "Home.", dur: 2.4, narr: true },
-      { shot: { pos: [8.3, 1.3, -4.1], look: [7.3, 1.0, -7.2], fov: 46, to: { pos: [8.0, 1.5, -3.7] }, dur: 9, ease: "inOut", hand: 0.2 }, hold: false },
+      { shot: { pos: [7.7, 2.0, -2.9], look: [7.25, 1.0, -7.2], fov: fovA(50), to: { pos: [7.4, 2.4, -2.5] }, dur: 9, ease: "inOut", hand: 0.2 }, hold: false },
       { until: () => home.pipUp, max: 9 },
       () => {
         if (g !== gen) return;
@@ -1157,7 +1180,7 @@ export function createLevel(ctx) {
         platypus.lookAt(null);
         platypus.sleep(true);
       },
-      { shot: { pos: [8.0, 1.5, -3.7], look: [7.3, 1.0, -7.2], fov: 46, to: { pos: [7.2, 3.2, -1.6], look: [7.3, 0.8, -7.2], fov: 50 }, dur: 6, ease: "inOut" }, hold: false },
+      { shot: { pos: [7.4, 2.4, -2.5], look: [7.25, 1.0, -7.2], fov: fovA(50), to: { pos: [7.2, 3.2, -1.6], look: [7.3, 0.8, -7.2], fov: fovA(50) }, dur: 6, ease: "inOut" }, hold: false },
       { wait: 4 },
       { fade: "black", dur: 2 },
     ], {
@@ -1250,6 +1273,8 @@ export function createLevel(ctx) {
       act: act.live ? act.n : 0, actBeat: act.live ? songBeat() - act.t0 : 0, rolling: roll.on, leaping: lp.on,
       music: musicOn, songBeat: songBeat(), clock: songFallback ? "fallback" : "audio",
       world: ctx.world ? ctx.world.name : "",
+      ringLeap: trP.on, meeting: meet.on, bowPhase: bows.phase, homeDown: home.down, pipUp: home.pipUp,
+      friend: friend ? { x: friend.x, y: friend.y, z: friend.z } : null,
     };
   }
 

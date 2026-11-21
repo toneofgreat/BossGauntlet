@@ -28,7 +28,7 @@ const TRICKS_OFF = SLOTS.map((s) => ({ label: s.label, enabled: false }));
 const COIN_GOAL = 50;
 const MAX_WATCHERS = 12;
 // six fixed breakfast spots: two in the sand bank, two in the stream shallows, one by the reeds, one at the log bridge
-const SNACK_SPOTS = [[2.2, 3.6], [1.2, 0.4], [-8.1, -4.25], [-7.25, -2.2], [-10.3, 6.3], [-5.9, -4.5]];
+const SNACK_SPOTS = [[2.2, 3.6], [1.2, 0.4], [-8.1, -4.25], [-7.25, -2.2], [-9.1, 7.2], [-5.9, -4.5]];
 const KEEPER_SCATTER = { x: 7.6, z: 0.2 };
 
 export function createLevel(ctx) {
@@ -59,6 +59,7 @@ export function createLevel(ctx) {
   let ringN = 0, pipRing = 0, ringForceT = 0, shellOn = false, shellT = 0, diveHint = false;
   const syn = { phase: "go", round: 0, seq: [0, 2, 3], n: 3, i: 0, t: 0, mistakes: 0, help: false, want: -1, goT: 0 };
   let showT = 0, showEnded = false, coinTip = false, showBoost = false;
+  let camAim = 0, camAimT = 0;
   let bites = 0, dinnerReady = false, dinnerDone = false;
 
   const yawTo = (x, z, tx, tz) => Math.atan2(tx - x, tz - z);
@@ -111,7 +112,7 @@ export function createLevel(ctx) {
     tagPhase = "flee"; tagT = 0; tagLock = false; tired = false; roundT = 0;
     ringOn.fill(0); ringGot.fill(0); ringPuff.fill(0); pipRing = 0; ringForceT = 0; shellOn = false; shellT = 0;
     syn.phase = "go"; syn.i = 0; syn.t = 0; syn.mistakes = 0; syn.help = false; syn.want = -1; syn.goT = 0;
-    showT = 0; showEnded = false; showBoost = false;
+    showT = 0; showEnded = false; showBoost = false; camAimT = 0;
     dinnerReady = false; dinnerDone = false;
     keeperCol.on = false; bowlCol.on = false;
   }
@@ -471,6 +472,9 @@ export function createLevel(ctx) {
       forageGo();
       return;
     }
+    // out of the burrow (the follow camera cannot see into it), in the open, watching the keeper
+    putBoth(5.0, 1.6, yawTo(5.0, 1.6, KEEPER_SCATTER.x, KEEPER_SCATTER.z), 4.3, 0.3, yawTo(4.3, 0.3, KEEPER_SCATTER.x, KEEPER_SCATTER.z));
+    friend.do("idle");
     keeperIn(KEEPER_SCATTER, placeSnacks);
     const g = gen;
     cinema.play([
@@ -492,7 +496,7 @@ export function createLevel(ctx) {
     friend.do("follow");
     pipHelpT = 0; pipBusy = false; senseCd = 0; eating = false;
     ui.setObjective("Sniff out 6 yabbies with your bill", ctx.touch ? "tap Sense" : "E = Sense");
-    ui.hint(ctx.touch ? "Tap Sense. Your bill points the way!" : "Press E to sense. Your bill points the way!", 4);
+    ui.hint(ctx.touch ? "Your bill points the way!" : "Press E to sense. Your bill points the way!", 4);
     progress();
   }
   function forageFound(byPip) {
@@ -704,7 +708,7 @@ export function createLevel(ctx) {
     tricksLive = true;
     player.enabled = true;
     ui.banner("BUBBLE TRAIL", "Follow Pip into the pool", 2.8);
-    ui.setObjective("Swim through Pip's 8 bubble rings", ctx.touch ? "hold Jump to dive" : "hold Space to dive");
+    ui.setObjective("Swim through 8 bubble rings", ctx.touch ? "hold Jump to dive" : "hold Space to dive");
     friend.do("idle");
     friend.emote("call");
     later(1.0, pipNextRing);
@@ -727,7 +731,7 @@ export function createLevel(ctx) {
       ui.objectiveDone();
       later(1.2, () => {
         if (step !== "bubbles" || !shellOn) return;
-        ui.setObjective("Pip left a shiny shell at the bottom. Dive for it!", ctx.touch ? "hold Jump to dive" : "hold Space to dive");
+        ui.setObjective("Dive for Pip's shiny shell!", ctx.touch ? "hold Jump to dive" : "hold Space to dive");
       });
     }
   }
@@ -797,7 +801,7 @@ export function createLevel(ctx) {
     player.enabled = true;
     tricksShown(false);
     ui.banner("SHOW PRACTICE", "Copy Pip's tricks", 2.8);
-    ui.setObjective("Meet Pip at the show rock by the glass", "");
+    ui.setObjective("Meet Pip at the show rock", "");
     friendEv = null;
     friend.do("goto", { x: P.showFriend.x, z: P.showFriend.z, yaw: 0, run: true });
     progress();
@@ -807,8 +811,14 @@ export function createLevel(ctx) {
     syn.mistakes = 0; syn.help = false;
     synDemo(0.9);
   }
+  // turn the follow camera so Pip's demonstration is in view, just past the player's shoulder
+  function synFrame() {
+    camAim = yawTo(player.x, player.z, P.showFriend.x, P.showFriend.z) - 0.3;
+    camAimT = 1.4;
+  }
   function synDemo(delay) {
     clearWant();
+    synFrame();
     syn.phase = "demo"; syn.i = 0; syn.t = delay;
     tricksShown(false);
     ui.setObjective("Round " + (syn.round + 1) + " of 3: watch Pip...", "");
@@ -882,6 +892,14 @@ export function createLevel(ctx) {
       return;
     }
     if (syn.phase === "demo") {
+      if (camAimT > 0) {
+        camAimT -= dt;
+        let dy = camAim - ctx.cam.yaw;
+        while (dy > Math.PI) dy -= TAU;
+        while (dy < -Math.PI) dy += TAU;
+        ctx.cam.yaw += dy * Math.min(1, dt * 4);
+      }
+      if (ctx.cam.manualT < 2) ctx.cam.manualT = 2;
       syn.t -= dt;
       if (syn.t > 0) return;
       clearWant();
@@ -952,7 +970,7 @@ export function createLevel(ctx) {
     showT = 0; showEnded = false;
     tricksShown(true);
     ui.banner("SHOW TIME", "Earn " + COIN_GOAL + " coins", 3);
-    ui.setObjective("Earn " + COIN_GOAL + " coins: do tricks near the glass", ctx.touch ? "tap the tricks" : "keys 1 2 3 4");
+    ui.setObjective("Earn " + COIN_GOAL + " coins near the glass", ctx.touch ? "tap the tricks" : "keys 1 2 3 4");
     ui.hint("Different tricks in a row make a combo!", 4);
     friendEv = null;
     friend.do("follow", { dist: 1.4, side: 0.9 });
@@ -1030,7 +1048,12 @@ export function createLevel(ctx) {
     player.enabled = true;
     ui.setObjective("Eat dinner with Pip", ctx.touch ? "tap Eat at the bowl" : "E at the bowl");
     friendEv = null;
-    friend.do("goto", { x: P.bowlFriend.x, z: P.bowlFriend.z, yaw: P.bowlFriend.yaw });
+    {
+      // right at the bowl, on the far side from the door
+      const dx = P.bowlFriend.x - P.bowl.x, dz = P.bowlFriend.z - P.bowl.z, l = Math.hypot(dx, dz) || 1;
+      const fx2 = P.bowl.x + (dx / l) * 0.62, fz2 = P.bowl.z + (dz / l) * 0.62;
+      friend.do("goto", { x: fx2, z: fz2, yaw: yawTo(fx2, fz2, P.bowl.x, P.bowl.z) });
+    }
     progress();
   }
   function dinnerAction() {
@@ -1083,23 +1106,39 @@ export function createLevel(ctx) {
     if (keeper.visible) { keeper.reset(); zoo.door.reset(); }
     keeperCol.on = false;
     const g = gen;
-    const py = yawTo(2.6, 8.3, P.poster.x, P.poster.z);
+    const R = P.showRock, SF = P.showFriend, PO = P.poster, PC = P.posterClose;
+    // closing time: the visitors drift out, so nobody stands between the camera and the poster
+    crowd.disperse(); crowd.stroll(0);
+    const settle = () => {
+      if (step !== "poster") return;
+      if (Math.hypot(player.x - R.x, player.z - R.z) > 0.4) { player.stop(); player.teleport(R.x, R.z, 0); }
+      if (friend.distTo(SF.x, SF.z) > 0.5) { friend.do("idle"); friend.place(SF.x, SF.z, 0); }
+      friendEv = null;
+      friend.do("sit", { lookAt: PO });
+      platypus.pose("sit", 0.6);
+      tmpV.set(PO.x, PO.y, PO.z); platypus.lookAt(tmpV);
+    };
     cinema.play([
       { fade: "black", dur: 0.6 },
       () => {
-        crowd.disperse(); crowd.stroll(3);
+        ui.showHud(false);
+        props.coins.clear();
         player.stop();
-        putBoth(2.4, 5.9, 0.1, 3.7, 5.7, 0.1);
-        friendEv = (type) => { if (type === "arrived" && step === "poster") friend.do("sit", { lookAt: P.poster }); };
-        player.walkTo(2.6, 8.3, { speed: 0.5, face: py });
-        friend.do("goto", { x: 3.9, z: 8.4, yaw: yawTo(3.9, 8.4, P.poster.x, P.poster.z) });
+        putBoth(2.3, 5.3, 0.3, 3.9, 5.1, 0.3);
+        friendEv = (type) => { if (type === "arrived" && step === "poster") friend.do("sit", { lookAt: PO }); };
+        player.walkTo(R.x, R.z, { speed: 0.45, face: 0 });
+        friend.do("goto", { x: SF.x, z: SF.z, yaw: 0 });
       },
-      { shot: { pos: [3.1, 1.0, 4.5], look: [4.4, 1.7, 12], fov: 40, to: { pos: [3.25, 0.85, 6.3] }, dur: 5.5, ease: "inOut" }, hold: false },
+      // the two of them wander up to the glass
+      { shot: { pos: [0.6, 1.7, 3.4], look: [3.6, 0.5, 7.2], fov: 44, to: { pos: [1.2, 1.3, 4.2] }, dur: 4.6 }, hold: false },
       { fade: "clear", dur: 0.8 },
       { caption: "What a day.", dur: 2.6, narr: true },
-      () => { tmpV.set(P.poster.x, P.poster.y, P.poster.z); platypus.lookAt(tmpV); friend.lookAt(P.poster); },
-      { wait: 1.6 },
-      { shot: { look: P.poster, to: { pos: P.posterClose.pos, look: P.poster, fov: 30 }, dur: 5, ease: "inOut" } },
+      { until: () => !player.walking, max: 3 },
+      settle,
+      // over their shoulders, looking out through the glass
+      { shot: { pos: [3.8, 1.2, 3.8], look: [4.3, 1.1, 10], fov: 50, to: { pos: [3.85, 1.15, 4.6] }, dur: 3.2 } },
+      // ...through it, to the poster
+      { shot: { to: { pos: [PC.x, PC.y, PC.z], look: [PO.x, PO.y, PO.z], fov: fovFor(2.15, PO.z - PC.z, 40) }, dur: 5, ease: "inOut" } },
       { caption: "Tomorrow is the big show.", dur: 4, narr: true },
       { fade: "black", dur: 1.4 },
     ], {
@@ -1107,6 +1146,11 @@ export function createLevel(ctx) {
       release: null,
       onDone() { if (g !== gen) return; finish(); },
     });
+  }
+  // a vertical fov that fits `width` metres at `dist` across the screen (matters on a phone held upright)
+  function fovFor(width, dist, landscapeFov) {
+    const need = 2 * Math.atan(width / 2 / dist / ctx.camera.aspect) * 180 / Math.PI;
+    return clamp(need, landscapeFov, 95);
   }
 
   // =================================================================================== markers and hints

@@ -142,6 +142,7 @@ body.playing #hud.on ~ #menuBtn { display: block; }
 #toast { position: absolute; left: 50%; bottom: 23vh; transform: translate(-50%, 10px); background: rgba(35,33,43,.86); color: #fff; font-size: 14px; font-weight: 500;
   padding: 9px 16px; border-radius: 12px; opacity: 0; transition: opacity .25s, transform .25s; max-width: 86vw; text-align: center; }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
+#beat.on ~ #toast { bottom: calc(max(150px, 24vh) + 64px); }
 
 /* speech bubble */
 #bubble { position: absolute; left: 0; top: 0; width: min(380px, 84vw); pointer-events: auto; cursor: pointer;
@@ -301,7 +302,8 @@ body.pickhover #scene { cursor: pointer; }
 /* dark worlds: light text for labels that sit straight on the picture */
 body.dark .abil .lab { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); opacity: .8; }
 body.dark #foe .name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
-@media (max-width: 700px) { .meter .lab { display: none; } .meter .bar { width: 84px; } #quests { font-size: 12px; } #tricks { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 100px); } }
+@media (max-width: 700px) { .meter .lab { display: none; } .meter .bar { width: 84px; } #quests { font-size: 12px; } #tricks { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 100px); }
+  #beat { bottom: max(218px, 27vh); } #beat.on ~ #toast { bottom: calc(max(218px, 27vh) + 62px); } }
 
 /* ---------- cinema (cutscene director overlays) ---------- */
 #cine { position: fixed; inset: 0; z-index: 20; pointer-events: none; overflow: hidden; }
@@ -355,9 +357,9 @@ body.dark #foe .name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
   #stick { width: 104px; height: 104px; margin: -52px 0 0 -52px; }
 }
 @media (max-height: 480px) {
-  #beat { bottom: auto; top: 92px; height: 46px; } #beat .hit { width: 36px; height: 36px; } .note { width: 30px; height: 30px; top: 8px; }
+  #beat { bottom: 12px; height: 46px; } #beat .hit { width: 36px; height: 36px; } .note { width: 30px; height: 30px; top: 8px; }
   #banner { top: 22vh; } #call { top: 30vh; } #combo { top: 16vh; }
-  #bubble .txt { font-size: 15px; } #objective { font-size: 13px; padding: 6px 12px 6px 9px; } #toast { bottom: 30vh; }
+  #bubble .txt { font-size: 15px; } #objective { font-size: 13px; padding: 6px 12px 6px 9px; } #toast, #beat.on ~ #toast { bottom: 30vh; }
 }
 </style>
 </head>
