@@ -1,6 +1,11 @@
-// platypus.js — the player character.
+// platypus.js — the player character (and, as the "friend" variant, Pip).
 // A single lofted, skinned body (fur) + a leather mesh (bill, feet, claws, spurs) + eyes.
-// 3 draw calls, ~15k triangles, one shared 21-bone skeleton. Everything is procedural.
+// 3 draw calls, ~15k triangles, one 21-bone skeleton per instance. Everything is procedural.
+// Geometry and textures are built once per module and shared by every instance; materials are per instance.
+//
+// Animation is layered: the level-1 locomotion (gait, jump, sting, zap) is the base; swimming, the
+// persistent poses (sit, sleep, carry ...), lookAt and the one-shot actions (tricks, tail slap, eat ...)
+// only ADD to a set of pose channels and foot targets, so they blend over the base and over each other.
 //
 // Local space: +Z forward (bill), +Y up, +X is the animal's LEFT. Origin on the ground under the body.
 // Foot indices: 0 = FL, 1 = FR, 2 = HL, 3 = HR.
@@ -18,6 +23,9 @@ const smooth = (a, b, x) => {
 const damp = (cur, target, lambda, dt) => cur + (target - cur) * (1 - Math.exp(-lambda * dt));
 const frac = (x) => x - Math.floor(x);
 const lin = (c) => Math.pow(c < 0 ? 0 : c, 2.2); // sRGB-ish -> linear for vertex colours
+const seg = (a, b, x) => sat((x - a) / (b - a));
+const bump = (a, b, c, d, x) => smooth(a, b, x) * (1 - smooth(c, d, x)); // 0 -> 1 over a..b, 1 -> 0 over c..d
+const backOut = (t, k) => { const u = t - 1; return 1 + (k + 1) * u * u * u + k * u * u; }; // ease out with overshoot
 
 // ---------------------------------------------------------------------------------------------
 // Anatomy tables. Stations are [z, halfWidth, centreY, halfHeightUp, halfHeightDown].
@@ -127,6 +135,34 @@ const STING_SPIN_LEN = 0.38;
 const ZAP_DUR = 0.95;
 const ZAP_FIRE = 0.42;
 
+// LEVELS.md B1 — these numbers are binding (dur / apex in seconds, height = body rise inside the group).
+const TRICKS = {
+  spin: { dur: 0.9, apex: 0.45, height: 0.25 },
+  backflip: { dur: 1.15, apex: 0.5, height: 0.9 },
+  tailStand: { dur: 1.6, apex: 0.7, height: 0.35 },
+  roll: { dur: 0.9, apex: 0.45, height: 0 },
+  twirlLeap: { dur: 1.2, apex: 0.55, height: 1.1 },
+  wave: { dur: 1.1, apex: 0.5, height: 0 },
+  bow: { dur: 1.2, apex: 0.6, height: 0 },
+  waterLeap: { dur: 1.4, apex: 0.6, height: 1.3 },
+  diveFlip: { dur: 1.0, apex: 0.5, height: 0 },
+  tailSplash: { dur: 0.8, apex: 0.35, height: 0 },
+};
+const TRICK_ID = { spin: 0, backflip: 1, tailStand: 2, roll: 3, twirlLeap: 4, wave: 5, bow: 6, waterLeap: 7, diveFlip: 8, tailSplash: 9 };
+const TRICK_LAND = { spin: 0.7, backflip: 0.86, twirlLeap: 1.0, waterLeap: 1.12 }; // touchdown ("land" event)
+const SLAP_DUR = 0.7, SLAP_HIT = 0.28;
+const THROW_DUR = 0.5, THROW_RELEASE = 0.22;
+const EAT_DUR = 1.4, EAT_BITES = [0.3, 0.65, 1.0];
+const WAKE_DUR = 2.2, PLAYBOW_DUR = 1.1, NUZZLE_DUR = 1.4, SHAKE_DUR = 0.8;
+
+function hexLin(hex, out) {
+  let n = hex;
+  if (typeof n === 'string') n = parseInt(n.replace('#', '').replace('0x', ''), 16);
+  n = (+n || 0) >>> 0;
+  out[0] = lin(((n >> 16) & 255) / 255); out[1] = lin(((n >> 8) & 255) / 255); out[2] = lin((n & 255) / 255);
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Loft builder
 // ---------------------------------------------------------------------------------------------
@@ -166,11 +202,12 @@ function makeBuilder() {
   return { pos: [], uv: [], col: [], si: [], sw: [], glow: [], idx: [], seams: [] };
 }
 
-export function createPlatypus(THREE) {
-  const group = new THREE.Group();
-  group.name = 'platypus';
+// Geometry + textures: built once, shared by every instance.
+let ASSETS = null;
+let ASSET_REFS = 0;
 
-  // ---- scratch (build time + run time, never reallocated) ----
+function buildAssets(THREE) {
+  // ---- scratch (build time only) ----
   const S5 = [0, 0, 0, 0, 0];
   const V = { x: 0, y: 0, z: 0, th: 0, s: 0, c: 0, cy: 0, w: 0, f: 0, r: 1, g: 1, b: 1, gx: 0, gy: 0 };
   const SI = [0, 0, 0, 0];
@@ -446,9 +483,16 @@ export function createPlatypus(THREE) {
     const mott = 1 + Math.sin(z * 37 + v.th * 3) * Math.sin(v.th * 5 + z * 11) * 0.06;
     const shade = mott * (1 - 0.5 * groove) * (1 - 0.18 * smooth(-0.8, -1, s));
     v.r = lin(r * shade); v.g = lin(g * shade); v.b = lin(b * shade);
+    // masks for per-instance recolouring in the shader: x = dark fur (0 on the cream belly),
+    // y = bib (throat/chest, up the lower flanks) + cheek patch (used by the friend variant)
+    v.gx = t1;
+    const bib = smooth(0.5, -0.05, s) * smooth(0.1, 0.19, z) * (1 - smooth(0.31, 0.35, z));
+    const cheek = (1 - sat(Math.abs(elev - 0.3) / 0.55)) * smooth(0.275, 0.3, z) * (1 - smooth(0.345, 0.368, z));
+    v.gy = Math.max(bib, cheek);
   }
 
   function limbVert(v) {
+    v.gx = 1; v.gy = 0;
     const t = v.f;
     const k = 1 - 0.45 * smooth(0.35, 1, t);
     const under = 1 - 0.15 * smooth(0, -1, v.s);
@@ -469,7 +513,7 @@ export function createPlatypus(THREE) {
     loft(furB, front ? FRONT_UPPER_ST : HIND_UPPER_ST, { sub: 2, segs: 12, uScale: 2, vScale: 8, vert: limbVert, bone: B_LEG0 + i * 3 });
     loft(furB, front ? FRONT_LOWER_ST : HIND_LOWER_ST, { sub: 2, segs: 12, uScale: 2, vScale: 8, vert: limbVert, bone: B_LEG0 + i * 3 + 1 });
   }
-  const furGeo = finish(furB, { skin: true, glow: false });
+  const furGeo = finish(furB, { skin: true, glow: true });
 
   // ---------------------------------------------------------------------------------------------
   // Leather geometry: bill + shield, lower bill, nostrils, feet, claws, spurs
@@ -646,6 +690,33 @@ export function createPlatypus(THREE) {
   }
   const eyeGeo = finish(eyeB, { skin: false, glow: false });
 
+  return { furGeo, leatherGeo, eyeGeo, furMap, furNormal, leatherNormal, eyeY, spurTip };
+}
+
+// opts (optional): { variant: "player" | "friend", scale, fur, belly, bill } — the last three are hex overrides.
+export function createPlatypus(THREE, opts) {
+  const A = ASSETS || (ASSETS = buildAssets(THREE));
+  ASSET_REFS++;
+  const { furGeo, leatherGeo, eyeGeo, furMap, furNormal, leatherNormal, eyeY, spurTip } = A;
+  opts = opts || {};
+  const variant = opts.variant === 'friend' ? 'friend' : 'player';
+  const isFriend = variant === 'friend';
+  const SC = opts.scale > 0 ? +opts.scale : isFriend ? 0.9 : 1;
+
+  const group = new THREE.Group();
+  group.name = isFriend ? 'platypusFriend' : 'platypus';
+
+  // per-instance colouring: multipliers over the baked vertex colours (all 1 for the player, so the
+  // level-1 look is untouched). The friend is a lighter, warmer chestnut with a cream bib and cheeks,
+  // a paler bill with one pink freckle, and a slightly rounder tail.
+  const H3 = [0, 0, 0];
+  const furTint = isFriend ? new THREE.Vector3(2.25, 1.9, 1.5) : new THREE.Vector3(1, 1, 1);
+  const bellyTint = isFriend ? new THREE.Vector3(1.08, 1.06, 1.0) : new THREE.Vector3(1, 1, 1);
+  const billTint = isFriend ? new THREE.Vector3(3.3, 2.85, 2.6) : new THREE.Vector3(1, 1, 1);
+  if (opts.fur !== undefined && opts.fur !== null) { hexLin(opts.fur, H3); furTint.set(H3[0] / lin(0.34), H3[1] / lin(0.23), H3[2] / lin(0.145)); }
+  if (opts.belly !== undefined && opts.belly !== null) { hexLin(opts.belly, H3); bellyTint.set(H3[0] / lin(0.82), H3[1] / lin(0.72), H3[2] / lin(0.56)); }
+  if (opts.bill !== undefined && opts.bill !== null) { hexLin(opts.bill, H3); billTint.set(H3[0] / lin(0.17), H3[1] / lin(0.175), H3[2] / lin(0.2)); }
+
   // ---------------------------------------------------------------------------------------------
   // Materials
   // ---------------------------------------------------------------------------------------------
@@ -657,6 +728,15 @@ export function createPlatypus(THREE) {
     rimLeather: { value: new THREE.Color(0.1, 0.13, 0.17) },
     billColor: { value: new THREE.Color(0.25, 0.65, 1.6) },
     spurColor: { value: new THREE.Color(0.45, 1.5, 0.25) },
+    // extensions
+    wet: { value: 0 },
+    furTint: { value: furTint },
+    bellyTint: { value: bellyTint },
+    patch: { value: isFriend ? 0.9 : 0 },
+    patchColor: { value: new THREE.Vector3(lin(0.93), lin(0.85), lin(0.68)) },
+    tailRound: { value: isFriend ? 1 : 0 },
+    billTint: { value: billTint },
+    freckle: { value: isFriend ? 1 : 0 },
   };
 
   const furMat = new THREE.MeshStandardMaterial({
@@ -667,14 +747,22 @@ export function createPlatypus(THREE) {
   furMat.onBeforeCompile = (sh) => {
     sh.uniforms.uBristle = U.bristle;
     sh.uniforms.uRimColor = U.rimFur;
+    sh.uniforms.uWet = U.wet;
+    sh.uniforms.uFurTint = U.furTint;
+    sh.uniforms.uBellyTint = U.bellyTint;
+    sh.uniforms.uPatch = U.patch;
+    sh.uniforms.uPatchColor = U.patchColor;
+    sh.uniforms.uTailRound = U.tailRound;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uBristle;\nfloat platyHash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n{ float ph = platyHash(floor(position * 420.0)); transformed += objectNormal * (uBristle * 0.015 * ph); }');
+      .replace('#include <common>', '#include <common>\nuniform float uBristle;\nuniform float uTailRound;\nattribute vec2 aGlow;\nvarying vec2 vPlatyMask;\nfloat platyHash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlatyMask = aGlow;\n{ float ph = platyHash(floor(position * 420.0)); transformed += objectNormal * (uBristle * 0.015 * ph);\n  float tw = uTailRound * (1.0 - smoothstep(-0.36, -0.27, position.z));\n  transformed.x *= 1.0 + 0.15 * tw;\n  transformed.z = mix(transformed.z, -0.36 + (transformed.z + 0.36) * 0.84, tw); }');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uRimColor;\nuniform float uBristle;')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uRimColor;\nuniform float uBristle;\nuniform float uWet;\nuniform vec3 uFurTint;\nuniform vec3 uBellyTint;\nuniform float uPatch;\nuniform vec3 uPatchColor;\nvarying vec2 vPlatyMask;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n{ vec3 pTexel = diffuseColor.rgb / max(vColor.rgb, vec3(0.002));\n  vec3 pBase = diffuseColor.rgb * mix(uBellyTint, uFurTint, vPlatyMask.x);\n  diffuseColor.rgb = mix(pBase, uPatchColor * pTexel, vPlatyMask.y * uPatch) * (1.0 - 0.4 * uWet); }')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.2, uWet * 0.85);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float prim = 1.0 - saturate(dot(normalize(vViewPosition), normal));\n  float prim2 = prim * prim;\n  totalEmissiveRadiance += uRimColor * (prim2 * sqrt(prim)) * (0.35 + diffuseColor.rgb * 2.2);\n  totalEmissiveRadiance += vec3(0.2, 0.5, 1.0) * (uBristle * 0.55 * prim2); }');
   };
-  furMat.customProgramCacheKey = () => 'platypus-fur';
+  furMat.customProgramCacheKey = () => 'platypus-fur-2';
 
   const leatherMat = new THREE.MeshStandardMaterial({
     color: 0xffffff, vertexColors: true, roughness: 0.4, metalness: 0,
@@ -687,23 +775,32 @@ export function createPlatypus(THREE) {
     sh.uniforms.uBillColor = U.billColor;
     sh.uniforms.uSpurColor = U.spurColor;
     sh.uniforms.uRimColor = U.rimLeather;
+    sh.uniforms.uWet = U.wet;
+    sh.uniforms.uBillTint = U.billTint;
+    sh.uniforms.uFreckle = U.freckle;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 aGlow;\nvarying vec2 vPlatyGlow;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlatyGlow = aGlow;');
+      .replace('#include <common>', '#include <common>\nattribute vec2 aGlow;\nvarying vec2 vPlatyGlow;\nvarying vec3 vPlatyPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPlatyGlow = aGlow;\nvPlatyPos = position;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vPlatyGlow;\nuniform float uBillGlow;\nuniform float uSpurGlow;\nuniform vec3 uBillColor;\nuniform vec3 uSpurColor;\nuniform vec3 uRimColor;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPlatyGlow;\nvarying vec3 vPlatyPos;\nuniform float uBillGlow;\nuniform float uSpurGlow;\nuniform vec3 uBillColor;\nuniform vec3 uSpurColor;\nuniform vec3 uRimColor;\nuniform float uWet;\nuniform vec3 uBillTint;\nuniform float uFreckle;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n{ float pBill = step(0.01, vPlatyGlow.x);\n  diffuseColor.rgb *= mix(vec3(1.0), uBillTint, pBill);\n  float pFr = uFreckle * pBill * step(0.05, vPlatyPos.y) * (1.0 - smoothstep(0.0055, 0.0105, length(vPlatyPos.xz - vec2(0.024, 0.43))));\n  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.17, 0.17), pFr); }')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.16, uWet * 0.7);')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n{ float prim = 1.0 - saturate(dot(normalize(vViewPosition), normal));\n  totalEmissiveRadiance += uRimColor * (prim * prim * prim);\n  totalEmissiveRadiance += uBillColor * (vPlatyGlow.x * uBillGlow * (0.55 + 0.9 * prim));\n  totalEmissiveRadiance += uSpurColor * (vPlatyGlow.y * uSpurGlow); }');
   };
-  leatherMat.customProgramCacheKey = () => 'platypus-leather';
+  leatherMat.customProgramCacheKey = () => 'platypus-leather-2';
 
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
 
   // ---------------------------------------------------------------------------------------------
   // Skeleton
   // ---------------------------------------------------------------------------------------------
+  const scaler = new THREE.Group(); // per-instance size; the skeleton is bound at scale 1 and scaled afterwards
+  scaler.name = 'platypusScale';
+  group.add(scaler);
   const rig = new THREE.Group();
   rig.name = 'platypusRig';
-  group.add(rig);
+  rig.rotation.order = 'YXZ';
+  scaler.add(rig);
   const bones = [];
   function mkBone(name, pos, parent, parentPos) {
     const b = new THREE.Bone();
@@ -751,6 +848,7 @@ export function createPlatypus(THREE) {
 
   group.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(bones); // inverses from the bind pose above (leg bones bind at identity)
+  scaler.scale.setScalar(SC);
   const bindM = new THREE.Matrix4();
 
   const furMesh = new THREE.SkinnedMesh(furGeo, furMat);
@@ -789,6 +887,26 @@ export function createPlatypus(THREE) {
   feet[3].foot.add(spurR);
 
   // ---------------------------------------------------------------------------------------------
+  // Extension anchors (LEVELS.md B1)
+  // ---------------------------------------------------------------------------------------------
+  const tailTip = new THREE.Object3D();
+  tailTip.name = 'tailTip';
+  tailTip.position.set(0, -0.013, -0.106);
+  tail3.add(tailTip);
+  const ballAnchor = new THREE.Object3D();
+  ballAnchor.name = 'ballAnchor';
+  ballAnchor.position.set(0, -0.017, 0.152);
+  head.add(ballAnchor);
+  // between the front paws, under the bill. Rides on the chest so a carried thing bobs with the walk and
+  // follows the throw wind-up; with the carry pose blended in it sits at about (0, 0.17, 0.4) in the group.
+  const HOLD_Y = -0.138, HOLD_Z = 0.195;
+  const holdAnchor = new THREE.Object3D();
+  holdAnchor.name = 'holdAnchor';
+  holdAnchor.position.set(0, HOLD_Y, HOLD_Z);
+  holdAnchor.rotation.x = 0.29;
+  chest.add(holdAnchor);
+
+  // ---------------------------------------------------------------------------------------------
   // Animation state
   // ---------------------------------------------------------------------------------------------
   let clock = 0;
@@ -808,10 +926,95 @@ export function createPlatypus(THREE) {
   let idleW = 1;
 
   const tS = new THREE.Vector3(), tA = new THREE.Vector3(), tD = new THREE.Vector3();
-  const tE = new THREE.Vector3(), tP = new THREE.Vector3();
+  const tE = new THREE.Vector3(), tP = new THREE.Vector3(), tB = new THREE.Vector3();
   const bx = new THREE.Vector3(), by = new THREE.Vector3(), bz = new THREE.Vector3();
   const mB = new THREE.Matrix4(), mChest = new THREE.Matrix4();
   const air = { x: 0, y: 0, z: 0 };
+
+  // ---- extension state ----
+  // X: additive pose channels, cleared every frame and filled by the swim / pose / look / action layers.
+  // Conventions: pitch + = nose down, yaw + = nose to the animal's left (+X), roll + = right side down,
+  // tailX + = tail up, tailY + = tail to the right (-X).
+  const X = {
+    rigX: 0, rigY: 0, rigZ: 0, rigPitch: 0, rigYaw: 0, rigRoll: 0, pivY: 0.115, pivZ: 0,
+    hipX: 0, hipY: 0, hipZ: 0, pitch: 0, hipYaw: 0, roll: 0, sq: 0, curl: 0, sYaw: 0, sRoll: 0,
+    neckX: 0, neckY: 0, neckZ: 0, headX: 0, headY: 0, headZ: 0,
+    tailX: 0, t1x: 0, t2x: 0, t3x: 0, tailY: 0, tailZ: 0, tailSrc: 0, nodT: 0, tpT: 0,
+    air: 0, airK: 0, lid: 0, lidHard: 0, noBlink: 0, quiet: 0, noBreath: 0, breath: 0, bristle: 0,
+  };
+  function clearX() {
+    X.rigX = X.rigY = X.rigZ = X.rigPitch = X.rigYaw = X.rigRoll = 0; X.pivY = 0.115; X.pivZ = 0;
+    X.hipX = X.hipY = X.hipZ = X.pitch = X.hipYaw = X.roll = X.sq = X.curl = X.sYaw = X.sRoll = 0;
+    X.neckX = X.neckY = X.neckZ = X.headX = X.headY = X.headZ = 0;
+    X.tailX = X.t1x = X.t2x = X.t3x = X.tailY = X.tailZ = X.tailSrc = X.nodT = X.tpT = 0;
+    X.air = X.airK = X.lid = X.lidHard = X.noBlink = X.quiet = X.noBreath = X.breath = X.bristle = 0;
+    for (let i = 0; i < 4; i++) { const o = FO[i]; o.rw = 0; o.bw = 0; o.w = 0; o.pw = 0; }
+  }
+  // per-foot overrides: a rig-space target (rw) and a body-relative one (bw: chest space for the front
+  // feet, hips space for the hind feet), composited "over" in call order, plus pitch / yaw / web spread.
+  const FO = [];
+  for (let i = 0; i < 4; i++) FO.push({ rw: 0, rx: 0, ry: 0, rz: 0, bw: 0, bx: 0, by: 0, bz: 0, w: 0, pitch: 0, yaw: 0, fold: 1, roll: 0, pw: 0, pvx: 0, pvy: 0, pvz: 0 });
+  // knee / elbow direction override (rig space) for poses where the default sprawl would dig into the ground
+  function footPole(i, w, x, y, z) { const o = FO[i]; o.pw = w > 1 ? 1 : w; o.pvx = x; o.pvy = y; o.pvz = z; }
+  function footAux(o, w, pitch, yaw, fold, roll) {
+    const nw = w + o.w * (1 - w), k = w / nw;
+    if (o.w <= 0) o.roll = 0;
+    o.pitch += (pitch - o.pitch) * k; o.yaw += (yaw - o.yaw) * k; o.fold += (fold - o.fold) * k; o.roll += ((roll || 0) - o.roll) * k; o.w = nw;
+  }
+  function footR(i, w, x, y, z, pitch, yaw, fold, roll) {
+    if (!(w > 0.0005)) return;
+    if (w > 1) w = 1;
+    const o = FO[i];
+    const nw = w + o.rw * (1 - w), k = w / nw;
+    o.rx += (x - o.rx) * k; o.ry += (y - o.ry) * k; o.rz += (z - o.rz) * k; o.rw = nw;
+    o.bw *= 1 - w;
+    footAux(o, w, pitch, yaw, fold, roll);
+  }
+  function footB(i, w, x, y, z, pitch, yaw, fold, roll) {
+    if (!(w > 0.0005)) return;
+    if (w > 1) w = 1;
+    const o = FO[i];
+    const nw = w + o.bw * (1 - w), k = w / nw;
+    o.bx += (x - o.bx) * k; o.by += (y - o.by) * k; o.bz += (z - o.bz) * k; o.bw = nw;
+    footAux(o, w, pitch, yaw, fold, roll);
+  }
+
+  // one-shot actions
+  const A_SPIN = 0, A_BACKFLIP = 1, A_TAILSTAND = 2, A_ROLL = 3, A_TWIRL = 4, A_WAVE = 5, A_BOW = 6, A_WATERLEAP = 7,
+    A_DIVEFLIP = 8, A_TAILSPLASH = 9, A_SLAP = 10, A_THROW = 11, A_EAT = 12, A_WAKE = 13, A_PLAYBOW = 14, A_NUZZLE = 15, A_SHAKE = 16;
+  let actId = -1, actName = '', actT = 0, actDur = 0, actApex = -1, actLand = -1, actDir = 1, dirFlip = 1;
+  const evT = [null, null, null, null, null, null, null, null], evN = [null, null, null, null, null, null, null, null];
+  let evC = 0;
+  function pushEv(type, name) { if (evC < 8) { evT[evC] = type; evN[evC] = name; evC++; } }
+
+  // persistent poses
+  const P_SIT = 0, P_SAD = 1, P_LIMP = 2, P_STILL = 3, P_CURL = 4, P_BALANCE = 5, P_CARRIED = 6, P_SCARED = 7, P_CARRY = 8, P_N = 9;
+  const POSE_ID = { sit: P_SIT, sad: P_SAD, limp: P_LIMP, still: P_STILL, curl: P_CURL, balance: P_BALANCE, carried: P_CARRIED, scared: P_SCARED };
+  const PW = new Float32Array(P_N), PR = new Float32Array(P_N);
+  for (let i = 0; i < P_N; i++) PR[i] = 2;
+  PR[P_CARRY] = 1 / 0.2;
+  let poseCur = -1, poseName = null, sleepOn = false, carrySet = false, carryState = false;
+  let swimW = 0, diveW = 0, swimPh = 0, pitchLag = 0, muteFeet = 0;
+  let lookOn = false, lookW = 0, lookYawS = 0, lookPitchS = 0;
+  const lookTarget = new THREE.Vector3(), lookTmp = new THREE.Vector3();
+  let eyeOverride = null;
+  let wet = 0;
+  // frame values shared with the layer functions
+  let fT = 0, fR = 0, fDuty = 0.7, fDt = 0;
+
+  // crossfade from a snapshot of the last drawn pose (used when a one-shot starts, restarts or ends)
+  const xfBones = bones.concat([rig]);
+  const xfP = [], xfQ = [], xfS = [];
+  for (let i = 0; i < xfBones.length; i++) { xfP.push(new THREE.Vector3()); xfQ.push(new THREE.Quaternion()); xfS.push(new THREE.Vector3(1, 1, 1)); }
+  const xfTmpQ = new THREE.Quaternion();
+  let xfT = 1, xfDur = 0;
+  function xfadeStart(dur) {
+    for (let i = 0; i < xfBones.length; i++) {
+      const b = xfBones[i];
+      xfP[i].copy(b.position); xfQ[i].copy(b.quaternion); xfS[i].copy(b.scale);
+    }
+    xfT = 0; xfDur = dur;
+  }
 
   function orient(bone, from, to, stretch) {
     bz.subVectors(to, from);
@@ -864,10 +1067,42 @@ export function createPlatypus(THREE) {
     billTip,
     spurL,
     spurR,
-    radius: 0.35,
+    radius: 0.35 * SC,
+    // ---- LEVELS.md B1 extensions ----
+    tricks: TRICKS,
+    trick,
+    get acting() { return actId >= 0; },
+    onEvent: null,
+    tailSlap,
+    slapHitTime: SLAP_HIT,
+    tailTip,
+    holdAnchor,
+    setCarry,
+    throwAnim,
+    throwReleaseTime: THROW_RELEASE,
+    eat,
+    eatBiteTimes: EAT_BITES,
+    sleep,
+    wakeStretch,
+    pose,
+    playBow,
+    nuzzle,
+    shake,
+    lookAt,
+    blink,
+    setEyes,
+    ballAnchor,
+    setWet,
     // extras
-    length: 1.0,
-    height: 0.27,
+    variant,
+    scale: SC,
+    get currentPose() { return poseName; },
+    get sleeping() { return sleepOn; },
+    get carrying() { return carrySet || carryState; },
+    get wet() { return wet; },
+    reset,
+    length: 1.0 * SC,
+    height: 0.27 * SC,
     meshes: [furMesh, leatherMesh, eyes],
     skeleton,
     dispose,
@@ -918,13 +1153,588 @@ export function createPlatypus(THREE) {
     celT = 0;
   }
 
+  // ---------------- extension API ----------------
+  function startAct(id, name, dur, apex, land) {
+    xfadeStart(0.12);
+    actId = id; actName = name; actT = 0; actDur = dur; actApex = apex; actLand = land;
+    dirFlip = -dirFlip; actDir = dirFlip;
+    celebrating = false;
+    return dur;
+  }
+
+  function trick(name) {
+    const tr = TRICKS[name];
+    if (!tr || TRICK_ID[name] === undefined) return 0;
+    const ld = TRICK_LAND[name];
+    return startAct(TRICK_ID[name], name, tr.dur, tr.apex, ld === undefined ? -1 : ld);
+  }
+  function tailSlap() { return startAct(A_SLAP, 'tailSlap', SLAP_DUR, -1, -1); }
+  function throwAnim() { return startAct(A_THROW, 'throw', THROW_DUR, -1, -1); }
+  function eat() { return startAct(A_EAT, 'eat', EAT_DUR, -1, -1); }
+  function wakeStretch() { return startAct(A_WAKE, 'wakeStretch', WAKE_DUR, -1, -1); }
+  function playBow() { return startAct(A_PLAYBOW, 'playBow', PLAYBOW_DUR, -1, -1); }
+  function nuzzle() { return startAct(A_NUZZLE, 'nuzzle', NUZZLE_DUR, -1, -1); }
+  function shake() { return startAct(A_SHAKE, 'shake', SHAKE_DUR, -1, -1); }
+
+  function setCarry(on) { carrySet = !!on; }
+
+  function sleep(on) {
+    sleepOn = !!on;
+    PR[P_CURL] = 1 / 1.2;
+    if (sleepOn) celebrating = false;
+  }
+
+  function pose(name, blend) {
+    const id = name !== null && name !== undefined && POSE_ID[name] !== undefined ? POSE_ID[name] : -1;
+    const rate = 1 / Math.max(blend === undefined ? 0.5 : +blend || 0, 0.02);
+    for (let i = 0; i < P_CARRY; i++) {
+      if (i === P_CURL && sleepOn && id !== P_CURL) continue; // sleep keeps its own slow blend
+      if (i === id || i === poseCur || PW[i] > 0) PR[i] = rate;
+    }
+    poseCur = id;
+    poseName = id >= 0 ? name : null;
+    if (id >= 0) celebrating = false;
+  }
+
+  function lookAt(v) {
+    if (v && typeof v.x === 'number') { lookTarget.set(v.x, v.y || 0, v.z || 0); lookOn = true; } else lookOn = false;
+  }
+  function blink() { if (blinkT < 0) blinkT = 0; }
+  function setEyes(open) { eyeOverride = open === null || open === undefined ? null : sat(+open || 0); }
+  function setWet(v) { wet = sat(+v || 0); }
+
+  // back to the freshly-built state (levels call this from enter()/exit(); the caller still owns `group`)
+  function reset() {
+    actId = -1; evC = 0; xfT = 1; xfDur = 0;
+    poseCur = -1; poseName = null; sleepOn = false; carrySet = false;
+    for (let i = 0; i < P_N; i++) PW[i] = 0;
+    swimW = diveW = 0; lookOn = false; lookW = lookYawS = lookPitchS = 0;
+    eyeOverride = null; wet = 0; celebrating = false; celW = 0;
+    stingT = zapT = hurtT = -1; stingEnded = true;
+    q = qv = nod = nodV = tp = tpV = 0;
+    resetFeet(0);
+  }
+
   function dispose() {
-    furGeo.dispose(); leatherGeo.dispose(); eyeGeo.dispose();
     furMat.dispose(); leatherMat.dispose(); eyeMat.dispose();
-    if (furMap) furMap.dispose();
-    if (furNormal) furNormal.dispose();
-    if (leatherNormal) leatherNormal.dispose();
     skeleton.dispose();
+    ASSET_REFS--;
+    if (ASSET_REFS <= 0 && ASSETS === A) {
+      furGeo.dispose(); leatherGeo.dispose(); eyeGeo.dispose();
+      if (furMap) furMap.dispose();
+      if (furNormal) furNormal.dispose();
+      if (leatherNormal) leatherNormal.dispose();
+      ASSETS = null; ASSET_REFS = 0;
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Layers. Each one only ADDS to X / sets foot overrides, so anything can play over anything.
+  // ---------------------------------------------------------------------------------------------
+
+  // Swimming: alternate front-foot rowing (the way a platypus really swims), hind feet folded back as
+  // rudders, tail steering, body rocking into each stroke. Diving: the same stroke, harder and deeper,
+  // eyes shut, a gentle dolphin ripple down the spine and tail.
+  function swimLayer(w, dive, turnNow) {
+    const amp = lerp(0.3, 1, sat(fR * 1.7));
+    swimPh += lerp(0.85, 2.2, fR) * (1 + 0.3 * dive) * fDt;
+    if (swimPh > 1024) swimPh -= 1024;
+    const a0 = swimPh * TAU;
+    for (let i = 0; i < 4; i++) {
+      const f = feet[i];
+      if (f.front) {
+        const ph = a0 + (i === 1 ? PI : 0);
+        const c = Math.cos(ph), sn = Math.sin(ph);
+        const power = smooth(-0.15, 0.55, sn); // the foot is sweeping backwards
+        const reach = amp * (1 + 0.25 * dive);
+        footR(i, w,
+          f.side * (0.2 + 0.04 * power * amp + 0.012 * dive),
+          0.085 - 0.062 * power * reach + 0.015 * dive,
+          f.hz + 0.015 + 0.115 * reach * c,
+          lerp(0.1, 1.2, power), f.side * 0.3 * power, lerp(0.66, 1.32, power));
+      } else {
+        const steer = Math.max(0, f.side * turnNow * 3.2);
+        const kick = Math.sin(a0 * 2 + (i === 3 ? PI : 0));
+        footR(i, w,
+          f.side * (0.148 - 0.02 * dive + 0.06 * steer),
+          0.078 + 0.012 * dive + 0.008 * kick * amp,
+          f.hz - 0.088 + 0.014 * kick * amp + 0.03 * steer,
+          1.15 - 0.5 * steer, f.side * (0.45 + 0.5 * steer), 0.78 + 0.5 * steer);
+      }
+    }
+    const surf = w * (1 - dive);
+    X.rigY += surf * (-0.03 + 0.006 * Math.sin(fT * 2.1) + 0.005 * amp * Math.sin(a0 * 2 + 0.7));
+    X.pitch += surf * (-0.035 + 0.012 * amp * Math.sin(a0 * 2));
+    X.neckX += surf * -0.06; X.headX += surf * -0.05;
+    X.sYaw += w * 0.034 * amp * Math.sin(a0 + 0.3);
+    X.roll += w * 0.045 * amp * Math.sin(a0 + 0.9);
+    X.neckY += w * -0.05 * amp * Math.sin(a0 + 0.3);
+    X.tailSrc += w * 0.16 * amp * Math.sin(a0 - 1.3);
+    X.tailX += w * -0.04;
+    X.quiet += w * sat(fR * 3);
+    if (dive > 0) {
+      const dw = w * dive;
+      X.curl += dw * 0.024 * amp * Math.sin(a0 * 2);
+      X.tailX += dw * 0.12 * amp * Math.sin(a0 * 2 - 1.4);
+      X.t3x += dw * 0.08 * amp * Math.sin(a0 * 2 - 2.3);
+      X.neckX += dw * 0.03;
+      if (dw > X.lidHard) X.lidHard = dw;
+    }
+    // follow-through when the caller pitches the whole animal (dives, surfacing)
+    const dp = clamp(group.rotation.x - pitchLag, -0.5, 0.5);
+    X.tailX -= w * dp * 0.85;
+    X.neckX += w * dp * 0.25;
+  }
+
+  // Sitting up on the haunches: rump down, tail flat behind as a third leg, front paws hanging at the
+  // chest. `skipPaw` leaves one front paw to the caller (the wave).
+  function poseSit(w, skipPaw) {
+    X.pitch -= 0.95 * w; X.hipY += 0.06 * w; X.hipZ -= 0.02 * w;
+    X.curl += 0.15 * w; X.neckX += 0.25 * w; X.headX += 0.24 * w;
+    X.t1x += 0.66 * w; X.t2x += 0.3 * w; X.t3x += 0.14 * w;
+    X.roll += w * 0.014 * Math.sin(fT * 0.7);
+    X.tailSrc += w * 0.1 * Math.sin(fT * 0.9 + 1);
+    for (let i = 0; i < 4; i++) {
+      const f = feet[i];
+      if (f.front) {
+        if (i !== skipPaw) footB(i, w, f.side * 0.075, -0.128 + 0.004 * Math.sin(fT * 1.9 + i), 0.09, 0.9, -f.side * 0.25, 0.85);
+      } else footR(i, w, f.side * 0.2, ANKLE_H, f.hz + 0.1, 0, f.side * 0.2, 1);
+    }
+  }
+
+  function poseSad(w) {
+    const sigh = Math.pow(Math.max(0, Math.sin(fT * 0.55)), 6);
+    X.neckX += w * (0.045 - 0.03 * sigh); X.headX += w * 0.04;
+    X.hipY -= 0.008 * w; X.curl += 0.01 * w; X.tailX -= 0.07 * w; X.sq += 0.06 * w;
+    X.breath += w * 0.03 * sigh;
+    X.quiet += 0.9 * w; X.noBlink = Math.max(X.noBlink, w);
+    // heavy lids and a slow, slow blink
+    const u = frac(fT / 3.9);
+    const slow = smooth(0, 0.07, u) * (1 - smooth(0.1, 0.19, u));
+    X.lid = Math.max(X.lid, w * (0.34 + 0.66 * slow));
+  }
+
+  // Favouring the right hind leg: it is carried, toe barely touching; the body hops over the good leg.
+  function poseLimp(w) {
+    const HR = feet[3];
+    const p = frac(phase - feet[2].off + 8);
+    const hop = p < fDuty ? Math.sin(PI * p / fDuty) : 0;
+    footR(3, 0.85 * w, HR.hx * 0.84, 0.046 - 0.016 * hop * walkW, HR.hz + 0.05, 0.55, 0, 0.82);
+    X.roll -= 0.065 * w; X.hipX += 0.014 * w; X.tailY += 0.14 * w;
+    X.hipY += w * walkW * (0.006 - 0.02 * hop);
+    X.pitch += w * walkW * 0.035 * hop;
+    X.nodT += w * walkW * 0.11 * hop;
+    X.tpT += w * walkW * 0.1 * hop;
+  }
+
+  // Lying on its side, limp. Nothing in here depends on time: once blended in it does not move at all.
+  function poseStill(w) {
+    X.rigRoll += 1.42 * w; X.rigY += 0.022 * w;
+    X.neckY -= 0.04 * w; X.headY -= 0.03 * w; X.headX += 0.08 * w; X.sYaw -= 0.02 * w; X.neckZ -= 0.24 * w; X.headZ -= 0.3 * w;
+    X.curl += 0.03 * w;
+    X.tailY += 0.3 * w; X.tailZ -= 0.6 * w; X.tailX -= 0.05 * w;
+    for (let i = 0; i < 4; i++) {
+      const f = feet[i];
+      if (f.side > 0) footR(i, w, 0.04, f.front ? 0.004 : -0.004, f.hz + (f.front ? 0.055 : 0.045), 0.5, -0.5, 0.85, -0.9);
+      else footR(i, w, -0.098, f.front ? -0.03 : -0.036, f.hz + (f.front ? 0.07 : 0.03), 0.05, f.toe, 0.85, -1.42);
+      // limp limbs: elbows and knees fall towards the belly instead of sprawling
+      footPole(i, w, f.side > 0 ? 0.1 : 0.35, -1, f.front ? -0.35 : 0.35);
+    }
+    X.quiet += w; X.noBreath = Math.max(X.noBreath, w); X.noBlink = Math.max(X.noBlink, w);
+    if (w > X.lidHard) X.lidHard = w;
+  }
+
+  // Asleep: belly down, curled into a ring to the right, bill tucked in, tail folded forward over the
+  // nose, feet tucked under, slow deep breaths and the odd dream twitch.
+  function poseCurl(w) {
+    const br = Math.sin(fT * 1.25);
+    X.hipY -= (0.015 - 0.003 * br) * w; X.hipX += 0.1 * w;
+    X.roll += 0.08 * w; X.sRoll -= 0.02 * w;
+    X.sYaw -= 0.56 * w; X.neckY -= 0.6 * w; X.headY -= 0.5 * w;
+    X.neckX += 0.0 * w; X.headX += 0.0 * w; X.headZ += 0.1 * w;
+    X.tailY += 2.85 * w; X.t2x += 0.2 * w; X.t3x += 0.3 * w;
+    const tw = Math.pow(Math.max(0, Math.sin(fT * 0.83 + 1)), 40) * Math.sin(fT * 31);
+    X.t3x += w * 0.05 * tw; X.tailY += w * 0.04 * tw;
+    X.breath += w * 0.042 * br;
+    for (let i = 0; i < 4; i++) {
+      const f = feet[i];
+      const inner = f.side < 0 ? 1 : 0;
+      if (f.front) footB(i, w, f.side * (0.105 - 0.03 * inner), -0.068, 0.05, 0.12, -f.side * 0.3, 0.8);
+      else footB(i, w, f.side * (0.12 - 0.035 * inner), -0.07 + (i === 3 ? 0.01 * tw : 0), 0.035, 0.12, -f.side * 0.2, 0.8);
+    }
+    X.quiet += w; X.noBreath = Math.max(X.noBreath, w); X.noBlink = Math.max(X.noBlink, w);
+    if (w > X.lidHard) X.lidHard = w;
+  }
+
+  // A ball on the bill: head up, bill top level, quick little corrections, tail out as a counterweight.
+  function poseBalance(w) {
+    const c1 = Math.sin(fT * 5.1) * Math.sin(fT * 1.3 + 0.5), c2 = Math.sin(fT * 3.3 + 1);
+    X.pitch -= 0.1 * w; X.neckX -= 0.2 * w; X.headX += 0.07 * w;
+    X.headZ += w * 0.05 * c1; X.neckZ += w * 0.03 * c1; X.neckY += w * 0.04 * c2; X.hipX += w * 0.006 * c2;
+    X.tailX += 0.12 * w; X.tailSrc += w * 0.28 * Math.sin(fT * 3.3 + 2.2);
+    X.quiet += w;
+  }
+
+  // Held under the belly by a person: everything hangs, slow pendulum swing, now and then a wriggle.
+  function poseCarried(w) {
+    const wr = smooth(0.5, 0.85, Math.sin(fT * 0.9) * Math.sin(fT * 0.37 + 2));
+    for (let i = 0; i < 4; i++) {
+      const f = feet[i];
+      const sw = 0.028 * Math.sin(fT * 1.6 + i * 2.1) + wr * 0.045 * Math.sin(fT * 13 + i * 1.57);
+      footB(i, w, f.side * (f.front ? 0.125 : 0.13), -0.16 + 0.012 * Math.sin(fT * 2.3 + i * 1.7), (f.front ? 0.035 : -0.035) + sw, 0.75, 0, 0.9);
+    }
+    X.sYaw += w * wr * 0.07 * Math.sin(fT * 9); X.tailSrc += w * (0.25 * Math.sin(fT * 1.6 + 1) + wr * 0.6 * Math.sin(fT * 9 + 1.5));
+    X.tailX -= 0.45 * w; X.curl += 0.05 * w; X.neckX -= 0.13 * w; X.headX -= 0.05 * w;
+    X.breath += w * 0.008 * Math.sin(fT * 4.2);
+  }
+
+  // Frightened: pressed flat, quick shallow breaths, a tremble, the head darting between threats.
+  function poseScared(w) {
+    const dart = clamp(Math.sin(fT * 2.1) * 4, -1, 1) * 0.5 + clamp(Math.sin(fT * 1.3 + 2) * 5, -1, 1) * 0.5;
+    X.hipY -= 0.012 * w; X.sq += 0.2 * w;
+    X.neckX += 0.05 * w; X.headX -= 0.07 * w; X.tailX -= 0.02 * w;
+    X.breath += w * 0.022 * Math.sin(fT * 10.5); X.noBreath = Math.max(X.noBreath, w);
+    X.hipX += w * 0.0018 * Math.sin(fT * 61);
+    X.headY += w * 0.26 * dart; X.neckY += w * 0.12 * dart;
+    X.bristle = Math.max(X.bristle, 0.22 * w);
+    X.quiet += w;
+  }
+
+  // Hold: reared up over the thing, both front paws and the bill tip pinning it at holdAnchor, tail on
+  // the ground as a prop, and a rolling hind-leg waddle when it walks.
+  function poseCarry(w) {
+    X.pitch -= 0.5 * w; X.hipY += 0.014 * w; X.hipZ += 0.03 * w;
+    X.curl += 0.07 * w; X.neckX += 0.03 * w; X.headX += 0.28 * w;
+    X.t1x += 0.42 * w; X.t2x += 0.2 * w; X.t3x += 0.08 * w;
+    const sq = Math.sin(fT * 2.2) * 0.003; // the paws keep adjusting their grip a little
+    for (let i = 0; i < 2; i++) {
+      const f = feet[i];
+      footB(i, w, f.side * (0.088 + sq * f.side), HOLD_Y + 0.012, HOLD_Z - 0.02, 0.45, -f.side * 1.0, 1.15);
+    }
+    X.roll += w * rollP * 1.6 + w * walkW * 0.05 * Math.sin(phase * TAU + 0.5);
+    X.hipYaw += w * yawP * 0.5;
+    X.hipX += w * walkW * 0.012 * Math.sin(phase * TAU + 0.5);
+    X.tailSrc += w * walkW * 0.3 * Math.sin(phase * TAU - 1.0);
+    X.quiet += 0.7 * w;
+  }
+
+  function poseLayers(dt) {
+    for (let i = 0; i < P_N; i++) {
+      const target = i === poseCur || (i === P_CURL && sleepOn) || (i === P_CARRY && (carrySet || carryState)) ? 1 : 0;
+      const step = PR[i] * dt;
+      PW[i] += clamp(target - PW[i], -step, step);
+    }
+    let w;
+    if ((w = PW[P_SIT]) > 0) poseSit(w * w * (3 - 2 * w), -1);
+    if ((w = PW[P_SAD]) > 0) poseSad(w * w * (3 - 2 * w));
+    if ((w = PW[P_LIMP]) > 0) poseLimp(w * w * (3 - 2 * w));
+    if ((w = PW[P_BALANCE]) > 0) poseBalance(w * w * (3 - 2 * w));
+    if ((w = PW[P_SCARED]) > 0) poseScared(w * w * (3 - 2 * w));
+    if ((w = PW[P_CARRY]) > 0) poseCarry(w * w * (3 - 2 * w));
+    if ((w = PW[P_CARRIED]) > 0) poseCarried(w * w * (3 - 2 * w));
+    if ((w = PW[P_CURL]) > 0) poseCurl(w * w * (3 - 2 * w));
+    if ((w = PW[P_STILL]) > 0) poseStill(w * w * (3 - 2 * w));
+    muteFeet = (PW[P_CARRY] > 0.5 ? 3 : 0) | (PW[P_LIMP] > 0.5 ? 8 : 0) | (PW[P_STILL] + PW[P_CURL] + PW[P_CARRIED] + PW[P_SIT] > 0.5 ? 15 : 0);
+  }
+
+  function lookLayer(dt) {
+    let yawT = 0, pitchT = 0;
+    if (lookOn) {
+      lookTmp.copy(lookTarget);
+      group.worldToLocal(lookTmp);
+      const lx = lookTmp.x, lz = lookTmp.z - 0.2 * SC, ly = lookTmp.y - 0.1 * SC;
+      yawT = clamp(Math.atan2(lx, lz), -1.22, 1.22);
+      pitchT = clamp(-Math.atan2(ly, Math.sqrt(lx * lx + lz * lz) + 1e-4), -0.61, 0.61);
+    }
+    const live = (1 - sat(PW[P_STILL] * 2)) * (1 - sat(PW[P_CURL] * 2)) * (1 - sat(Math.abs(X.rigYaw) + Math.abs(X.rigPitch) + Math.abs(X.rigRoll)));
+    lookW = damp(lookW, lookOn ? live : 0, 7, dt);
+    lookYawS = damp(lookYawS, yawT, 8, dt);
+    lookPitchS = damp(lookPitchS, pitchT, 8, dt);
+    if (lookW < 0.001) return;
+    const y = lookYawS * lookW, p = lookPitchS * lookW;
+    X.sYaw += y * 0.05; X.neckY += y * 0.4; X.headY += y * 0.45;
+    X.neckX += p * 0.42; X.headX += p * 0.5; X.curl += p * 0.027;
+    X.headZ -= y * 0.06;
+    X.quiet += 0.85 * lookW;
+  }
+
+  // the wet-dog shake: a roll wave that starts at the head and runs down the spine to the tail tip
+  function shakeCurves(s, len, amp) {
+    if (s <= 0 || s >= len) return;
+    const env = smooth(0, 0.1, s) * (1 - smooth(len - 0.22, len, s)) * amp;
+    const ph = s * TAU * lerp(10, 7.5, s / len);
+    X.headZ += env * 0.5 * Math.sin(ph); X.neckZ += env * 0.26 * Math.sin(ph - 0.5);
+    X.sRoll += env * 0.1 * Math.sin(ph - 1.0); X.roll += env * 0.17 * Math.sin(ph - 1.7);
+    X.hipX += env * 0.006 * Math.sin(ph - 1.7);
+    X.tailZ += env * 0.3 * Math.sin(ph - 2.6); X.tailY += env * 0.32 * Math.sin(ph - 3.0);
+    X.headY += env * 0.08 * Math.sin(ph + 0.6);
+    if (env > X.lid) X.lid = env > 1 ? 1 : env;
+    X.bristle = Math.max(X.bristle, 0.5 * env);
+  }
+
+  // play-bow: forearms and chin on the floor, rump high, tail wagging
+  function bowCurves(t, D, playful) {
+    const an = bump(0, 0.07, 0.1, 0.2, t);
+    const hold = smooth(0.34, 0.46, t) * (1 - smooth(D - 0.42, D - 0.3, t));
+    let down = backOut(seg(0.12, 0.44, t), 1.3) * (1 - smooth(D - 0.38, D - 0.08, t));
+    if (playful) down *= 1 + 0.1 * hold * Math.sin((t - 0.42) * TAU * 3.2);
+    X.sq += 0.1 * an - 0.1 * bump(D - 0.22, D - 0.13, D - 0.09, D, t);
+    X.pitch += 0.5 * down - 0.07 * an; X.hipY += 0.092 * down; X.hipZ -= 0.02 * down;
+    X.curl -= 0.105 * down; X.neckX -= 0.2 * down - 0.06 * an; X.headX -= 0.13 * down;
+    for (let i = 0; i < 2; i++) footR(i, down, feet[i].side * 0.15, ANKLE_H, 0.365, 0, -feet[i].side * 0.12, 1.25);
+    X.tailX += 0.26 * down;
+    const wag = hold * Math.sin(fT * (playful ? 19 : 15));
+    X.tailY += (playful ? 0.5 : 0.24) * wag; X.roll += (playful ? 0.05 : 0.02) * wag;
+    if (playful) { X.headZ += 0.22 * hold * Math.sin((t - 0.4) * TAU * 1.8); X.neckY += 0.1 * hold * Math.sin((t - 0.4) * TAU * 1.8 + 0.8); }
+    X.lid = Math.max(X.lid, 0.35 * down);
+    X.quiet += down > 1 ? 1 : down;
+  }
+
+  function actLayer() {
+    const t = actT, D = actDur, d = actDir;
+    switch (actId) {
+      case A_SPIN: {
+        const cr = bump(0, 0.09, 0.13, 0.24, t);
+        const u = seg(0.15, 0.7, t), hop = 4 * u * (1 - u), lead = Math.sin(PI * u);
+        X.sq += 0.4 * cr;
+        X.rigY += 0.25 * hop; X.rigYaw += d * TAU * lerp(u, u * u * (3 - 2 * u), 0.55);
+        X.air = Math.max(X.air, sat(hop * 3.5));
+        X.rigRoll -= d * 0.15 * lead; X.pitch -= 0.08 * lead;
+        X.sYaw += d * (0.1 * lead - 0.1 * cr); X.neckY += d * (0.24 * lead * (1 - u) - 0.14 * cr); X.headY += d * (0.2 * lead * (1 - u) - 0.1 * cr);
+        X.tailSrc -= d * 0.6 * lead; X.tailX += 0.22 * lead;
+        if (t > 0.7) { const s = t - 0.7, v = Math.exp(-s * 14) * Math.sin(s * 30); X.rigRoll += d * 0.05 * v; X.tailY += d * 0.22 * v; }
+        break;
+      }
+      case A_BACKFLIP: {
+        const cr = bump(0, 0.12, 0.16, 0.27, t);
+        const u = seg(0.2, 0.86, t), hop = 4 * u * (1 - u);
+        const throwB = bump(0, 0.06, 0.12, 0.32, u), tuck = bump(0.14, 0.4, 0.62, 0.9, u);
+        X.sq += 0.5 * cr - 0.12 * throwB; X.pitch -= 0.05 * cr; X.neckX += 0.03 * cr; X.tailX -= 0.06 * cr;
+        X.rigY += 0.9 * hop; X.rigPitch -= TAU * lerp(u, u * u * (3 - 2 * u), 0.75);
+        X.air = Math.max(X.air, smooth(0, 0.08, u) * (1 - smooth(0.96, 1, u)));
+        X.airK += u < 0.5 ? 1 - smooth(0.04, 0.34, u) : -smooth(0.7, 0.97, u);
+        X.curl += 0.2 * tuck - 0.1 * throwB;
+        X.neckX += -0.42 * throwB + 0.24 * tuck; X.headX += -0.26 * throwB + 0.15 * tuck;
+        X.tailX += 0.5 * throwB - 0.32 * tuck + 0.3 * smooth(0.75, 1, u) * (1 - smooth(0.86, 1.04, t));
+        break;
+      }
+      case A_TAILSTAND: {
+        const cr = bump(0, 0.09, 0.13, 0.26, t);
+        const fall = seg(1.24, 1.5, t);
+        const up = backOut(seg(0.16, 0.58, t), 1.25) * (1 - fall * fall * (0.4 + 0.6 * fall));
+        const hold = smooth(0.5, 0.64, t) * (1 - smooth(1.16, 1.28, t));
+        const wb = Math.sin(fT * 5.3), wb2 = Math.sin(fT * 8.1 + 1);
+        X.sq += 0.4 * cr - 0.1 * bump(0.2, 0.4, 0.5, 0.7, t) + 0.3 * bump(1.46, 1.51, 1.53, 1.6, t);
+        X.neckX += 0.12 * cr;
+        X.pivY = 0.04; X.pivZ = -0.24;
+        X.rigPitch += -1.24 * up + hold * 0.045 * Math.sin(fT * 4.1 + 0.5);
+        X.rigRoll += hold * (0.06 * wb + 0.03 * wb2);
+        X.rigY += 0.085 * up;
+        X.t1x += 0.14 * up; X.t2x += 0.5 * up; X.t3x += 0.6 * up;
+        X.tailY -= hold * 0.3 * wb;
+        X.curl += 0.12 * up; X.neckX += 0.4 * up; X.headX += 0.4 * up;
+        X.air = Math.max(X.air, up > 1 ? 1 : up);
+        for (let i = 0; i < 2; i++) {
+          const sd = feet[i].side;
+          footR(i, up, sd * 0.262, 0.075 + sd * 0.035 * hold * wb, 0.215 + 0.02 * hold * wb2, -0.2, sd * 0.5, 1.3);
+        }
+        break;
+      }
+      case A_ROLL: {
+        const an = bump(0, 0.06, 0.09, 0.18, t);
+        const u = seg(0.12, 0.74, t), rot = lerp(u, u * u * (3 - 2 * u), 0.6), ang = TAU * rot, s1 = Math.sin(PI * u);
+        const sa = Math.sin(ang);
+        X.rigRoll += d * (ang - 0.14 * an);
+        X.rigY += 0.055 * sa * sa - 0.006 * s1; X.rigX -= d * 0.1 * s1;
+        const tk = smooth(0, 0.12, u) * (1 - smooth(0.88, 1, u));
+        X.air = Math.max(X.air, tk);
+        // legs hug the body so it can roll over them
+        for (let i = 0; i < 4; i++) {
+          footR(i, tk, feet[i].side * 0.14, 0.05, feet[i].hz + (feet[i].front ? 0.03 : 0.02), 0.5, 0, 0.85);
+          footPole(i, tk, feet[i].side * 0.2, -1, feet[i].front ? -0.4 : 0.4);
+        }
+        X.sRoll += d * 0.1 * Math.sin(TAU * u); X.headZ += d * 0.26 * Math.sin(TAU * u); X.tailZ -= d * 0.3 * Math.sin(TAU * u);
+        X.curl += 0.09 * s1;
+        const belly = bump(0.3, 0.42, 0.58, 0.7, u);
+        X.tailX += 0.3 * belly; X.lid = Math.max(X.lid, 0.6 * belly);
+        if (belly > 0) {
+          // belly up: all four feet pedal at the sky
+          for (let i = 0; i < 4; i++) {
+            const f = feet[i];
+            footR(i, belly, f.side * 0.17, 0.0 + 0.03 * Math.sin(fT * 26 + i * 1.9), f.hz + (f.front ? 0.04 : 0.02) + 0.03 * Math.cos(fT * 26 + i * 1.9), 0.3, 0, 1.25);
+          }
+        }
+        if (t > 0.74) { const s = t - 0.74, v = Math.exp(-s * 16) * Math.sin(s * 34); X.rigRoll += d * 0.1 * v; X.tailY -= d * 0.2 * v; }
+        break;
+      }
+      case A_TWIRL: {
+        const cr = bump(0, 0.13, 0.17, 0.28, t);
+        const u = seg(0.2, 1.0, t), hop = 4 * u * (1 - u), s1 = Math.sin(PI * u);
+        X.sq += 0.55 * cr - 0.13 * bump(0, 0.06, 0.1, 0.3, u);
+        X.sYaw += d * (0.08 * s1 - 0.14 * cr); X.neckY += d * (0.3 * s1 - 0.16 * cr);
+        X.rigY += 1.1 * hop; X.rigYaw += d * 2 * TAU * lerp(u, u * u * (3 - 2 * u), 0.45);
+        X.rigPitch += -0.55 * smooth(0, 0.06, u) * (1 - smooth(0.05, 0.48, u)) + 0.3 * bump(0.5, 0.74, 0.84, 1, u);
+        X.rigRoll -= d * 0.13 * s1;
+        X.air = Math.max(X.air, smooth(0, 0.05, u) * (1 - smooth(0.96, 1, u)));
+        X.airK += u < 0.5 ? 1 - smooth(0.05, 0.4, u) : -smooth(0.66, 0.97, u);
+        X.tailSrc -= d * 0.5 * s1; X.tailX += 0.3 * s1; X.curl += 0.08 * bump(0.25, 0.45, 0.55, 0.8, u);
+        X.lid = Math.max(X.lid, 0.4 * bump(0.3, 0.45, 0.6, 0.75, u));
+        break;
+      }
+      case A_WAVE: {
+        const up = smooth(0.02, 0.3, t) * (1 - smooth(0.84, 1.06, t));
+        const paw = d > 0 ? 0 : 1, sd = feet[paw].side;
+        const wv = bump(0.2, 0.36, 0.8, 0.95, t), osc = Math.sin((t - 0.3) * TAU * 3.3);
+        X.sq += 0.2 * bump(0, 0.05, 0.08, 0.18, t) + 0.2 * bump(0.98, 1.03, 1.05, 1.1, t);
+        poseSit(up, paw);
+        footB(paw, up * (1 - wv), sd * 0.075, -0.128, 0.09, 0.9, -sd * 0.25, 0.85);
+        footB(paw, up * wv, sd * (0.172 + 0.042 * osc), 0.03 + 0.012 * Math.abs(osc), 0.135, -0.75, sd * 0.25 + 0.55 * osc, 1.35);
+        X.headZ -= sd * 0.2 * wv; X.headY += sd * 0.16 * wv; X.neckX -= 0.1 * wv;
+        X.roll += 0.03 * osc * wv; X.tailSrc += 0.35 * osc * wv;
+        X.lid = Math.max(X.lid, 0.45 * wv); X.quiet += up;
+        break;
+      }
+      case A_BOW: bowCurves(t, D, false); break;
+      case A_PLAYBOW: bowCurves(t, D, true); break;
+      case A_WATERLEAP: {
+        const sink = bump(0, 0.09, 0.13, 0.24, t);
+        const u = seg(0.15, 1.12, t), hop = 4 * u * (1 - u);
+        const out = 1 - smooth(1.14, 1.38, t);
+        X.rigY += -0.07 * sink + 1.3 * hop - 0.17 * bump(1.08, 1.2, 1.24, 1.4, t);
+        X.rigPitch += lerp(-0.4 * sink, -1.15 * Math.cos(PI * u), smooth(0.12, 0.2, t)) * out;
+        X.rigZ += 0.22 * smooth(0.3, 1, u) * out;
+        X.rigRoll += d * 0.14 * Math.sin(PI * u);
+        X.curl += -0.07 * bump(0, 0.05, 0.2, 0.42, u) + 0.16 * bump(0.36, 0.5, 0.6, 0.86, u);
+        X.tailX += -0.4 * bump(0, 0.03, 0.08, 0.26, u) + 0.36 * bump(0.38, 0.5, 0.56, 0.78, u) - 0.15 * bump(0.8, 0.95, 1, 1.1, u);
+        X.neckX += -0.1 * bump(0, 0.1, 0.3, 0.5, u) + 0.16 * bump(0.5, 0.7, 0.92, 1, u);
+        const tuckW = bump(0.1, 0.2, 1.2, 1.38, t);
+        for (let i = 0; i < 4; i++) {
+          const f = feet[i];
+          footR(i, tuckW, f.side * (f.front ? 0.165 : 0.14), 0.085, f.hz - (f.front ? 0.1 : 0.1), 1.25, f.side * 0.3, 0.68);
+        }
+        X.lid = Math.max(X.lid, smooth(0.9, 1, u) * out);
+        X.quiet += 1;
+        break;
+      }
+      case A_DIVEFLIP: {
+        const u = seg(0.06, 0.9, t), ang = TAU * lerp(u, u * u * (3 - 2 * u), 0.7);
+        const tuck = bump(0.04, 0.3, 0.68, 0.96, u);
+        X.rigPitch += ang;
+        X.rigY -= 0.11 * (1 - Math.cos(ang)) * 0.5; X.rigZ += 0.07 * Math.sin(ang);
+        X.curl += 0.2 * tuck; X.neckX += 0.2 * tuck; X.headX += 0.1 * tuck;
+        X.tailX += -0.36 * tuck + 0.5 * bump(0.72, 0.9, 0.96, 1.12, u) * (1 - smooth(0.9, 1, t));
+        X.rigRoll += d * 0.1 * Math.sin(ang * 0.5);
+        const pull = bump(0, 0.04, 0.1, 0.36, u); // one big double-handed pull to start the turn
+        for (let i = 0; i < 2; i++) footR(i, tuck, feet[i].side * (0.2 + 0.03 * pull), 0.07 - 0.04 * pull, feet[i].hz + 0.11 - 0.2 * smooth(0, 0.34, u), 0.3 + 0.9 * pull, feet[i].side * 0.3, 0.75 + 0.55 * pull);
+        for (let i = 2; i < 4; i++) footR(i, tuck, feet[i].side * 0.15, 0.085, feet[i].hz - 0.02, 1.0, feet[i].side * 0.3, 0.75);
+        X.lidHard = 1; X.quiet += 1;
+        break;
+      }
+      case A_TAILSPLASH: {
+        const wind = smooth(0, 0.24, t), sl = seg(0.265, 0.35, t), slap = sl * sl;
+        const rec = 1 - smooth(0.42, 0.76, t);
+        const ang = 1.15 * wind * (1 - slap) - 0.26 * slap * rec;
+        X.t1x += ang * 0.42; X.t2x += ang * 0.33; X.t3x += ang * 0.25;
+        X.pitch += 0.2 * wind * (1 - slap) - 0.1 * bump(0.33, 0.38, 0.42, 0.62, t);
+        X.rigY += 0.03 * wind * (1 - slap) - 0.045 * bump(0.33, 0.38, 0.42, 0.72, t);
+        X.neckX -= 0.16 * wind * (1 - slap) - 0.1 * bump(0.33, 0.38, 0.42, 0.6, t);
+        X.tailY += d * 0.12 * wind * (1 - slap);
+        if (t > 0.35) { const s = t - 0.35; X.tailX += 0.12 * Math.exp(-s * 9) * Math.sin(s * 26); }
+        X.lid = Math.max(X.lid, 0.85 * bump(0.3, 0.36, 0.45, 0.6, t));
+        break;
+      }
+      case A_SLAP: {
+        const coil = bump(0, 0.07, 0.09, 0.18, t);
+        const w1 = seg(0.08, SLAP_HIT, t), w2 = seg(0.4, 0.68, t);
+        const h1 = Math.sin(PI * w1), h2 = Math.sin(PI * w2);
+        X.rigYaw += d * PI * (w1 * w1 + w2 * w2 * (3 - 2 * w2));
+        X.rigY += 0.06 * h1 + 0.03 * h2; X.air = Math.max(X.air, 0.9 * h1, 0.7 * h2);
+        X.sq += 0.3 * coil + 0.3 * bump(0.27, 0.3, 0.33, 0.46, t);
+        const lagc = bump(0.04, 0.15, 0.22, 0.275, t);
+        const crack = smooth(0.225, SLAP_HIT, t) * (1 - smooth(0.42, 0.62, t));
+        X.tailY += d * (-1.0 * lagc + 0.55 * crack);
+        X.tailX += 0.5 * bump(0.04, 0.14, 0.2, 0.27, t) - 0.2 * crack;
+        X.sYaw += d * (0.1 * h1 - 0.1 * coil + 0.06 * crack); X.neckY += d * (0.3 * coil + 0.22 * h1 * (1 - w1) - 0.2 * crack); X.headY += d * 0.16 * coil;
+        X.rigRoll -= d * 0.1 * h1; X.pitch += 0.06 * crack;
+        if (t > SLAP_HIT) {
+          // the stop is dead and stiff: a short, fast shudder instead of a floppy follow-through
+          const s = t - SLAP_HIT, v = Math.exp(-s * 22) * Math.sin(s * 95);
+          X.tailY += d * 0.07 * v; X.rigRoll += 0.035 * v; X.hipX += 0.004 * v; X.t3x += 0.05 * v;
+        }
+        X.quiet += 1;
+        break;
+      }
+      case A_THROW: {
+        const wind = bump(0, 0.13, 0.16, 0.22, t);
+        const fl = smooth(0.165, 0.235, t) * (1 - smooth(0.3, 0.5, t));
+        // rock back and up with the load, then snap chest and paws forward to fling it
+        X.pitch += -0.14 * wind + 0.03 * fl; X.neckX += -0.2 * wind + 0.14 * fl; X.headX += -0.16 * wind - 0.08 * fl;
+        X.curl += -0.03 * wind; X.hipZ += -0.035 * wind + 0.075 * fl; X.hipY += 0.012 * fl;
+        X.sq += 0.2 * wind - 0.16 * fl; X.t1x += 0.14 * wind - 0.05 * fl; X.tpT += 0.3 * fl;
+        for (let i = 0; i < 2; i++) footB(i, fl * 0.95, feet[i].side * 0.1, -0.085, 0.2, 0.1, -feet[i].side * 0.4, 1.3);
+        if (t > THROW_RELEASE) { const s = t - THROW_RELEASE, v = Math.exp(-s * 12) * Math.sin(s * 28); X.neckX += 0.08 * v; X.tailX += 0.1 * v; }
+        break;
+      }
+      case A_EAT: {
+        const down = smooth(0, 0.2, t) * (1 - smooth(1.14, 1.36, t));
+        let jab = 0, chew = 0, lift = 0, tilt = 0;
+        for (let k = 0; k < 3; k++) {
+          const s = t - EAT_BITES[k];
+          jab += Math.exp(-(s * s) / 0.0022);
+          if (s > 0.05 && s < 0.34) {
+            const e = smooth(0.05, 0.1, s) * (1 - smooth(0.26, 0.34, s));
+            chew += e * Math.sin(s * TAU * 9); lift += e; tilt += k === 1 ? -e : e;
+          }
+        }
+        const g = 1 - 0.6 * swimW;
+        // each bite: a quick forward jab at the food, then the head comes up, tips to one side and chews
+        X.pitch += g * (0.02 * down + 0.025 * jab); X.curl += 0.005 * down;
+        X.neckX += g * (0.04 * down + 0.03 * jab) - 0.24 * lift + 0.03 * chew - 0.17 * bump(1.1, 1.2, 1.25, 1.38, t);
+        X.headX += g * (0.035 * down + 0.03 * jab) - 0.17 * lift + 0.085 * chew;
+        X.hipZ += 0.03 * jab - 0.01 * lift; X.sq += 0.08 * jab;
+        X.headZ += 0.17 * tilt; X.neckZ += 0.07 * tilt; X.headY += 0.06 * tilt;
+        X.tailX += 0.1 * down; X.tailSrc += 0.3 * down * Math.sin(fT * 9);
+        X.lid = Math.max(X.lid, 0.55 * (jab > 1 ? 1 : jab));
+        X.quiet += down;
+        break;
+      }
+      case A_WAKE: {
+        // a yawn (head tips back, eyes screwed shut, one huge breath) ...
+        const yawn = bump(0.05, 0.36, 0.55, 0.82, t);
+        X.neckX -= 0.3 * yawn; X.headX -= 0.26 * yawn; X.breath += 0.05 * yawn; X.headZ += 0.1 * yawn * Math.sin(t * 3.2);
+        X.lid = Math.max(X.lid, smooth(0.08, 0.28, t) * (1 - smooth(0.62, 0.86, t)));
+        // ... the long front-paw stretch: paws walk out, chest down, rump up, toes spread, tail quivers ...
+        const st = backOut(seg(0.66, 1.0, t), 1.1) * (1 - smooth(1.3, 1.56, t));
+        X.pitch += 0.46 * st; X.hipY += 0.086 * st; X.hipZ -= 0.03 * st; X.curl -= 0.1 * st;
+        X.neckX -= 0.13 * st; X.headX -= 0.1 * st;
+        for (let i = 0; i < 2; i++) footR(i, st, feet[i].side * 0.14, ANKLE_H, 0.385, 0, -feet[i].side * 0.15, 1.38);
+        X.tailX += 0.34 * st + 0.045 * st * Math.sin(fT * 38);
+        X.lid = Math.max(X.lid, 0.75 * (st > 1 ? 1 : st));
+        // ... and a shake to finish
+        shakeCurves(t - 1.52, 0.56, 0.75);
+        X.quiet += 1 - smooth(2.0, 2.2, t);
+        break;
+      }
+      case A_NUZZLE: {
+        const en = smooth(0, 0.3, t) * (1 - smooth(1.05, 1.4, t));
+        const ph = (t - 0.2) * TAU * 1.9;
+        X.hipZ += 0.045 * en; X.pitch += 0.03 * en; X.curl -= 0.02 * en;
+        X.neckY += 0.28 * en * Math.sin(ph); X.headY += 0.2 * en * Math.sin(ph - 0.5);
+        X.headZ += 0.38 * en * Math.sin(ph - 0.9); X.neckZ += 0.12 * en * Math.sin(ph - 0.6);
+        X.neckX += en * (-0.05 + 0.07 * Math.sin(ph * 2)); X.headX += 0.05 * en * Math.cos(ph * 2);
+        X.sYaw += 0.03 * en * Math.sin(ph - 1.4);
+        X.tailSrc += 0.45 * en * Math.sin(t * TAU * 1.3); X.tailX += 0.08 * en;
+        X.lid = Math.max(X.lid, 0.7 * en); X.quiet += en;
+        break;
+      }
+      case A_SHAKE: {
+        X.sq += 0.16 * bump(0, 0.05, 0.08, 0.16, t) - 0.08 * bump(0.68, 0.73, 0.75, 0.8, t);
+        shakeCurves(t - 0.05, 0.68, 1);
+        X.quiet += 1;
+        break;
+      }
+      default: break;
+    }
   }
 
   const REST_STATE = { speed: 0, maxSpeed: 3, grounded: true, vy: 0, turn: 0, moving: false };
@@ -938,6 +1748,9 @@ export function createPlatypus(THREE) {
     const vy = s.vy || 0;
     const turn = s.turn || 0;
     const moving = s.moving !== undefined ? !!s.moving : speed > 0.05;
+    const diving = !!s.diving;
+    const swimming = !!s.swimming || diving;
+    carryState = !!s.carrying;
     clock = typeof s.time === 'number' ? s.time : clock + dt;
     const time = clock;
     const r = sat(speed / maxSpeed);
@@ -1000,9 +1813,30 @@ export function createPlatypus(THREE) {
       if (hurtT > 0.6) hurtT = -1;
     }
 
+    // ---------------- one-shot timeline (events are queued and dispatched at the end of update) ----------------
+    if (actId >= 0) {
+      const t0 = actT;
+      actT += dt;
+      if (actApex >= 0 && t0 < actApex && actT >= actApex) pushEv('apex', actName);
+      if (actLand >= 0 && t0 < actLand && actT >= actLand) {
+        pushEv('land', actName);
+        if (actId !== A_WATERLEAP) { qv += 8; nodV += 4; tpV -= 5; resetFeet(0.28); }
+      }
+      if (actId === A_SLAP && t0 < SLAP_HIT && actT >= SLAP_HIT) { pushEv('slap', actName); nodV += 2; resetFeet(0.2); }
+      else if (actId === A_EAT) {
+        for (let k = 0; k < 3; k++) if (t0 < EAT_BITES[k] && actT >= EAT_BITES[k]) pushEv('bite', actName);
+      } else if (actId === A_SHAKE && t0 < 0.4 && actT >= 0.4) wet *= 0.35;
+      else if (actId === A_TAILSTAND && t0 < 1.5 && actT >= 1.5) { nodV += 3; tpV -= 3; }
+      if (actT >= actDur) {
+        pushEv('done', actName);
+        actId = -1;
+        xfadeStart(0.1);
+      }
+    }
+
     // ---------------- gait ----------------
-    const walking = grounded && !spinning && speed > 0.04;
-    const suspended = !grounded || spinning;
+    const walking = grounded && !spinning && !swimming && speed > 0.04;
+    const suspended = !grounded || spinning || swimming;
     let freq = speed / lerp(0.2, 0.47, r);
     if (freq > 6.8) freq = 6.8;
     const duty = lerp(0.72, 0.5, r);
@@ -1045,7 +1879,7 @@ export function createPlatypus(THREE) {
           // plant
           f.swing = false;
           f.x = f.tx; f.z = f.tz; f.lift = 0; f.fold = 0; f.yaw = 0;
-          if (f.df > 0.3 && api.onFootstep) api.onFootstep(i, f.x, f.z, (0.3 + 0.7 * r) * f.df);
+          if (f.df > 0.3 && api.onFootstep && !(muteFeet & (1 << i))) api.onFootstep(i, f.x * SC, f.z * SC, (0.3 + 0.7 * r) * f.df);
         } else if (!f.swing && !st && adv > 0) {
           // lift off
           f.swing = true;
@@ -1108,39 +1942,60 @@ export function createPlatypus(THREE) {
     bob = damp(bob, ((FL.lift + FR.lift + HL.lift + HR.lift) * 0.085 - 0.012 * r * walkW) * gW, 16, dt);
     turnS = damp(turnS, clamp(turn * 0.06, -0.28, 0.28), 7, dt);
 
+    // ---------------- extension layers ----------------
+    clearX();
+    fT = time; fR = r; fDuty = duty; fDt = dt;
+    swimW = damp(swimW, swimming ? 1 : 0, 9, dt);
+    diveW = damp(diveW, diving ? 1 : 0, 6, dt);
+    if (swimW > 0.002) swimLayer(swimW, diveW, turnS);
+    pitchLag = damp(pitchLag, group.rotation.x, 5, dt);
+    poseLayers(dt);
+    if (actId >= 0) actLayer();
+    lookLayer(dt);
+    if (X.bristle > bristle) bristle = X.bristle;
+    const quiet = sat(X.quiet);
+    const idleE = idleW * (1 - quiet);
+    // wet fur: soaked while swimming, damp from wading, dries by itself in about 8 s
+    if (swimming) wet = 1;
+    else {
+      if (s.inWater && wet < 0.4) wet = 0.4;
+      if (wet > 0) { wet -= dt / 8; if (wet < 0) wet = 0; }
+    }
+
     // squash / stretch spring
     const qT = airW * (-0.3 * kUp) + zapDip * 0.12;
     qv += (-(q - qT) * 230 - qv * 17) * dt;
     q += qv * dt;
     if (q > 1) { q = 1; if (qv > 0) qv = 0; }
     if (q < -0.5) { q = -0.5; if (qv < 0) qv = 0; }
+    const qq = clamp(q + X.sq, -0.5, 1);
 
     // idle life
-    const breath = Math.sin(time * 1.9);
-    const idleLook = idleW * Math.sin(time * 0.37) * Math.sin(time * 0.23 + 1.0) * 0.4;
-    const sniff = idleW * (Math.sin(time * 2.3) * 0.03 + Math.max(0, Math.sin(time * 0.6)) * Math.sin(time * 11) * 0.012);
+    const breath = Math.sin(time * 1.9) * (1 - sat(X.noBreath));
+    const idleLook = idleE * Math.sin(time * 0.37) * Math.sin(time * 0.23 + 1.0) * 0.4;
+    const sniff = idleE * (Math.sin(time * 2.3) * 0.03 + Math.max(0, Math.sin(time * 0.6)) * Math.sin(time * 11) * 0.012);
     const celS = Math.sin(celT * 6.5), celHop = Math.abs(celS);
 
     // head pitch spring (positive = nose down)
     const nodT = sniff + walkW * 0.03 * Math.sin(phase * TAU * 2 + 0.6) +
       airW * (-0.12 * kUp + 0.12 * kDn + 0.1 * kMid) + zapDip * 0.17 - flinch * 0.3 +
-      celW * (-0.28 + 0.08 * celHop) + spinArc * 0.08;
+      celW * (-0.28 + 0.08 * celHop) + spinArc * 0.08 + X.nodT;
     nodV += (-(nod - nodT) * 190 - nodV * 15) * dt;
     nod += nodV * dt;
     nod = clamp(nod, -0.7, 0.7);
 
     // tail pitch spring (positive = tail up)
-    let tpT = walkW * 0.05 * Math.sin(phase * TAU * 2 + 1.0) + idleW * 0.02 * Math.sin(time * 0.9) +
+    let tpT = walkW * 0.05 * Math.sin(phase * TAU * 2 + 1.0) + idleE * 0.02 * Math.sin(time * 0.9) +
       airW * (-0.22 * kUp + 0.34 * kDn - 0.12 * kMid) + celW * 0.42 * Math.sin(celT * 13) +
-      spinArc * 0.22 - zapDip * 0.05 + flinch * 0.2;
+      spinArc * 0.22 - zapDip * 0.05 + flinch * 0.2 + X.tpT;
     tpV += (-(tp - tpT) * 130 - tpV * 9.5) * dt;
     tp += tpV * dt;
     tp = clamp(tp, grounded ? -0.14 : -0.5, 0.8);
 
     // tail yaw: each joint chases the one before it, so the sway travels down the paddle
     const stingBend = stingSide * 0.27 * spinArc;
-    const tailSrc = -yawP * 0.9 - turnS * 0.7 + idleW * 0.07 * Math.sin(time * 0.8) +
-      stingSide * 0.55 * spinArc + celW * 0.18 * Math.sin(celT * 6.5 + 1.2);
+    const tailSrc = -yawP * 0.9 - turnS * 0.7 + idleE * 0.07 * Math.sin(time * 0.8) +
+      stingSide * 0.55 * spinArc + celW * 0.18 * Math.sin(celT * 6.5 + 1.2) + X.tailSrc;
     tailY0 = damp(tailY0, tailSrc, 11, dt);
     tailY1 = damp(tailY1, tailY0 * 1.15, 7.5, dt);
     tailY2 = damp(tailY2, tailY1 * 1.15, 5.5, dt);
@@ -1149,25 +2004,25 @@ export function createPlatypus(THREE) {
     const shiver = bristle * Math.sin(time * 92) * 0.0032;
     const pitchBody = airW * (-0.26 * kUp + 0.08 * kDn) + zapDip * 0.15 - celW * (0.2 + 0.05 * celHop) +
       walkW * 0.012 * Math.sin(phase * TAU * 2) - flinch * 0.1;
-    const curl = airW * (kMid * 0.15 - kUp * 0.07 + kDn * 0.02) + zapDip * 0.03 + Math.max(q, 0) * 0.03;
-    const dYaw = (yawC - yawP) / 3 + turnS / 3 + stingBend / 3;
-    const dRoll = (rollC - rollP) / 3;
-    const chestX = 0.1 * Math.sin(yawP) + 0.09 * Math.sin(yawP + dYaw) + 0.09 * Math.sin(yawP + 2 * dYaw);
+    const curl = airW * (kMid * 0.15 - kUp * 0.07 + kDn * 0.02) + zapDip * 0.03 + Math.max(q, 0) * 0.03 + X.curl;
+    const dYaw = (yawC - yawP) / 3 + turnS / 3 + stingBend / 3 + X.sYaw;
+    const dRoll = (rollC - rollP) / 3 + X.sRoll;
+    const chestX = 0.1 * Math.sin(yawP) + 0.09 * Math.sin(yawP + dYaw - X.sYaw) + 0.09 * Math.sin(yawP + 2 * (dYaw - X.sYaw));
     const drop = Math.max(q, 0) * 0.06 + q * (q < 0 ? 0.02 : 0) + zapDip * 0.014;
 
     hips.position.set(
-      -chestX * 0.5 + shiver,
-      J.hips[1] + bob - drop + celW * 0.012 * celHop,
-      J.hips[2] - flinch * 0.05
+      -chestX * 0.5 + shiver + X.hipX,
+      J.hips[1] + bob - drop + celW * 0.012 * celHop + X.hipY - Math.max(X.sq, 0) * 0.05,
+      J.hips[2] - flinch * 0.05 + X.hipZ
     );
     hips.rotation.set(
-      pitchBody,
-      yawP,
-      rollP - turnS * 0.25 * r + celW * 0.12 * celS + flinch * 0.06 * Math.sin(time * 40) - stingSide * 0.18 * spinArc
+      pitchBody + X.pitch,
+      yawP + X.hipYaw,
+      rollP - turnS * 0.25 * r + celW * 0.12 * celS + flinch * 0.06 * Math.sin(time * 40) - stingSide * 0.18 * spinArc + X.roll
     );
-    hips.scale.set(1 + 0.22 * q, 1 - 0.28 * q, 1 + 0.05 * q - 0.03 * Math.min(q, 0));
+    hips.scale.set(1 + 0.22 * qq, 1 - 0.28 * qq, 1 + 0.05 * qq - 0.03 * Math.min(qq, 0));
 
-    const br = 1 + 0.018 * breath * (0.5 + 0.5 * idleW) + bristle * 0.02;
+    const br = 1 + 0.018 * breath * (0.5 + 0.5 * idleW) + bristle * 0.02 + X.breath;
     spine1.rotation.set(curl, dYaw, dRoll);
     spine2.rotation.set(curl, dYaw, dRoll);
     spine2.scale.set(br, br, 1);
@@ -1175,21 +2030,21 @@ export function createPlatypus(THREE) {
     chest.scale.set(1 / br, 1 / br, 1);
 
     const lookYaw = idleLook + turnS * 1.1 + celW * 0.22 * Math.sin(celT * 6.5 + 0.6);
-    neck.rotation.set(nod * 0.5 + airW * kMid * 0.06, -(yawC + turnS + stingBend) * 0.55 + lookYaw * 0.45, -rollC * 0.5);
-    head.rotation.set(nod * 0.5, -(yawCLag + stingBend) * 0.4 + lookYaw * 0.55, -rollC * 0.4 + idleLook * 0.15);
+    neck.rotation.set(nod * 0.5 + airW * kMid * 0.06 + X.neckX, -(yawC + turnS + stingBend) * 0.55 + lookYaw * 0.45 + X.neckY, -rollC * 0.5 + X.neckZ);
+    head.rotation.set(nod * 0.5 + X.headX, -(yawCLag + stingBend) * 0.4 + lookYaw * 0.55 + X.headY, -rollC * 0.4 + idleLook * 0.15 + X.headZ);
 
-    tail1.rotation.set(tp * 0.5 - pitchBody * 0.35, tailY0, -rollP * 0.6);
-    tail2.rotation.set(tp * 0.3, tailY1, 0);
-    tail3.rotation.set(tp * 0.25, tailY2, 0);
+    const tY3 = X.tailY / 3;
+    tail1.rotation.set(tp * 0.5 - pitchBody * 0.35 + X.tailX * 0.4 + X.t1x, tailY0 + tY3, -rollP * 0.6 + X.tailZ);
+    tail2.rotation.set(tp * 0.3 + X.tailX * 0.33 + X.t2x, tailY1 + tY3, X.tailZ);
+    tail3.rotation.set(tp * 0.25 + X.tailX * 0.27 + X.t3x, tailY2 + tY3, 0);
 
-    // rig: only the sting spin hop and the celebration bounce move the whole animal
-    if (stingT >= 0) {
-      rig.rotation.y = -stingSide * TAU * spinE;
-      rig.position.y = 0.075 * spinArc + celW * 0.045 * celHop;
-    } else {
-      rig.rotation.y = 0;
-      rig.position.y = celW * 0.045 * celHop;
-    }
+    // rig: the sting spin hop, the celebration bounce and the tricks move the whole animal. Rotations
+    // turn about a pivot (body centre by default) so flips and rolls spin in place.
+    const rigYaw0 = stingT >= 0 ? -stingSide * TAU * spinE : 0;
+    const rigY0 = (stingT >= 0 ? 0.075 * spinArc : 0) + celW * 0.045 * celHop;
+    rig.rotation.set(X.rigPitch, rigYaw0 + X.rigYaw, X.rigRoll);
+    tB.set(0, X.pivY, X.pivZ).applyEuler(rig.rotation);
+    rig.position.set(X.rigX - tB.x, rigY0 + X.rigY + (X.pivY - tB.y), X.rigZ + (X.pivZ - tB.z));
 
     // ---------------- legs (two-bone IK in rig space) ----------------
     hips.updateMatrix();
@@ -1198,17 +2053,30 @@ export function createPlatypus(THREE) {
     chest.updateMatrix();
     mChest.multiplyMatrices(hips.matrix, spine1.matrix).multiply(spine2.matrix).multiply(chest.matrix);
 
+    const xAir = X.air > 1 ? 1 : X.air;
     for (let i = 0; i < 4; i++) {
       const f = feet[i];
+      const o = FO[i];
       let aw = airW;
       if (i !== kickIdx && spinArc > aw) aw = spinArc;
-      airPose(f, airW > 0.02 ? kS : 0);
+      if (xAir > aw) aw = xAir;
+      airPose(f, airW > 0.02 ? kS : clamp(X.airK, -1, 1));
       let px = lerp(f.x, air.x, aw);
       let py = lerp(ANKLE_H + f.lift, air.y, aw);
       let pz = lerp(f.z, air.z, aw);
       let pitch = f.pitch * (1 - aw) + 0.35 * aw;
       let yaw = f.side * f.toe + f.yaw * (1 - aw);
-      const fold = 1 - 0.22 * f.fold * (1 - aw) + 0.14 * aw;
+      let fold = 1 - 0.22 * f.fold * (1 - aw) + 0.14 * aw;
+      if (o.w > 0) {
+        pitch = lerp(pitch, o.pitch, o.w);
+        yaw = lerp(yaw, f.side * f.toe + o.yaw, o.w);
+        fold = lerp(fold, o.fold, o.w);
+      }
+      if (o.rw > 0) {
+        px = lerp(px, o.rx, o.rw);
+        py = lerp(py, o.ry, o.rw);
+        pz = lerp(pz, o.rz, o.rw);
+      }
       if (i === kickIdx && kw > 0) {
         px = lerp(px, f.side * 0.17, kw);
         py = lerp(py, 0.08, kw);
@@ -1220,6 +2088,10 @@ export function createPlatypus(THREE) {
 
       tS.copy(f.att).applyMatrix4(f.front ? mChest : hips.matrix);
       tA.set(px, py, pz);
+      if (o.bw > 0) {
+        tB.set(o.bx, o.by, o.bz).applyMatrix4(f.front ? mChest : hips.matrix);
+        tA.lerp(tB, o.bw);
+      }
       tD.subVectors(tA, tS);
       let d = tD.length();
       if (d < 1e-5) { tD.set(0, -1, 0); d = 1e-5; } else tD.multiplyScalar(1 / d);
@@ -1237,14 +2109,16 @@ export function createPlatypus(THREE) {
       const aa = f.a * stretch, bb = f.b * stretch;
       const along = clamp((aa * aa - bb * bb + d * d) / (2 * d), -aa, aa);
       const h = Math.sqrt(Math.max(0, aa * aa - along * along));
-      tP.copy(f.pole).addScaledVector(tD, -f.pole.dot(tD));
+      tP.copy(f.pole);
+      if (o.pw > 0) { tB.set(o.pvx, o.pvy, o.pvz); tP.lerp(tB, o.pw); }
+      tP.addScaledVector(tD, -tP.dot(tD));
       if (tP.lengthSq() < 1e-8) tP.set(f.side, 0, 0);
       tP.normalize();
       tE.copy(tS).addScaledVector(tD, along).addScaledVector(tP, h);
       orient(f.upper, tS, tE, stretch);
       orient(f.lower, tE, tA, stretch);
       f.foot.position.copy(tA);
-      f.foot.rotation.set(pitch, yaw, 0);
+      f.foot.rotation.set(pitch, yaw, o.w > 0 ? o.roll * o.w : 0);
       f.foot.scale.set(fold, 1, 1);
     }
 
@@ -1253,6 +2127,7 @@ export function createPlatypus(THREE) {
     if (blinkNext <= 0 && blinkT < 0) {
       blinkT = 0;
       blinkNext = 2.2 + Math.random() * 3.8;
+      if (X.noBlink > 0.5) blinkT = -1;
     }
     let lid = 0;
     if (blinkT >= 0) {
@@ -1265,11 +2140,38 @@ export function createPlatypus(THREE) {
       lid = Math.max(lid, 0.9);
     }
     if (celW > 0.5) lid = Math.max(lid, 0.55); // happy squint
+    if (X.lid > lid) lid = X.lid;
+    if (eyeOverride !== null) lid = 1 - eyeOverride;
+    if (X.lidHard > lid) lid = X.lidHard;
     eyes.scale.y = 1 - 0.93 * sat(lid);
 
     U.bristle.value = bristle;
     U.billGlow.value = billGlow;
     U.spurGlow.value = spurGlow;
+    U.wet.value = wet;
+
+    // ---------------- crossfade out of the previous pose ----------------
+    if (xfT < xfDur) {
+      xfT += dt;
+      if (xfT < xfDur) {
+        const k0 = xfT / xfDur, k = k0 * k0 * (3 - 2 * k0);
+        for (let i = 0; i < xfBones.length; i++) {
+          const b = xfBones[i];
+          b.position.lerpVectors(xfP[i], b.position, k);
+          b.scale.lerpVectors(xfS[i], b.scale, k);
+          xfTmpQ.copy(b.quaternion);
+          b.quaternion.copy(xfQ[i]).slerp(xfTmpQ, k);
+        }
+      }
+    }
+
+    // ---------------- events ----------------
+    if (evC > 0) {
+      const n = evC;
+      evC = 0;
+      const cb = api.onEvent;
+      if (cb) for (let i = 0; i < n; i++) cb(evT[i], evN[i]);
+    }
   }
 
   // settle the rest pose so the model is valid before the first frame

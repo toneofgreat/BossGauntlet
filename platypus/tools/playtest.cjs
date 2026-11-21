@@ -1,7 +1,9 @@
 // Full playthrough test for the platypus game.
-//   node tools/playtest.cjs            (from anywhere)
-// Serves the game folder on a free port, plays start -> victory with real key presses (plus the
-// window.__platy debug seam for positioning), saves screenshots to tools/shots/ and measures fps.
+//   node tools/playtest.cjs            (from anywhere)      --quick  : do not fight for real (debug win)
+//                                                           --chain  : skip level 1, only test menu + levels 2..5
+// Serves the game folder on a free port, plays main screen -> level 1 -> victory -> main screen (level 2
+// unlocked) with real key presses (plus the window.__platy debug seam for positioning), then walks the
+// unlock chain 2 -> 3 -> 4 -> 5, saves screenshots to tools/shots/ and measures fps.
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -11,6 +13,7 @@ const ROOT = path.join(__dirname, "..");
 const SHOTS = path.join(__dirname, "shots");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json" };
 const QUICK = process.argv.includes("--quick");
+const CHAIN_ONLY = process.argv.includes("--chain");
 
 function serve() {
   return new Promise((resolve) => {
@@ -60,13 +63,27 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   };
   const log = (m) => { report.steps.push(m); console.log(m); };
 
+  let s;
   try {
     await page.goto(url, { waitUntil: "load" });
     await page.waitForFunction(() => window.__platy && !document.getElementById("levelBtn").disabled, { timeout: 60000 });
     const gpu = await page.evaluate(() => { const gl = window.__platy.renderer.getContext(); const e = gl.getExtension("WEBGL_debug_renderer_info"); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : "?"; });
     log("gpu: " + gpu);
+    await page.evaluate(() => window.__platy.resetProgress());
     await sleep(400);
     await shot("start");
+    {
+      const m = await page.evaluate(() => Array.from(document.querySelectorAll(".lvl")).map((b) => ({ n: b.dataset.n, locked: b.classList.contains("locked"), bg: getComputedStyle(b).backgroundImage.slice(0, 80) })));
+      log("menu: " + m.map((b) => b.n + (b.locked ? " locked" : " open")).join(", "));
+      if (m.length !== 5 || m[0].locked || !m[1].locked || !m[4].locked) throw new Error("fresh menu must show 5 circles with only level 1 open");
+      // a locked circle only shakes
+      await page.click("#lvl3");
+      await sleep(250); await shot("menu-locked-shake");
+      const s0 = await st();
+      if (s0.mode !== "menu") throw new Error("a locked level started");
+    }
+    if (CHAIN_ONLY) await page.evaluate(() => window.__platy.unlock(2));
+    else {
 
     // 1. LEVEL 1 circle -> black -> TUTORIAL -> white -> world
     await page.click("#levelBtn");
@@ -115,7 +132,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // 5. ankle sting on the dummy
     await sleep(1400);
-    let s = await st();
+    s = await st();
     const d0 = s.dummies[0];
     await shot("sting-dummy-appears");
     {
@@ -212,17 +229,84 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await sleep(1400); await shot("victory");
     log("victory ok");
 
-    // 8. play again returns to the wizard's greeting
+    // 8. Continue returns to the main screen, where level 2 unlocks
+    const label = await page.evaluate(() => document.getElementById("again").textContent);
+    if (label !== "Continue") throw new Error("victory button should say Continue, says " + label);
     await page.click("#again");
-    await waitFor((x) => x.step === "greet", 6000, "restart");
-    await sleep(1500); await shot("play-again");
-    log("play again ok");
+    await waitFor((x) => x.mode === "menu", 6000, "back on the main screen");
+    await sleep(700); await shot("menu-before-unlock");
+    await sleep(700); await shot("menu-unlocking");
+    await sleep(2200); await shot("menu-level2-unlocked");
+    s = await st();
+    if (s.progress.unlocked !== 2 || !s.progress.beaten[0]) throw new Error("level 2 did not unlock: " + JSON.stringify(s.progress));
+    if (s.running) throw new Error("the level is still running behind the main screen");
+    log("continue -> main screen, level 2 unlocked ok");
+    }
 
-    // 9. touch layout
-    await page.evaluate(() => window.__platy.skipTo("fight"));
+    // 9. the unlock chain 2 -> 3 -> 4 -> 5 (placeholder or real levels: driven through the debug seam)
+    for (let n = 2; n <= 5; n++) {
+      const locked = await page.evaluate((k) => document.getElementById("lvl" + k).classList.contains("locked"), n);
+      if (locked) throw new Error("level " + n + " is still locked on the main screen");
+      await sleep(400);
+      await page.click("#lvl" + n);
+      await sleep(1900); await shot("L" + n + "-title");
+      let s2 = await waitFor((x) => x.mode === "level" && x.levelN === n, 20000, "level " + n + " running");
+      if (n === 2 || n === 5) {
+        // the wake-up blink (only in the placeholder / when the level starts with it)
+        for (let i = 0; i < 9; i++) { await sleep(750); s2 = await st(); if (s2.cinema.eye < 1 || i < 2) await shot("L" + n + "-eye-" + i); }
+      }
+      await sleep(1500);
+      // hold Enter to skip whatever cutscene is running
+      for (let i = 0; i < 6; i++) {
+        s2 = await st();
+        if (!s2.cinema.playing) break;
+        await page.keyboard.down("Enter"); await sleep(1300); await page.keyboard.up("Enter"); await sleep(900);
+      }
+      await sleep(1500);
+      s2 = await st();
+      await shot("L" + n + "-play");
+      log("level " + n + ": step=" + s2.step + " calls=" + s2.render.calls + " tris=" + s2.render.triangles + " fps=" + s2.fps.toFixed(0));
+      if (s2.step === "play") {
+        await page.keyboard.down("KeyW"); await sleep(700); await page.keyboard.up("KeyW");
+        await page.keyboard.press("KeyE");
+      } else await page.evaluate(() => window.__platy.win());
+      await sleep(1600); await shot("L" + n + "-complete");
+      // a Continue card, or (level 5) the end card that returns by itself
+      for (let i = 0; i < 150; i++) {
+        s2 = await st();
+        if (s2.mode === "menu") break;
+        const card = await page.evaluate(() => document.getElementById("victory").classList.contains("on"));
+        if (card) { await page.click("#again"); await sleep(400); }
+        await sleep(200);
+      }
+      s2 = await waitFor((x) => x.mode === "menu", 5000, "main screen after level " + n);
+      const want = Math.min(5, n + 1);
+      if (s2.progress.unlocked !== want || !s2.progress.beaten[n - 1]) throw new Error("after level " + n + ": " + JSON.stringify(s2.progress));
+      await sleep(1700); await shot("menu-after-L" + n);
+      await sleep(1500);
+      log("level " + n + " -> main screen ok (unlocked " + s2.progress.unlocked + ")");
+    }
+    await shot("menu-all-beaten");
+
+    // 10. progress survives a reload
+    await page.reload({ waitUntil: "load" });
+    await page.waitForFunction(() => window.__platy && !document.getElementById("levelBtn").disabled, { timeout: 60000 });
+    s = await st();
+    if (s.progress.unlocked !== 5) throw new Error("progress was not saved: " + JSON.stringify(s.progress));
+    log("progress persisted ok");
+
+    // 11. touch layout (level 1 replayed from the main screen through the debug seam)
     await page.evaluate(() => { document.body.classList.add("touch"); });
     await page.setViewport({ width: 844, height: 390, deviceScaleFactor: 1 });
+    await sleep(500); await shot("menu-phone-landscape");
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await sleep(500); await shot("menu-phone-portrait");
+    await page.setViewport({ width: 844, height: 390, deviceScaleFactor: 1 });
+    await page.evaluate(() => window.__platy.startLevel(1));
+    await waitFor((x) => x.mode === "level" && x.step === "greet", 20000, "level 1 replay");
+    await page.evaluate(() => window.__platy.skipTo("fight"));
     await sleep(1500); await shot("touch-layout");
+    await page.evaluate(() => window.__platy.resetProgress());
     report.ok = true;
   } catch (e) {
     report.ok = false;

@@ -1,4 +1,4 @@
-// game.js - tutorial script and combat rules. No DOM, no input: main.js feeds it.
+// game.js - LEVEL 1: tutorial script and combat rules. No DOM, no input: src/levels/level1.js feeds it.
 
 const TAU = Math.PI * 2;
 function wrap(a) { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; }
@@ -7,7 +7,7 @@ function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 const STEPS = ["greet", "move", "jump", "sting", "zap", "fight", "victory"];
 
 export function createGame(c) {
-  const { THREE, cushions, platypus, wizard, fx, audio, ui, player, dummies: dummyActors, human: humanActor, colliders } = c;
+  const { THREE, cushions, platypus, wizard, fx, audio, ui, player, dummies: dummyActors, human: humanActor, colliders, onComplete } = c;
   const S = cushions.SPACING;
   const WATER_Y = cushions.seamY + 0.15;
   const WATER_W = 1.7;
@@ -251,7 +251,7 @@ export function createGame(c) {
         platypus.celebrate();
         after(0.7, () => audio.victory());
         after(0.9, () => talk([{ t: "You did it! The Collector is napping on the cushions. Magnificent!", g: "cheer" }]));
-        after(2.6, () => { ui.setHumanHp(null); ui.showVictory(restart); });
+        after(2.6, () => { ui.setHumanHp(null); ui.showVictory(() => { if (onComplete) onComplete(); else restart(); }); });
         break;
       }
     }
@@ -339,6 +339,21 @@ export function createGame(c) {
       player.teleport(0, 0, 0);
       startStep("greet");
     });
+  }
+
+  // back to the untouched state (used when the level is entered or left)
+  function reset() {
+    cleanup();
+    if (arena.water) { arena.water.dispose(); arena.water = null; }
+    arena.ready = false;
+    W.on = false;
+    wizard.group.visible = false;
+    colW.on = false; colH.on = false;
+    for (const col of colD) col.on = false;
+    hearts = MAX_HEARTS;
+    stingCd = zapCd = hintCd = leashCd = 0;
+    step = "boot";
+    player.enabled = false;
   }
 
   function skipTo(name) {
@@ -596,7 +611,6 @@ export function createGame(c) {
     if (stingCd > 0) stingCd -= dt;
     if (zapCd > 0) zapCd -= dt;
     if (hintCd > 0) hintCd -= dt;
-    if (player.invuln > 0) player.invuln -= dt;
 
     if (pendingSting >= 0) { pendingSting -= dt; if (pendingSting < 0) resolveSting(); }
     if (pendingZap >= 0) { pendingZap -= dt; if (pendingZap < 0) resolveZap(); }
@@ -688,7 +702,7 @@ export function createGame(c) {
   }
 
   return {
-    update, start() { startStep("greet"); }, trySting, tryZap, onJump, onLand, skipTo, win, restart, state,
+    update, start() { startStep("greet"); }, trySting, tryZap, onJump, onLand, skipTo, win, restart, reset, state,
     waterLevelAt, wading, STEPS,
     get step() { return step; },
   };

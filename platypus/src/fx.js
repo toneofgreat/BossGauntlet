@@ -5,6 +5,7 @@
 // one PointLight (intensity 0 when idle). All motion is closed-form in vertex shaders: the CPU only
 // writes a few floats when an effect is spawned, and nothing is allocated after construction
 // (except in createWater, which is a setup-time call).
+// The level 2-5 extensions (see EXTENSIONS below) add at most 4 more draw calls, each hidden while idle.
 
 const MAX_PARTICLES = 384;
 const P_STRIDE = 20; // 5 x vec4
@@ -439,6 +440,555 @@ void main() {
 	float a = clamp((glow * 0.85 + core * 0.55) * vInt, 0.0, 1.0);
 	if (a < 0.004) discard;
 	gl_FragColor = vec4(col * a, a * 0.72);
+}
+`;
+
+// ---------------------------------------------------------------------------------------------
+// EXTENSIONS (levels 2-5): four more pooled draw calls, all closed-form in the vertex shader.
+//   fx-xparticles : billboards with real linear drag (terminal velocity), a "stop time" (land / reach the
+//                   surface), wobble, delayed start, and more shapes (bubble, heart, z, star, ember ...)
+//   fx-flakes     : true 3D tumbling quads / triangles: glass shards and confetti (land, skip, lie flat)
+//   fx-xrings     : oriented rings (horizontal or upright, stretched; foam / impact / sense styles)
+//   fx-ambient    : heat shimmer cards + the drifting motes of spotDust
+// Each is hidden (no draw call) while it has nothing alive.
+// ---------------------------------------------------------------------------------------------
+
+const MAX_XP = 1536;
+const XP_STRIDE = 24; // 6 x vec4
+const MAX_CONFETTI = 300;
+const MAX_SHARDS = 128;
+const MAX_FLAKES = MAX_CONFETTI + MAX_SHARDS;
+const FL_STRIDE = 24; // 6 x vec4
+const MAX_XRINGS = 64;
+const XR_STRIDE = 20; // 5 x vec4
+const MAX_HEAT = 8;
+const MAX_MOTES = 256;
+const AMB_STRIDE = 8; // 2 x vec4
+const FLAKE_HOP = 0.26; // seconds a shard skips after its first touch-down
+const NEVER = 1e9;
+
+// extended particle shapes
+const X_SOFT = 0, X_DROP = 1, X_BUBBLE = 2, X_HEART = 3, X_ZED = 4, X_STAR = 5, X_EMBER = 6, X_SHEET = 7,
+	X_GRAIN = 8, X_FOAM = 9;
+// extended ring styles
+const R_CLEAN = 0, R_FOAM = 1, R_IMPACT = 2, R_SENSE = 3, R_FROTH = 4, R_HALO = 5;
+
+const XP_VERT = /* glsl */ `
+uniform float uTime;
+attribute vec4 aPos;  // spawn xyz, start time (may be in the future: delayed start)
+attribute vec4 aVel;  // velocity xyz, life
+attribute vec4 aParm; // size0, size1, gravity, drag (linear: terminal velocity = gravity / drag)
+attribute vec4 aCol;  // rgb, additive 0..1
+attribute vec4 aMisc; // shape, stretch | spin | sway, rotation, alpha
+attribute vec4 aExt;  // stop time (motion freezes at this age), wobble amplitude, wobble frequency, seed
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vA;
+varying float vShape;
+varying float vSeed;
+void main() {
+	vUv = position.xy;
+	vCol = aCol;
+	vShape = aMisc.x;
+	vSeed = aExt.w;
+	vA = 0.0;
+	float age = uTime - aPos.w;
+	float life = aVel.w;
+	float u = age / max(life, 1e-4);
+	if (life <= 0.0 || u < 0.0 || u >= 1.0) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	float shape = aMisc.x;
+	float tm = min(age, aExt.x);
+	float k = max(aParm.w, 0.05);
+	float dec = exp(-k * tm);
+	vec3 vt = vec3(0.0, aParm.z / k, 0.0);
+	vec3 p = aPos.xyz + (aVel.xyz - vt) * ((1.0 - dec) / k) + vt * tm;
+	vec3 vel = (aVel.xyz - vt) * dec + vt;
+
+	float ph = aExt.w * 6.2831853;
+	float wob = aExt.y * min(tm * 2.5, 1.0);
+	vec2 wd = vec2(cos(ph * 5.0), sin(ph * 5.0));
+	float wa = sin(tm * aExt.z + ph);
+	float wb = cos(tm * aExt.z * 0.63 + ph * 2.0) * 0.5;
+	p.xz += (wd * wa + vec2(-wd.y, wd.x) * wb) * wob;
+
+	float ease = 1.0 - (1.0 - u) * (1.0 - u);
+	float size = mix(aParm.x, aParm.y, ease);
+	float a = aMisc.w;
+	vec3 col = aCol.rgb;
+	float ang = aMisc.z;
+	float stretch = 0.0;
+	if (shape < 0.5) {            // soft mote
+		a *= smoothstep(0.0, 0.1, u) * pow(1.0 - u, 1.35);
+	} else if (shape < 1.5) {     // droplet
+		a *= smoothstep(0.0, 0.03, u) * (1.0 - smoothstep(0.9, 1.0, u));
+		stretch = aMisc.y;
+	} else if (shape < 2.5) {     // bubble: wobbles, swells and pops at the very end
+		size = mix(aParm.x, aParm.y, u) * (1.0 + 0.07 * sin(age * 9.0 + ph)) * (1.0 + 0.9 * smoothstep(0.955, 1.0, u));
+		a *= smoothstep(0.0, 0.03, u) * (1.0 - smoothstep(0.965, 1.0, u));
+	} else if (shape < 3.5) {     // heart: pops in, sways
+		size *= 1.0 + 0.3 * sin(min(u * 7.0, 1.0) * 3.14159265);
+		a *= smoothstep(0.0, 0.06, u) * (1.0 - smoothstep(0.6, 1.0, u));
+		ang += sin(age * 2.3 + ph) * aMisc.y;
+	} else if (shape < 4.5) {     // z
+		a *= smoothstep(0.0, 0.12, u) * (1.0 - smoothstep(0.55, 1.0, u));
+		ang += sin(age * 1.7 + ph) * aMisc.y;
+	} else if (shape < 5.5) {     // twinkling star
+		float tw = 0.55 + 0.45 * sin(age * (14.0 + 10.0 * aExt.w) + ph * 3.0);
+		a *= pow(max(sin(3.14159265 * u), 0.0), 0.6) * tw;
+		ang += age * aMisc.y;
+	} else if (shape < 6.5) {     // ember: flickers and cools
+		float fl = 0.62 + 0.38 * sin(age * (17.0 + 13.0 * aExt.w) + ph * 4.0);
+		a *= smoothstep(0.0, 0.08, u) * pow(1.0 - u, 0.8) * fl;
+		col = mix(col, vec3(0.78, 0.10, 0.02), smoothstep(0.25, 1.0, u));
+		stretch = aMisc.y;
+	} else if (shape < 7.5) {     // water sheet / streak
+		a *= smoothstep(0.0, 0.05, u) * (1.0 - smoothstep(0.82, 1.0, u));
+		stretch = aMisc.y;
+	} else if (shape < 8.5) {     // grain / chip: tumbles until it lands
+		a *= 1.0 - smoothstep(0.72, 1.0, u);
+		ang += tm * aMisc.y;
+	} else {                      // foam blob
+		a *= smoothstep(0.0, 0.08, u) * pow(1.0 - u, 1.2);
+	}
+	vA = a;
+	vCol = vec4(col, aCol.a);
+
+	vec4 mv = viewMatrix * vec4(p, 1.0);
+	vec2 c = position.xy;
+	vec2 off;
+	if (stretch > 0.0) {
+		vec2 vv = (viewMatrix * vec4(vel, 0.0)).xy;
+		float spd = age > aExt.x ? 0.0 : length(vv);
+		vec2 ax = spd > 1e-4 ? vv / spd : vec2(1.0, 0.0);
+		float len = 1.0 + stretch * spd;
+		off = (ax * c.x * len + vec2(-ax.y, ax.x) * c.y) * size;
+	} else {
+		float ca = cos(ang);
+		float sa = sin(ang);
+		off = vec2(c.x * ca - c.y * sa, c.x * sa + c.y * ca) * size;
+	}
+	mv.xy += off;
+	gl_Position = projectionMatrix * mv;
+}
+`;
+
+const XP_FRAG = /* glsl */ `
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vA;
+varying float vShape;
+varying float vSeed;
+void main() {
+	float r = length(vUv);
+	vec3 col = vCol.rgb;
+	float a;
+	if (vShape < 0.5) {            // soft mote
+		a = smoothstep(1.0, 0.0, r);
+		a *= a;
+	} else if (vShape < 1.5) {     // droplet: darker refracting rim, bright body, hot highlight
+		a = smoothstep(1.0, 0.78, r);
+		float hl = smoothstep(0.5, 0.0, length(vUv - vec2(-0.28, 0.36)));
+		float rim = smoothstep(0.45, 0.95, r);
+		col = col * (1.0 - 0.3 * rim) + vec3(hl * 0.7) + vec3(0.12) * smoothstep(0.6, 0.0, length(vUv - vec2(0.3, -0.4)));
+	} else if (vShape < 2.5) {     // bubble: thin bright film, two highlights
+		float rim = smoothstep(0.62, 0.9, r) * smoothstep(1.0, 0.9, r);
+		float hl = smoothstep(0.34, 0.0, length(vUv - vec2(-0.36, 0.4)));
+		float hl2 = smoothstep(0.22, 0.0, length(vUv - vec2(0.42, -0.46))) * 0.5;
+		float film = smoothstep(1.0, 0.9, r) * 0.13;
+		a = clamp(rim * 0.8 + film + hl + hl2, 0.0, 1.0);
+		col = mix(col, vec3(1.0), clamp(hl + hl2 + rim * 0.35, 0.0, 1.0));
+	} else if (vShape < 3.5) {     // heart
+		vec2 q = vec2(vUv.x * 1.25, vUv.y * 1.25 + 0.15);
+		float d2 = dot(q, q) - 1.0;
+		float f = d2 * d2 * d2 - q.x * q.x * q.y * q.y * q.y;
+		a = smoothstep(0.07, -0.07, f);
+		float hl = smoothstep(0.42, 0.0, length(vUv - vec2(-0.36, 0.34)));
+		col = col * (0.82 + 0.18 * smoothstep(-0.8, 0.6, vUv.y)) + vec3(hl * 0.5);
+		col = mix(col * 0.72, col, smoothstep(-0.02, -0.5, f));
+	} else if (vShape < 4.5) {     // the letter z, with a soft dark halo so it reads on any background
+		float bar = max(smoothstep(0.21, 0.13, abs(vUv.y - 0.6)), smoothstep(0.21, 0.13, abs(vUv.y + 0.6)))
+			* smoothstep(0.72, 0.62, abs(vUv.x));
+		float dg = smoothstep(0.2, 0.12, abs(vUv.x - vUv.y) * 0.7071) * smoothstep(0.78, 0.68, abs(vUv.y))
+			* smoothstep(0.72, 0.62, abs(vUv.x));
+		float z = max(bar, dg);
+		float halo = smoothstep(1.0, 0.25, r) * 0.2;
+		col = mix(vec3(0.16, 0.2, 0.45), col, z);
+		a = max(z, halo);
+	} else if (vShape < 5.5) {     // four-point star
+		float g = max(1.0 - r, 0.0);
+		float ax = abs(vUv.x);
+		float ay = abs(vUv.y);
+		float flare = max(0.0, 1.0 - ax * 7.0) * max(0.0, 1.0 - ay) + max(0.0, 1.0 - ay * 7.0) * max(0.0, 1.0 - ax);
+		a = g * g * g * 1.4 + flare * flare * 0.9;
+		col = mix(col, vec3(1.0), clamp(g * g * 1.6 + flare * 0.3, 0.0, 1.0));
+	} else if (vShape < 6.5) {     // ember
+		float g = smoothstep(1.0, 0.0, r);
+		col = mix(col, vec3(1.0, 0.95, 0.75), g * g * 0.8);
+		a = pow(g, 1.3);
+	} else if (vShape < 7.5) {     // water sheet: long, thin-edged, bright spine
+		float spine = pow(max(1.0 - abs(vUv.y), 0.0), 1.6);
+		a = spine * smoothstep(1.0, 0.35, abs(vUv.x)) * 0.9;
+		col = mix(col * 0.88, vec3(1.0), spine * spine * 0.7);
+	} else if (vShape < 8.5) {     // grain / chip: hard, slightly angular, shaded
+		float d = max(abs(vUv.x) * 0.8 + abs(vUv.y) * 0.45, r * 0.9);
+		a = smoothstep(1.0, 0.8, d);
+		col *= 0.78 + 0.3 * smoothstep(-0.6, 0.7, vUv.y - vUv.x * 0.3);
+	} else {                       // foam blob with a lumpy edge
+		float an = atan(vUv.y, vUv.x);
+		float lump = sin(an * 5.0 + vSeed * 40.0) * 0.1 + sin(an * 9.0 - vSeed * 70.0) * 0.06;
+		a = smoothstep(0.95, 0.5, r + lump);
+		a *= 0.75 + 0.25 * smoothstep(0.9, 0.2, r);
+	}
+	a = clamp(a * vA, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(col * a, a * (1.0 - vCol.a));
+}
+`;
+
+const FLAKE_VERT = /* glsl */ `
+uniform float uTime;
+attribute vec4 aPos;  // spawn xyz, start time
+attribute vec4 aVel;  // velocity xyz, life
+attribute vec4 aPhys; // gravity, drag, landing time, hop height (0 = settles softly, no skip)
+attribute vec4 aRot;  // spin-axis azimuth, spin-axis y, spin rate, start angle
+attribute vec4 aCol;  // rgb, kind (0 glass, 1 paper, 2 foil)
+attribute vec4 aShp;  // half size x, half size y, seed, flutter amplitude
+varying vec2 vUv;
+varying vec3 vN;
+varying vec3 vW;
+varying vec4 vCol;
+varying float vA;
+
+float fh(float n) { return fract(sin(n) * 43758.5453123); }
+vec3 rod(vec3 v, vec3 ax, float c, float s) {
+	return v * c + cross(ax, v) * s + ax * (dot(ax, v) * (1.0 - c));
+}
+// ragged outline of a shard: every corner pulled in / pushed sideways by its own hash
+vec2 shardCorner(vec2 c, float seed) {
+	float cid = (c.x * 0.5 + 0.5) + (c.y + 1.0);
+	vec2 d = c * (0.42 + 0.58 * fh(seed * 91.7 + cid * 17.3));
+	d.x += (fh(seed * 37.1 + cid * 5.1) - 0.5) * 0.55;
+	return d;
+}
+void main() {
+	vUv = position.xy;
+	vCol = aCol;
+	vA = 0.0;
+	vN = vec3(0.0, 1.0, 0.0);
+	vW = vec3(0.0);
+	float age = uTime - aPos.w;
+	float life = aVel.w;
+	if (life <= 0.0 || age < 0.0 || age >= life) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	float seed = aShp.z;
+	float tL = aPhys.z;
+	float hopH = aPhys.w;
+	float hops = step(0.0005, hopH);
+	float tm = min(age, tL);
+	float k = max(aPhys.y, 0.05);
+	float dec = exp(-k * tm);
+	vec3 vt = vec3(0.0, aPhys.x / k, 0.0);
+	vec3 p = aPos.xyz + (aVel.xyz - vt) * ((1.0 - dec) / k) + vt * tm;
+	vec3 vel = (aVel.xyz - vt) * dec + vt;
+
+	// paper flutter: a sideways sway that builds up as the piece slows down
+	float ph = seed * 6.2831853;
+	float fe = aShp.w * (1.0 - exp(-1.5 * tm));
+	float ff = 3.0 + 4.0 * fh(seed + 1.3);
+	vec2 fd = vec2(cos(ph * 7.0), sin(ph * 7.0));
+	p.xz += fd * (sin(tm * ff + ph) * fe) + vec2(-fd.y, fd.x) * (sin(tm * ff * 0.57 + ph * 3.0) * fe * 0.6);
+
+	// after touch-down: one small skip and a short slide, then rest
+	float post = max(age - tL, 0.0);
+	float s = clamp(post / ${FLAKE_HOP.toFixed(2)}, 0.0, 1.0);
+	p.y += hopH * 4.0 * s * (1.0 - s);
+	p.xz += vel.xz * (hopH * 1.3) * (1.0 - exp(-post * 6.0));
+
+	// outline
+	vec2 c = position.xy;
+	vec2 d = c;
+	if (aCol.w < 0.5) {
+		d = shardCorner(c, seed);
+		if (c.x > 0.0 && c.y > 0.0 && fh(seed * 13.7) > 0.4) {
+			d = shardCorner(vec2(1.0, -1.0), seed); // collapse a corner: this one is a triangle
+			vUv = vec2(1.0, -1.0);
+		}
+	}
+	vec3 l = vec3(d.x * aShp.x, 0.0, d.y * aShp.y);
+
+	// tumble about a fixed axis; when it lands it turns flat
+	float el = clamp(aRot.y, -0.98, 0.98);
+	float er = sqrt(1.0 - el * el);
+	vec3 axis = vec3(er * cos(aRot.x), el, er * sin(aRot.x));
+	float ang = aRot.w + aRot.z * min(age, tL + ${FLAKE_HOP.toFixed(2)} * hops);
+	ang += sin(tm * ff * 1.3 + ph * 2.0) * aShp.w * 6.0;
+	float ca = cos(ang);
+	float sa = sin(ang);
+	vec3 lt = rod(l, axis, ca, sa);
+	vec3 nt = rod(vec3(0.0, 1.0, 0.0), axis, ca, sa);
+	float cy = cos(ph * 3.0);
+	float sy = sin(ph * 3.0);
+	vec3 lf = vec3(l.x * cy + l.z * sy, 0.004 + 0.004 * fh(seed * 7.0), -l.x * sy + l.z * cy);
+	float lay0 = mix(0.0, ${(FLAKE_HOP * 0.55).toFixed(3)}, hops);
+	float lay1 = mix(0.14, ${FLAKE_HOP.toFixed(2)}, hops);
+	float f = smoothstep(lay0, lay1, post);
+	vec3 lw = mix(lt, lf, f);
+	vN = normalize(mix(nt, vec3(0.0, 1.0, 0.0), f) + vec3(1e-4, 0.0, 0.0));
+	p += lw;
+	vW = p;
+
+	float fadeDur = min(0.9, life * 0.4);
+	vA = 1.0 - smoothstep(life - fadeDur, life, age);
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const FLAKE_FRAG = /* glsl */ `
+uniform vec3 uSun;
+uniform vec3 uGlint;
+varying vec2 vUv;
+varying vec3 vN;
+varying vec3 vW;
+varying vec4 vCol;
+varying float vA;
+void main() {
+	vec3 N = normalize(vN);
+	vec3 V = normalize(cameraPosition - vW);
+	float ndv = abs(dot(N, V));
+	vec3 H1 = normalize(uSun + V);
+	float nh1 = abs(dot(N, H1));
+	vec3 col;
+	float a;
+	if (vCol.w < 0.5) {
+		// glass: nearly clear face-on, bright at grazing angles and along the cut edges,
+		// and it FLASHES when the face swings through a mirror angle (sun + an overhead lamp)
+		float edge = 1.0 - max(abs(vUv.x), abs(vUv.y));
+		float rim = smoothstep(0.2, 0.0, edge);
+		float fres = pow(max(1.0 - ndv, 0.0), 3.0);
+		vec3 H2 = normalize(vec3(0.22, 0.93, 0.28) + V);
+		float nh2 = abs(dot(N, H2));
+		float glint = pow(nh1, 90.0) * 2.4 + pow(nh2, 48.0) * 1.1;
+		float sheen = pow(nh1, 7.0) * 0.2 + pow(nh2, 5.0) * 0.1;
+		a = 0.13 + 0.4 * fres + rim * 0.42 + sheen;
+		col = vCol.rgb * (0.4 + 0.6 * fres) + vec3(0.78, 1.0, 0.96) * rim * 0.55 + vec3(sheen);
+		col = col * a + uGlint * glint;
+		a = clamp(a + glint * 0.5, 0.0, 1.0);
+		gl_FragColor = vec4(col * vA, a * vA);
+	} else {
+		// paper / foil confetti: two-sided, soft wrap lighting, foil pieces sparkle
+		float back = dot(N, V) < 0.0 ? 0.8 : 1.0;
+		float lam = 0.6 + 0.4 * abs(dot(N, uSun));
+		col = vCol.rgb * lam * back;
+		float foil = step(1.5, vCol.w);
+		col += uGlint * (pow(nh1, 22.0) * 1.3 + (1.0 - ndv) * (1.0 - ndv) * 0.25) * foil;
+		col += vec3(0.12) * pow(nh1, 6.0) * (1.0 - foil);
+		gl_FragColor = vec4(col * vA, vA);
+	}
+}
+`;
+
+const XRING_VERT = /* glsl */ `
+uniform float uTime;
+attribute vec4 aRing;  // centre xyz, start time (may be in the future)
+attribute vec4 aRing2; // life, r0, r1, thickness (fraction of radius)
+attribute vec4 aRCol;  // rgb, additive
+attribute vec4 aRExt;  // yaw, stretch along the forward axis, style, alpha
+attribute vec4 aRExt2; // upright 0/1, seed, hold 0/1, unused
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vFade;
+varying float vThick;
+varying float vStyle;
+varying float vSeed;
+varying float vU;
+void main() {
+	vUv = position.xy * 1.3;
+	vCol = aRCol;
+	vThick = aRing2.w;
+	vStyle = aRExt.z;
+	vSeed = aRExt2.y;
+	vFade = 0.0;
+	vU = 0.0;
+	float age = uTime - aRing.w;
+	float u = age / max(aRing2.x, 1e-4);
+	if (aRing2.x <= 0.0 || u < 0.0 || u >= 1.0) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	vU = u;
+	float e = 1.0 - (1.0 - u) * (1.0 - u);
+	float rad = mix(aRing2.y, aRing2.z, e);
+	float fadeA = smoothstep(0.0, 0.08, u) * pow(1.0 - u, 1.4);
+	float fadeB = smoothstep(0.0, 0.1, u) * (1.0 - smoothstep(0.8, 1.0, u)) * (0.8 + 0.2 * sin(age * 3.0 + aRExt2.y * 6.0));
+	vFade = mix(fadeA, fadeB, aRExt2.z) * aRExt.w;
+	float sy = sin(aRExt.x);
+	float cy = cos(aRExt.x);
+	vec3 fwd = vec3(sy, 0.0, cy);
+	vec3 side = vec3(cy, 0.0, -sy);
+	float st = max(aRExt.y, 0.05);
+	vec3 p;
+	if (aRExt2.x > 0.5) {
+		// upright ring whose axis is the forward direction
+		p = aRing.xyz + (side * position.x + vec3(0.0, position.y, 0.0)) * rad * 1.3;
+	} else {
+		// flat ring; stretching keeps the rear edge where it was, so it reaches FORWARD
+		p = aRing.xyz + (fwd * (position.x * st * 1.3 + (st - 1.0)) + side * (position.y * 1.3)) * rad;
+	}
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const XRING_FRAG = /* glsl */ `
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vFade;
+varying float vThick;
+varying float vStyle;
+varying float vSeed;
+varying float vU;
+void main() {
+	float r = length(vUv);
+	float an = atan(vUv.y, vUv.x);
+	vec3 col = vCol.rgb;
+	float a;
+	if (vStyle < 0.5) {            // clean ripple ring
+		float band = smoothstep(1.0, 0.0, abs(r - 1.0) / vThick);
+		band = band * band * (3.0 - 2.0 * band);
+		float echo = smoothstep(1.0, 0.0, abs(r - 0.66) / (vThick * 0.7)) * 0.28;
+		a = band + echo;
+		col = mix(col, vec3(1.0), band * band * 0.4);
+	} else if (vStyle < 1.5) {     // foam ring: lumpy, broken, lacy
+		float s = vSeed * 6.2831853;
+		float n1 = sin(an * 7.0 + s) * 0.5 + sin(an * 13.0 - s * 1.7 + r * 3.0) * 0.3 + sin(an * 29.0 + s * 2.3) * 0.2;
+		float n2 = sin(an * 5.0 - s * 0.7) * 0.6 + sin(an * 17.0 + s * 3.1 + vU * 4.0) * 0.4;
+		float rr = r - n1 * 0.035;
+		float band = smoothstep(1.0, 0.0, abs(rr - 1.0) / (vThick * (0.75 + 0.35 * n2)));
+		float gaps = smoothstep(-0.75, 0.1, n2 + (1.0 - vU) * 0.8);
+		float lace = smoothstep(1.0, 0.0, abs(rr - 0.8) / (vThick * 0.5)) * 0.35 * smoothstep(-0.2, 0.6, n1);
+		a = band * gaps + lace;
+	} else if (vStyle < 2.5) {     // impact: razor ring, radial streaks, a flash that dies fast
+		float band = smoothstep(1.0, 0.0, abs(r - 1.0) / vThick);
+		band *= band;
+		float spk = pow(max(sin(an * 9.0 + vSeed * 20.0), 0.0), 10.0) + pow(max(sin(an * 5.0 - vSeed * 31.0), 0.0), 16.0) * 0.7;
+		float streak = spk * smoothstep(0.35, 0.95, r) * smoothstep(1.28, 1.0, r);
+		float flash = smoothstep(0.9, 0.0, r) * max(1.0 - vU * 3.5, 0.0) * 0.8;
+		a = band + streak * 0.9 + flash;
+		col = mix(col, vec3(1.0), clamp(band * 0.6 + flash, 0.0, 1.0));
+	} else if (vStyle < 3.5) {     // electro-sense: nested arcs, strongest toward the forward (+x) side
+		float dash = 0.72 + 0.28 * sin(an * 38.0 + vSeed * 9.0 - vU * 14.0);
+		float b1 = smoothstep(1.0, 0.0, abs(r - 1.0) / vThick);
+		float b2 = smoothstep(1.0, 0.0, abs(r - 0.72) / (vThick * 0.8)) * 0.55;
+		float b3 = smoothstep(1.0, 0.0, abs(r - 0.44) / (vThick * 0.7)) * 0.3;
+		float fw = 0.3 + 0.7 * smoothstep(-0.7, 0.85, vUv.x / max(r, 1e-3));
+		a = (b1 * b1 + b2 + b3) * dash * fw + 0.05 * smoothstep(1.0, 0.2, r) * fw;
+		col = mix(col, vec3(1.0), b1 * b1 * 0.55);
+	} else if (vStyle < 4.5) {     // froth: a churned white disc
+		float s = vSeed * 6.2831853;
+		float lump = sin(an * 6.0 + s) * 0.07 + sin(an * 11.0 - s * 2.0) * 0.05;
+		float body = smoothstep(1.0, 0.72, r + lump);
+		float cells = 0.62 + 0.38 * sin(vUv.x * 9.0 + s) * sin(vUv.y * 9.0 - s * 1.3);
+		a = body * cells * (0.55 + 0.45 * smoothstep(0.2, 0.9, r));
+	} else {                       // halo: soft steady hoop
+		float band = smoothstep(1.0, 0.0, abs(r - 1.0) / vThick);
+		a = band * band * (0.8 + 0.2 * sin(an * 3.0 + vSeed * 6.0 + vU * 20.0));
+		col = mix(col, vec3(1.0), band * band * 0.3);
+	}
+	a = clamp(a * vFade, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(col * a, a * (1.0 - vCol.a));
+}
+`;
+
+const AMB_VERT = /* glsl */ `
+uniform float uTime;
+uniform vec3 uBoxMin;
+uniform vec3 uBoxSize;
+uniform float uMote;
+attribute vec4 aA; // heat: centre xyz, 0     | mote: seed xyz (0..1), 1
+attribute vec4 aB; // heat: w, h, seed, alpha | mote: size, rate, phase, alpha
+varying vec2 vUv;
+varying float vKind;
+varying float vA;
+varying float vSeed;
+float ah(float n) { return fract(sin(n) * 43758.5453123); }
+void main() {
+	vUv = position.xy;
+	vKind = aA.w;
+	vSeed = aB.z;
+	vA = 0.0;
+	if (aA.w < 0.5) {
+		if (aB.w <= 0.0) {
+			gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+			return;
+		}
+		// upright card that turns about Y to face the camera
+		vec3 toCam = cameraPosition - aA.xyz;
+		toCam.y = 0.0;
+		float l = length(toCam);
+		vec3 right = l > 1e-4 ? vec3(toCam.z, 0.0, -toCam.x) / l : vec3(1.0, 0.0, 0.0);
+		vec3 p = aA.xyz + right * (position.x * aB.x * 0.5) + vec3(0.0, position.y * aB.y * 0.5, 0.0);
+		vA = aB.w;
+		gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+	} else {
+		if (uMote <= 0.002) {
+			gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+			return;
+		}
+		// a mote drifts on its own slow heading and wraps inside the box (faded at the faces)
+		vec3 vel = (vec3(ah(aB.z * 3.1 + 0.2), ah(aB.z * 7.7 + 1.1), ah(aB.z * 5.3 + 2.4)) - 0.5) * vec3(0.11, 0.05, 0.11);
+		vel.y += 0.012;
+		vec3 q = aA.xyz + vel * uTime / max(uBoxSize, vec3(0.5));
+		q.x += sin(uTime * 0.31 + aB.z * 20.0) * 0.012;
+		q.z += cos(uTime * 0.27 + aB.z * 31.0) * 0.012;
+		q = fract(q);
+		vec3 ef = smoothstep(vec3(0.0), vec3(0.09), q) * (1.0 - smoothstep(vec3(0.91), vec3(1.0), q));
+		float tw = 0.5 + 0.5 * sin(uTime * (0.5 + aB.y * 1.9) + aB.z * 40.0);
+		vA = aB.w * ef.x * ef.y * ef.z * (0.35 + 0.65 * tw * tw) * uMote;
+		vec4 mv = viewMatrix * vec4(uBoxMin + q * uBoxSize, 1.0);
+		mv.xy += position.xy * aB.x;
+		gl_Position = projectionMatrix * mv;
+	}
+}
+`;
+
+const AMB_FRAG = /* glsl */ `
+uniform float uTime;
+varying vec2 vUv;
+varying float vKind;
+varying float vA;
+varying float vSeed;
+void main() {
+	if (vKind < 0.5) {
+		// heat shimmer without refraction: thin wavering streaks of warm light climbing the card
+		float y01 = vUv.y * 0.5 + 0.5;
+		float t = uTime;
+		float w1 = sin(vUv.x * 9.0 + sin(vUv.y * 5.0 - t * 2.6 + vSeed) * 1.7 + vSeed * 3.0);
+		float w2 = sin(vUv.x * 17.0 - sin(vUv.y * 8.0 - t * 3.7 + vSeed * 2.0) * 1.3 + t * 0.6);
+		float s1 = 1.0 - abs(w1);
+		float s2 = 1.0 - abs(w2);
+		s1 *= s1;
+		s1 *= s1 * s1;
+		s2 *= s2;
+		s2 *= s2;
+		s2 *= s2;
+		float env = 1.0 - vUv.x * vUv.x;
+		env *= env * smoothstep(0.0, 0.14, y01) * pow(max(1.0 - y01, 0.0), 1.3);
+		float a = (s1 * 0.6 + s2 * 0.4 + 0.12) * env * vA;
+		if (a < 0.003) discard;
+		vec3 col = mix(vec3(1.0, 0.42, 0.10), vec3(1.0, 0.80, 0.52), y01);
+		gl_FragColor = vec4(col * a, 0.0);
+	} else {
+		float r = length(vUv);
+		float a = smoothstep(1.0, 0.0, r);
+		a = a * a * vA;
+		if (a < 0.003) discard;
+		gl_FragColor = vec4(vec3(1.0, 0.96, 0.86) * a, a * 0.15);
+	}
 }
 `;
 
@@ -994,7 +1544,1091 @@ export function createFx(THREE) {
 		spawnRing(x, yy + 0.004, z, 0.7, 0.1, 0.55, 0.18, r, g, b, 0.15);
 	}
 
+	// =============================================================================================
+	// EXTENSIONS (levels 2-5)
+	// =============================================================================================
+
+	function clampN(n, def, lo, hi) {
+		let v = typeof n === "number" && n === n ? Math.round(n) : def;
+		if (v < lo) v = lo;
+		if (v > hi) v = hi;
+		return v;
+	}
+	function clampF(v, def, lo, hi) {
+		const f = typeof v === "number" && v === v ? v : def;
+		return f < lo ? lo : f > hi ? hi : f;
+	}
+	let cR = 1, cG = 1, cB = 1;
+	function hexRGB(hex, def) {
+		const h = typeof hex === "number" && hex === hex ? hex : def;
+		cR = ((h >> 16) & 255) / 255;
+		cG = ((h >> 8) & 255) / 255;
+		cB = (h & 255) / 255;
+	}
+
+	// ------------------------------------------------------------------ ground (optional)
+	// Where falling bits come to rest. Unset: each effect uses its own sensible floor (documented per effect).
+	let groundFn = null;
+	let waterFn = null;
+	let groundY = null;
+	function setGround(ground, water) {
+		groundFn = typeof ground === "function" ? ground : null;
+		groundY = typeof ground === "number" && ground === ground ? ground : null;
+		waterFn = typeof water === "function" ? water : null;
+	}
+	function floorAt(x, z, fallback) {
+		let f = fallback;
+		if (groundFn) {
+			const h = groundFn(x, z);
+			if (typeof h === "number" && h === h) f = h;
+		} else if (groundY !== null) {
+			f = groundY;
+		}
+		if (waterFn) {
+			const wy = waterFn(x, z);
+			if (typeof wy === "number" && wy === wy && wy > f) f = wy;
+		}
+		if (waters.length) {
+			const w = findWater(x, z, 0);
+			if (w && w.surfaceY > f) f = w.surfaceY;
+		}
+		return f;
+	}
+
+	// Same closed form as the shaders: linear drag k, gravity g, terminal velocity g / k.
+	function yAt(y0, vy, grav, k, t) {
+		const vt = grav / k;
+		return y0 + (vy - vt) * (1 - Math.exp(-k * t)) / k + vt * t;
+	}
+	// First time the height crosses `target` going down (dir -1) or up (dir +1). `maxT` if it never does.
+	function timeToY(y0, vy, grav, k, target, dir, maxT) {
+		let t = 0;
+		let prev = (y0 - target) * -dir;
+		let step = 0.03;
+		let everAbove = prev > 0;
+		for (let i = 0; i < 44; i++) {
+			const t2 = t + step;
+			const cur = (yAt(y0, vy, grav, k, t2) - target) * -dir;
+			if (prev > 0 && cur <= 0) {
+				let lo = t;
+				let hi = t2;
+				for (let j = 0; j < 14; j++) {
+					const mid = (lo + hi) * 0.5;
+					if ((yAt(y0, vy, grav, k, mid) - target) * -dir > 0) lo = mid;
+					else hi = mid;
+				}
+				return hi > maxT ? maxT : hi;
+			}
+			if (cur > 0) everAbove = true;
+			prev = cur;
+			t = t2;
+			if (t > maxT) break;
+			step *= 1.18;
+		}
+		return everAbove ? maxT : 0;
+	}
+	let landT = 0, landX = 0, landY = 0, landZ = 0;
+	function solveLand(x, y, z, vx, vy, vz, grav, k, floor0, useGround, maxT) {
+		let f = floor0;
+		let t = timeToY(y, vy, grav, k, f, -1, maxT);
+		let e = (1 - Math.exp(-k * t)) / k;
+		if (useGround && (groundFn || waterFn || waters.length) && t < maxT) {
+			f = floorAt(x + vx * e, z + vz * e, floor0);
+			t = timeToY(y, vy, grav, k, f, -1, maxT);
+			e = (1 - Math.exp(-k * t)) / k;
+		}
+		landT = t;
+		landX = x + vx * e;
+		landZ = z + vz * e;
+		landY = f;
+		return t;
+	}
+
+	// ------------------------------------------------------------------ extended particles (1 draw call)
+	const xData = new Float32Array(MAX_XP * XP_STRIDE);
+	const xBuffer = new THREE.InstancedInterleavedBuffer(xData, XP_STRIDE, 1);
+	xBuffer.setUsage(THREE.DynamicDrawUsage);
+	const xGeo = new THREE.InstancedBufferGeometry();
+	xGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	xGeo.setIndex(quadIndex);
+	xGeo.setAttribute("aPos", new THREE.InterleavedBufferAttribute(xBuffer, 4, 0));
+	xGeo.setAttribute("aVel", new THREE.InterleavedBufferAttribute(xBuffer, 4, 4));
+	xGeo.setAttribute("aParm", new THREE.InterleavedBufferAttribute(xBuffer, 4, 8));
+	xGeo.setAttribute("aCol", new THREE.InterleavedBufferAttribute(xBuffer, 4, 12));
+	xGeo.setAttribute("aMisc", new THREE.InterleavedBufferAttribute(xBuffer, 4, 16));
+	xGeo.setAttribute("aExt", new THREE.InterleavedBufferAttribute(xBuffer, 4, 20));
+	xGeo.instanceCount = MAX_XP;
+	const xMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: XP_VERT,
+		fragmentShader: XP_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const xparticles = new THREE.Mesh(xGeo, xMat);
+	xparticles.name = "fx-xparticles";
+	xparticles.frustumCulled = false;
+	xparticles.renderOrder = 4;
+	xparticles.visible = false;
+	xparticles.castShadow = false;
+	xparticles.receiveShadow = false;
+	group.add(xparticles);
+	let xCursor = 0;
+	let xAliveUntil = -1;
+	// dirty span (instances) since the last upload; a reused range object keeps the upload small
+	let xLo = MAX_XP;
+	let xHi = -1;
+	let xWrapped = false;
+	const xRange = { start: 0, count: 0 };
+	let xPending = false; // an upload was requested and has not reached the GPU yet
+	xBuffer.onUpload(() => {
+		xPending = false;
+	});
+
+	// stop: age at which motion freezes (NEVER = keeps moving). delay: seconds before it appears.
+	function xs(x, y, z, vx, vy, vz, life, size0, size1, grav, drag, r, g, b, additive, shape, stretch, rot, alpha,
+		stop, wobAmp, wobFreq, delay) {
+		const i = xCursor;
+		const o = i * XP_STRIDE;
+		xCursor = xCursor + 1;
+		if (xCursor >= MAX_XP) {
+			xCursor = 0;
+			xWrapped = true;
+		}
+		const t0 = now + delay;
+		xData[o] = x; xData[o + 1] = y; xData[o + 2] = z; xData[o + 3] = t0;
+		xData[o + 4] = vx; xData[o + 5] = vy; xData[o + 6] = vz; xData[o + 7] = life;
+		xData[o + 8] = size0; xData[o + 9] = size1; xData[o + 10] = grav; xData[o + 11] = drag;
+		xData[o + 12] = r; xData[o + 13] = g; xData[o + 14] = b; xData[o + 15] = additive;
+		xData[o + 16] = shape; xData[o + 17] = stretch; xData[o + 18] = rot; xData[o + 19] = alpha;
+		xData[o + 20] = stop; xData[o + 21] = wobAmp; xData[o + 22] = wobFreq; xData[o + 23] = Math.random();
+		if (i < xLo) xLo = i;
+		if (i > xHi) xHi = i;
+		if (t0 + life > xAliveUntil) xAliveUntil = t0 + life;
+		xparticles.visible = true;
+	}
+
+	// ------------------------------------------------------------------ flakes: shards + confetti (1 draw call)
+	const fData = new Float32Array(MAX_FLAKES * FL_STRIDE);
+	const fBuffer = new THREE.InstancedInterleavedBuffer(fData, FL_STRIDE, 1);
+	fBuffer.setUsage(THREE.DynamicDrawUsage);
+	const fGeo = new THREE.InstancedBufferGeometry();
+	fGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	fGeo.setIndex(quadIndex);
+	fGeo.setAttribute("aPos", new THREE.InterleavedBufferAttribute(fBuffer, 4, 0));
+	fGeo.setAttribute("aVel", new THREE.InterleavedBufferAttribute(fBuffer, 4, 4));
+	fGeo.setAttribute("aPhys", new THREE.InterleavedBufferAttribute(fBuffer, 4, 8));
+	fGeo.setAttribute("aRot", new THREE.InterleavedBufferAttribute(fBuffer, 4, 12));
+	fGeo.setAttribute("aCol", new THREE.InterleavedBufferAttribute(fBuffer, 4, 16));
+	fGeo.setAttribute("aShp", new THREE.InterleavedBufferAttribute(fBuffer, 4, 20));
+	fGeo.instanceCount = MAX_FLAKES;
+	const uGlint = { value: new THREE.Vector3(1.0, 0.98, 0.95) };
+	const fMat = new THREE.ShaderMaterial({
+		uniforms: { uTime, uSun, uGlint },
+		vertexShader: FLAKE_VERT,
+		fragmentShader: FLAKE_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const flakes = new THREE.Mesh(fGeo, fMat);
+	flakes.name = "fx-flakes";
+	flakes.frustumCulled = false;
+	flakes.renderOrder = 3;
+	flakes.visible = false;
+	flakes.castShadow = false;
+	flakes.receiveShadow = false;
+	group.add(flakes);
+	let confCursor = 0; // instances [0, MAX_CONFETTI)
+	let shardCursor = 0; // instances [MAX_CONFETTI, MAX_FLAKES)
+	let fDirty = false;
+	let fAliveUntil = -1;
+
+	function flake(i, x, y, z, vx, vy, vz, life, grav, drag, tLand, hop, axAz, axY, spin, rot0, r, g, b, kind, hx, hy, flutter) {
+		const o = i * FL_STRIDE;
+		fData[o] = x; fData[o + 1] = y; fData[o + 2] = z; fData[o + 3] = now;
+		fData[o + 4] = vx; fData[o + 5] = vy; fData[o + 6] = vz; fData[o + 7] = life;
+		fData[o + 8] = grav; fData[o + 9] = drag; fData[o + 10] = tLand; fData[o + 11] = hop;
+		fData[o + 12] = axAz; fData[o + 13] = axY; fData[o + 14] = spin; fData[o + 15] = rot0;
+		fData[o + 16] = r; fData[o + 17] = g; fData[o + 18] = b; fData[o + 19] = kind;
+		fData[o + 20] = hx; fData[o + 21] = hy; fData[o + 22] = Math.random(); fData[o + 23] = flutter;
+		fDirty = true;
+		if (now + life > fAliveUntil) fAliveUntil = now + life;
+		flakes.visible = true;
+	}
+
+	// ------------------------------------------------------------------ extended rings (1 draw call)
+	const xrData = new Float32Array(MAX_XRINGS * XR_STRIDE);
+	const xrBuffer = new THREE.InstancedInterleavedBuffer(xrData, XR_STRIDE, 1);
+	xrBuffer.setUsage(THREE.DynamicDrawUsage);
+	const xrGeo = new THREE.InstancedBufferGeometry();
+	xrGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	xrGeo.setIndex(quadIndex);
+	xrGeo.setAttribute("aRing", new THREE.InterleavedBufferAttribute(xrBuffer, 4, 0));
+	xrGeo.setAttribute("aRing2", new THREE.InterleavedBufferAttribute(xrBuffer, 4, 4));
+	xrGeo.setAttribute("aRCol", new THREE.InterleavedBufferAttribute(xrBuffer, 4, 8));
+	xrGeo.setAttribute("aRExt", new THREE.InterleavedBufferAttribute(xrBuffer, 4, 12));
+	xrGeo.setAttribute("aRExt2", new THREE.InterleavedBufferAttribute(xrBuffer, 4, 16));
+	xrGeo.instanceCount = MAX_XRINGS;
+	const xrMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: XRING_VERT,
+		fragmentShader: XRING_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const xrings = new THREE.Mesh(xrGeo, xrMat);
+	xrings.name = "fx-xrings";
+	xrings.frustumCulled = false;
+	xrings.renderOrder = 2;
+	xrings.visible = false;
+	xrings.castShadow = false;
+	xrings.receiveShadow = false;
+	group.add(xrings);
+	let xrCursor = 0;
+	let xrDirty = false;
+	let xrAliveUntil = -1;
+
+	function xring(x, y, z, life, r0, r1, thick, r, g, b, additive, style, yaw, stretch, alpha, upright, hold, delay) {
+		const o = xrCursor * XR_STRIDE;
+		xrCursor = (xrCursor + 1) % MAX_XRINGS;
+		const t0 = now + delay;
+		xrData[o] = x; xrData[o + 1] = y; xrData[o + 2] = z; xrData[o + 3] = t0;
+		xrData[o + 4] = life; xrData[o + 5] = r0; xrData[o + 6] = r1; xrData[o + 7] = thick;
+		xrData[o + 8] = r; xrData[o + 9] = g; xrData[o + 10] = b; xrData[o + 11] = additive;
+		xrData[o + 12] = yaw; xrData[o + 13] = stretch; xrData[o + 14] = style; xrData[o + 15] = alpha;
+		xrData[o + 16] = upright; xrData[o + 17] = Math.random(); xrData[o + 18] = hold; xrData[o + 19] = 0;
+		xrDirty = true;
+		if (t0 + life > xrAliveUntil) xrAliveUntil = t0 + life;
+		xrings.visible = true;
+	}
+
+	// ------------------------------------------------------------------ ambient: heat cards + motes (1 draw call)
+	const AMB_COUNT = MAX_HEAT + MAX_MOTES;
+	const aData = new Float32Array(AMB_COUNT * AMB_STRIDE);
+	for (let i = 0; i < MAX_MOTES; i++) {
+		const o = (MAX_HEAT + i) * AMB_STRIDE;
+		aData[o] = Math.random(); aData[o + 1] = Math.random(); aData[o + 2] = Math.random(); aData[o + 3] = 1;
+		const big = Math.random() < 0.12;
+		aData[o + 4] = big ? rnd(0.03, 0.05) : rnd(0.011, 0.024); // size (m)
+		aData[o + 5] = Math.random();                              // twinkle rate
+		aData[o + 6] = Math.random();                              // phase / heading seed
+		aData[o + 7] = big ? rnd(0.1, 0.18) : rnd(0.28, 0.6);      // alpha
+	}
+	const aBuffer = new THREE.InstancedInterleavedBuffer(aData, AMB_STRIDE, 1);
+	aBuffer.setUsage(THREE.DynamicDrawUsage);
+	const aGeo = new THREE.InstancedBufferGeometry();
+	aGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	aGeo.setIndex(quadIndex);
+	aGeo.setAttribute("aA", new THREE.InterleavedBufferAttribute(aBuffer, 4, 0));
+	aGeo.setAttribute("aB", new THREE.InterleavedBufferAttribute(aBuffer, 4, 4));
+	aGeo.instanceCount = AMB_COUNT;
+	const uBoxMin = { value: new THREE.Vector3(-8, 0.3, -8) };
+	const uBoxSize = { value: new THREE.Vector3(16, 7, 16) };
+	const uMote = { value: 0 };
+	const aMat = new THREE.ShaderMaterial({
+		uniforms: { uTime, uBoxMin, uBoxSize, uMote },
+		vertexShader: AMB_VERT,
+		fragmentShader: AMB_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const ambient = new THREE.Mesh(aGeo, aMat);
+	ambient.name = "fx-ambient";
+	ambient.frustumCulled = false;
+	ambient.renderOrder = 5;
+	ambient.visible = false;
+	ambient.castShadow = false;
+	ambient.receiveShadow = false;
+	group.add(ambient);
+	let aDirty = false;
+	let heatLive = 0;
+	let heatCursor = 0;
+	let moteTarget = 0;
+	let moteFade = 0;
+	const heatHandles = [];
+	for (let i = 0; i < MAX_HEAT; i++) {
+		const h = {
+			active: false,
+			index: i,
+			remove() {
+				if (!h.active) return;
+				h.active = false;
+				aData[i * AMB_STRIDE + 7] = 0;
+				aDirty = true;
+				heatLive--;
+			},
+			// extras: retune a live card without re-creating it
+			set(x, y, z, w, hh) {
+				if (!h.active) return h;
+				const o = i * AMB_STRIDE;
+				aData[o] = x; aData[o + 1] = y; aData[o + 2] = z;
+				if (typeof w === "number") aData[o + 4] = w;
+				if (typeof hh === "number") aData[o + 5] = hh;
+				aDirty = true;
+				return h;
+			},
+			setStrength(s) {
+				if (!h.active) return h;
+				aData[i * AMB_STRIDE + 7] = Math.max(0.001, s) * 0.2;
+				aDirty = true;
+				return h;
+			},
+		};
+		heatHandles.push(h);
+	}
+
+	// ------------------------------------------------------------------ water effects
+	// splash(x, y, z, size): y is the water surface. The showpiece: froth disc + foam ring + ripples on
+	// the surface, a crown of sheets tipped with beads, a late central jet, spray whose drops ring the
+	// water where they come down, and a breath of mist.
+	function splash(x, y, z, size = 0.5) {
+		const s = clampF(size, 0.5, 0.05, 1.25);
+		const S = 0.4 + 0.6 * s;
+		const sy = y + 0.012;
+		rippleAt(x, z, 0.8 + 2.0 * s);
+
+		xring(x, sy, z, 0.45 + 0.25 * s, 0.04, 0.16 + 0.34 * s, 0.5, 1, 1, 1, 0.12, R_FROTH, rnd(0, 6.28), 1, 0.8, 0, 0, 0);
+		xring(x, sy + 0.002, z, 0.8 + 0.5 * s, 0.08, 0.5 + 1.0 * s, 0.2, 0.96, 0.99, 1, 0.18, R_FOAM, rnd(0, 6.28), 1, 0.9, 0, 0, 0);
+		xring(x, sy + 0.001, z, 1.2 + 0.5 * s, 0.1, 0.9 + 1.5 * s, 0.07, 0.9, 0.97, 1, 0.35, R_CLEAN, 0, 1, 0.55, 0, 0, 0.1);
+		xring(x, sy + 0.001, z, 1.1 + 0.4 * s, 0.06, 0.6 + 1.1 * s, 0.08, 0.9, 0.97, 1, 0.35, R_CLEAN, 0, 1, 0.4, 0, 0, 0.3);
+
+		// crown
+		const nc = 9 + Math.round(11 * s);
+		const r0 = 0.05 + 0.09 * s;
+		for (let i = 0; i < nc; i++) {
+			const a = ((i + rnd(-0.3, 0.3)) / nc) * Math.PI * 2;
+			const ca = Math.cos(a);
+			const sa = Math.sin(a);
+			const out = rnd(0.55, 1.0) * (0.5 + 0.9 * s);
+			const up = rnd(1.9, 2.7) * (0.55 + 0.75 * s);
+			let tl = timeToY(y + 0.01, up, -9.8, 0.5, y, -1, 3);
+			xs(x + ca * r0, y + 0.01, z + sa * r0, ca * out, up, sa * out, tl, rnd(0.024, 0.036) * S, rnd(0.014, 0.02) * S,
+				-9.8, 0.5, 0.86, 0.95, 1.0, 0.3, X_SHEET, 0.42, 0, 0.8, NEVER, 0, 0, 0);
+			tl = timeToY(y + 0.01, up * 1.14, -9.8, 0.4, y, -1, 3);
+			xs(x + ca * r0, y + 0.01, z + sa * r0, ca * out * 1.2, up * 1.14, sa * out * 1.2, tl, rnd(0.013, 0.024) * S, rnd(0.01, 0.016) * S,
+				-9.8, 0.4, 0.8, 0.93, 0.99, 0.12, X_DROP, 0.03, 0, 0.95, NEVER, 0, 0, 0);
+		}
+		// the jet that rebounds out of the closing cavity
+		if (s > 0.25) {
+			const nj = 3 + Math.round(3 * s);
+			const jd = 0.12 + 0.06 * s;
+			for (let j = 0; j < nj; j++) {
+				const vy = (2.4 + 2.6 * s) * (1 - j * 0.13);
+				const tl = timeToY(y + 0.01, vy, -9.8, 0.4, y, -1, 3);
+				xs(x + rnd(-0.01, 0.01), y + 0.01, z + rnd(-0.01, 0.01), rnd(-0.12, 0.12), vy, rnd(-0.12, 0.12), tl,
+					(j === 0 ? 0.022 : 0.034) * S, 0.016 * S, -9.8, 0.4, 0.86, 0.95, 1.0, j === 0 ? 0.12 : 0.3,
+					j === 0 ? X_DROP : X_SHEET, j === 0 ? 0.03 : 0.5, 0, 0.9, NEVER, 0, 0, jd);
+			}
+		}
+		// spray; every third drop rings the surface where it lands
+		const nd = 6 + Math.round(20 * s);
+		for (let i = 0; i < nd; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.5, 2.8) * (0.5 + 0.7 * s);
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(1.2, 4.2) * (0.45 + 0.7 * s);
+			const tl = timeToY(y + 0.02, vy, -9.8, 0.8, y, -1, 3);
+			xs(x, y + 0.02, z, vx, vy, vz, tl, rnd(0.008, 0.02) * S + 0.004, 0.008, -9.8, 0.8,
+				0.8, 0.93, 0.99, 0.12, X_DROP, 0.03, 0, 0.95, NEVER, 0, 0, 0);
+			if (i % 3 === 0) {
+				const e = (1 - Math.exp(-0.8 * tl)) / 0.8;
+				xring(x + vx * e, sy, z + vz * e, 0.45, 0.012, 0.13, 0.16, 0.92, 0.98, 1, 0.3, R_CLEAN, 0, 1, 0.55, 0, 0, tl);
+			}
+		}
+		// mist + churned foam at the foot
+		const nm = 3 + Math.round(5 * s);
+		for (let i = 0; i < nm; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.1, 0.5) * S;
+			xs(x + Math.cos(a) * 0.06, y + rnd(0.03, 0.12), z + Math.sin(a) * 0.06, Math.cos(a) * sp, rnd(0.3, 0.9) * S, Math.sin(a) * sp,
+				rnd(0.5, 0.9), 0.07 * S, rnd(0.22, 0.34) * S, 0.2, 3.0, 0.95, 0.98, 1.0, 0.35, X_SOFT, 0, 0, 0.22, NEVER, 0, 0, 0);
+		}
+		const nf = 3 + Math.round(3 * s);
+		for (let i = 0; i < nf; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.2, 0.7) * S;
+			xs(x + Math.cos(a) * r0, y + 0.02, z + Math.sin(a) * r0, Math.cos(a) * sp, rnd(0.0, 0.25), Math.sin(a) * sp,
+				rnd(0.45, 0.8), 0.03 * S, rnd(0.05, 0.08) * S, -0.4, 3.5, 1, 1, 1, 0.1, X_FOAM, 0, rnd(0, 6.28), 0.7, NEVER, 0, 0, 0);
+		}
+	}
+
+	// droplets(vec3, n): water shaken off / dripping from a point. They fall to the ground (setGround), a
+	// water surface under them, or simply fade after a short fall when no ground is known.
+	function droplets(pos, n = 8) {
+		const cnt = clampN(n, 8, 1, 48);
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		const known = !!(groundFn || waterFn || groundY !== null || (waters.length && findWater(x, z, 0.3)));
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.3, 1.7);
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(0.4, 2.3);
+			let life = rnd(0.45, 0.8);
+			if (known) {
+				solveLand(x, y, z, vx, vy, vz, -9.8, 0.7, floorAt(x, z, y - 0.6), true, 2.5);
+				life = Math.max(0.08, landT);
+				if (i % 3 === 0 && landT < 2.5) {
+					xring(landX, landY + 0.012, landZ, 0.4, 0.01, 0.1, 0.18, 0.9, 0.97, 1, 0.3, R_CLEAN, 0, 1, 0.45, 0, 0, landT);
+				}
+			}
+			xs(x + rnd(-0.03, 0.03), y + rnd(-0.02, 0.03), z + rnd(-0.03, 0.03), vx, vy, vz, life, rnd(0.008, 0.02), 0.007,
+				-9.8, 0.7, 0.8, 0.93, 0.99, 0.12, X_DROP, 0.035, 0, 0.95, NEVER, 0, 0, 0);
+		}
+	}
+
+	// bubbles(x, y, z, n, surfaceY): rise wobbling and pop exactly at the surface (with a tiny ring for some).
+	// Without surfaceY they rise for a couple of seconds and pop.
+	function bubbles(x, y, z, n = 6, surfaceY) {
+		const cnt = clampN(n, 6, 1, 40);
+		const hasSurf = typeof surfaceY === "number" && surfaceY === surfaceY;
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = rnd(0, 0.07);
+			const big = Math.random() < 0.2;
+			const size = big ? rnd(0.028, 0.042) : rnd(0.009, 0.022);
+			const k = 2.6;
+			const rise = (big ? rnd(0.55, 0.8) : rnd(0.3, 0.6)) * k; // buoyancy: terminal rise = this / k
+			const bx = x + Math.cos(a) * rr;
+			const by = y + rnd(-0.03, 0.03);
+			const bz = z + Math.sin(a) * rr;
+			const vx = Math.cos(a) * rnd(0, 0.25);
+			const vz = Math.sin(a) * rnd(0, 0.25);
+			const vy = rnd(0.1, 0.7);
+			const delay = i * rnd(0.01, 0.045);
+			let life;
+			if (hasSurf) {
+				life = by >= surfaceY ? 0.12 : timeToY(by, vy, rise, k, surfaceY - size * 0.5, 1, 7);
+				if (life < 0.1) life = 0.1;
+				if (i % 3 === 0 && life < 7) {
+					const e = (1 - Math.exp(-k * life)) / k;
+					xring(bx + vx * e, surfaceY + 0.012, bz + vz * e, 0.4, 0.008, 0.05 + size * 2.2, 0.2, 0.92, 0.98, 1, 0.3,
+						R_CLEAN, 0, 1, 0.5, 0, 0, delay + life);
+				}
+			} else {
+				life = rnd(1.4, 2.4);
+			}
+			xs(bx, by, bz, vx, vy, vz, life, size * 0.8, size * 1.15, rise, k, 0.82, 0.95, 1.0, 0.35, X_BUBBLE, 0, 0, 0.9,
+				NEVER, rnd(0.012, 0.035), rnd(5, 9), delay);
+		}
+	}
+
+	// bubbleRing(x, y, z, yaw, r): an upright hoop of bubbles facing along yaw; hangs ~6 s, then the
+	// bubbles pop one after another. A faint halo makes it read as something to swim through.
+	function bubbleRing(x, y, z, yaw = 0, r = 0.6) {
+		const rad = clampF(r, 0.6, 0.15, 3);
+		const cy = Math.cos(yaw);
+		const sy = Math.sin(yaw);
+		const nb = clampN((Math.PI * 2 * rad) / 0.15, 20, 12, 30);
+		for (let i = 0; i < nb; i++) {
+			const a = ((i + rnd(-0.25, 0.25)) / nb) * Math.PI * 2;
+			const rr = rad * rnd(0.96, 1.04);
+			const ox = Math.cos(a) * rr;
+			const size = rnd(0.02, 0.042);
+			xs(x + cy * ox, y + Math.sin(a) * rr, z - sy * ox, 0, 0, 0, rnd(5.5, 6.5), size * 0.6, size, 0.012, 0.6,
+				0.82, 0.95, 1.0, 0.35, X_BUBBLE, 0, 0, 0.92, NEVER, rnd(0.006, 0.016), rnd(1.5, 3.2), i * 0.012);
+		}
+		// a few loose ones that slip away upward
+		for (let i = 0; i < 6; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const ox = Math.cos(a) * rad;
+			xs(x + cy * ox, y + Math.sin(a) * rad, z - sy * ox, 0, rnd(0.05, 0.2), 0, rnd(0.9, 1.6), 0.008, 0.014, 0.9, 2.6,
+				0.82, 0.95, 1.0, 0.35, X_BUBBLE, 0, 0, 0.8, NEVER, 0.02, rnd(5, 8), rnd(0.1, 0.8));
+		}
+		xring(x, y, z, 6.2, rad, rad, 0.09, 0.55, 0.9, 1.0, 0.6, R_HALO, yaw, 1, 0.3, 1, 1, 0);
+		xring(x, y, z, 0.6, rad * 0.5, rad * 1.15, 0.1, 0.8, 0.96, 1.0, 0.5, R_CLEAN, yaw, 1, 0.5, 1, 0, 0);
+	}
+
+	// wake(x, z, surfaceY, strength): call while swimming (every frame is fine: it meters itself per
+	// swimmer). Leaves a trail of foam rings stretched along the heading, plus a little foam and spray.
+	const WAKES = 4;
+	const wakeX = new Float32Array(WAKES);
+	const wakeZ = new Float32Array(WAKES);
+	const wakeT = new Float32Array(WAKES).fill(-100);
+	function wake(x, z, surfaceY, strength = 0.6) {
+		const s = clampF(strength, 0.6, 0, 1.5);
+		if (s <= 0.01) return;
+		const y = typeof surfaceY === "number" && surfaceY === surfaceY ? surfaceY : floorAt(x, z, 0);
+		// which swimmer is this? the tracked one nearest (within 0.7 m of its last ring), else the stalest slot
+		let slot = -1;
+		let best = 0.49;
+		let oldest = 0;
+		for (let i = 0; i < WAKES; i++) {
+			if (wakeT[i] < wakeT[oldest]) oldest = i;
+			if (now - wakeT[i] > 1.5) continue;
+			const dx = x - wakeX[i];
+			const dz = z - wakeZ[i];
+			const d2 = dx * dx + dz * dz;
+			if (d2 < best) {
+				best = d2;
+				slot = i;
+			}
+		}
+		let dx = 0;
+		let dz = 0;
+		if (slot < 0) {
+			slot = oldest;
+		} else {
+			dx = x - wakeX[slot];
+			dz = z - wakeZ[slot];
+			const moved = Math.sqrt(dx * dx + dz * dz);
+			if (now - wakeT[slot] < 0.09) return;
+			if (moved < 0.02 && now - wakeT[slot] < 0.5) return; // treading water: slow pulses only
+		}
+		wakeX[slot] = x;
+		wakeZ[slot] = z;
+		wakeT[slot] = now;
+		const dl = Math.sqrt(dx * dx + dz * dz);
+		const yaw = dl > 1e-3 ? Math.atan2(-dx, -dz) : 0; // rings trail BEHIND the swimmer
+		const st = dl > 1e-3 ? 1.35 : 1;
+		rippleAt(x, z, 0.3 + 0.5 * s);
+		xring(x, y + 0.012, z, 0.7 + 0.5 * s, 0.07, 0.3 + 0.45 * s, 0.2, 0.95, 0.99, 1, 0.2, R_FOAM, yaw, st, 0.3 + 0.4 * Math.min(s, 1), 0, 0, 0);
+		if (s > 0.35) {
+			const px = dl > 1e-3 ? -dz / dl : 1;
+			const pz = dl > 1e-3 ? dx / dl : 0;
+			for (let i = 0; i < 2; i++) {
+				const side = i === 0 ? 1 : -1;
+				const sp = rnd(0.25, 0.6) * s * side;
+				xs(x + px * 0.08 * side, y + 0.015, z + pz * 0.08 * side, px * sp, 0, pz * sp, rnd(0.45, 0.8), 0.02, rnd(0.04, 0.06),
+					0, 3.0, 1, 1, 1, 0.1, X_FOAM, 0, rnd(0, 6.28), 0.55, NEVER, 0, 0, 0);
+			}
+		}
+		if (s > 0.7) {
+			const nd = s > 1.1 ? 3 : 2;
+			for (let i = 0; i < nd; i++) {
+				const a = Math.random() * Math.PI * 2;
+				const sp = rnd(0.3, 1.0);
+				const vy = rnd(0.8, 1.9) * s;
+				const tl = timeToY(y + 0.02, vy, -9.8, 0.8, y, -1, 2);
+				xs(x, y + 0.02, z, Math.cos(a) * sp, vy, Math.sin(a) * sp, tl, rnd(0.008, 0.015), 0.007, -9.8, 0.8,
+					0.8, 0.93, 0.99, 0.12, X_DROP, 0.03, 0, 0.9, NEVER, 0, 0, 0);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------ small joys
+	function coinSparkle(pos) {
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		xs(x, y, z, 0, 0, 0, 0.36, 0.05, 0.26, 0, 1, 1.0, 0.86, 0.35, 0.7, X_STAR, 0.8, rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+		for (let i = 0; i < 8; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const el = rnd(-0.2, 1.2);
+			const sp = rnd(0.5, 1.6);
+			const ce = Math.cos(el);
+			const pale = Math.random() < 0.35;
+			xs(x, y, z, Math.cos(a) * ce * sp, Math.sin(el) * sp + 0.4, Math.sin(a) * ce * sp, rnd(0.4, 0.75), rnd(0.022, 0.04), 0.012,
+				-1.6, 2.6, 1.0, pale ? 0.97 : 0.82, pale ? 0.75 : 0.25, 0.65, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+		}
+		xring(x, y, z, 0.38, 0.03, 0.3, 0.14, 1.0, 0.85, 0.3, 0.5, R_CLEAN, 0, 1, 0.7, 0, 0, 0);
+	}
+
+	function hearts(pos, n = 3) {
+		const cnt = clampN(n, 3, 1, 12);
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.15, 0.5);
+			const k = 1.6;
+			const tone = Math.random();
+			xs(pos.x + rnd(-0.05, 0.05), pos.y + rnd(-0.02, 0.05), pos.z + rnd(-0.05, 0.05),
+				Math.cos(a) * sp, rnd(0.5, 1.0), Math.sin(a) * sp, rnd(1.2, 1.7), 0.028, rnd(0.055, 0.085),
+				rnd(0.3, 0.5) * k, k, 1.0, 0.3 + tone * 0.2, 0.46 + tone * 0.18, 0.0, X_HEART, rnd(0.18, 0.35), rnd(-0.25, 0.25), 0.96,
+				NEVER, rnd(0.03, 0.07), rnd(2.2, 3.6), i * 0.09);
+		}
+	}
+
+	function sparkle(pos, colorHex = 0xfff2a8, n = 8) {
+		const cnt = clampN(n, 8, 1, 32);
+		hexRGB(colorHex, 0xfff2a8);
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		xs(x, y, z, 0, 0, 0, 0.3, 0.04, 0.2, 0, 1, cR, cG, cB, 0.7, X_STAR, 0.6, rnd(0, 1.5), 0.9, NEVER, 0, 0, 0);
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const el = rnd(-0.6, 1.3);
+			const sp = rnd(0.3, 1.5);
+			const ce = Math.cos(el);
+			const w = Math.random() < 0.3 ? 0.5 : 0; // some paler
+			xs(x + rnd(-0.03, 0.03), y + rnd(-0.03, 0.03), z + rnd(-0.03, 0.03),
+				Math.cos(a) * ce * sp, Math.sin(el) * sp + 0.25, Math.sin(a) * ce * sp, rnd(0.45, 0.95), rnd(0.018, 0.04), 0.01,
+				-0.9, 2.8, cR + (1 - cR) * w, cG + (1 - cG) * w, cB + (1 - cB) * w, 0.65, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0,
+				NEVER, 0.01, rnd(2, 5), i * 0.012);
+		}
+	}
+
+	// crumbs(vec3): bits dropping from a munching mouth; they land (setGround, else ~0.1 below) and stay a moment.
+	function crumbs(pos) {
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		const f0 = floorAt(x, z, y - 0.1);
+		for (let i = 0; i < 7; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.15, 0.7);
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(0.3, 1.2);
+			solveLand(x, y, z, vx, vy, vz, -9.8, 0.8, f0 + 0.008, true, 2);
+			const t = Math.random();
+			const pink = Math.random() < 0.3;
+			xs(x, y, z, vx, vy, vz, landT + rnd(0.7, 1.2), rnd(0.008, 0.014), rnd(0.007, 0.011), -9.8, 0.8,
+				pink ? 0.85 : 0.5 + t * 0.25, pink ? 0.55 : 0.36 + t * 0.2, pink ? 0.5 : 0.2 + t * 0.12, 0.0,
+				X_GRAIN, rnd(-14, 14), rnd(0, 6.28), 1.0, landT, 0, 0, i * 0.015);
+		}
+		xs(x, y, z, 0, 0.15, 0, 0.45, 0.02, 0.07, 0.1, 3, 0.8, 0.7, 0.55, 0.0, X_SOFT, 0, 0, 0.3, NEVER, 0, 0, 0);
+	}
+
+	function sandPuff(x, y, z, strength = 0.6) {
+		const s = clampF(strength, 0.6, 0, 2);
+		const k = 0.55 + 0.45 * s;
+		const nm = 4 + Math.round(5 * Math.min(s, 1.5));
+		for (let i = 0; i < nm; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.3, 1.0) * k;
+			const tone = rnd(0.0, 1.0);
+			xs(x + Math.cos(a) * 0.04, y + 0.03, z + Math.sin(a) * 0.04, Math.cos(a) * sp, rnd(0.25, 0.9) * k, Math.sin(a) * sp,
+				rnd(0.55, 1.0), rnd(0.04, 0.07) * k, rnd(0.15, 0.26) * k, 0.12, 3.0,
+				0.86 + tone * 0.08, 0.76 + tone * 0.08, 0.56 + tone * 0.1, 0.0, X_SOFT, 0, 0, rnd(0.3, 0.48), NEVER, 0, 0, 0);
+		}
+		const ng = 6 + Math.round(9 * Math.min(s, 1.5));
+		for (let i = 0; i < ng; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.4, 1.6) * k;
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(0.9, 2.6) * k;
+			solveLand(x, y + 0.02, z, vx, vy, vz, -9.8, 0.9, y + 0.006, true, 2);
+			const tone = rnd(0.0, 1.0);
+			xs(x, y + 0.02, z, vx, vy, vz, landT + rnd(0.4, 0.9), rnd(0.006, 0.012), 0.006, -9.8, 0.9,
+				0.78 + tone * 0.14, 0.66 + tone * 0.14, 0.44 + tone * 0.14, 0.0, X_GRAIN, rnd(-16, 16), rnd(0, 6.28), 1.0,
+				landT, 0, 0, 0);
+		}
+	}
+
+	function dust(x, y, z, strength = 0.5) {
+		const s = clampF(strength, 0.5, 0, 2);
+		const k = 0.5 + 0.5 * s;
+		const nm = 4 + Math.round(6 * Math.min(s, 1.5));
+		const a0 = Math.random() * Math.PI * 2;
+		for (let i = 0; i < nm; i++) {
+			const a = a0 + ((i + rnd(-0.3, 0.3)) / nm) * Math.PI * 2;
+			const sp = rnd(0.5, 1.3) * k;
+			const tone = rnd(0.0, 1.0);
+			xs(x + Math.cos(a) * 0.05, y + 0.04, z + Math.sin(a) * 0.05, Math.cos(a) * sp, rnd(0.08, 0.4) * k, Math.sin(a) * sp,
+				rnd(0.6, 1.1), rnd(0.05, 0.08) * k, rnd(0.2, 0.34) * k, 0.1, 3.4,
+				0.62 + tone * 0.12, 0.58 + tone * 0.11, 0.52 + tone * 0.1, 0.0, X_SOFT, 0, 0, rnd(0.22, 0.36), NEVER, 0, 0, 0);
+		}
+		if (s > 0.45) {
+			for (let i = 0; i < 4; i++) {
+				const a = Math.random() * Math.PI * 2;
+				const sp = rnd(0.4, 1.3) * k;
+				const vx = Math.cos(a) * sp;
+				const vz = Math.sin(a) * sp;
+				const vy = rnd(0.8, 1.9) * k;
+				solveLand(x, y + 0.02, z, vx, vy, vz, -9.8, 0.9, y + 0.006, true, 2);
+				xs(x, y + 0.02, z, vx, vy, vz, landT + rnd(0.3, 0.6), rnd(0.006, 0.01), 0.005, -9.8, 0.9,
+					0.5, 0.47, 0.43, 0.0, X_GRAIN, rnd(-16, 16), rnd(0, 6.28), 0.9, landT, 0, 0, 0);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------ confetti
+	const CONFETTI = [
+		1.0, 0.24, 0.33, 1.0, 0.72, 0.1, 1.0, 0.92, 0.22, 0.25, 0.82, 0.42,
+		0.18, 0.68, 1.0, 0.62, 0.4, 1.0, 1.0, 0.45, 0.78, 1.0, 1.0, 1.0,
+	];
+	// confetti(vec3, dirVec3 | null, n, floorY?): dir = a cannon shot along it (its length scales the
+	// speed when it is longer than 1.5), null = a popper burst upward. At most 300 pieces alive. Pieces
+	// flutter down at ~1 m/s, settle flat (setGround, else floorY, else y = 0 or 2.5 m below) and fade.
+	function confetti(pos, dir, n = 60, floorY) {
+		const cnt = clampN(n, 60, 1, MAX_CONFETTI);
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		let dx = 0;
+		let dy = 1;
+		let dz = 0;
+		let power = 1;
+		let cone = 0.75;
+		if (dir && (dir.x || dir.y || dir.z)) {
+			const l = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+			dx = dir.x / l; dy = dir.y / l; dz = dir.z / l;
+			power = l > 1.5 ? Math.min(l / 8, 2) : 1.25;
+			cone = 0.36;
+		}
+		// two axes perpendicular to the shot
+		let ax = -dz;
+		let ay = 0;
+		let az = dx;
+		let al = Math.sqrt(ax * ax + az * az);
+		if (al < 1e-3) { ax = 1; az = 0; al = 1; }
+		ax /= al; az /= al;
+		const bx = dy * az - dz * ay;
+		const by = dz * ax - dx * az;
+		const bz = dx * ay - dy * ax;
+		const fallback = typeof floorY === "number" && floorY === floorY ? floorY : (y > 0.2 ? 0 : y - 2.5);
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const off = Math.tan(cone * Math.sqrt(Math.random()));
+			const ca = Math.cos(a) * off;
+			const sa = Math.sin(a) * off;
+			let vx = dx + ax * ca + bx * sa;
+			let vy = dy + ay * ca + by * sa;
+			let vz = dz + az * ca + bz * sa;
+			const vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
+			const sp = rnd(3.2, 9.5) * power / vl;
+			vx *= sp; vy *= sp; vz *= sp;
+			const k = rnd(1.5, 2.4);
+			const grav = -rnd(0.75, 1.3) * k; // terminal fall 0.75 .. 1.3 m/s
+			solveLand(x, y, z, vx, vy, vz, grav, k, fallback + 0.004, true, 10);
+			const linger = rnd(2.5, 4.5);
+			const ci = ((Math.random() * 8) | 0) * 3;
+			const foil = Math.random() < 0.3;
+			const hx = rnd(0.016, 0.028);
+			const idx = confCursor;
+			confCursor = (confCursor + 1) % MAX_CONFETTI;
+			flake(idx, x + rnd(-0.05, 0.05), y + rnd(-0.05, 0.05), z + rnd(-0.05, 0.05), vx, vy, vz, landT + linger,
+				grav, k, landT, 0, rnd(0, 6.28), rnd(-0.5, 0.5), rnd(5, 15) * (Math.random() < 0.5 ? -1 : 1), rnd(0, 6.28),
+				CONFETTI[ci], CONFETTI[ci + 1], CONFETTI[ci + 2], foil ? 2 : 1, hx, hx * rnd(1.2, 2.0), rnd(0.05, 0.16));
+		}
+		// the pop
+		xs(x, y, z, 0, 0, 0, 0.22, 0.08, 0.4, 0, 1, 1, 0.95, 0.8, 0.7, X_STAR, 0.5, rnd(0, 1.5), 0.7, NEVER, 0, 0, 0);
+		for (let i = 0; i < 5; i++) {
+			xs(x, y, z, dx * rnd(0.5, 2) + rnd(-0.4, 0.4), dy * rnd(0.5, 2) + rnd(-0.2, 0.5), dz * rnd(0.5, 2) + rnd(-0.4, 0.4),
+				rnd(0.5, 0.9), 0.08, rnd(0.25, 0.4), 0.15, 2.4, 0.95, 0.95, 0.95, 0.0, X_SOFT, 0, 0, 0.22, NEVER, 0, 0, 0);
+		}
+	}
+
+	// spotDust(on, box): slow motes hanging in the arena air. box: THREE.Box3 / { min, max } /
+	// { x0, x1, y0, y1, z0, z1 } / { x, y, z, w, h, d } (centre + size) / [x0, y0, z0, x1, y1, z1].
+	// Omit the box to keep the last one (default: 16 x 7 x 16 m around the origin).
+	function spotDust(on, box) {
+		if (box) {
+			let x0, y0, z0, x1, y1, z1;
+			if (box.min && box.max) {
+				x0 = box.min.x; y0 = box.min.y; z0 = box.min.z; x1 = box.max.x; y1 = box.max.y; z1 = box.max.z;
+			} else if (typeof box.length === "number" && box.length >= 6) {
+				x0 = box[0]; y0 = box[1]; z0 = box[2]; x1 = box[3]; y1 = box[4]; z1 = box[5];
+			} else if (typeof box.x0 === "number") {
+				x0 = box.x0; x1 = box.x1; z0 = box.z0; z1 = box.z1;
+				y0 = typeof box.y0 === "number" ? box.y0 : 0.3;
+				y1 = typeof box.y1 === "number" ? box.y1 : y0 + 7;
+			} else if (typeof box.x === "number") {
+				const w = box.w || box.width || 16;
+				const hh = box.h || box.height || 7;
+				const d = box.d || box.depth || w;
+				x0 = box.x - w * 0.5; x1 = box.x + w * 0.5;
+				y0 = (box.y || 0) - hh * 0.5; y1 = (box.y || 0) + hh * 0.5;
+				z0 = (box.z || 0) - d * 0.5; z1 = (box.z || 0) + d * 0.5;
+			}
+			const span = x1 - x0 + (y1 - y0) + (z1 - z0); // NaN if any bound is missing or not a number
+			if (typeof span === "number" && span === span) {
+				uBoxMin.value.set(Math.min(x0, x1), Math.min(y0, y1), Math.min(z0, z1));
+				uBoxSize.value.set(Math.max(Math.abs(x1 - x0), 0.5), Math.max(Math.abs(y1 - y0), 0.5), Math.max(Math.abs(z1 - z0), 0.5));
+			}
+		}
+		moteTarget = on ? 1 : 0;
+		if (on) ambient.visible = true;
+	}
+
+	// ------------------------------------------------------------------ glass
+	// glassShards(x, y, z, dirX, dirZ, n = 60, floorY?): the pane at (x, y, z) bursts toward (dirX, dirZ).
+	// Small fast splinters from the point of impact, bigger slower plates from the rim of the hole; every
+	// piece tumbles on its own axis and flashes as it swings through the light, lands (setGround, else
+	// floorY, else y = 0), skips once, turns flat and fades. All of it rides the scaled dt, so in slow
+	// motion the glints sweep slowly across the faces.
+	function glassShards(x, y, z, dirX, dirZ, n = 60, floorY) {
+		const cnt = clampN(n, 60, 1, MAX_SHARDS);
+		let dx = typeof dirX === "number" ? dirX : 0;
+		let dz = typeof dirZ === "number" ? dirZ : 0;
+		const dl = Math.sqrt(dx * dx + dz * dz);
+		if (dl < 1e-4) { dx = 0; dz = 1; } else { dx /= dl; dz /= dl; }
+		const px = -dz; // across the pane
+		const pz = dx;
+		const fallback = typeof floorY === "number" && floorY === floorY ? floorY : (y > 0.2 ? 0 : y - 1.2);
+		const f0 = floorAt(x, z, fallback);
+		const R = 1.1;
+		for (let i = 0; i < cnt; i++) {
+			const rr = Math.pow(Math.random(), 0.7) * R;
+			const a = Math.random() * Math.PI * 2;
+			const ca = Math.cos(a);
+			const sa = Math.sin(a);
+			const c = 1 - rr / R; // 1 at the point of impact
+			const sx = x + px * ca * rr;
+			const sz = z + pz * ca * rr;
+			let sy = y + sa * rr * 0.95;
+			if (sy < f0 + 0.06) sy = f0 + 0.06 + Math.random() * 0.2;
+			const out = 0.7 + 6.2 * c * c * rnd(0.55, 1.0) + rnd(0, 1.3);
+			const radial = rnd(0.3, 1.9) * (0.4 + 0.6 * c);
+			const vx = dx * out + px * ca * radial + rnd(-0.35, 0.35);
+			const vz = dz * out + pz * ca * radial + rnd(-0.35, 0.35);
+			const vy = sa * radial * 0.8 + rnd(-0.2, 1.7) * c + 0.25;
+			const hx = rnd(0.022, 0.05) + (1 - c) * rnd(0.0, 0.085);
+			const hy = hx * rnd(0.55, 1.5);
+			const k = 0.2 + 0.012 / hx;
+			solveLand(sx, sy, sz, vx, vy, vz, -9.8, k, fallback + 0.004, true, 6);
+			const idx = MAX_CONFETTI + shardCursor;
+			shardCursor = (shardCursor + 1) % MAX_SHARDS;
+			const tone = Math.random();
+			flake(idx, sx, sy, sz, vx, vy, vz, landT + FLAKE_HOP + rnd(2.2, 3.8), -9.8, k, landT, rnd(0.025, 0.09),
+				rnd(0, 6.28), rnd(-0.8, 0.8), rnd(3.5, 15) * (Math.random() < 0.5 ? -1 : 1), rnd(0, 6.28),
+				0.6 + tone * 0.12, 0.84 + tone * 0.08, 0.88 + tone * 0.08, 0, hx, hy, 0);
+		}
+		// glass dust: twinkling specks carried along with the burst
+		const ns = Math.min(28, 8 + (cnt >> 1));
+		for (let i = 0; i < ns; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = Math.random() * 0.7;
+			const out = rnd(0.8, 5.5);
+			const vx = dx * out + rnd(-0.9, 0.9);
+			const vz = dz * out + rnd(-0.9, 0.9);
+			const vy = rnd(-0.3, 2.2);
+			const sx = x + px * Math.cos(a) * rr;
+			const sz = z + pz * Math.cos(a) * rr;
+			const sy = Math.max(f0 + 0.05, y + Math.sin(a) * rr);
+			solveLand(sx, sy, sz, vx, vy, vz, -6.5, 1.4, fallback + 0.004, true, 4);
+			xs(sx, sy, sz, vx, vy, vz, Math.max(0.2, landT), rnd(0.012, 0.026), 0.008, -6.5, 1.4,
+				0.85, 0.97, 1.0, 0.7, X_STAR, rnd(-4, 4), rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+		}
+		// grit that rattles onto the floor and stays a while
+		const ng = Math.min(16, 4 + (cnt >> 2));
+		for (let i = 0; i < ng; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = Math.random() * 0.6;
+			const out = rnd(0.5, 4.5);
+			const vx = dx * out + rnd(-0.7, 0.7);
+			const vz = dz * out + rnd(-0.7, 0.7);
+			const vy = rnd(-0.2, 1.6);
+			const sx = x + px * Math.cos(a) * rr;
+			const sz = z + pz * Math.cos(a) * rr;
+			const sy = Math.max(f0 + 0.05, y + Math.sin(a) * rr);
+			solveLand(sx, sy, sz, vx, vy, vz, -9.8, 0.6, fallback + 0.006, true, 4);
+			xs(sx, sy, sz, vx, vy, vz, landT + rnd(1.5, 2.6), rnd(0.006, 0.012), 0.006, -9.8, 0.6,
+				0.82, 0.95, 0.97, 0.25, X_GRAIN, rnd(-18, 18), rnd(0, 6.28), 0.9, landT, 0, 0, 0);
+		}
+		// the breath of powdered glass + one hard flash at the point of impact
+		for (let i = 0; i < 7; i++) {
+			const out = rnd(0.4, 2.2);
+			xs(x + px * rnd(-0.5, 0.5), y + rnd(-0.4, 0.4), z + pz * rnd(-0.5, 0.5), dx * out + rnd(-0.3, 0.3), rnd(-0.1, 0.4), dz * out + rnd(-0.3, 0.3),
+				rnd(0.7, 1.3), 0.12, rnd(0.4, 0.65), -0.15, 1.8, 0.86, 0.95, 0.98, 0.45, X_SOFT, 0, 0, 0.16, NEVER, 0, 0, 0);
+		}
+		xs(x, y, z, 0, 0, 0, 0.2, 0.2, 0.85, 0, 1, 0.9, 0.98, 1.0, 0.8, X_STAR, 0.4, rnd(0, 1.5), 0.6, NEVER, 0, 0, 0);
+		xring(x, y, z, 0.3, 0.1, 1.15, 0.07, 0.9, 0.98, 1.0, 0.6, R_IMPACT, Math.atan2(dx, dz), 1, 0.55, 1, 0, 0);
+	}
+
+	// ------------------------------------------------------------------ fire and heat
+	function embers(x, y, z, spread = 0.5, n = 5) {
+		const cnt = clampN(n, 5, 1, 24);
+		const sprd = clampF(spread, 0.5, 0, 8);
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = Math.sqrt(Math.random()) * sprd;
+			const k = rnd(0.9, 1.5);
+			const hot = Math.random();
+			xs(x + Math.cos(a) * rr, y + rnd(0, 0.1), z + Math.sin(a) * rr, rnd(-0.35, 0.35), rnd(0.5, 2.2), rnd(-0.35, 0.35),
+				rnd(1.2, 2.9), rnd(0.012, 0.028), 0.005, rnd(0.45, 1.3) * k, k,
+				1.0, 0.55 + hot * 0.3, 0.14 + hot * 0.2, 0.88, X_EMBER, 0.035, 0, 1.0,
+				NEVER, rnd(0.05, 0.16), rnd(1.6, 4.5), i * 0.03);
+		}
+	}
+
+	// heat(x, y, z, w, h) -> { remove() }: (x, y, z) is the CENTRE of an upright card w wide, h tall.
+	function heat(x, y, z, w = 2, h = 2) {
+		let hd = null;
+		for (let i = 0; i < MAX_HEAT; i++) {
+			if (!heatHandles[i].active) {
+				hd = heatHandles[i];
+				break;
+			}
+		}
+		if (!hd) {
+			// all eight in use: recycle round-robin (the old owner's remove() will then drop this card early)
+			hd = heatHandles[heatCursor];
+			heatCursor = (heatCursor + 1) % MAX_HEAT;
+			heatLive--;
+		}
+		hd.active = true;
+		heatLive++;
+		const o = hd.index * AMB_STRIDE;
+		aData[o] = x; aData[o + 1] = y; aData[o + 2] = z; aData[o + 3] = 0;
+		aData[o + 4] = Math.max(0.05, w); aData[o + 5] = Math.max(0.05, h); aData[o + 6] = Math.random() * 20; aData[o + 7] = 0.2;
+		aDirty = true;
+		ambient.visible = true;
+		return hd;
+	}
+
+	// ------------------------------------------------------------------ level 5
+	// slapRing(x, y, z, yaw): yaw = the way the slapper faces; the shock ring stands upright across it.
+	function slapRing(x, y, z, yaw = 0) {
+		const fx_ = Math.sin(yaw);
+		const fz_ = Math.cos(yaw);
+		xring(x, y, z, 0.26, 0.06, 0.62, 0.06, 1.0, 0.95, 0.8, 0.55, R_IMPACT, yaw, 1, 1.0, 1, 0, 0);
+		xring(x, y, z, 0.42, 0.04, 0.9, 0.045, 1.0, 0.9, 0.7, 0.45, R_CLEAN, yaw, 1, 0.5, 1, 0, 0.04);
+		xs(x, y, z, 0, 0, 0, 0.16, 0.1, 0.45, 0, 1, 1.0, 0.95, 0.8, 0.75, X_STAR, 0.5, rnd(0, 1.5), 0.9, NEVER, 0, 0, 0);
+		const f0 = floorAt(x, z, y - 0.6);
+		// wood chips, thrown back toward the slapper and out to the sides
+		for (let i = 0; i < 10; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const side = Math.cos(a) * rnd(1.2, 3.4);
+			const vy = Math.sin(a) * rnd(0.8, 2.6) + 1.2;
+			const back = rnd(0.3, 2.2);
+			const vx = fz_ * side - fx_ * back;
+			const vz = -fx_ * side - fz_ * back;
+			solveLand(x, y, z, vx, vy, vz, -9.8, 0.9, f0 + 0.008, true, 2);
+			const tone = Math.random();
+			xs(x, y, z, vx, vy, vz, landT + rnd(0.4, 0.8), rnd(0.009, 0.018), 0.008, -9.8, 0.9,
+				0.7 + tone * 0.22, 0.5 + tone * 0.2, 0.26 + tone * 0.14, 0.0, X_GRAIN, rnd(-22, 22), rnd(0, 6.28), 1.0, landT, 0, 0, 0);
+		}
+		// hot sparks
+		for (let i = 0; i < 7; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const side = Math.cos(a) * rnd(2.0, 5.0);
+			const back = rnd(0, 1.5);
+			xs(x, y, z, fz_ * side - fx_ * back, Math.sin(a) * rnd(1.5, 4.0) + 0.5, -fx_ * side - fz_ * back,
+				rnd(0.14, 0.3), rnd(0.02, 0.032), 0.006, -6 * 3.5, 3.5, 1.0, 0.9, 0.55, 0.7, X_EMBER, 0.1, 0, 1.0, NEVER, 0, 0, 0);
+		}
+		for (let i = 0; i < 3; i++) {
+			xs(x, y, z, rnd(-0.6, 0.6), rnd(0.1, 0.6), rnd(-0.6, 0.6), rnd(0.4, 0.7), 0.06, rnd(0.2, 0.3), 0.1, 3,
+				0.8, 0.72, 0.6, 0.0, X_SOFT, 0, 0, 0.3, NEVER, 0, 0, 0);
+		}
+	}
+
+	// zzz(vec3): one soft "z" drifting up and away; successive calls alternate small / big.
+	let zCount = 0;
+	function zzz(pos) {
+		const big = zCount % 3;
+		zCount++;
+		const s = 0.75 + big * 0.22;
+		xs(pos.x, pos.y, pos.z, rnd(0.03, 0.09), 0.2, rnd(-0.03, 0.03), 1.9, 0.03 * s, 0.075 * s, 0.24, 1.0,
+			0.84, 0.9, 1.0, 0.0, X_ZED, 0.22, rnd(-0.1, 0.25), 0.92, NEVER, 0.035, 1.6, 0);
+	}
+
+	// sadMotes(vec3, n): a few slow pale motes sinking around the point. Subtle on purpose.
+	function sadMotes(pos, n = 6) {
+		const cnt = clampN(n, 6, 1, 16);
+		for (let i = 0; i < cnt; i++) {
+			const k = 1.0;
+			xs(pos.x + rnd(-0.55, 0.55), pos.y + rnd(0.1, 0.8), pos.z + rnd(-0.55, 0.55), 0, 0, 0, rnd(3.0, 4.6),
+				rnd(0.01, 0.016), rnd(0.014, 0.024), -rnd(0.05, 0.12) * k, k, 0.8, 0.86, 1.0, 0.5, X_SOFT, 0, 0, rnd(0.25, 0.42),
+				NEVER, rnd(0.02, 0.05), rnd(0.5, 1.1), i * rnd(0.05, 0.25));
+		}
+	}
+
+	// senseRing(x, y, z, dirX, dirZ): the electro-sense ping. With a direction it reaches toward it
+	// (the longer the vector, up to 1, the further it stretches); with (0, 0) it is a plain round ping.
+	function senseRing(x, y, z, dirX, dirZ) {
+		const dx = typeof dirX === "number" ? dirX : 0;
+		const dz = typeof dirZ === "number" ? dirZ : 0;
+		const dl = Math.sqrt(dx * dx + dz * dz);
+		const has = dl > 1e-3;
+		const yaw = has ? Math.atan2(dx, dz) : 0;
+		const st = has ? 1.5 + 0.9 * Math.min(dl, 1) : 1;
+		xring(x, y, z, 0.75, 0.08, 0.7, 0.1, 0.4, 0.86, 1.0, 0.6, R_SENSE, yaw, st, 0.9, 0, 0, 0);
+		xring(x, y + 0.003, z, 0.6, 0.05, 0.42, 0.13, 0.55, 0.92, 1.0, 0.6, R_SENSE, yaw, st, 0.6, 0, 0, 0.14);
+		xs(x, y + 0.02, z, 0, 0, 0, 0.25, 0.03, 0.14, 0, 1, 0.6, 0.92, 1.0, 0.8, X_STAR, 0.5, rnd(0, 1.5), 0.7, NEVER, 0, 0, 0);
+		if (has) {
+			const ux = dx / dl;
+			const uz = dz / dl;
+			for (let i = 0; i < 4; i++) {
+				const sp = rnd(1.2, 3.0);
+				xs(x + ux * 0.1, y + 0.03, z + uz * 0.1, ux * sp + rnd(-0.35, 0.35), rnd(0.0, 0.3), uz * sp + rnd(-0.35, 0.35),
+					rnd(0.35, 0.6), rnd(0.014, 0.024), 0.008, 0, 3.2, 0.6, 0.92, 1.0, 0.75, X_STAR, rnd(-3, 3), rnd(0, 1.5), 0.9,
+					NEVER, 0, 0, i * 0.04);
+			}
+		}
+	}
+
+	// tint of the mirror flashes on glass and foil (default warm white), e.g. red under the alarm light
+	function setGlint(colorHex) {
+		hexRGB(colorHex, 0xfffaf2);
+		uGlint.value.set(cR, cG, cB);
+	}
+
+	function clearExt() {
+		for (let i = 0; i < MAX_XP; i++) xData[i * XP_STRIDE + 7] = 0;
+		xWrapped = true; // force a whole-buffer upload
+		xAliveUntil = -1;
+		for (let i = 0; i < MAX_FLAKES; i++) fData[i * FL_STRIDE + 7] = 0;
+		fDirty = true;
+		fAliveUntil = -1;
+		for (let i = 0; i < MAX_XRINGS; i++) xrData[i * XR_STRIDE + 4] = 0;
+		xrDirty = true;
+		xrAliveUntil = -1;
+		for (let i = 0; i < MAX_HEAT; i++) {
+			heatHandles[i].active = false;
+			aData[i * AMB_STRIDE + 7] = 0;
+		}
+		heatLive = 0;
+		aDirty = true;
+		moteTarget = 0;
+		moteFade = 0;
+		uMote.value = 0;
+		for (let i = 0; i < WAKES; i++) wakeT[i] = -100;
+	}
+
+	function updateExt(dt) {
+		if (xHi >= 0 || xWrapped) {
+			// Upload only the span written since the last frame (one reused range object). If the last
+			// request never reached the GPU (the pool was not drawn), or the cursor wrapped: whole buffer.
+			const ranges = xBuffer.updateRanges;
+			if (ranges) {
+				ranges.length = 0;
+				if (!xWrapped && !xPending && xHi >= xLo) {
+					xRange.start = xLo * XP_STRIDE;
+					xRange.count = (xHi - xLo + 1) * XP_STRIDE;
+					ranges.push(xRange);
+				}
+			}
+			xBuffer.needsUpdate = true;
+			xPending = true;
+			xLo = MAX_XP;
+			xHi = -1;
+			xWrapped = false;
+		}
+		if (xparticles.visible && now > xAliveUntil) xparticles.visible = false;
+		if (fDirty) {
+			fBuffer.needsUpdate = true;
+			fDirty = false;
+		}
+		if (flakes.visible && now > fAliveUntil) flakes.visible = false;
+		if (xrDirty) {
+			xrBuffer.needsUpdate = true;
+			xrDirty = false;
+		}
+		if (xrings.visible && now > xrAliveUntil) xrings.visible = false;
+
+		if (moteFade !== moteTarget) {
+			const stepM = dt * 0.8;
+			moteFade = moteFade < moteTarget ? Math.min(moteTarget, moteFade + stepM) : Math.max(moteTarget, moteFade - stepM);
+			uMote.value = moteFade * moteFade * (3 - 2 * moteFade);
+		}
+		if (aDirty) {
+			aBuffer.needsUpdate = true;
+			aDirty = false;
+		}
+		const ambOn = heatLive > 0 || moteFade > 0 || moteTarget > 0;
+		if (ambient.visible !== ambOn) ambient.visible = ambOn;
+	}
+
 	function clear(removeWater = false) {
+		clearExt();
 		for (let i = 0; i < MAX_PARTICLES; i++) pData[i * P_STRIDE + 7] = 0;
 		pDirty = true;
 		pAliveUntil = -1;
@@ -1101,6 +2735,8 @@ export function createFx(THREE) {
 			rDirty = false;
 		}
 		if (rings.visible && now > rAliveUntil) rings.visible = false;
+
+		updateExt(dt);
 	}
 
 	function setSun(x, y, z) {
@@ -1122,5 +2758,29 @@ export function createFx(THREE) {
 		setSun,
 		waters,
 		PULSE_TRAVEL,
+		// extensions (LEVELS.md B9)
+		splash,
+		droplets,
+		bubbles,
+		bubbleRing,
+		wake,
+		coinSparkle,
+		hearts,
+		sparkle,
+		crumbs,
+		sandPuff,
+		dust,
+		confetti,
+		spotDust,
+		glassShards,
+		embers,
+		heat,
+		slapRing,
+		zzz,
+		sadMotes,
+		senseRing,
+		// extension extras
+		setGround,
+		setGlint,
 	};
 }
