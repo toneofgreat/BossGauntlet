@@ -13,6 +13,8 @@ export function createProgress() {
     if (o && typeof o.unlocked === "number") {
       st.unlocked = Math.max(1, Math.min(RELEASED, o.unlocked | 0));
       for (let i = 0; i < LEVEL_COUNT; i++) st.beaten[i] = !!(o.beaten && o.beaten[i]);
+      // a level beaten before the next one was released still opens it once it is
+      for (let i = 0; i < LEVEL_COUNT; i++) if (st.beaten[i] && i + 2 > st.unlocked) st.unlocked = Math.min(RELEASED, i + 2);
     }
   } catch (e) { /* private mode, blocked storage: play without saving */ }
   function save() {
