@@ -132,7 +132,18 @@ export function createLevel(ctx) {
     if (ctx.debug) ctx.debug.level10 = { base, jungle, combat, tribe, got, setup: (n) => jump(n) };
   }
 
+  // The camp scenes sit at the triangle budget (the crowd + the named members + you): in the jungle the named
+  // members cast no shadows and at most three are full models (as in level 9). The base and exit() put them back.
+  function tribeLite(on) {
+    tribe.maxFull = on ? 3 : 4;
+    for (const k in tribe.members) {
+      const m = tribe.members[k], g = m && m.body && m.body.group;
+      if (!g) continue;
+      g.traverse((o) => { if (o.isMesh) { if (o.userData.l10Shadow === undefined) o.userData.l10Shadow = o.castShadow; o.castShadow = on ? false : o.userData.l10Shadow; } });
+    }
+  }
   function toBase() {
+    tribeLite(false);
     ctx.setWorld(base);
     base.group.add(combat.group, tribe.group);
     combat.setWorld(base);
@@ -141,6 +152,7 @@ export function createLevel(ctx) {
     FX("setGround", null, null);
   }
   function toJungle(time) {
+    tribeLite(true);
     jungle.setTime(time, 0);
     ctx.setWorld(jungle);
     jungle.group.add(combat.group, tribe.group);
@@ -243,7 +255,9 @@ export function createLevel(ctx) {
     sp("soldier", 2.2, 9.8, { yaw: PI, post: true, sweep: 0.45, squad: 1 });
   }
   function spawnYard() {
-    sp("soldier", -12, 16.5, { route: "yardA", squad: 1 });
+    // yardA joins his round at its far end, not 5 m from the fence hole the player has just come through
+    const a = sp("soldier", -12, 30, { route: "yardA", squad: 1, yaw: -PI / 2 });
+    if (a) a.ri = 2;
     sp("soldier", 4, 20, { route: "yardB", squad: 1 });
     sp("officer", 10, 39.7, { yaw: PI, post: true, sweep: 0.5, squad: 1 });
   }
@@ -402,10 +416,13 @@ export function createLevel(ctx) {
         mus("stealth", { intensity: 0.3 });
         break;
       case "yard":
-        player.teleport(B.cp1.x, B.cp1.z, 0);
-        makeSquad(6, B.cp1.x - 0.6, B.cp1.z + 1.6, 0, 0);
+        player.teleport(B.cp1.x, B.cp1.z + 1.8, 0);               // 1.8 m in: the follow camera starts inside the fence, not behind its mesh
+        makeSquad(6, B.cp1.x - 1.8, B.cp1.z + 1.4, 0, 0);
         spawnFence(); spawnYard();
-        if (!respawn) cp("cp1", B.cp1.x, B.cp1.z, 0, "Inside the fence");
+        if (!respawn) cp("cp1", B.cp1.x, B.cp1.z + 1.8, 0, "Inside the fence");
+        // cp1 lies on the west searchlight's sweep: start with the disc just gone past, so a restart is never
+        // spotted standing still (a whole sweep, ~6 s, to get moving)
+        base.lights[0].phase = 0.86;
         yardObjective();
         mus("stealth", { intensity: 0.3 });
         break;
@@ -605,7 +622,7 @@ export function createLevel(ctx) {
   }
   function reachYard() {
     stage = "yard"; step = "yard";
-    cp("cp1", B.cp1.x, B.cp1.z, 0, "Inside the fence");
+    cp("cp1", B.cp1.x, B.cp1.z + 1.8, 0, "Inside the fence");
     spawnYard();
     ui.objectiveDone();
     yardObjective();
@@ -1070,8 +1087,8 @@ export function createLevel(ctx) {
     sneakOn = false;
     const T = J.baseTrail;
     player.maxSpeed = 3;
-    player.teleport(T.x, T.z, -PI / 2);
-    makeSquad(fightersAt, T.x + 1.8, T.z + 0.2, -PI / 2, 2, null, false);
+    player.teleport(T.x - 4, T.z + 0.2, -PI / 2);          // 4 m down the cleared lane: the follow camera starts on the trail, not in the ferns
+    makeSquad(fightersAt, T.x - 6.2, T.z + 0.6, -PI / 2, 2, null, false);
     lost = SQUAD - 2 - fightersAt;
     combat.order("follow");
     if (musState !== "chill") mus("chill", { intensity: 0.3 });
@@ -1141,7 +1158,8 @@ export function createLevel(ctx) {
         { call: () => { if (music && music.motif) music.motif("pipSad"); } },
         { caption: n === 4 ? "Four leaves on the fire. One for each." : "A leaf on the fire for each one.", dur: 3.6, narr: true },
         { wait: 0.6 },
-        { shot: { pos: [f.x - 1.6, f.y + 0.9, f.z - 0.6], look: burra.group, lookY: 0.3, fov: F(34), to: { pos: [f.x - 1.3, f.y + 0.8, f.z - 0.4] }, dur: 7.5 }, hold: false },
+        // Burra from in front and to the side, the fire off the left edge of the frame (not shot through the flames)
+        { shot: { pos: [f.x + 0.5, f.y + 0.75, f.z - 1.5], look: burra.group, lookY: 0.3, fov: F(34), to: { pos: [f.x + 0.8, f.y + 0.7, f.z - 1.2] }, dur: 7.5 }, hold: false },
         { call: () => { burra.lookAt(platypus.group); } },
         { caption: "[Now we know what they are.]", dur: 3.4, who: "Old Burra" },
         { wait: 0.4 },
@@ -1279,7 +1297,9 @@ export function createLevel(ctx) {
   function refreshAim() {
     aimList.length = 0;
     const l = combat.enemies;
-    for (let i = 0; i < l.length; i++) aimList.push(l[i]);
+    // the blaster snaps only to soldiers you can actually see: no bolts wasted into the hangar wall at the men behind it
+    const sightOk = got.blaster && inBase();
+    for (let i = 0; i < l.length; i++) { const e = l[i]; if (!sightOk || !e.alive || dist2(e.x, e.z, player.x, player.z) < 3 || base.sight(player.x, player.z, e.x, e.z)) aimList.push(e); }
     if (!got.blaster) return;
     if (step === "armoury" || (stage === "fightout" && !outside)) { for (let i = 0; i < base.targets.length; i++) if (base.targets[i].alive) aimList.push(base.targets[i]); }
     else {
@@ -1408,6 +1428,7 @@ export function createLevel(ctx) {
     tribe.village.clear();
     try { base.reset(); } catch (e) { /* nothing to undo */ }
     try { jungle.reset(); } catch (e) { /* nothing to undo */ }
+    tribeLite(false);
     step = "boot";
   }
   function win() {
