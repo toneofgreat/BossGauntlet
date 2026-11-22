@@ -213,7 +213,7 @@ export function createLevel(ctx) {
     leadRoute.length = 0;
     leadRoute.push(J.leadPath && J.leadPath[1] ? J.leadPath[1] : { x: 7.5, z: 55 }, J.campGate);
     REVEAL_AT.yaw = Math.atan2(J.camp.x - REVEAL_AT.x, J.camp.z - REVEAL_AT.z);
-    if (ctx.debug) ctx.debug.level8 = { zoo, jungle, combat, tribe, friend, men };
+    if (ctx.debug) ctx.debug.level8 = { zoo, jungle, combat, tribe, friend, men, ringPos, mouth };
   }
 
   // Everything back to nothing, behind black. Every starter begins here.
@@ -245,6 +245,7 @@ export function createLevel(ctx) {
     combat.reset();
     combat.frozen = false;
     combat.bodyTTL = 12;
+    tribeShadows(true);
     tribe.reset();
     platypus.reset();
     platypus.lookAt(null);
@@ -435,7 +436,8 @@ export function createLevel(ctx) {
     friend.place(sf.x, sf.z, Math.atan2(sr.x - sf.x, sr.z - sf.z));
     friend.do("idle");
     friend.lookAt(platypus.group);
-    cam.yaw = 0.3; cam.pitch = 0.3; cam.wantDist = 3.5; cam.manualT = 4;
+    // over the shoulder: Pip near the middle of the frame, the player's back and tail in the corner
+    cam.yaw = Math.atan2(sf.x - sr.x, sf.z - sr.z) - 0.55; cam.pitch = 0.32; cam.wantDist = 2.9; cam.manualT = 1e9;
     round = 0; m2 = "pre"; m2T = 1.6; copyT = 0; m2Slot = -1; nuzzled = false;
     ui.setTricks(TRICK_UI);
     setObj("Copy Pip's trick  0 / 3", "watch Pip, then do the same");
@@ -1265,11 +1267,12 @@ export function createLevel(ctx) {
   }
   function playMeet() {
     meetPhase = "cine";
-    const g = gen, m = J.meet, c = J.camMeet || { pos: { x: m.x + 3.4, y: m.y + 0.7, z: m.z + 1.6 }, look: m };
+    const g = gen, m = J.meet;
     const y = gy(m.x, m.z);
     cinema.play([
       { call: () => { player.walkTo(m.x, m.z - 0.6, { speed: 0.45, face: 0 }); } },
-      { shot: { pos: arr(c.pos), look: moss.group, lookY: 0.2, fov: F(40), dur: 0 } },
+      // from just inside the curtain, over the newcomer: Moss with his back turned (jungle.P.camMeet is behind a flower bush)
+      { shot: { pos: [m.x - 2.0, y + 1.0, m.z - 1.4], look: moss.group, lookY: 0.2, fov: F(40), dur: 0 } },
       { wait: 1.4 },
       { call: () => moss.do("call") },
       { wait: 2.3 },
@@ -1380,9 +1383,21 @@ export function createLevel(ctx) {
     playReveal();
   }
   // the camp, all at once (idempotent: the cutscene and its skip both call it)
+  // The reveal is the heaviest frame of the level (the village crowd + four full platypus models). The crowd
+  // casts no shadows; for the length of the reveal neither do Moss, Burra and Nib (the triangle budget), back on in hardStop.
+  function tribeShadows(on) {
+    for (const m of [moss, burra, nib]) {
+      if (!m || !m.built) continue;
+      m.body.group.traverse((o) => { if (o.isMesh) { if (o.userData.l8Shadow === undefined) o.userData.l8Shadow = o.castShadow; o.castShadow = on ? o.userData.l8Shadow : false; } });
+    }
+  }
   function campOn() {
     if (camp) return;
     camp = true;
+    tribeShadows(false);
+    ui.setObjective(null); objText = ""; // no "Follow Moss!" left over after the crane
+    combat.reset(); // the fallen capture party lies 85 m back in the glade: out of the reveal (they are not culled)
+    for (let i = 0; i < 4; i++) men[i] = null;
     mossState = "home";
     clearMarks();
     jungle.setZone("camp", true);
@@ -1598,7 +1613,7 @@ export function createLevel(ctx) {
     build, enter, start, update, exit, onAction,
     state() {
       return { step, memory, struggle: Math.round(struggle * 100) / 100, screamed, trail: trailI, moss: mossState, camp,
-        rings: ringI, round, presses, meet: meetPhase, jungle: inJungle };
+        rings: ringI, round, m2, m3: m3.phase, presses, meet: meetPhase, jungle: inJungle };
     },
     skipTo, win,
     STEPS,
