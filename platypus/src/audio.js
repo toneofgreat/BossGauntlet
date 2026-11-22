@@ -10,6 +10,7 @@ export function createAudio() {
   let bus = null;        // everything dry lands here
   let verbIn = null;     // reverb send input
   let muteGain = null;
+  let musicBusNode = null;
   let whiteBuf = null;
   let pinkBuf = null;
   let muted = false;
@@ -1484,6 +1485,7 @@ export function createAudio() {
   }
 
   function step(surface, strength = 0.6, pan = 0) {
+    if (EXT_STEP[surface] === 1) { stepExt(surface, strength, pan); return; } // levels 6-11 surfaces (below)
     if (!ready()) return;
     const now = ctx.currentTime;
     if (now - lastWStepT < 0.02) return;
@@ -3315,6 +3317,3695 @@ export function createAudio() {
   }
 
 
+  // ==========================================================================
+  // EXTENSIONS 2 (levels 6-11, LEVELS2.md B2). Additive again: nothing above is
+  // changed except one early-out in step() for the new surfaces. World sounds go
+  // through wBus (underwater / muffle low-pass, heartDrop + scream duck); the
+  // scream itself, its ring and its heartbeat use storyBus, which is never ducked.
+  // ==========================================================================
+
+  const gateT = {};
+  /** Internal rate limit: false when `key` fired less than minDt seconds ago. */
+  function gate(key, minDt) {
+    const now = ctx.currentTime;
+    const last = gateT[key];
+    if (last !== undefined && now - last < minDt && now >= last) return false;
+    gateT[key] = now;
+    return true;
+  }
+  const num = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
+  const irnd = (a, b) => a + ((Math.random() * (b - a + 1)) | 0);
+  const sp = (param, v, t, tc) => param.setTargetAtTime(v, t, tc);
+  function mkGain(v) {
+    const g = ctx.createGain();
+    g.gain.value = v;
+    return g;
+  }
+
+  /** World one-shot output with distance: far = quieter, darker, more room. Returns the node to feed. */
+  function wd(pan, dist, send, level) {
+    const d = clamp(num(dist, 0), 0, 1);
+    const g = outTo(wBus, wVerb, clamp(num(pan, 0), -1, 1) * (1 - 0.4 * d),
+      (send === undefined ? 0.06 : send) + 0.55 * d, (level === undefined ? 1 : level) * (1 - 0.72 * d));
+    if (d < 0.03) return g;
+    const lp = filt("lowpass", 15000 * Math.pow(0.055, d), 0.5);
+    lp.connect(g);
+    return lp;
+  }
+
+  const CLANG = [1, 1.51, 2.13, 2.87, 3.76, 5.14];
+  /** Struck metal: a cluster of inharmonic partials, the high ones dying first. */
+  function clang(dest, t, f, peak, tc, n) {
+    let tEnd = t;
+    const m = n || 5;
+    for (let i = 0; i < m; i++) {
+      const fi = f * CLANG[i] * rnd(0.985, 1.015);
+      if (fi > 11000) break;
+      const g = ctx.createGain();
+      const e = env(g.gain, t, 0.002, peak / (1 + i * 0.7), tc / (1 + i * 0.55));
+      const o = osc(i % 2 ? "triangle" : "sine", fi, t, e);
+      o.connect(g);
+      g.connect(dest);
+      if (e > tEnd) tEnd = e;
+    }
+    return tEnd;
+  }
+
+  /** Struck wood: a pitched body, one high partial and a click. */
+  function knock(dest, t, f, peak, tc) {
+    thump(dest, t, f * 2.62, f * 2.5, 0.03, 0.003, peak * 0.3, tc * 0.5);
+    burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 1.4, f0: Math.min(9000, f * 3.4), attack: 0.002, peak: peak * 0.7, tc: 0.012 });
+    return thump(dest, t, f * 1.22, f, 0.03, 0.003, peak, tc);
+  }
+
+  /** A dry little tick. */
+  function tick(dest, t, f, peak, tc) {
+    return burst(dest, t, { buf: whiteBuf, type: "bandpass", q: 3, f0: f, attack: 0.0015, peak, tc: tc || 0.005 });
+  }
+
+  /** Raspy animal / engine voice: saw through one formant, fluttered at amHz. */
+  function rasp(dest, t, f0, f1, form, q, amHz, dur, peak, rise) {
+    const g = ctx.createGain();
+    const tEnd = swell(g.gain, t, rise || Math.min(0.05, dur * 0.3), peak, t + dur * 0.8, Math.max(0.015, dur * 0.1));
+    const o = osc("sawtooth", f0, t, tEnd);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const bp = filt("bandpass", form, q);
+    const tr = mkGain(0.55);
+    const l = osc("sine", amHz, t, tEnd);
+    const lg = mkGain(0.45);
+    l.connect(lg);
+    lg.connect(tr.gain);
+    o.connect(bp);
+    bp.connect(tr);
+    tr.connect(g);
+    g.connect(dest);
+    return tEnd;
+  }
+
+  /** Low-passed noise with a rolling, bumpy level (thunder, debris, dust). */
+  function rumble(dest, t, dur, cut, peak, bumps, rate, buf) {
+    const src = noise(buf || pinkBuf, t, t + dur + 0.05, rate || 0.6);
+    const lp = filt("lowpass", cut, 0.6);
+    const g = mkGain(0);
+    g.gain.setValueCurveAtTime(rustleCurve(peak, bumps), t, dur);
+    src.connect(lp);
+    lp.connect(g);
+    g.connect(dest);
+    return t + dur + 0.06;
+  }
+
+  /** Rolling filtered-noise rattle with a spiky level (chains, pebbles, mesh). */
+  function rattle(dest, t, dur, f, q, peak, density) {
+    const src = noise(whiteBuf, t, t + dur + 0.02, rnd(0.9, 1.2));
+    const bp = filt("bandpass", f, q);
+    const g = mkGain(0);
+    g.gain.setValueCurveAtTime(crackleCurve(peak, density, false), t, dur);
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(dest);
+    return t + dur + 0.03;
+  }
+
+  // ---- steps (new surfaces) -------------------------------------------------------
+
+  const EXT_STEP = { dirt: 1, leaves: 1, mud: 1, metal: 1, canvas: 1, concrete: 1, cushion: 1 };
+
+  function stepExt(surface, strength = 0.6, pan = 0) {
+    if (surface === "cushion") { cushionStep(clamp(num(strength, 0.6), 0.05, 1.3) * 0.6, pan); return; }
+    if (!ready()) return;
+    const now = ctx.currentTime;
+    if (now - lastWStepT < 0.02) return;
+    lastWStepT = now;
+    const s = clamp(num(strength, 0.6), 0.05, 1.3);
+    const v = 0.3 + 0.7 * Math.min(s, 1);
+    const dest = wOut(clamp(num(pan, 0), -1, 1) * 0.6 + rnd(-0.05, 0.05), 0.04);
+    one(dest, (t, keep) => {
+      if (surface === "dirt") {
+        // packed earth: a dull pat, a short puff and a few grains turning under the paw
+        keep(thump(dest, t, rnd(88, 108), 50, 0.07, 0.007, 0.32 * v, 0.04));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "lowpass", q: 0.5, hp: 160, rate: rnd(0.9, 1.2),
+          f0: rnd(1400, 2000), f1: rnd(380, 520), sweep: 0.07, attack: 0.006, peak: 0.36 * v, tc: 0.03,
+        }));
+        keep(crackle(dest, t + 0.012, rnd(0.07, 0.12), 2600, 0.035 * v, 0.2, false));
+      } else if (surface === "leaves") {
+        // leaf litter: a soft give, then dry crisp crunching on top
+        keep(thump(dest, t, rnd(84, 100), 52, 0.07, 0.01, 0.16 * v, 0.04));
+        keep(fabricRustle(dest, t, rnd(0.11, 0.17), rnd(3400, 5200), 0.9, 0.1 * v, irnd(3, 5)));
+        keep(fabricRustle(dest, t + rnd(0.02, 0.05), rnd(0.08, 0.13), rnd(5200, 7200), 1.2, 0.05 * v, 3));
+        keep(crackle(dest, t + 0.006, rnd(0.09, 0.15), 3600, 0.06 * v, 0.28, false));
+        if (Math.random() < 0.3) keep(tick(dest, t + rnd(0.02, 0.06), rnd(1800, 2600), 0.05 * v, 0.008)); // a twig
+      } else if (surface === "mud") {
+        // wet squelch: the paw sinks, the mud lets go with a little suck
+        keep(thump(dest, t, rnd(76, 92), 44, 0.09, 0.012, 0.3 * v, 0.05));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "lowpass", q: 1.6, rate: rnd(0.7, 0.9),
+          f0: rnd(820, 1100), f1: rnd(210, 280), sweep: 0.12, attack: 0.018, peak: 0.42 * v, tc: 0.05,
+        }));
+        keep(thump(dest, t + rnd(0.07, 0.1), rnd(130, 160), rnd(250, 320), 0.07, 0.02, 0.1 * v, 0.03));
+        bloops(dest, t + 0.03, irnd(2, 3), 240, 620, 0.1, 0.07 * v, keep);
+      } else if (surface === "metal") {
+        // deck plate: padded paw on thin steel, a short hollow ring and a claw tick
+        keep(thump(dest, t, rnd(170, 200), 110, 0.04, 0.004, 0.22 * v, 0.03));
+        keep(clang(dest, t, rnd(540, 700), 0.07 * v, rnd(0.05, 0.09), 4));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "bandpass", q: 2.2, f0: rnd(1100, 1500), attack: 0.003, peak: 0.16 * v, tc: 0.02,
+        }));
+        if (Math.random() < 0.6) keep(tick(dest, t + rnd(0.006, 0.02), rnd(3800, 5200), 0.045 * v));
+      } else if (surface === "canvas") {
+        // taut tent cloth over boards: a small drum-like "bup" and a cloth rub
+        const f = rnd(138, 160);
+        keep(thump(dest, t, f, f * 0.66, 0.06, 0.006, 0.32 * v, 0.05));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "bandpass", q: 0.9, f0: rnd(480, 640), f1: 320, sweep: 0.06,
+          attack: 0.005, peak: 0.2 * v, tc: 0.03,
+        }));
+        keep(fabricRustle(dest, t + 0.005, rnd(0.08, 0.13), rnd(2200, 3200), 1.1, 0.05 * v, 3));
+      } else {
+        // concrete: tight, dry, bright slap with a pinch of grit
+        keep(thump(dest, t, rnd(180, 215), 112, 0.035, 0.003, 0.24 * v, 0.02));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "bandpass", q: 1.2, f0: rnd(2000, 2700), f1: 1200, sweep: 0.025,
+          attack: 0.002, peak: 0.3 * v, tc: 0.011,
+        }));
+        keep(crackle(dest, t + 0.01, 0.06, 4200, 0.02 * v, 0.2, false));
+        if (Math.random() < 0.5) keep(tick(dest, t + rnd(0.008, 0.02), rnd(3400, 4600), 0.04 * v));
+      }
+    });
+  }
+
+  // ---- UI -------------------------------------------------------------------------
+
+  function checkpoint() {
+    if (!ready() || !gate("cp", 0.2)) return;
+    const dest = out(0, 0.35);
+    one(dest, (t, keep) => {
+      // two warm rising notes (D -> A) on a felt bell, with a soft pad breathing under them
+      keep(pad(dest, t, [midi(50), midi(57), midi(62)], 0.7, 0.05, 0.2, 0.3, 1500));
+      keep(pluck(dest, t, midi(62), 0.13, 0.5, 0.25));
+      keep(bell(dest, t, midi(74), 0.03, 0.3));
+      keep(pluck(dest, t + 0.17, midi(69), 0.14, 0.9, 0.25));
+      keep(bell(dest, t + 0.17, midi(81), 0.035, 0.6));
+    });
+  }
+
+  function denied() {
+    if (!ready() || !gate("den", 0.12)) return;
+    const dest = out(0, 0.1);
+    one(dest, (t, keep) => {
+      // "nuh-uh": two soft low reedy notes, the second lower
+      const lp = filt("lowpass", 900, 0.7);
+      lp.connect(dest);
+      keep(tone(lp, t, "square", 196, 190, 0.07, 0.09, 0.008, 0.02));
+      keep(tone(lp, t + 0.11, "square", 155.6, 148, 0.11, 0.09, 0.008, 0.03));
+      keep(thump(dest, t, 120, 70, 0.05, 0.004, 0.14, 0.03));
+    });
+  }
+
+  function armyUp(n = 1) {
+    if (!ready() || !gate("armyUp", 0.03)) return;
+    const k = Math.max(0, (num(n, 1) | 0) - 1);
+    const f = midi(74 + PENTA[k % 5] + 12 * Math.min(2, (k / 5) | 0)); // climbs a D pentatonic, capped two octaves up
+    const dest = out(rnd(-0.25, 0.25), 0.3);
+    one(dest, (t, keep) => {
+      keep(chirp(dest, t, f * 0.8, f, 0.05, 0.07));
+      keep(pluck(dest, t + 0.03, f, 0.13, 0.22, 0.4));
+      keep(bell(dest, t + 0.03, f * 2, 0.035, 0.16));
+      if (k % 5 === 4) keep(bell(dest, t + 0.1, f * 3, 0.02, 0.3)); // a little glint at the top of each octave
+    });
+  }
+
+  function armyDown() {
+    if (!ready() || !gate("armyDown", 0.08)) return;
+    const dest = out(rnd(-0.2, 0.2), 0.4);
+    one(dest, (t, keep) => {
+      // one soft falling note; gentle, a small sigh rather than a sting
+      keep(tone(dest, t, "sine", 587.33, 392, 0.45, 0.09, 0.03, 0.16));
+      keep(tone(dest, t, "triangle", 1174.66, 784, 0.4, 0.012, 0.03, 0.1));
+      keep(pad(dest, t, [196, 293.66], 0.5, 0.025, 0.2, 0.3, 700));
+    });
+  }
+
+  function gearOn(kind = "leaf") {
+    if (!ready() || !gate("gear", 0.1)) return;
+    const dest = out(0, 0.2);
+    one(dest, (t, keep) => {
+      if (kind === "suit") {
+        // heavy cloth pulled on, a zip, two clasps
+        keep(fabricRustle(dest, t, 0.3, 1800, 0.8, 0.13, 5));
+        keep(thump(dest, t + 0.04, 120, 60, 0.08, 0.008, 0.26, 0.05));
+        keep(whoosh(dest, t + 0.25, 1800, 5200, 6000, 0.22, 0.04, 0.09, 5, whiteBuf));
+        keep(rattle(dest, t + 0.25, 0.22, 4200, 4, 0.06, 0.6));
+        keep(knock(dest, t + 0.56, 420, 0.16, 0.02));
+        keep(clang(dest, t + 0.56, 1900, 0.03, 0.04, 3));
+        keep(knock(dest, t + 0.7, 480, 0.16, 0.02));
+        keep(pluck(dest, t + 0.72, midi(62), 0.07, 0.5, 0.2));
+      } else if (kind === "glasses") {
+        // hinges, a tiny settle on the bill, a glint
+        keep(tick(dest, t, 4200, 0.09));
+        keep(tick(dest, t + 0.07, 5200, 0.07));
+        keep(thump(dest, t + 0.16, 620, 420, 0.03, 0.003, 0.08, 0.02));
+        keep(bell(dest, t + 0.2, midi(93), 0.05, 0.3));
+        keep(bell(dest, t + 0.28, midi(98), 0.035, 0.5));
+      } else if (kind === "weapon") {
+        // lifted, racked, locked: clack - clack - thunk
+        keep(fabricRustle(dest, t, 0.12, 2400, 1, 0.05, 2));
+        keep(knock(dest, t + 0.1, 360, 0.22, 0.018));
+        keep(clang(dest, t + 0.1, 1250, 0.05, 0.03, 4));
+        keep(whoosh(dest, t + 0.2, 900, 2600, 1600, 0.06, 0.05, 0.07, 3, whiteBuf));
+        keep(knock(dest, t + 0.3, 300, 0.26, 0.02));
+        keep(clang(dest, t + 0.3, 980, 0.07, 0.05, 4));
+        keep(thump(dest, t + 0.46, 150, 70, 0.07, 0.005, 0.34, 0.05));
+        keep(clang(dest, t + 0.46, 620, 0.04, 0.09, 3));
+      } else {
+        // leaf armour: dry leaves settling, a vine pulled snug, a woody toggle, a warm note
+        keep(fabricRustle(dest, t, 0.28, 4200, 0.9, 0.12, 5));
+        keep(fabricRustle(dest, t + 0.12, 0.2, 6000, 1.2, 0.06, 4));
+        keep(creak(dest, t + 0.26, 420, 0.16, 0.035));
+        keep(knock(dest, t + 0.46, 520, 0.18, 0.022));
+        keep(pluck(dest, t + 0.48, midi(69), 0.08, 0.5, 0.25));
+        keep(pluck(dest, t + 0.58, midi(74), 0.07, 0.6, 0.25));
+      }
+    });
+  }
+
+  function visorOn() {
+    if (!ready() || !gate("visor", 0.2)) return;
+    const dest = out(0, 0.18);
+    one(dest, (t, keep) => {
+      // a little power-up sweep, then a tick and two soft "ready" blips
+      keep(tick(dest, t, 3600, 0.1));
+      keep(tone(dest, t + 0.02, "sine", 280, 2500, 0.34, 0.07, 0.05, 0.03));
+      keep(tone(dest, t + 0.02, "triangle", 560, 5000, 0.34, 0.012, 0.05, 0.03));
+      keep(whoosh(dest, t + 0.02, 700, 5200, 6000, 0.32, 0.05, 0.05, 4, whiteBuf));
+      keep(crackle(dest, t + 0.05, 0.3, 5200, 0.02, 0.2, true));
+      keep(tick(dest, t + 0.4, 5200, 0.12));
+      keep(tone(dest, t + 0.46, "sine", 1760, 1760, 0.04, 0.06, 0.006, 0.03));
+      keep(tone(dest, t + 0.56, "sine", 2349.3, 2349.3, 0.05, 0.06, 0.006, 0.07));
+    });
+  }
+
+  // ---- guns -----------------------------------------------------------------------
+
+  function gunshot(dist = 0, pan = 0, kind = "rifle") {
+    if (!ready()) return;
+    const blaster = kind === "blaster";
+    if (!gate(blaster ? "blaster" : "shot", 0.04)) return;
+    const d = clamp(num(dist, 0), 0, 1);
+    const p = clamp(num(pan, 0), -1, 1);
+    if (blaster) {
+      // the player's launcher: a round, punchy "thoomp" out of a tube. Friendly on purpose.
+      const dest = wd(p, d, 0.1, 0.9);
+      one(dest, (t, keep) => {
+        const f = rnd(205, 230);
+        keep(thump(dest, t, f, 64, 0.11, 0.004, 0.75, 0.07));
+        keep(thump(dest, t, f * 2, 150, 0.06, 0.003, 0.22, 0.03));
+        // air popping out of the barrel + the hollow tube ringing once
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "lowpass", q: 0.7, f0: 2400, f1: 420, sweep: 0.07, attack: 0.003, peak: 0.5, tc: 0.03,
+        }));
+        keep(burst(dest, t + 0.005, {
+          buf: pinkBuf, type: "bandpass", q: 7, f0: rnd(300, 340), attack: 0.004, peak: 0.5, tc: 0.07,
+        }));
+        // the round leaving: a tiny upward "fwip"
+        keep(tone(dest, t + 0.02, "sine", 620, 1500, 0.07, 0.05, 0.01, 0.025));
+        keep(whoosh(dest, t + 0.02, 900, 2600, 1500, 0.05, 0.1, 0.07, 2, whiteBuf));
+        keep(tick(dest, t + 0.09, 2600, 0.04)); // the spring settling
+      });
+      return;
+    }
+    const pistol = kind === "pistol";
+    const near = (1 - d) * (1 - d);
+    const k = (pistol ? 1.45 : 1) * rnd(0.94, 1.06);
+    const lvl = pistol ? 0.8 : 1;
+    const dest = wd(p, d, 0.12, lvl);
+    one(dest, (t, keep) => {
+      if (near > 0.02) {
+        // CRACK: the supersonic snap, a few milliseconds of everything
+        keep(burst(dest, t, {
+          buf: whiteBuf, type: "highpass", q: 0.6, f0: 1600 * k, attack: 0.001, peak: 0.9 * near, tc: 0.012,
+        }));
+        keep(burst(dest, t, {
+          buf: whiteBuf, type: "bandpass", q: 0.8, f0: 3400 * k, f1: 900 * k, sweep: 0.04,
+          attack: 0.001, peak: 0.6 * near, tc: 0.022,
+        }));
+        // slap-back off the nearest wall
+        keep(burst(dest, t + rnd(0.085, 0.13), {
+          buf: pinkBuf, type: "bandpass", q: 0.7, f0: 1500 * k, f1: 600, sweep: 0.06,
+          attack: 0.004, peak: 0.24 * near, tc: 0.04,
+        }));
+      }
+      // the body: chest thump + the bark of the muzzle blast
+      keep(thump(dest, t, 190 * k, 48, 0.06, 0.002, (pistol ? 0.5 : 0.8) * (0.35 + 0.65 * near), pistol ? 0.04 : 0.06));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.8, f0: 2600 * k * (1 - 0.6 * d), f1: 300, sweep: 0.09,
+        attack: 0.002, peak: 0.75 * (0.3 + 0.7 * near), tc: pistol ? 0.035 : 0.055,
+      }));
+      // the tail rolling away; the further the shot, the more of the sound is tail
+      keep(burst(dest, t + 0.02 + d * 0.05, {
+        buf: pinkBuf, type: "lowpass", q: 0.5, rate: 0.7, f0: 1300 - 800 * d, f1: 180, sweep: 0.5 + d * 0.5,
+        attack: 0.02 + 0.05 * d, peak: 0.2 + 0.3 * d, tc: 0.16 + 0.36 * d,
+      }));
+      if (d > 0.4) keep(thump(dest, t, 110, 52, 0.12, 0.01, 0.5 * d, 0.1)); // far: just a dull pop
+      if (!pistol && near > 0.3) keep(clang(dest, t + 0.03, rnd(1700, 2300), 0.012 * near, 0.03, 3)); // action cycling
+    });
+  }
+
+  function bulletWhiz(pan = 0) {
+    if (!ready() || !gate("whiz", 0.04)) return;
+    const t = ctx.currentTime + 0.004;
+    const p0 = clamp(num(pan, 0), -1, 1) || (Math.random() < 0.5 ? -0.7 : 0.7);
+    const g = mkGain(1);
+    let last = g;
+    if (ctx.createStereoPanner) {
+      // passes the head: starts on its side, ends on the other
+      const pn = ctx.createStereoPanner();
+      pn.pan.setValueAtTime(clamp(p0, -1, 1), t);
+      pn.pan.linearRampToValueAtTime(clamp(-p0 * 0.8, -1, 1), t + 0.16);
+      g.connect(pn);
+      last = pn;
+    }
+    last.connect(wBus);
+    const k = rnd(0.85, 1.2);
+    let tEnd = burst(g, t, {
+      buf: whiteBuf, type: "bandpass", q: 7, f0: 5200 * k, f1: 1100 * k, sweep: 0.13,
+      attack: 0.03, peak: 0.5, tc: 0.03,
+    });
+    tEnd = Math.max(tEnd, tone(g, t, "sine", 2900 * k, 800 * k, 0.14, 0.05, 0.03, 0.025));
+    tEnd = Math.max(tEnd, burst(g, t + 0.02, {
+      buf: pinkBuf, type: "bandpass", q: 1.5, f0: 900, f1: 380, sweep: 0.12, attack: 0.03, peak: 0.16, tc: 0.03,
+    }));
+    release(g, tEnd + 0.15);
+  }
+
+  function ricochet(pan = 0) {
+    if (!ready() || !gate("rico", 0.03)) return;
+    const dest = wd(clamp(num(pan, 0), -1, 1) + rnd(-0.1, 0.1), 0, 0.3);
+    one(dest, (t, keep) => {
+      const f = rnd(2600, 4200);
+      keep(tick(dest, t, rnd(3000, 5000), 0.3, 0.006));
+      keep(thump(dest, t, 300, 120, 0.03, 0.002, 0.2, 0.015));
+      // "p-teeeww": a tumbling whine sliding away, with a warble
+      const g = ctx.createGain();
+      const e = env(g.gain, t + 0.008, 0.006, 0.085, rnd(0.09, 0.16));
+      const o = osc("sine", f, t + 0.008, e);
+      o.frequency.exponentialRampToValueAtTime(f * rnd(0.28, 0.42), t + rnd(0.3, 0.5));
+      const v = osc("sine", rnd(28, 46), t + 0.008, e);
+      const vg = mkGain(f * 0.05);
+      v.connect(vg);
+      vg.connect(o.frequency);
+      o.connect(g);
+      g.connect(dest);
+      keep(e);
+      keep(clang(dest, t, rnd(1500, 2400), 0.03, 0.05, 3));
+    });
+  }
+
+  function bulletHit(surface = "dirt", pan = 0) {
+    if (!ready() || !gate("bhit", 0.03)) return;
+    const dest = wd(clamp(num(pan, 0), -1, 1) + rnd(-0.08, 0.08), 0, 0.12);
+    one(dest, (t, keep) => {
+      if (surface === "metal") {
+        keep(tick(dest, t, 4200, 0.3));
+        keep(clang(dest, t, rnd(900, 1500), 0.14, rnd(0.09, 0.16), 5));
+        keep(thump(dest, t, 240, 120, 0.03, 0.002, 0.2, 0.02));
+        keep(crackle(dest, t, 0.12, 5000, 0.06, 0.3, false)); // sparks
+      } else if (surface === "wood") {
+        keep(knock(dest, t, rnd(240, 320), 0.34, 0.03));
+        keep(crackle(dest, t + 0.005, 0.16, 2400, 0.1, 0.3, false)); // splinters
+        keep(tick(dest, t + rnd(0.05, 0.1), rnd(2200, 3000), 0.05, 0.008));
+      } else if (surface === "concrete") {
+        keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.6, f0: 2400, attack: 0.001, peak: 0.36, tc: 0.012 }));
+        keep(thump(dest, t, 260, 110, 0.03, 0.002, 0.26, 0.02));
+        keep(crackle(dest, t + 0.01, 0.3, 3200, 0.08, 0.22, false)); // chips falling
+        keep(burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 0.8, f0: 1200, attack: 0.004, peak: 0.16, tc: 0.05 }));
+      } else if (surface === "leaves") {
+        keep(tick(dest, t, 3200, 0.12));
+        keep(fabricRustle(dest, t, 0.2, rnd(3800, 5600), 1, 0.14, 4));
+        keep(fabricRustle(dest, t + 0.08, 0.22, rnd(5000, 7000), 1.2, 0.05, 3));
+      } else {
+        // dirt: a thud and a spit of earth
+        keep(thump(dest, t, rnd(130, 160), 52, 0.05, 0.003, 0.36, 0.035));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "lowpass", q: 0.6, f0: 2400, f1: 500, sweep: 0.06, attack: 0.003, peak: 0.4, tc: 0.03,
+        }));
+        keep(crackle(dest, t + 0.02, 0.2, 2600, 0.05, 0.2, false));
+      }
+    });
+  }
+
+  function emptyClick() {
+    if (!ready() || !gate("empty", 0.08)) return;
+    const dest = out(0, 0.05);
+    one(dest, (t, keep) => {
+      // a dry spring and a hollow "tk" - nothing in the tube
+      keep(tick(dest, t, 2600, 0.16));
+      keep(knock(dest, t, 420, 0.12, 0.012));
+      keep(tick(dest, t + 0.07, 1800, 0.12, 0.008));
+      keep(thump(dest, t + 0.07, 300, 210, 0.03, 0.003, 0.09, 0.02));
+      keep(tone(dest, t + 0.075, "sine", 660, 640, 0.03, 0.012, 0.004, 0.04)); // the empty tube
+    });
+  }
+
+  function aimWarn(pan = 0) {
+    if (!ready() || !gate("aim", 0.09)) return;
+    const dest = wd(clamp(num(pan, 0), -1, 1) * 0.8, 0, 0.12);
+    one(dest, (t, keep) => {
+      // short, thin, rising two-tone: "being aimed at". Reads over gunfire, never harsh.
+      const bp = filt("bandpass", 1500, 1.4);
+      bp.connect(dest);
+      keep(tone(bp, t, "square", 987.8, 987.8, 0.06, 0.1, 0.005, 0.012));
+      keep(tone(bp, t + 0.09, "square", 1318.5, 1396.9, 0.1, 0.11, 0.005, 0.03));
+      keep(tone(dest, t + 0.09, "sine", 2637, 2794, 0.09, 0.02, 0.005, 0.04));
+    });
+  }
+
+  function shotDown() {
+    if (!ctx || !duck || ctx.state === "closed") return;
+    const t = ctx.currentTime + 0.004;
+    // every world sound falls away within a quarter of a second. Released by stopAll() / sadTheme(true);
+    // as a safety net the world also comes back by itself, slowly, long after the ring is gone.
+    duck.gain.cancelScheduledValues(t);
+    duck.gain.setValueAtTime(duck.gain.value, t);
+    duck.gain.linearRampToValueAtTime(0, t + 0.25);
+    duck.gain.setValueAtTime(0, t + 8);
+    duck.gain.linearRampToValueAtTime(1, t + 10.5);
+    setLoop("screamCharge", 0, buildScreamCharge, 0.3);
+    if (!ready()) return;
+    const dest = outTo(storyBus, storyVerb, 0, 0.3);
+    afterG = dest;
+    let tEnd = t;
+    const keep = (e) => { if (e > tEnd) tEnd = e; };
+    // ONE enormous close shot: crack, chest thump, a wall of air - and it is already over
+    keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.6, f0: 1200, attack: 0.001, peak: 1.5, tc: 0.016 }));
+    keep(burst(dest, t, {
+      buf: whiteBuf, type: "bandpass", q: 0.7, f0: 3200, f1: 500, sweep: 0.08, attack: 0.001, peak: 1.1, tc: 0.04,
+    }));
+    keep(thump(dest, t, 170, 30, 0.22, 0.002, 1.5, 0.1));
+    keep(thump(dest, t, 340, 70, 0.08, 0.002, 0.6, 0.04));
+    keep(burst(dest, t, {
+      buf: pinkBuf, type: "lowpass", q: 0.7, f0: 3000, f1: 110, sweep: 0.35, attack: 0.002, peak: 1.2, tc: 0.09,
+    }));
+    // the high ring that is left: two close tones beating slowly, fading for four seconds
+    const ring = ctx.createGain();
+    ring.gain.setValueAtTime(0, t);
+    ring.gain.linearRampToValueAtTime(0.05, t + 0.2);
+    ring.gain.setTargetAtTime(0, t + 0.3, 0.85);
+    const a = osc("sine", 3951, t, t + 4.6);
+    const b = osc("sine", 3958.5, t, t + 4.6);
+    const c = osc("sine", 7902, t, t + 4.6);
+    const cg = mkGain(0.12);
+    a.connect(ring);
+    b.connect(ring);
+    c.connect(cg);
+    cg.connect(ring);
+    ring.connect(dest);
+    keep(t + 4.7);
+    // one heavy, muffled heartbeat under it
+    const lp = filt("lowpass", 120, 0.7);
+    lp.connect(dest);
+    for (let i = 0; i < 3; i++) {
+      const tb = t + 0.7 + i * 1.15;
+      const pk = 0.7 - i * 0.2;
+      keep(thump(lp, tb, 62, 38, 0.1, 0.014, pk, 0.08));
+      keep(thump(lp, tb + 0.27, 54, 34, 0.1, 0.014, pk * 0.7, 0.09));
+    }
+    release(dest, tEnd + 0.3);
+  }
+
+  // ---- people (stylised gibberish: vowels only, never words, never cruel) -----------
+
+  /** One spoken syllable with a soft consonant edge. */
+  function syl(dest, t, f0, f1, dur, peak, vowel, hard) {
+    if (hard) {
+      burst(dest, t - 0.012, {
+        buf: whiteBuf, type: "bandpass", q: 1.2, f0: rnd(1800, 3200), attack: 0.004, peak: peak * 0.16, tc: 0.012,
+      });
+    }
+    return vox(dest, t, f0, f1, dur, peak, vowel || pick(VOWELS), rnd(4.5, 6), 0.012);
+  }
+
+  function guardVoice(kind = "huh", pan = 0, dist = 0) {
+    if (!ready() || !gate("gv", 0.06)) return;
+    const radio = kind === "radio";
+    const k = rnd(0.86, 1.18); // every guard has his own pitch
+    const world = wd(clamp(num(pan, 0), -1, 1) * 0.85, dist, 0.14, radio ? 0.75 : 1);
+    let dest = world;
+    if (radio) {
+      // a small speaker: narrow band, a little squelch at each end
+      const bp = filt("bandpass", 1900, 1.3);
+      const hp = filt("highpass", 700, 0.7);
+      bp.connect(hp);
+      hp.connect(world);
+      dest = bp;
+    }
+    const A = VOWELS[0], O = VOWELS[1], U = VOWELS[2], E = VOWELS[3], SCH = VOWELS[4], AW = VOWELS[5];
+    const t = ctx.currentTime + 0.016;
+    let tEnd = t;
+    const keep = (e) => { if (e > tEnd) tEnd = e; return e; };
+    if (kind === "hey") {
+      keep(syl(dest, t, 205 * k, 150 * k, 0.26, 0.75, E, true));
+      keep(syl(dest, t, 410 * k, 300 * k, 0.2, 0.1, A));
+    } else if (kind === "alert") {
+      keep(syl(dest, t, 170 * k, 190 * k, 0.11, 0.6, E, true));
+      keep(syl(dest, t + 0.15, 190 * k, 215 * k, 0.11, 0.65, A, true));
+      keep(syl(dest, t + 0.3, 240 * k, 170 * k, 0.32, 0.8, A, true));
+    } else if (kind === "search") {
+      // muttering to himself, low and slow
+      const fs = [118, 108, 124, 100];
+      for (let i = 0; i < 4; i++) {
+        keep(syl(dest, t + i * rnd(0.2, 0.26), fs[i] * k, fs[i] * k * rnd(0.92, 1.05), rnd(0.12, 0.17), 0.3, pick([U, SCH, O])));
+      }
+    } else if (kind === "lost") {
+      // "aaah... meh." a shrug you can hear
+      keep(syl(dest, t, 150 * k, 128 * k, 0.3, 0.42, A));
+      keep(syl(dest, t + 0.42, 122 * k, 98 * k, 0.24, 0.36, SCH));
+      keep(burst(dest, t + 0.62, {
+        buf: pinkBuf, type: "bandpass", q: 0.8, f0: 1300, f1: 700, sweep: 0.3, attack: 0.08, peak: 0.05, tc: 0.1,
+      }));
+    } else if (kind === "hurt") {
+      // comic "oof!"
+      keep(thump(dest, t, 150, 60, 0.06, 0.004, 0.3, 0.04));
+      keep(syl(dest, t + 0.02, 185 * k, 105 * k, 0.2, 0.7, O));
+    } else if (kind === "down") {
+      // "ooouuugh...": a long deflating groan, then a sigh. He is having a nap.
+      const g = ctx.createGain();
+      g.connect(dest);
+      keep(vox(g, t, 172 * k, 74 * k, 0.75, 0.6, O, 7, 0.03));
+      keep(vox(g, t + 0.05, 344 * k, 150 * k, 0.6, 0.08, U, 7, 0.03));
+      keep(burst(dest, t + 0.6, {
+        buf: pinkBuf, type: "bandpass", q: 0.7, f0: 1200, f1: 500, sweep: 0.5, attack: 0.15, peak: 0.07, tc: 0.16,
+      }));
+    } else if (radio) {
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1500, attack: 0.004, peak: 0.3, tc: 0.03 }));
+      keep(tone(dest, t + 0.02, "square", 1320, 1320, 0.05, 0.1, 0.004, 0.01));
+      let tt = t + 0.16;
+      const n = irnd(5, 7);
+      for (let i = 0; i < n; i++) {
+        const f = rnd(125, 175) * k;
+        const dur = rnd(0.07, 0.13);
+        keep(syl(dest, tt, f, f * rnd(0.88, 1.12), dur, 0.8, pick(VOWELS), Math.random() < 0.5));
+        tt += dur + rnd(0.03, 0.09);
+      }
+      keep(crackle(dest, t + 0.1, tt - t, 2200, 0.05, 0.2, false));
+      keep(burst(dest, tt + 0.03, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1500, attack: 0.004, peak: 0.34, tc: 0.045 }));
+    } else if (kind === "laugh") {
+      const n = irnd(4, 6);
+      for (let i = 0; i < n; i++) {
+        const f = (210 - i * 16) * k;
+        keep(syl(dest, t + i * 0.13, f, f * 0.84, 0.075, 0.5 - i * 0.04, i % 2 ? A : AW, true));
+      }
+    } else if (kind === "yawn") {
+      const g = ctx.createGain();
+      g.connect(dest);
+      keep(vox(g, t, 120 * k, 215 * k, 0.55, 0.4, A, 0, 0));
+      keep(vox(g, t + 0.5, 215 * k, 100 * k, 0.8, 0.42, AW, 5, 0.02));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "bandpass", q: 0.8, f0: 700, f1: 1500, sweep: 0.5, attack: 0.3, peak: 0.05, tc: 0.12,
+      }));
+      keep(syl(dest, t + 1.42, 112 * k, 104 * k, 0.12, 0.2, U));
+    } else if (kind === "order") {
+      // three barked syllables: firm, level, the last one drops
+      keep(syl(dest, t, 165 * k, 168 * k, 0.1, 0.65, A, true));
+      keep(syl(dest, t + 0.16, 168 * k, 170 * k, 0.1, 0.65, E, true));
+      keep(syl(dest, t + 0.32, 172 * k, 122 * k, 0.2, 0.75, O, true));
+    } else {
+      // "huh?"
+      keep(syl(dest, t, 128 * k, 196 * k, 0.24, 0.5, SCH));
+    }
+    release(dest, tEnd + 0.15);
+  }
+
+  function punch() {
+    if (!ready() || !gate("punch", 0.03)) return;
+    const dest = wOut(rnd(-0.15, 0.15), 0.08);
+    one(dest, (t, keep) => {
+      // short swish, then a padded, cartoon "bap"
+      keep(whoosh(dest, t, 700, 2400, 1200, 0.035, 0.03, 0.14, 2, whiteBuf));
+      const th = t + 0.035;
+      keep(thump(dest, th, rnd(170, 200), 58, 0.07, 0.003, 0.6, 0.05));
+      keep(burst(dest, th, {
+        buf: pinkBuf, type: "bandpass", q: 0.8, f0: rnd(1200, 1600), f1: 500, sweep: 0.05, attack: 0.002, peak: 0.6, tc: 0.025,
+      }));
+      keep(burst(dest, th, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 3000, attack: 0.001, peak: 0.14, tc: 0.008 }));
+      keep(fabricRustle(dest, th + 0.01, 0.1, 2600, 1, 0.05, 2));
+    });
+  }
+
+  function bodyFall(surface = "dirt") {
+    if (!ready() || !gate("bfall", 0.03)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.1);
+    one(dest, (t, keep) => {
+      // knees, then the rest: two soft heavy thuds and a rustle of uniform
+      keep(thump(dest, t, 120, 46, 0.09, 0.006, 0.4, 0.06));
+      const tb = t + rnd(0.13, 0.18);
+      keep(thump(dest, tb, 96, 34, 0.14, 0.006, 0.7, 0.1));
+      keep(burst(dest, tb, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, f0: 1500, f1: 260, sweep: 0.12, attack: 0.005, peak: 0.5, tc: 0.06,
+      }));
+      keep(fabricRustle(dest, t + 0.02, 0.3, 2100, 0.9, 0.09, 5));
+      if (surface === "metal") {
+        keep(clang(dest, tb, rnd(300, 420), 0.16, 0.25, 5));
+        keep(rattle(dest, tb + 0.05, 0.3, 2600, 3, 0.05, 0.3));
+      } else if (surface === "wood") {
+        keep(knock(dest, tb, 150, 0.4, 0.06));
+        keep(creak(dest, tb + 0.08, 240, 0.2, 0.03));
+      } else if (surface === "concrete") {
+        keep(burst(dest, tb, { buf: pinkBuf, type: "bandpass", q: 1, f0: 1900, attack: 0.002, peak: 0.3, tc: 0.016 }));
+        keep(clang(dest, tb + 0.06, 2400, 0.025, 0.05, 3)); // a buckle
+      } else if (surface === "leaves") {
+        keep(fabricRustle(dest, tb, 0.4, 4400, 0.9, 0.16, 6));
+        keep(crackle(dest, tb, 0.3, 3400, 0.07, 0.25, false));
+      } else {
+        keep(burst(dest, tb + 0.02, {
+          buf: pinkBuf, type: "bandpass", q: 0.6, f0: 900, f1: 500, sweep: 0.3, attack: 0.05, peak: 0.12, tc: 0.12,
+        })); // dust
+        keep(crackle(dest, tb + 0.03, 0.25, 2600, 0.04, 0.18, false));
+      }
+    });
+  }
+
+  function buildSiren(L, t, kind) {
+    loopOut(L, wBus, wVerb, 0.45);
+    const far = t + 1e6;
+    if (kind === "circus") {
+      // a hand-cranked siren: a rotor whine that surges with every turn of the handle, and an alarm bell
+      L.scale = 0.5;
+      const a = osc("sawtooth", 520, t, far);
+      const b = osc("square", 523, t, far);
+      const bg = mkGain(0.3);
+      const bp = filt("bandpass", 1100, 1.2);
+      const g = mkGain(0.12);
+      a.connect(bp);
+      b.connect(bg);
+      bg.connect(bp);
+      bp.connect(g);
+      g.connect(L.gain);
+      L.nodes.push(a, b);
+      // the crank: an uneven push-pull (two LFOs that never line up)
+      lfo(L, t, 0.42, 210, a.frequency);
+      lfo(L, t, 0.42, 210, b.frequency);
+      lfo(L, t, 1.31, 28, a.frequency);
+      lfo(L, t, 1.31, 28, b.frequency);
+      lfo(L, t, 0.42, 420, bp.frequency);
+      lfo(L, t, 0.84, 0.035, g.gain);
+      let next = t + 0.1;
+      every(L, 300, (now) => {
+        if (next < now) next = now + 0.05;
+        while (next < now + 0.8) {
+          // the bell: a quick, slightly uneven hammer
+          clang(L.gain, next, 1480 * rnd(0.995, 1.005), rnd(0.04, 0.06), 0.16, 4);
+          tick(L.gain, next, 3200, 0.02);
+          next += rnd(0.105, 0.135);
+        }
+      });
+    } else {
+      // base klaxon: two horn tones, slow, each one swelling and sagging like a big compressor horn
+      L.scale = 0.6;
+      const lp = filt("lowpass", 2400, 0.7);
+      const bp = filt("bandpass", 900, 0.9);
+      const g = mkGain(0);
+      bp.connect(lp);
+      lp.connect(g);
+      g.connect(L.gain);
+      const oscs = [osc("sawtooth", 392, t, far), osc("sawtooth", 393.6, t, far), osc("square", 196, t, far)];
+      const og = [0.5, 0.45, 0.22];
+      for (let i = 0; i < 3; i++) {
+        const x = mkGain(og[i]);
+        oscs[i].connect(x);
+        x.connect(bp);
+        L.nodes.push(oscs[i]);
+      }
+      lfo(L, t, 31, 0.012, g.gain); // the horn's reed buzz
+      let next = t + 0.05;
+      let hi = false;
+      every(L, 300, (now) => {
+        if (next < now) { next = now + 0.05; }
+        while (next < now + 1.2) {
+          hi = !hi;
+          const f = hi ? 440 : 349.2;
+          const mult = [1, 1.004, 0.5];
+          for (let i = 0; i < 3; i++) {
+            oscs[i].frequency.setValueAtTime(f * mult[i] * 0.94, next);
+            oscs[i].frequency.linearRampToValueAtTime(f * mult[i], next + 0.12);
+            oscs[i].frequency.setTargetAtTime(f * mult[i] * 0.97, next + 0.6, 0.12);
+          }
+          g.gain.setTargetAtTime(0.16, next, 0.04);
+          g.gain.setTargetAtTime(0.02, next + 0.7, 0.07);
+          next += 0.95;
+        }
+      });
+    }
+  }
+
+  function siren(on, kind = "base") {
+    setLoop("siren", on ? 1 : 0, buildSiren, 0.5, kind === "circus" ? "circus" : "base");
+  }
+
+  function buildSearchlight(L, t) {
+    loopOut(L, wBus, wVerb, 0.06);
+    L.scale = 0.5;
+    const far = t + 1e6;
+    // a big lamp ballast: mains hum with its harmonics and a fizzing arc on top
+    const hum = mkGain(0.09);
+    const fs = [100, 200.3, 300.5, 400];
+    const as = [1, 0.5, 0.3, 0.12];
+    for (let i = 0; i < fs.length; i++) {
+      const o = osc(i === 2 ? "triangle" : "sine", fs[i], t, far);
+      const x = mkGain(as[i]);
+      o.connect(x);
+      x.connect(hum);
+      L.nodes.push(o);
+    }
+    hum.connect(L.gain);
+    lfo(L, t, 0.17, 0.02, hum.gain);
+    const fizz = bed(L, t, whiteBuf, "bandpass", 3600, 1.4, 0.018, null, 1);
+    lfo(L, t, 100, 0.016, fizz.g.gain);
+    lfo(L, t, 0.23, 600, fizz.f.frequency);
+  }
+
+  function searchlightHum(level) {
+    setLoop("searchlight", level, buildSearchlight, 0.4);
+  }
+
+  function explosion(dist = 0) {
+    if (!ready() || !gate("boom", 0.1)) return;
+    const d = clamp(num(dist, 0), 0, 1);
+    const near = 1 - d;
+    const dest = wd(rnd(-0.1, 0.1), d * 0.8, 0.35, 1.25);
+    one(dest, (t, keep) => {
+      // the crack of the drum bursting (near only), then the "whoomp" of the fuel going up
+      if (near > 0.15) {
+        keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 900, attack: 0.001, peak: 0.9 * near, tc: 0.03 }));
+        keep(crackle(dest, t, 0.4, 1800, 0.3 * near, 0.35, false));
+      }
+      keep(thump(dest, t, 110, 24, 0.7, 0.006, 1.1, 0.34));
+      keep(thump(dest, t, 220, 44, 0.25, 0.005, 0.5, 0.12));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, rate: 0.8, f0: 3200 - 2000 * d, f1: 90, sweep: 0.9,
+        attack: 0.004, peak: 1.0, tc: 0.3,
+      }));
+      // fireball: a rolling, breathing roar that rises and dies
+      keep(rumble(dest, t + 0.05, 2.4, 520, 0.6, 5, 0.5));
+      keep(whoosh(dest, t + 0.08, 300, 1500, 240, 0.35, 1.2, 0.3, 0.7, pinkBuf));
+      // second, softer whump as the next drum goes
+      keep(thump(dest, t + 0.42, 84, 26, 0.5, 0.01, 0.6, 0.25));
+      keep(burst(dest, t + 0.42, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, rate: 0.7, f0: 1400, f1: 100, sweep: 0.6, attack: 0.01, peak: 0.5, tc: 0.25,
+      }));
+      // debris raining down afterwards
+      if (near > 0.2) {
+        keep(crackle(dest, t + 0.5, 1.6, 2400, 0.09 * near, 0.14, false));
+        for (let i = 0; i < 5; i++) {
+          const td = t + rnd(0.7, 2.1);
+          if (Math.random() < 0.5) keep(clang(dest, td, rnd(500, 1400), 0.04 * near, rnd(0.06, 0.14), 4));
+          else keep(thump(dest, td, rnd(120, 200), 70, 0.05, 0.004, 0.14 * near, 0.03));
+        }
+      }
+    });
+  }
+
+  // ---- items ----------------------------------------------------------------------
+
+  function paperRustle() {
+    if (!ready() || !gate("paper", 0.05)) return;
+    const dest = out(rnd(-0.1, 0.1), 0.05);
+    one(dest, (t, keep) => {
+      keep(crackle(dest, t, rnd(0.16, 0.24), 3000, 0.11, 0.4, false));
+      keep(fabricRustle(dest, t, 0.2, rnd(4800, 6400), 0.8, 0.09, 4));
+      keep(fabricRustle(dest, t + 0.03, 0.14, 2400, 0.9, 0.04, 2));
+    });
+  }
+
+  function paperUnfold() {
+    if (!ready() || !gate("paper", 0.05)) return;
+    const dest = out(rnd(-0.1, 0.1), 0.07);
+    one(dest, (t, keep) => {
+      // three folds opening, each a crinkle, and the sheet snapping flat
+      for (let i = 0; i < 3; i++) {
+        const tf = t + i * rnd(0.2, 0.26);
+        keep(crackle(dest, tf, rnd(0.13, 0.19), 2600 + i * 500, 0.1, 0.35, i === 2));
+        keep(fabricRustle(dest, tf, 0.18, rnd(4200, 6000), 0.8, 0.08, 3));
+      }
+      keep(thump(dest, t + 0.68, 260, 140, 0.04, 0.004, 0.1, 0.025));
+      keep(burst(dest, t + 0.68, { buf: whiteBuf, type: "bandpass", q: 0.8, f0: 3200, attack: 0.003, peak: 0.12, tc: 0.02 }));
+    });
+  }
+
+  function armorClank(weight = 0.5) {
+    if (!ready() || !gate("clank", 0.03)) return;
+    const w = clamp(num(weight, 0.5), 0, 1);
+    const dest = wOut(rnd(-0.15, 0.15), 0.14);
+    one(dest, (t, keep) => {
+      const f = 1300 - 850 * w;
+      keep(clang(dest, t, f * rnd(0.94, 1.06), 0.09 + 0.1 * w, 0.06 + 0.22 * w, 5));
+      keep(thump(dest, t, 240 - 110 * w, 80, 0.04, 0.003, 0.16 + 0.3 * w, 0.03 + 0.03 * w));
+      keep(tick(dest, t, 3600, 0.1));
+      if (w > 0.35) keep(clang(dest, t + rnd(0.05, 0.09), f * 1.34, 0.05 * w, 0.1, 4)); // a second plate answering
+      if (w > 0.7) keep(rattle(dest, t + 0.04, 0.25, 2400, 3, 0.05, 0.3));
+    });
+  }
+
+  function leverPull() {
+    if (!ready() || !gate("lever", 0.15)) return;
+    const dest = wOut(0, 0.14);
+    one(dest, (t, keep) => {
+      // ratchet teeth, a groan of the arm, the heavy "ka-chunk" as it seats
+      for (let i = 0; i < 5; i++) {
+        const tk = t + i * (0.055 - i * 0.004);
+        keep(tick(dest, tk, 2400 + i * 160, 0.12));
+        keep(clang(dest, tk, 1700 + i * 90, 0.02, 0.02, 3));
+      }
+      keep(creak(dest, t + 0.02, 210, 0.28, 0.05));
+      keep(thump(dest, t + 0.32, 150, 56, 0.08, 0.004, 0.55, 0.06));
+      keep(clang(dest, t + 0.32, 420, 0.12, 0.2, 5));
+      keep(knock(dest, t + 0.32, 260, 0.2, 0.03));
+      keep(rattle(dest, t + 0.36, 0.2, 2200, 3, 0.04, 0.3));
+    });
+  }
+
+  function gateOpen(heavy = false) {
+    if (!ready() || !gate("gate", 0.3)) return;
+    const dest = wOut(0, heavy ? 0.3 : 0.16);
+    one(dest, (t, keep) => {
+      if (heavy) {
+        // bolts thrown, a motor taking the load, chain running, the long groan of steel - and the stop
+        keep(clang(dest, t, 300, 0.2, 0.3, 5));
+        keep(thump(dest, t, 130, 50, 0.08, 0.004, 0.5, 0.07));
+        const dur = 2.1;
+        const g = ctx.createGain();
+        const e = swell(g.gain, t + 0.15, 0.3, 0.1, t + 0.15 + dur, 0.1);
+        const m = osc("sawtooth", 58, t + 0.15, e);
+        m.frequency.linearRampToValueAtTime(82, t + 0.7);
+        m.frequency.setTargetAtTime(74, t + 0.7, 0.3);
+        const lp = filt("lowpass", 420, 1.5);
+        m.connect(lp);
+        lp.connect(g);
+        g.connect(dest);
+        keep(e);
+        keep(rattle(dest, t + 0.2, dur, 2600, 3, 0.07, 0.45));
+        keep(rumble(dest, t + 0.2, dur, 260, 0.3, 6, 0.5));
+        for (let i = 0; i < 4; i++) {
+          const f = rnd(150, 260);
+          keep(creak(dest, t + 0.3 + i * 0.47 + rnd(0, 0.1), f, rnd(0.4, 0.6), 0.07));
+          keep(creak(dest, t + 0.33 + i * 0.47, f * 2.02, 0.4, 0.025));
+        }
+        keep(thump(dest, t + 0.2 + dur, 96, 34, 0.14, 0.004, 0.8, 0.12));
+        keep(clang(dest, t + 0.2 + dur, 210, 0.24, 0.5, 6));
+        keep(rattle(dest, t + 0.25 + dur, 0.5, 2000, 2.5, 0.06, 0.25));
+      } else {
+        keep(tick(dest, t, 2800, 0.14));
+        keep(clang(dest, t, 1500, 0.05, 0.06, 4));
+        keep(creak(dest, t + 0.06, rnd(300, 380), 0.55, 0.06));
+        keep(creak(dest, t + 0.1, rnd(520, 640), 0.4, 0.025));
+        keep(rattle(dest, t + 0.1, 0.5, 3600, 3, 0.04, 0.25));
+        keep(knock(dest, t + 0.66, 220, 0.2, 0.03));
+      }
+    });
+  }
+
+  function fenceRattle() {
+    if (!ready() || !gate("fence", 0.08)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.14);
+    one(dest, (t, keep) => {
+      // chain-link: a shiver of thousands of little wire contacts, running outward and dying
+      keep(rattle(dest, t, rnd(0.5, 0.7), rnd(3800, 4600), 2.2, 0.16, 0.6));
+      keep(rattle(dest, t + 0.03, 0.45, rnd(6200, 7400), 3, 0.07, 0.5));
+      keep(thump(dest, t, 180, 90, 0.05, 0.004, 0.16, 0.035));
+      const f = rnd(700, 900);
+      for (let i = 0; i < 4; i++) keep(clang(dest, t + i * rnd(0.045, 0.07), f * (1 + i * 0.07), 0.035 - i * 0.006, 0.12, 4));
+      keep(tone(dest, t, "sine", rnd(96, 110), 88, 0.4, 0.03, 0.02, 0.12)); // the post humming
+    });
+  }
+
+  function buildTruck(L, t) {
+    loopOut(L, wBus, wVerb, 0.1);
+    L.scale = 0.6;
+    const far = t + 1e6;
+    // a big diesel: slow firing pulses, a rattling body, exhaust breath; it revs lazily
+    const fire = osc("sawtooth", 34, t, far);
+    const sub = osc("sine", 34, t, far);
+    const lp = filt("lowpass", 240, 1.4);
+    const g = mkGain(0.22);
+    const sg = mkGain(0.3);
+    fire.connect(lp);
+    lp.connect(g);
+    sub.connect(sg);
+    sg.connect(g);
+    g.connect(L.gain);
+    L.nodes.push(fire, sub);
+    lfo(L, t, 17, 0.1, g.gain); // the lumpy half-order
+    const clat = bed(L, t, pinkBuf, "bandpass", 1500, 1.6, 0.03, null, 1);
+    const chop = osc("square", 34, t, far);
+    const cg = mkGain(0.03);
+    chop.connect(cg);
+    cg.connect(clat.g.gain);
+    L.nodes.push(chop);
+    const ex = bed(L, t, pinkBuf, "lowpass", 520, 0.6, 0.07, null, 0.7);
+    lfo(L, t, 8.5, 0.03, ex.g.gain);
+    // lazy revs
+    const rev = (o, depth) => { lfo(L, t, 0.13, depth, o.frequency); lfo(L, t, 0.31, depth * 0.4, o.frequency); };
+    rev(fire, 5);
+    rev(sub, 5);
+    rev(chop, 5);
+    lfo(L, t, 0.13, 60, lp.frequency);
+  }
+
+  function truckEngine(on) {
+    setLoop("truck", on ? 1 : 0, buildTruck, 0.8);
+  }
+
+  // ---- helicopter -----------------------------------------------------------------
+
+  const H = { on: false, rpm: 0.6, load: 0.2, dist: 0, t0: 0 };
+
+  function buildHeli(L, t) {
+    loopOut(L, wBus, wVerb, 0.1);
+    L.scale = 0.85;
+    const far = t + 1e6;
+    const mix = mkGain(1);
+    const lp = filt("lowpass", 16000, 0.5);
+    mix.connect(lp);
+    lp.connect(L.gain);
+
+    // the blade-pass clock: a narrow periodic pulse (sum of cosines), one peak per blade
+    const N = 14;
+    const re = new Float32Array(N);
+    const im = new Float32Array(N);
+    for (let k = 1; k < N; k++) re[k] = Math.exp(-0.2 * k);
+    const blade = ctx.createOscillator();
+    blade.setPeriodicWave(ctx.createPeriodicWave(re, im));
+    blade.frequency.setValueAtTime(1.2, t);
+    blade.start(t);
+    blade.stop(far);
+
+    const am = (depth, gainNode) => {
+      const d = mkGain(depth);
+      blade.connect(d);
+      d.connect(gainNode.gain);
+      return d;
+    };
+
+    // 1. blade slap: the "wop-wop": low-passed air, opened once per blade
+    const slapSrc = noise(pinkBuf, t, far, 0.8);
+    const slapLP = filt("lowpass", 600, 0.9);
+    const slapG = mkGain(0.03);
+    slapSrc.connect(slapLP);
+    slapLP.connect(slapG);
+    slapG.connect(mix);
+    const slapD = am(0.2, slapG);
+
+    // 2. the pressure pulse you feel in the chest
+    const sub = osc("sine", 40, t, far);
+    const subG = mkGain(0);
+    sub.connect(subG);
+    subG.connect(mix);
+    const subD = am(0.1, subG);
+
+    // 3. heavy "chop" under load: a sharper, brighter crack on every blade
+    const chopSrc = noise(whiteBuf, t, far, 1);
+    const chopBP = filt("bandpass", 1300, 0.9);
+    const chopG = mkGain(0);
+    chopSrc.connect(chopBP);
+    chopBP.connect(chopG);
+    chopG.connect(mix);
+    const chopD = am(0, chopG);
+
+    // 4. the swish of the tips
+    const swSrc = noise(whiteBuf, t, far, 1.2);
+    const swHP = filt("highpass", 3200, 0.5);
+    const swG = mkGain(0.004);
+    swSrc.connect(swHP);
+    swHP.connect(swG);
+    swG.connect(mix);
+    const swD = am(0.008, swG);
+
+    // 5. turbine: a whine with its fifth, through a resonance that tracks it
+    const tur = osc("sawtooth", 260, t, far);
+    const tur2 = osc("sawtooth", 391, t, far);
+    const tur2G = mkGain(0.5);
+    const turBP = filt("bandpass", 900, 3);
+    const turG = mkGain(0.002);
+    tur.connect(turBP);
+    tur2.connect(tur2G);
+    tur2G.connect(turBP);
+    turBP.connect(turG);
+    turG.connect(mix);
+    const hiss = bed(L, t, whiteBuf, "bandpass", 5200, 0.8, 0.0, mix, 1);
+
+    // 6. engine / gearbox drone
+    const drone = osc("sawtooth", 30, t, far);
+    const drone2 = osc("triangle", 60.4, t, far);
+    const droneLP = filt("lowpass", 260, 0.8);
+    const droneG = mkGain(0.02);
+    drone.connect(droneLP);
+    drone2.connect(droneLP);
+    droneLP.connect(droneG);
+    droneG.connect(mix);
+
+    // 7. tail rotor buzz
+    const tail = osc("square", 20, t, far);
+    const tailBP = filt("bandpass", 950, 1.6);
+    const tailG = mkGain(0);
+    tail.connect(tailBP);
+    tailBP.connect(tailG);
+    tailG.connect(mix);
+
+    L.nodes.push(blade, slapSrc, sub, chopSrc, swSrc, tur, tur2, drone, drone2, tail);
+    L.h = {
+      mix, lp, blade, slapLP, slapG, slapD, sub, subD, chopBP, chopD, swG, swD,
+      tur, tur2, turBP, turG, hiss, drone, drone2, droneG, tail, tailG,
+    };
+    H.t0 = t;
+    every(L, 50, heliApply);
+  }
+
+  function heliParams(L, now, r, load, dist, tc) {
+    const h = L.h;
+    const bladeHz = 1.2 + 18 * r;                      // two blades: ~12 Hz at idle, ~19 Hz flat out
+    sp(h.blade.frequency, bladeHz, now, tc);
+    sp(h.slapLP.frequency, 380 + 520 * r + 1000 * load, now, tc);
+    sp(h.slapG.gain, 0.03 + 0.2 * r, now, tc);
+    sp(h.slapD.gain, (0.2 + 0.55 * r) * (1 + 0.7 * load), now, tc);
+    sp(h.sub.frequency, 36 + 26 * r, now, tc);
+    sp(h.subD.gain, 0.1 + 0.36 * r + 0.25 * load * r, now, tc);
+    sp(h.chopBP.frequency, 1100 + 1100 * load, now, tc);
+    sp(h.chopD.gain, 0.34 * load * r, now, tc);
+    sp(h.swG.gain, 0.004 + 0.03 * r, now, tc);
+    sp(h.swD.gain, 0.008 + 0.04 * r, now, tc);
+    const tf = 230 + 2300 * Math.pow(r, 1.3) - 170 * load * r; // the turbine sags when it is asked for more
+    sp(h.tur.frequency, tf, now, tc);
+    sp(h.tur2.frequency, tf * (1.503 + 0.012 * load), now, tc); // ...and its partials drift apart: strained
+    sp(h.turBP.frequency, clamp(tf * 1.5, 300, 6000), now, tc);
+    sp(h.turG.gain, 0.002 + 0.03 * r + 0.035 * load * r, now, tc);
+    sp(h.hiss.g.gain, 0.012 * r + 0.02 * load * r, now, tc);
+    sp(h.drone.frequency, 26 + 60 * r - 8 * load * r, now, tc);
+    sp(h.drone2.frequency, (26 + 60 * r - 8 * load * r) * 2.013, now, tc);
+    sp(h.droneG.gain, 0.02 + 0.13 * r + 0.1 * load * r, now, tc);
+    sp(h.tail.frequency, bladeHz * 5.3, now, tc);
+    sp(h.tailG.gain, 0.014 * r, now, tc);
+    sp(h.lp.frequency, 16000 * Math.pow(0.05, dist), now, tc);
+    sp(h.mix.gain, 1 - 0.78 * dist, now, tc);
+  }
+
+  function heliApply(now) {
+    const L = loops.heli;
+    if (!L || !L.h) return;
+    const s = clamp((now - H.t0) / 3, 0, 1);            // the 3 s spool-up
+    const spool = s * s * (3 - 2 * s);
+    heliParams(L, now, clamp(H.rpm, 0, 1) * spool, clamp(H.load, 0, 1) * spool, clamp(H.dist, 0, 1), 0.09);
+  }
+
+  const heli = {
+    start() {
+      if (H.on && (loops.heli || want.heli)) return;
+      H.on = true;
+      H.rpm = 0.6;
+      H.load = 0.2;
+      H.dist = 0;
+      setLoop("heli", 1, buildHeli, 0.4);
+      if (!ready()) return;
+      const dest = wOut(0, 0.1);
+      one(dest, (t, keep) => {
+        // starter: igniter ticks, the starter motor whining up, the "whump" of light-off
+        for (let i = 0; i < 9; i++) keep(tick(dest, t + 0.05 + i * (0.11 - i * 0.006), 3400, 0.07));
+        const g = ctx.createGain();
+        const e = swell(g.gain, t, 0.5, 0.07, t + 2.6, 0.25);
+        const o = osc("sawtooth", 150, t, e);
+        o.frequency.exponentialRampToValueAtTime(1700, t + 2.9);
+        const bp = filt("bandpass", 400, 2);
+        bp.frequency.setValueAtTime(400, t);
+        bp.frequency.exponentialRampToValueAtTime(3400, t + 2.9);
+        o.connect(bp);
+        bp.connect(g);
+        g.connect(dest);
+        keep(e);
+        keep(thump(dest, t + 1.0, 90, 40, 0.2, 0.02, 0.3, 0.12));
+        keep(burst(dest, t + 1.0, {
+          buf: pinkBuf, type: "lowpass", q: 0.6, f0: 300, f1: 1400, sweep: 1.6, attack: 0.3, peak: 0.16, tc: 0.5,
+        }));
+      });
+    },
+    stop(crashed = false) {
+      const was = H.on;
+      H.on = false;
+      const L = loops.heli;
+      if (L && L.h && ctx && ctx.state !== "closed") {
+        const now = ctx.currentTime;
+        if (crashed) {
+          heliParams(L, now, 0.05, 0, H.dist, 0.07);     // the rotor stops dead
+        } else {
+          heliParams(L, now, 0.03, 0, H.dist, 0.8);      // a long spool-down
+        }
+      }
+      setLoop("heli", 0, buildHeli, crashed ? 0.3 : 3.2);
+      if (crashed && was && ready()) {
+        const dest = wOut(0, 0.15);
+        one(dest, (t, keep) => {
+          // the turbine choking: a fast falling whine and a cough
+          keep(tone(dest, t, "sawtooth", 1500, 160, 0.45, 0.04, 0.01, 0.1));
+          keep(burst(dest, t + 0.1, {
+            buf: pinkBuf, type: "lowpass", q: 0.7, f0: 900, f1: 160, sweep: 0.3, attack: 0.02, peak: 0.2, tc: 0.1,
+          }));
+        });
+      }
+    },
+    set(rpm, load, dist = 0) {
+      H.rpm = clamp(num(rpm, H.rpm), 0, 1);
+      H.load = clamp(num(load, H.load), 0, 1);
+      H.dist = clamp(num(dist, 0), 0, 1);
+    },
+    get on() { return H.on; },
+  };
+
+  function buildWind(L, t) {
+    loopOut(L, wBus, wVerb, 0.05);
+    // air over the ears: a wide moving band, a low buffet, and at speed a thin whistle through the frame
+    const body = bed(L, t, pinkBuf, "bandpass", 500, 0.5, 0.3, null, 0.9);
+    lfo(L, t, 0.13, 140, body.f.frequency);
+    lfo(L, t, 0.31, 0.08, body.g.gain);
+    lfo(L, t, 0.83, 0.04, body.g.gain);
+    const low = bed(L, t, pinkBuf, "lowpass", 160, 0.7, 0.3, null, 0.5);
+    lfo(L, t, 0.47, 0.12, low.g.gain);
+    const wh = bed(L, t, whiteBuf, "bandpass", 1500, 9, 0, null, 1);
+    lfo(L, t, 0.21, 260, wh.f.frequency);
+    L.set = (lv, tt) => {
+      sp(body.f.frequency, 360 + 900 * lv, tt, 0.3);
+      sp(low.f.frequency, 120 + 160 * lv, tt, 0.3);
+      sp(wh.g.gain, 0.3 * Math.max(0, lv - 0.45), tt, 0.3);
+      sp(wh.f.frequency, 1100 + 1400 * lv, tt, 0.3);
+    };
+  }
+
+  function wind(level) {
+    setLoop("wind", level, buildWind, 0.6);
+  }
+
+  function gust(strength = 0.6, pan = 0) {
+    if (!ready() || !gate("gust", 0.15)) return;
+    const s = clamp(num(strength, 0.6), 0.05, 1);
+    const t = ctx.currentTime + 0.004;
+    const p0 = clamp(num(pan, 0), -1, 1);
+    const g = mkGain(1);
+    let last = g;
+    if (ctx.createStereoPanner) {
+      // it arrives from its side and blows through to the other
+      const pn = ctx.createStereoPanner();
+      pn.pan.setValueAtTime(p0, t);
+      pn.pan.linearRampToValueAtTime(clamp(-p0 * 0.6, -1, 1), t + 1.8);
+      g.connect(pn);
+      last = pn;
+    }
+    last.connect(wBus);
+    const up = 0.5 + 0.4 * (1 - s);
+    let tEnd = whoosh(g, t, 260, 700 + 900 * s, 300, up, 1.1, 0.5 * s, 0.6, pinkBuf);
+    tEnd = Math.max(tEnd, whoosh(g, t + 0.1, 900, 2200 + 1500 * s, 1000, up, 0.8, 0.12 * s, 1.4, whiteBuf));
+    tEnd = Math.max(tEnd, rumble(g, t, up + 1.2, 150, 0.4 * s, 4, 0.5));
+    if (s > 0.5) tEnd = Math.max(tEnd, whoosh(g, t + 0.2, 1300, 2100, 1500, up, 0.6, 0.05 * s, 12, whiteBuf)); // whistle
+    release(g, tEnd + 0.15);
+  }
+
+  function crash(size = 0.7) {
+    if (!ready() || !gate("crash", 0.1)) return;
+    const s = clamp(num(size, 0.7), 0.05, 1);
+    const dest = wOut(rnd(-0.1, 0.1), 0.22, 0.6 + 0.6 * s);
+    one(dest, (t, keep) => {
+      // IMPACT: sub thump + the crunch of sheet metal folding
+      keep(thump(dest, t, 120, 26, 0.3, 0.004, 0.9 * s + 0.2, 0.16));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.7, f0: 4200, f1: 260, sweep: 0.25, attack: 0.002, peak: 0.9, tc: 0.09,
+      }));
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 2000, attack: 0.001, peak: 0.4, tc: 0.02 }));
+      keep(rattle(dest, t, 0.5 + 0.5 * s, 1300, 0.8, 0.5, 0.5));
+      const n = irnd(4, 5) + ((s * 4) | 0);
+      for (let i = 0; i < n; i++) {
+        keep(clang(dest, t + Math.pow(Math.random(), 1.6) * (0.3 + 0.5 * s), rnd(180, 900), rnd(0.08, 0.2), rnd(0.1, 0.4), 5));
+      }
+      // tearing / buckling groans
+      keep(creak(dest, t + 0.05, rnd(130, 190), 0.5, 0.1));
+      keep(creak(dest, t + 0.2, rnd(240, 340), 0.4, 0.06));
+      // glass
+      const ng = 6 + ((s * 12) | 0);
+      for (let i = 0; i < ng; i++) {
+        keep(bell(dest, t + 0.03 + Math.pow(Math.random(), 1.7) * 0.6, rnd(2200, 6400), rnd(0.012, 0.045), rnd(0.03, 0.09)));
+      }
+      keep(crackle(dest, t + 0.02, 0.5, 3600, 0.12 * s, 0.3, false));
+      // debris tail: bits bouncing, sliding, settling
+      const tail = 0.8 + 1.6 * s;
+      keep(crackle(dest, t + 0.4, tail, 2400, 0.07, 0.14, false));
+      keep(rumble(dest, t + 0.2, tail, 300, 0.25 * s, 5, 0.5));
+      for (let i = 0; i < 3 + ((s * 4) | 0); i++) {
+        const td = t + 0.5 + Math.random() * tail;
+        keep(clang(dest, td, rnd(600, 2200), rnd(0.02, 0.05), rnd(0.05, 0.14), 4));
+        keep(thump(dest, td, rnd(140, 220), 80, 0.04, 0.004, 0.1, 0.025));
+      }
+      // a hubcap that will not lie down
+      if (s > 0.5) {
+        const tw = t + 0.9;
+        for (let i = 0; i < 7; i++) keep(clang(dest, tw + i * (0.16 - i * 0.02), 1250, 0.03 - i * 0.003, 0.07, 3));
+      }
+    });
+  }
+
+  function metalScrape(pan = 0) {
+    if (!ready() || !gate("scrape", 0.12)) return;
+    const dest = wd(clamp(num(pan, 0), -1, 1) * 0.8, 0, 0.14);
+    one(dest, (t, keep) => {
+      // skid on metal: a stick-slip screech, a band of grinding, sparks
+      const dur = rnd(0.4, 0.6);
+      const f = rnd(1300, 1900);
+      const g = ctx.createGain();
+      const e = swell(g.gain, t, 0.03, 0.045, t + dur, 0.06);
+      const o = osc("sawtooth", f, t, e);
+      o.frequency.linearRampToValueAtTime(f * rnd(0.7, 0.86), t + dur);
+      const fm = osc("sine", rnd(60, 95), t, e);
+      const fg = mkGain(f * 0.12);
+      fm.connect(fg);
+      fg.connect(o.frequency);
+      const bp = filt("bandpass", f * 1.7, 3);
+      o.connect(bp);
+      bp.connect(g);
+      g.connect(dest);
+      keep(e);
+      keep(rattle(dest, t, dur, rnd(2600, 3600), 5, 0.3, 0.8));
+      keep(rumble(dest, t, dur, 500, 0.25, 4, 0.8));
+      keep(crackle(dest, t, dur, 5200, 0.07, 0.3, false));
+    });
+  }
+
+  function buildWarnBeep(L, t) {
+    L.gain.connect(bus);
+    L.scale = 0.5;
+    // cockpit master caution: beep-beep ... beep-beep, two pitches, a small speaker
+    const bp = filt("bandpass", 1900, 1.5);
+    bp.connect(L.gain);
+    let next = t + 0.02;
+    every(L, 250, (now) => {
+      if (next < now) next = now + 0.03;
+      while (next < now + 0.8) {
+        tone(bp, next, "square", 1568, 1568, 0.07, 0.14, 0.004, 0.008);
+        tone(bp, next + 0.13, "square", 1975.5, 1975.5, 0.07, 0.14, 0.004, 0.008);
+        next += 0.52;
+      }
+    });
+  }
+
+  function warnBeep(on) {
+    setLoop("warnBeep", on ? 1 : 0, buildWarnBeep, 0.3);
+  }
+
+  function buildRotorWash(L, t) {
+    loopOut(L, wBus, wVerb, 0.04);
+    L.scale = 0.7;
+    // downwash hitting the ground: a wide torn hiss that flutters with the blades, dust and grit in it
+    const a = bed(L, t, whiteBuf, "bandpass", 1900, 0.5, 0.12, null, 1.1);
+    lfo(L, t, 13.5, 0.05, a.g.gain);
+    lfo(L, t, 0.37, 500, a.f.frequency);
+    const b = bed(L, t, pinkBuf, "lowpass", 420, 0.6, 0.22, null, 0.7);
+    lfo(L, t, 13.5, 0.07, b.g.gain);
+    lfo(L, t, 0.61, 0.06, b.g.gain);
+    const grit = bed(L, t, whiteBuf, "highpass", 5200, 0.5, 0.03, null, 1.3);
+    lfo(L, t, 1.7, 0.02, grit.g.gain);
+  }
+
+  function rotorWash(level) {
+    setLoop("rotorWash", level, buildRotorWash, 0.4);
+  }
+
+  // ---- circus ---------------------------------------------------------------------
+
+  // waltz fragments: [beat, midi, beats]; 4 bars of 3/4 each; chords per bar
+  const CAL = [
+    { m: [[0, 72, 1], [1, 76, 1], [2, 79, 1], [3, 84, 2], [5, 79, 1], [6, 81, 1], [7, 77, 1], [8, 74, 1], [9, 76, 3]], c: [0, 0, 1, 0] },
+    { m: [[0, 79, 1.5], [1.5, 77, 0.5], [2, 76, 1], [3, 74, 2], [5, 71, 1], [6, 72, 1], [7, 76, 1], [8, 79, 1], [9, 84, 3]], c: [0, 1, 0, 0] },
+    { m: [[0, 69, 1], [1, 72, 1], [2, 76, 1], [3, 75, 2], [5, 72, 1], [6, 71, 1], [7, 68, 1], [8, 71, 1], [9, 69, 3]], c: [3, 3, 4, 3] },
+    { m: [[0, 84, 1], [1, 83, 1], [2, 84, 1], [3, 81, 1], [4, 77, 1], [5, 81, 1], [6, 79, 1], [7, 76, 1], [8, 79, 1], [9, 72, 3]], c: [0, 2, 0, 0] },
+  ];
+  const CAL_CH = [
+    [48, [60, 64, 67]],   // C
+    [43, [59, 62, 65]],   // G7
+    [41, [60, 65, 69]],   // F
+    [45, [60, 64, 69]],   // Am
+    [40, [59, 62, 68]],   // E7
+  ];
+
+  /** One steam-whistle note: a breathy chiff, a square pipe a little out of tune, pressure sagging in. */
+  function calNote(dest, t, f, dur, peak) {
+    const g = ctx.createGain();
+    const tEnd = swell(g.gain, t, 0.035, peak, t + dur * 0.84, 0.03);
+    const a = osc("square", f * 0.982, t, tEnd);
+    a.frequency.linearRampToValueAtTime(f, t + 0.07);
+    a.detune.value = rnd(-16, 16);
+    const b = osc("sine", f * 2.006, t, tEnd);
+    const ag = mkGain(0.32);
+    const lp = filt("lowpass", Math.min(5200, f * 4.5), 0.6);
+    const vib = osc("sine", rnd(5, 6.2), t, tEnd);
+    const vg = mkGain(f * 0.006);
+    vib.connect(vg);
+    vg.connect(a.frequency);
+    a.connect(ag);
+    ag.connect(lp);
+    b.connect(lp);
+    lp.connect(g);
+    g.connect(dest);
+    burst(dest, t, {
+      buf: whiteBuf, type: "bandpass", q: 2, f0: Math.min(6500, f * 3), attack: 0.008, peak: peak * 0.5, tc: 0.025,
+    });
+    return tEnd;
+  }
+
+  /** A waltz fragment on the calliope. Returns its end time. */
+  function calliopeInto(dest, t, n, bars, vol) {
+    const fr = CAL[((n | 0) % CAL.length + CAL.length) % CAL.length];
+    const bs = 0.335;
+    const nb = Math.min(4, bars || 4);
+    let tEnd = t;
+    for (let bar = 0; bar < nb; bar++) {
+      const ch = CAL_CH[fr.c[bar]];
+      const tb = t + bar * 3 * bs;
+      tEnd = Math.max(tEnd, calNote(dest, tb, midi(ch[0]), bs * 0.9, 0.1 * vol));          // oom
+      for (let k = 1; k < 3; k++) {                                                       // pah pah
+        for (let j = 0; j < 3; j++) calNote(dest, tb + k * bs + rnd(0, 0.012), midi(ch[1][j]), bs * 0.45, 0.032 * vol);
+      }
+    }
+    for (let i = 0; i < fr.m.length; i++) {
+      const ev = fr.m[i];
+      if (ev[0] >= nb * 3) break;
+      const tn = t + ev[0] * bs + rnd(0, 0.014);
+      tEnd = Math.max(tEnd, calNote(dest, tn, midi(ev[1]), ev[2] * bs, 0.085 * vol));
+      calNote(dest, tn, midi(ev[1] + 12), ev[2] * bs, 0.025 * vol);
+    }
+    // the bellows / steam under it all
+    burst(dest, t, {
+      buf: pinkBuf, type: "bandpass", q: 0.6, f0: 2400, attack: 0.3, peak: 0.02 * vol, tc: nb * 3 * bs * 0.4,
+    });
+    return tEnd + 0.2;
+  }
+
+  function calliope(n = 0) {
+    if (!ready() || !gate("calliope", 0.5)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.25);
+    one(dest, (t, keep) => {
+      // it wheezes awake first: air, a sagging first pipe, then the tune
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "bandpass", q: 0.8, f0: 900, f1: 2600, sweep: 0.3, attack: 0.2, peak: 0.1, tc: 0.08,
+      }));
+      keep(calliopeInto(dest, t + 0.3, num(n, 0), 4, 1));
+    });
+  }
+
+  /** One flap of heavy canvas. */
+  function flapInto(dest, t, s, keep) {
+    keep(thump(dest, t, rnd(100, 125), 56, 0.09, 0.012, 0.4 * s, 0.06));
+    keep(burst(dest, t, {
+      buf: pinkBuf, type: "lowpass", q: 0.6, rate: rnd(0.8, 1.1),
+      f0: rnd(1300, 1900), f1: 260, sweep: 0.14, attack: 0.012, peak: 0.5 * s, tc: 0.06,
+    }));
+    keep(fabricRustle(dest, t + 0.02, rnd(0.2, 0.32), rnd(1500, 2400), 0.8, 0.1 * s, 4));
+    if (Math.random() < 0.6) {
+      // the slack running back along the cloth: a softer second flap
+      keep(thump(dest, t + rnd(0.16, 0.24), rnd(120, 150), 70, 0.07, 0.014, 0.18 * s, 0.045));
+      keep(fabricRustle(dest, t + 0.2, 0.2, 2000, 0.9, 0.06 * s, 3));
+    }
+    if (Math.random() < 0.4) keep(creak(dest, t + rnd(0.05, 0.2), rnd(260, 380), rnd(0.18, 0.3), 0.03 * s)); // a guy rope
+  }
+
+  function canvasFlap(strength = 0.6) {
+    if (!ready() || !gate("flap", 0.06)) return;
+    const dest = wOut(rnd(-0.4, 0.4), 0.12);
+    one(dest, (t, keep) => flapInto(dest, t, clamp(num(strength, 0.6), 0.1, 1.2), keep));
+  }
+
+  function buildGeneratorCore(L, t, dest, sputter) {
+    const far = t + 1e6;
+    // a small petrol generator: putt-putt firing, a rattly cover, exhaust
+    const fire = osc("sawtooth", 46, t, far);
+    const lp = filt("lowpass", 300, 2);
+    const g = mkGain(0.2);
+    fire.connect(lp);
+    lp.connect(g);
+    g.connect(dest);
+    const putt = osc("square", 23, t, far);
+    const pg = mkGain(0.09);
+    putt.connect(pg);
+    pg.connect(g.gain);
+    L.nodes.push(fire, putt);
+    const ex = bed(L, t, pinkBuf, "bandpass", 700, 0.8, 0.05, dest, 0.8);
+    const eg = mkGain(0.035);
+    putt.connect(eg);
+    eg.connect(ex.g.gain);
+    const cover = bed(L, t, whiteBuf, "bandpass", 2600, 4, 0.012, dest, 1);
+    lfo(L, t, 46, 0.01, cover.g.gain);
+    lfo(L, t, 0.19, 1.6, fire.frequency);
+    lfo(L, t, 0.19, 0.8, putt.frequency);
+    if (sputter) {
+      // running out of fuel: it stumbles, nearly dies, catches again
+      let next = t + 0.4;
+      every(L, 300, (now) => {
+        if (next < now) next = now + 0.05;
+        while (next < now + 0.8) {
+          const hole = rnd(0.12, 0.4);
+          sp(g.gain, 0.03, next, 0.03);
+          sp(fire.frequency, rnd(26, 34), next, 0.06);
+          sp(putt.frequency, rnd(13, 17), next, 0.06);
+          sp(g.gain, 0.2, next + hole, 0.04);
+          sp(fire.frequency, 46, next + hole, 0.1);
+          sp(putt.frequency, 23, next + hole, 0.1);
+          thump(dest, next + hole, 110, 50, 0.06, 0.004, 0.16, 0.04); // the backfire that catches it
+          next += hole + rnd(0.3, 1.5);
+        }
+      });
+    }
+  }
+
+  function buildGenerator(L, t, sputter) {
+    loopOut(L, wBus, wVerb, 0.08);
+    L.scale = 0.6;
+    buildGeneratorCore(L, t, L.gain, sputter);
+  }
+
+  function generator(on, sputter = false) {
+    setLoop("generator", on ? 1 : 0, buildGenerator, 0.5, !!sputter);
+  }
+
+  function buildCircus(L, t) {
+    loopOut(L, wBus, wVerb, 0.16);
+    // 1. the generator, far behind the wagons
+    const genLP = filt("lowpass", 520, 0.5);
+    const genG = mkGain(0.22);
+    genLP.connect(genG);
+    genG.connect(L.gain);
+    buildGeneratorCore(L, t, genLP, false);
+    // 2. night air moving over the tents
+    const air = bed(L, t, pinkBuf, "bandpass", 620, 0.4, 0.022, null, 0.7);
+    lfo(L, t, 0.05, 220, air.f.frequency);
+    lfo(L, t, 0.083, 0.012, air.g.gain);
+    // 3. the leftover crowd: a few people still awake somewhere, heard through canvas
+    const mur = bed(L, t, pinkBuf, "bandpass", 380, 0.9, 0.022, null, 0.6);
+    const mlp = filt("lowpass", 560, 0.5);
+    mur.g.disconnect();
+    mur.g.connect(mlp);
+    mlp.connect(L.gain);
+    lfo(L, t, 0.11, 0.012, mur.g.gain);
+    lfo(L, t, 0.29, 80, mur.f.frequency);
+    lfo(L, t, 2.3, 0.004, mur.g.gain);
+
+    let nextCricket = t + 0.5;
+    let nextFlap = t + 2;
+    let nextCal = t + rnd(9, 16);
+    let nextLaugh = t + rnd(12, 25);
+    let calN = irnd(0, 3);
+    const cf = [4100, 4520, 4980];
+    every(L, 400, (now) => {
+      if (nextCricket < now) nextCricket = now + 0.1;
+      while (nextCricket < now + 0.9) {
+        cricketPhrase(L, nextCricket, pick(cf) * rnd(0.98, 1.02), rnd(-0.9, 0.9), rnd(0.25, 0.8));
+        nextCricket += rnd(0.5, 1.9);
+      }
+      if (nextFlap < now + 0.9) {
+        const tf = Math.max(nextFlap, now + 0.05);
+        const d = outTo(L.gain, wVerb, rnd(-0.8, 0.8), 0.2, rnd(0.25, 0.6));
+        let e = tf;
+        flapInto(d, tf, rnd(0.4, 0.9), (x) => { if (x > e) e = x; return x; });
+        release(d, e + 0.2);
+        nextFlap = tf + rnd(2.5, 8);
+      }
+      if (nextCal < now + 0.9) {
+        // 2-4 bars of the waltz drifting across the field on the wind
+        const tc = Math.max(nextCal, now + 0.05);
+        const bars = irnd(2, 4);
+        const len = bars * 3 * 0.335;
+        const lp = filt("lowpass", rnd(1300, 2100), 0.6);
+        const g = mkGain(0);
+        g.gain.setValueAtTime(0, tc);
+        g.gain.linearRampToValueAtTime(rnd(0.3, 0.5), tc + len * 0.4);
+        g.gain.linearRampToValueAtTime(rnd(0.12, 0.3), tc + len * 0.7);
+        g.gain.setTargetAtTime(0, tc + len * 0.85, 0.25);
+        lp.connect(g);
+        const d = outTo(L.gain, wVerb, rnd(-0.6, 0.6), 0.6, 1);
+        g.connect(d);
+        const e = calliopeInto(lp, tc, calN++, bars, 0.7);
+        release(lp, e + 1.5);
+        release(d, e + 1.6);
+        nextCal = tc + len + rnd(18, 40);
+      }
+      if (nextLaugh < now + 0.9) {
+        // somebody far off laughs at something, or a tin cup falls over
+        const tl = Math.max(nextLaugh, now + 0.05);
+        const lp = filt("lowpass", 1100, 0.5);
+        const d = outTo(L.gain, wVerb, rnd(-0.8, 0.8), 0.7, 0.2);
+        lp.connect(d);
+        let e = tl;
+        if (Math.random() < 0.6) {
+          const k = rnd(0.9, 1.3);
+          for (let i = 0; i < 4; i++) e = vox(lp, tl + i * 0.14, (200 - i * 14) * k, 160 * k, 0.08, 0.5, VOWELS[0], 0, 0);
+        } else {
+          e = clang(lp, tl, rnd(900, 1400), 0.3, 0.2, 4);
+          clang(lp, tl + 0.18, rnd(900, 1400), 0.15, 0.15, 4);
+        }
+        release(lp, e + 0.3);
+        release(d, e + 0.4);
+        nextLaugh = tl + rnd(14, 34);
+      }
+    });
+  }
+
+  function circusAmbience(on) {
+    setLoop("circus", on ? 1 : 0, buildCircus, 1.6);
+  }
+
+  function cageRattle() {
+    if (!ready() || !gate("cage", 0.08)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.16);
+    one(dest, (t, keep) => {
+      // the whole door jumping in its frame: bars ringing against each other, the latch chattering
+      keep(thump(dest, t, 150, 70, 0.06, 0.004, 0.4, 0.045));
+      const n = irnd(5, 7);
+      const f = rnd(620, 760);
+      for (let i = 0; i < n; i++) {
+        const tb = t + i * rnd(0.035, 0.06);
+        keep(clang(dest, tb, f * pick([1, 1.12, 1.26, 0.94]), 0.11 * (1 - i / (n + 2)), rnd(0.09, 0.2), 5));
+        keep(tick(dest, tb, rnd(2600, 3800), 0.08));
+      }
+      keep(rattle(dest, t, 0.4, 2800, 3, 0.1, 0.5));
+      keep(creak(dest, t + 0.1, rnd(300, 400), 0.2, 0.03));
+    });
+  }
+
+  function latchBreak() {
+    if (!ready() || !gate("latch", 0.2)) return;
+    const dest = wOut(0, 0.25);
+    one(dest, (t, keep) => {
+      // SNAP - the hasp shears, the pieces ring away across the floor, the door swings
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.6, f0: 1800, attack: 0.001, peak: 0.6, tc: 0.012 }));
+      keep(thump(dest, t, 260, 80, 0.05, 0.003, 0.6, 0.04));
+      keep(clang(dest, t, 880, 0.22, 0.4, 6));
+      keep(clang(dest, t + 0.01, 1318, 0.08, 0.25, 4));
+      let tb = t + 0.22;
+      let gap = 0.17;
+      for (let i = 0; i < 6; i++) {
+        keep(clang(dest, tb, rnd(1900, 2600), 0.07 - i * 0.01, 0.06, 4)); // the broken piece bouncing
+        tb += gap;
+        gap *= 0.68;
+      }
+      keep(creak(dest, t + 0.3, rnd(250, 320), 0.7, 0.07));
+      keep(creak(dest, t + 0.35, rnd(480, 560), 0.6, 0.03));
+      keep(clang(dest, t + 1.05, 520, 0.08, 0.3, 5)); // the door meeting its stop
+    });
+  }
+
+  function strikerBell() {
+    if (!ready() || !gate("striker", 0.25)) return;
+    const dest = wOut(0, 0.4);
+    one(dest, (t, keep) => {
+      // high striker: THWACK on the pad, the puck zipping up the rail, DING!
+      keep(thump(dest, t, 180, 60, 0.07, 0.003, 0.6, 0.05));
+      keep(knock(dest, t, 240, 0.4, 0.03));
+      keep(tone(dest, t + 0.03, "triangle", 300, 1900, 0.3, 0.05, 0.02, 0.02));
+      keep(whoosh(dest, t + 0.03, 800, 4200, 4600, 0.3, 0.03, 0.06, 4, whiteBuf));
+      const tb = t + 0.36;
+      keep(tick(dest, tb, 4200, 0.2));
+      keep(clang(dest, tb, 1760, 0.3, 1.1, 6));
+      keep(bell(dest, tb, 1760, 0.16, 1.3));
+      keep(bell(dest, tb, 3520, 0.05, 0.6));
+      // the bell shimmering as it swings
+      const g = ctx.createGain();
+      const e = env(g.gain, tb, 0.01, 0.05, 0.9);
+      const o = osc("sine", 1764, tb, e);
+      const tr = mkGain(0.5);
+      const l = osc("sine", 7, tb, e);
+      const lg = mkGain(0.5);
+      l.connect(lg);
+      lg.connect(tr.gain);
+      o.connect(tr);
+      tr.connect(g);
+      g.connect(dest);
+      keep(e);
+    });
+  }
+
+  function bottles() {
+    if (!ready() || !gate("bottles", 0.15)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.2);
+    one(dest, (t, keep) => {
+      // a row of empties going over: hollow tonks, glass on glass, one rolling away
+      const n = irnd(4, 6);
+      for (let i = 0; i < n; i++) {
+        const tb = t + i * rnd(0.06, 0.13);
+        const f = rnd(420, 760);
+        keep(tone(dest, tb, "sine", f, f * 0.985, 0.05, 0.1, 0.004, 0.06)); // the air in the bottle
+        keep(bell(dest, tb, rnd(2200, 4400), 0.07, rnd(0.05, 0.12)));
+        keep(tick(dest, tb, rnd(3600, 5200), 0.1));
+        if (Math.random() < 0.5) keep(bell(dest, tb + rnd(0.05, 0.12), rnd(2600, 5000), 0.035, 0.06));
+      }
+      // the roller
+      const tr = t + 0.5;
+      keep(rattle(dest, tr, 0.9, 1800, 2.5, 0.05, 0.35));
+      const g = ctx.createGain();
+      const e = swell(g.gain, tr, 0.1, 0.03, tr + 0.7, 0.12);
+      const o = osc("sine", 560, tr, e);
+      o.frequency.linearRampToValueAtTime(520, tr + 0.9);
+      const tm = mkGain(0.5);
+      const l = osc("sine", 9, tr, e);
+      l.frequency.linearRampToValueAtTime(3, tr + 0.9);
+      const lg = mkGain(0.5);
+      l.connect(lg);
+      lg.connect(tm.gain);
+      o.connect(tm);
+      tm.connect(g);
+      g.connect(dest);
+      keep(e);
+      keep(bell(dest, tr + 0.95, 3100, 0.04, 0.1)); // ...and stops against something
+    });
+  }
+
+  // ---- jungle ---------------------------------------------------------------------
+
+  const JL = { birds: 1, insects: 1, wind: 1 };
+
+  /** One call of bird species `sp` into dest. Returns the time it ends. */
+  function birdCall(dest, t, species, k) {
+    let e = t;
+    const up = (x) => { if (x > e) e = x; };
+    let tt = t;
+    if (species === 0) {
+      // the whistler: two long pure notes, "fee - bee"
+      up(tone(dest, tt, "sine", 3100 * k, 3060 * k, 0.26, 0.032, 0.03, 0.04));
+      up(tone(dest, tt + 0.4, "sine", 2590 * k, 2520 * k, 0.34, 0.03, 0.03, 0.06));
+    } else if (species === 1) {
+      // the triller: one note repeated, faster and faster
+      const n = irnd(9, 14);
+      let gap = 0.13;
+      for (let i = 0; i < n; i++) {
+        up(tone(dest, tt, "sine", 3650 * k, 4300 * k, 0.04, 0.024, 0.008, 0.012));
+        tt += gap;
+        gap = Math.max(0.045, gap * 0.86);
+      }
+    } else if (species === 2) {
+      // the parrot: two or three cheerful rasping squawks
+      const n = irnd(2, 3);
+      for (let i = 0; i < n; i++) {
+        up(rasp(dest, tt, 900 * k, 720 * k, 2500 * k, 2.2, rnd(60, 85), rnd(0.14, 0.2), 0.11));
+        tt += rnd(0.24, 0.34);
+      }
+    } else if (species === 3) {
+      // the liquid one: a rising "bloo-OOP" and a gurgle of droplets after it
+      up(tone(dest, tt, "sine", 520 * k, 2900 * k, 0.28, 0.035, 0.06, 0.03));
+      for (let i = 0; i < 4; i++) {
+        const f = rnd(1500, 2600) * k;
+        up(thump(dest, tt + 0.36 + i * 0.05, f, f * 1.6, 0.04, 0.005, 0.022, 0.016));
+      }
+    } else if (species === 4) {
+      // the dove: "hoo, hoo, hooooo"
+      const ds = [0.2, 0.2, 0.5];
+      for (let i = 0; i < 3; i++) {
+        up(tone(dest, tt, "sine", 480 * k, 440 * k, ds[i], 0.045, 0.05, 0.06));
+        tt += ds[i] + 0.16;
+      }
+    } else if (species === 5) {
+      // the toucan: a dry rhythmic croak
+      const n = irnd(4, 7);
+      for (let i = 0; i < n; i++) {
+        up(rasp(dest, tt, 300 * k, 280 * k, 1150 * k, 4, 48, 0.07, 0.12));
+        tt += 0.19;
+      }
+    } else {
+      // the warbler: a tumble of tiny high slurs
+      const n = irnd(6, 10);
+      for (let i = 0; i < n; i++) {
+        const f = rnd(4200, 6000) * k;
+        up(tone(dest, tt, "sine", f, f * rnd(0.75, 1.35), 0.05, 0.018, 0.01, 0.014));
+        tt += rnd(0.07, 0.11);
+      }
+    }
+    return e;
+  }
+
+  // every species has its own two perches (pan of the caller, pan of the one that answers)
+  const PERCH = [[-0.6, 0.5], [0.7, -0.2], [0.2, -0.8], [-0.3, 0.8], [0.5, -0.5], [-0.8, 0.1], [0, 0.6]];
+
+  function buildJungle(L, t, time) {
+    loopOut(L, wBus, wVerb, 0.1);
+    L.scale = 0.9;
+    const far = t + 1e6;
+    const day = time === "day";
+    const night = time === "night";
+    const dawn = time === "dawn";
+    const mist = time === "mist";
+
+    const birdG = mkGain(JL.birds);
+    const birdGate = mkGain(1);       // the scream closes this: the birds are the last thing to come back
+    const insG = mkGain(JL.insects);
+    const windG = mkGain(JL.wind);
+    birdG.connect(birdGate);
+    birdGate.connect(L.gain);
+    insG.connect(L.gain);
+    windG.connect(L.gain);
+    const sendTo = (node, amt) => { const s = mkGain(amt); node.connect(s); s.connect(wVerb); };
+    sendTo(birdGate, 0.4);
+    sendTo(insG, 0.12);
+    L.layers = { birds: birdG, insects: insG, wind: windG };
+    L.birdGate = birdGate;
+
+    // wind in the leaves: a slow canopy sigh and the dry shimmer of big leaves
+    const can = bed(L, t, pinkBuf, "bandpass", 900, 0.4, mist ? 0.012 : 0.03, windG, 0.8);
+    lfo(L, t, 0.041, 380, can.f.frequency);
+    lfo(L, t, 0.067, mist ? 0.006 : 0.016, can.g.gain);
+    const leaf = bed(L, t, whiteBuf, "bandpass", 4600, 0.7, mist ? 0.002 : 0.007, windG, 1.2);
+    lfo(L, t, 0.067, mist ? 0.0015 : 0.005, leaf.g.gain);
+    lfo(L, t, 0.19, 900, leaf.f.frequency);
+    // the deep, still air under the canopy
+    const deep = bed(L, t, pinkBuf, "lowpass", 140, 0.6, 0.03, null, 0.5);
+    lfo(L, t, 0.09, 0.012, deep.g.gain);
+
+    // cicadas (day / dawn): two beds that are silent until the scheduler swells them
+    let cic1 = null;
+    let cic2 = null;
+    if (day || dawn) {
+      cic1 = bed(L, t, whiteBuf, "bandpass", 6300, 5, 0, null, 1);
+      cic1.g.disconnect();
+      const am1 = mkGain(0.5);
+      cic1.g.connect(am1);
+      am1.connect(insG);
+      lfo(L, t, 53, 0.5, am1.gain);                  // the buzz itself
+      cic2 = bed(L, t, whiteBuf, "bandpass", 4300, 9, 0, null, 0.9);
+      cic2.g.disconnect();
+      const am2 = mkGain(0.5);
+      cic2.g.connect(am2);
+      am2.connect(insG);
+      lfo(L, t, 6.3, 0.5, am2.gain);                 // "zee-zee-zee-zee"
+    }
+    if (night) {
+      // a steady silver sheet of tree crickets under the single voices
+      const sheet = bed(L, t, whiteBuf, "bandpass", 5200, 14, 0.07, insG, 1);
+      lfo(L, t, 17, 0.035, sheet.g.gain);
+      const sheet2 = bed(L, t, whiteBuf, "bandpass", 3900, 16, 0.045, insG, 1);
+      lfo(L, t, 11.3, 0.02, sheet2.g.gain);
+    }
+
+    const voice = (target, pan, vol, cut) => {
+      // a panned voice inside a layer; `cut` darkens it (far away)
+      const d = outTo(target, target, pan, 0, vol);
+      if (!cut) return [d, d];
+      const lp = filt("lowpass", cut, 0.5);
+      lp.connect(d);
+      return [lp, d];
+    };
+    const done = (pair, e) => { release(pair[0], e + 0.2); if (pair[1] !== pair[0]) release(pair[1], e + 0.25); };
+
+    const t0 = t;
+    let nextBird = t + (dawn ? 2 : mist ? 3 : 0.6);
+    let nextCic = t + rnd(3, 8);
+    let nextCic2 = t + rnd(8, 16);
+    let nextMonkey = t + rnd(8, 20);
+    let nextFrog = t + 0.4;
+    let nextPeep = t + 1;
+    let nextCricket = t + 0.3;
+    let nextOwl = t + rnd(4, 9);
+    let nextGrowl = t + rnd(20, 40);
+    let nextDrip = t + 0.5;
+    const cf = [4250, 4700, 5150];
+    const answers = []; // [time, species, k, pan, vol]
+
+    every(L, 400, (now) => {
+      const horizon = now + 0.9;
+      // ---- birds: phrases, and the answers they provoke
+      if (!night) {
+        if (nextBird < now) nextBird = now + 0.08;
+        // dawn: the chorus builds over the first minute, from one whistler to everybody
+        const build = dawn ? clamp((now - t0) / 55, 0.06, 1) : 1;
+        while (nextBird < horizon) {
+          let species;
+          if (mist) species = pick([0, 4, 4, 3]);
+          else if (dawn && build < 0.3) species = pick([0, 4, 0, 6]);
+          else species = irnd(0, 6);
+          const k = rnd(0.94, 1.07);
+          const pr = PERCH[species];
+          const vol = rnd(0.45, 1) * (mist ? 0.6 : 1);
+          const v = voice(birdG, pr[0] + rnd(-0.12, 0.12), vol, mist ? 2600 : 0);
+          const e = birdCall(v[0], nextBird, species, k);
+          done(v, e);
+          if (Math.random() < (mist ? 0.25 : 0.6)) {
+            // call and answer: the same kind of bird, from the other perch, a little late and a little different
+            answers.push([e + rnd(0.25, 1.0), species, k * rnd(0.95, 1.08), pr[1] + rnd(-0.12, 0.12), vol * rnd(0.4, 0.8)]);
+          }
+          const dens = mist ? 0.14 : dawn ? 0.15 + 1.15 * build : 1;
+          nextBird += rnd(0.7, 3.4) / dens;
+        }
+        for (let i = answers.length - 1; i >= 0; i--) {
+          const a = answers[i];
+          if (a[0] < horizon) {
+            const ta = Math.max(a[0], now + 0.02);
+            const v = voice(birdG, a[3], a[4], mist ? 2200 : 0);
+            done(v, birdCall(v[0], ta, a[1], a[2]));
+            answers.splice(i, 1);
+          }
+        }
+      }
+      // ---- cicadas: a bed that swells for a while, then stops all at once
+      if (cic1 && nextCic < horizon) {
+        const ts = Math.max(nextCic, now + 0.05);
+        const len = rnd(6, 13);
+        const pk = rnd(0.05, 0.09) * (dawn ? 0.6 : 1);
+        cic1.g.gain.setTargetAtTime(pk, ts, rnd(1, 2));
+        cic1.g.gain.setTargetAtTime(0, ts + len, 0.1);
+        cic1.f.frequency.setTargetAtTime(rnd(5800, 6900), ts, 0.5);
+        nextCic = ts + len + rnd(5, 16);
+      }
+      if (cic2 && nextCic2 < horizon) {
+        const ts = Math.max(nextCic2, now + 0.05);
+        const len = rnd(4, 8);
+        cic2.g.gain.setTargetAtTime(rnd(0.06, 0.1) * (dawn ? 0.6 : 1), ts, 0.6);
+        cic2.g.gain.setTargetAtTime(0, ts + len, 0.25);
+        nextCic2 = ts + len + rnd(9, 22);
+      }
+      // ---- far monkeys (day): a whooping run that climbs and speeds up
+      if (day && nextMonkey < horizon) {
+        const tm = Math.max(nextMonkey, now + 0.05);
+        const v = voice(L.gain, rnd(-0.9, 0.9), rnd(0.16, 0.3), 1500);
+        const s2 = mkGain(0.9);
+        v[1].connect(s2);
+        s2.connect(wVerb);
+        const n = irnd(4, 8);
+        const k = rnd(0.9, 1.25);
+        let tt = tm;
+        let gap = 0.3;
+        let e = tm;
+        for (let i = 0; i < n; i++) {
+          const f = (300 + i * 34) * k;
+          e = vox(v[0], tt, f, f * 1.5, 0.15, 0.6, VOWELS[i === n - 1 ? 0 : 2], 0, 0);
+          tt += gap;
+          gap = Math.max(0.15, gap * 0.88);
+        }
+        done(v, e + 0.3);
+        nextMonkey = tm + rnd(14, 38);
+      }
+      // ---- night: frogs, crickets, owls, and once in a while something big, far away, that is not interested in you
+      if (night) {
+        if (nextFrog < now) nextFrog = now + 0.05;
+        while (nextFrog < horizon) {
+          const v = voice(insG, rnd(-0.9, 0.9), rnd(0.3, 0.9), 0);
+          const k = rnd(0.85, 1.2);
+          let e = rasp(v[0], nextFrog, 108 * k, 100 * k, 820 * k, 4, 42, 0.11, 0.11);
+          e = Math.max(e, rasp(v[0], nextFrog + 0.15, 112 * k, 126 * k, 1300 * k, 4, 46, 0.14, 0.1));
+          if (Math.random() < 0.5) e = Math.max(e, rasp(v[0], nextFrog + 0.62, 108 * k, 100 * k, 820 * k, 4, 42, 0.11, 0.08));
+          done(v, e);
+          nextFrog += rnd(0.5, 2.6);
+        }
+        if (nextPeep < now) nextPeep = now + 0.05;
+        while (nextPeep < horizon) {
+          // peepers: tiny rising "pweep"s in a run
+          const v = voice(insG, rnd(-0.9, 0.9), rnd(0.3, 0.8), 0);
+          const f = rnd(2500, 3100);
+          const n = irnd(2, 6);
+          let e = nextPeep;
+          for (let i = 0; i < n; i++) e = tone(v[0], nextPeep + i * 0.21, "sine", f, f * 1.12, 0.07, 0.02, 0.01, 0.02);
+          done(v, e);
+          nextPeep += rnd(1.2, 4.5);
+        }
+        if (nextCricket < now) nextCricket = now + 0.05;
+        while (nextCricket < horizon) {
+          cricketPhrase({ gain: insG }, nextCricket, pick(cf) * rnd(0.98, 1.02), rnd(-0.9, 0.9), rnd(0.3, 0.9));
+          nextCricket += rnd(0.5, 1.8);
+        }
+        if (nextOwl < horizon) {
+          const to = Math.max(nextOwl, now + 0.05);
+          const k = rnd(0.9, 1.1);
+          const pan = rnd(-0.8, 0.8);
+          const hoot = (tt, kk, vol, p) => {
+            const v = voice(birdG, p, vol, 1800);
+            let e = tone(v[0], tt, "sine", 372 * kk, 352 * kk, 0.26, 0.06, 0.05, 0.07);
+            tone(v[0], tt + 0.42, "sine", 372 * kk, 360 * kk, 0.12, 0.05, 0.03, 0.04);
+            e = tone(v[0], tt + 0.6, "sine", 380 * kk, 330 * kk, 0.42, 0.06, 0.05, 0.1);
+            done(v, e);
+            return e;
+          };
+          const e = hoot(to, k, rnd(0.5, 0.9), pan);
+          if (Math.random() < 0.6) hoot(e + rnd(0.6, 1.6), k * 1.12, rnd(0.25, 0.5), -pan); // its mate, further off
+          nextOwl = to + rnd(9, 24);
+        }
+        if (nextGrowl < horizon) {
+          const tg = Math.max(nextGrowl, now + 0.05);
+          const v = voice(L.gain, rnd(-0.7, 0.7), 0.3, 420);
+          const s2 = mkGain(1);
+          v[1].connect(s2);
+          s2.connect(wVerb);
+          const e = rasp(v[0], tg, 62, 50, 260, 1.5, 19, 1.8, 0.5, 0.6);
+          done(v, e);
+          nextGrowl = tg + rnd(30, 70);
+        }
+      }
+      // ---- drips (mist: the main event; otherwise a few)
+      if (mist || dawn || night) {
+        if (nextDrip < now) nextDrip = now + 0.05;
+        while (nextDrip < horizon) {
+          const v = voice(L.gain, rnd(-0.9, 0.9), rnd(0.3, 1), 0);
+          const s2 = mkGain(mist ? 0.7 : 0.3);
+          v[1].connect(s2);
+          s2.connect(wVerb);
+          const f = rnd(900, 2400);
+          let e = thump(v[0], nextDrip, f, f * rnd(1.4, 1.9), 0.05, 0.004, rnd(0.02, 0.05), rnd(0.02, 0.04));
+          if (Math.random() < 0.4) e = fabricRustle(v[0], nextDrip + 0.01, 0.07, 3600, 1.2, 0.02, 2); // onto a leaf
+          done(v, e);
+          nextDrip += mist ? rnd(0.25, 1.6) : rnd(1.5, 5);
+        }
+      }
+    });
+  }
+
+  function jungleAmbience(on, time = "day") {
+    const tm = time === "night" || time === "dawn" || time === "mist" ? time : "day";
+    setLoop("jungle", on ? 1 : 0, buildJungle, 2.4, tm);
+  }
+
+  function buildRiver(L, t) {
+    loopOut(L, wBus, wVerb, 0.08);
+    L.scale = 0.5;
+    // a wide slow river: low body, mid wash, bright riffles, and bubbles turning over
+    const low = bed(L, t, pinkBuf, "lowpass", 420, 0.5, 0.2, null, 0.8);
+    lfo(L, t, 0.17, 0.04, low.g.gain);
+    const mid = bed(L, t, pinkBuf, "bandpass", 1300, 0.6, 0.09, null, 1.1);
+    lfo(L, t, 0.29, 300, mid.f.frequency);
+    lfo(L, t, 0.43, 0.025, mid.g.gain);
+    const hi = bed(L, t, whiteBuf, "bandpass", 4200, 0.8, 0.02, null, 1.2);
+    lfo(L, t, 0.37, 900, hi.f.frequency);
+    let next = t + 0.1;
+    every(L, 400, (now) => {
+      if (next < now) next = now + 0.05;
+      while (next < now + 0.9) {
+        const f = rnd(420, 1500);
+        thump(L.gain, next, f, f * rnd(1.3, 1.8), rnd(0.03, 0.07), 0.005, rnd(0.012, 0.035), rnd(0.015, 0.03));
+        next += rnd(0.04, 0.22);
+      }
+    });
+  }
+
+  function river(level) {
+    setLoop("river", level, buildRiver, 0.8);
+  }
+
+  function buildRain(L, t) {
+    loopOut(L, wBus, wVerb, 0.06);
+    L.scale = 0.7;
+    L.lv = 0.5;
+    // far hiss of the canopy, the body of the fall, and single drops close by on leaves and ground
+    const hiss = bed(L, t, whiteBuf, "highpass", 4200, 0.5, 0.05, null, 1.1);
+    lfo(L, t, 0.13, 0.012, hiss.g.gain);
+    const body = bed(L, t, pinkBuf, "bandpass", 1500, 0.4, 0.14, null, 1);
+    lfo(L, t, 0.09, 0.03, body.g.gain);
+    lfo(L, t, 0.21, 300, body.f.frequency);
+    const low = bed(L, t, pinkBuf, "lowpass", 300, 0.5, 0.06, null, 0.6);
+    L.set = (lv, tt) => {
+      L.lv = lv;
+      sp(low.g.gain, 0.02 + 0.2 * lv * lv, tt, 0.4);      // heavy rain roars
+      sp(body.f.frequency, 1900 - 700 * lv, tt, 0.4);
+    };
+    let next = t + 0.05;
+    every(L, 300, (now) => {
+      if (next < now) next = now + 0.03;
+      while (next < now + 0.7) {
+        const r = Math.random();
+        const pan = rnd(-0.9, 0.9);
+        const d = outTo(L.gain, wVerb, pan, 0, rnd(0.4, 1));
+        let e;
+        if (r < 0.5) {
+          e = tick(d, next, rnd(2600, 6000), rnd(0.03, 0.08), rnd(0.004, 0.01));           // on a leaf
+        } else if (r < 0.8) {
+          e = thump(d, next, rnd(260, 520), 180, 0.03, 0.003, rnd(0.03, 0.07), 0.016);      // on the ground
+        } else {
+          const f = rnd(900, 2000);
+          e = thump(d, next, f, f * 1.6, 0.04, 0.004, rnd(0.02, 0.05), 0.02);               // into a puddle
+        }
+        release(d, e + 0.1);
+        next += rnd(0.012, 0.09) / (0.25 + L.lv);
+      }
+    });
+  }
+
+  function rain(level) {
+    setLoop("rain", level, buildRain, 1);
+  }
+
+  function jungleLayers(o, seconds = 1.5) {
+    if (!o || typeof o !== "object") return;
+    const secs = Math.max(0.3, num(seconds, 1.5));
+    const keys = ["birds", "insects", "wind"];
+    for (let i = 0; i < 3; i++) if (typeof o[keys[i]] === "number") JL[keys[i]] = clamp(o[keys[i]], 0, 1);
+    if (typeof o.river === "number") setLoop("river", o.river, buildRiver, secs);
+    if (typeof o.rain === "number") setLoop("rain", o.rain, buildRain, secs);
+    const J = loops.jungle;
+    if (!J || !J.layers || !ctx || ctx.state === "closed") return;
+    const t = ctx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const p = J.layers[keys[i]].gain;
+      p.cancelScheduledValues(t);
+      p.setTargetAtTime(JL[keys[i]], t, secs / 3.5);
+    }
+  }
+
+  function thunder(dist = 0.5) {
+    if (!ready() || !gate("thunder", 0.4)) return;
+    const d = clamp(num(dist, 0.5), 0, 1);
+    const dest = wd(rnd(-0.5, 0.5), d * 0.5, 0.4, 1.2);
+    one(dest, (t, keep) => {
+      if (d < 0.6) {
+        // close: the sky tears first
+        const n = 1 - d / 0.6;
+        keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1500, attack: 0.002, peak: 0.6 * n, tc: 0.05 }));
+        keep(crackle(dest, t, 0.5, 1400, 0.4 * n, 0.4, false));
+        keep(thump(dest, t + 0.03, 150, 30, 0.4, 0.004, 0.9 * n, 0.2));
+      }
+      // the roll: it arrives in waves, off every hill, and takes its time to leave
+      const dur = 2.6 + 2.6 * d;
+      const t1 = t + 0.05 + d * 0.3;
+      keep(rumble(dest, t1, dur, 240 - 110 * d, 0.9, 7, 0.5));
+      keep(rumble(dest, t1 + 0.1, dur * 0.7, 700 - 400 * d, 0.3 * (1 - d * 0.6), 5, 0.7));
+      keep(thump(dest, t1, 70, 24, 1.2, 0.05, 0.6, 0.6));
+      keep(thump(dest, t1 + dur * rnd(0.3, 0.5), 60, 24, 0.9, 0.08, 0.4, 0.5));
+    });
+  }
+
+  function birdsFlush(n = 12, pan = 0) {
+    if (!ready() || !gate("flush", 0.3)) return;
+    const count = clamp(num(n, 12) | 0, 1, 24);
+    const p0 = clamp(num(pan, 0), -1, 1);
+    const dest = wOut(0, 0.25);
+    one(dest, (t, keep) => {
+      // the branch letting go, then every bird at once: wingbeats climbing away, alarm calls scattering
+      keep(fabricRustle(dest, t, 0.4, 3800, 0.9, 0.2, 6));
+      keep(crackle(dest, t, 0.25, 3000, 0.06, 0.3, false));
+      for (let i = 0; i < count; i++) {
+        const tb = t + Math.pow(Math.random(), 1.5) * 0.7;
+        const d = outTo(dest, dest, clamp(p0 + rnd(-0.6, 0.6), -1, 1), 0, 1);
+        const rate = rnd(11, 17);
+        const flaps = irnd(5, 11);
+        for (let j = 0; j < flaps; j++) {
+          const tf = tb + j / rate;
+          const a = (1 - j / (flaps + 2)) * 0.2;
+          keep(burst(d, tf, {
+            buf: pinkBuf, type: "bandpass", q: 0.9, f0: rnd(700, 1100), f1: rnd(1700, 2400), sweep: 0.03,
+            attack: 0.008, peak: a, tc: 0.012,
+          }));
+        }
+        if (i % 2 === 0) {
+          const f = rnd(2600, 4200);
+          const calls = irnd(2, 5);
+          for (let j = 0; j < calls; j++) {
+            keep(tone(d, tb + 0.05 + j * rnd(0.09, 0.14), "sine", f * 1.2, f * 0.8, 0.05, 0.05 * (1 - j / (calls + 1)), 0.006, 0.014));
+          }
+        }
+      }
+      // the leaves they left, still moving
+      keep(fabricRustle(dest, t + 0.5, 0.6, 4600, 0.9, 0.07, 5));
+    });
+  }
+
+  function mysteryCall(closeness = 0.5, pan = 0) {
+    if (!ready() || !gate("mystery", 0.4)) return;
+    const c = clamp(num(closeness, 0.5), 0, 1);
+    // far: dark, small, drowned in the forest's echo. Near: warm, clear, dry - and unmistakably a voice.
+    const world = outTo(wBus, wVerb, clamp(num(pan, 0), -1, 1) * 0.85, 0.9 - 0.75 * c, 0.3 + 0.7 * c);
+    const lp = filt("lowpass", 480 * Math.pow(11, c), 0.6);
+    lp.connect(world);
+    const t = ctx.currentTime + 0.02;
+    // the first three notes of the PLATYPUS theme (1 3 5 in D), as a low warbling growl-trill
+    const notes = [146.83, 185, 220];
+    const durs = [0.42, 0.42, 0.95];
+    let tEnd = t;
+    let tt = t;
+    for (let i = 0; i < 3; i++) {
+      const f = notes[i];
+      const dur = durs[i];
+      const from = i === 0 ? f * 0.86 : notes[i - 1];     // each note is scooped up into, like a throat would
+      // growl: the body of the call
+      const g = ctx.createGain();
+      const e = swell(g.gain, tt, 0.07, 0.42, tt + dur * 0.86, 0.06);
+      const o = osc("sawtooth", from, tt, e);
+      o.frequency.exponentialRampToValueAtTime(f, tt + 0.1);
+      const o2 = osc("triangle", from * 2, tt, e);
+      o2.frequency.exponentialRampToValueAtTime(f * 2.005, tt + 0.1);
+      const flt = filt("lowpass", 620, 1.2);
+      const fm = filt("bandpass", 980, 3);
+      const fmG = mkGain(0.5);
+      const tr = mkGain(0.6);
+      const l = osc("sine", i === 2 ? 17 : 23, tt, e);     // the trill
+      if (i === 2) l.frequency.linearRampToValueAtTime(27, tt + dur);
+      const lg = mkGain(0.4);
+      l.connect(lg);
+      lg.connect(tr.gain);
+      const o2g = mkGain(0.5);
+      o.connect(flt);
+      o.connect(fm);
+      fm.connect(fmG);
+      fmG.connect(tr);
+      o2.connect(o2g);
+      o2g.connect(flt);
+      flt.connect(tr);
+      tr.connect(g);
+      g.connect(lp);
+      // the almost-musical part: a soft whistle two octaves up riding on the growl, warbling
+      const w = ctx.createGain();
+      const ew = swell(w.gain, tt + 0.03, 0.08, 0.05 + 0.05 * c, tt + dur * 0.8, 0.07);
+      const ow = osc("sine", from * 4, tt + 0.03, ew);
+      ow.frequency.exponentialRampToValueAtTime(f * 4, tt + 0.12);
+      if (i === 2) ow.frequency.setTargetAtTime(f * 4 * 1.06, tt + dur * 0.5, 0.15); // the last note lifts: a question
+      const v = osc("sine", 9, tt + 0.03, ew);
+      const vg = mkGain(f * 4 * 0.022);
+      v.connect(vg);
+      vg.connect(ow.frequency);
+      ow.connect(w);
+      w.connect(lp);
+      tEnd = Math.max(tEnd, e, ew);
+      tt += dur + 0.04;
+    }
+    // breath at the end of the call
+    tEnd = Math.max(tEnd, burst(lp, tt - 0.25, {
+      buf: pinkBuf, type: "bandpass", q: 0.9, f0: 900, f1: 500, sweep: 0.4, attack: 0.12, peak: 0.05, tc: 0.12,
+    }));
+    release(lp, tEnd + 0.2);
+    release(world, tEnd + 0.25);
+  }
+
+  function vines() {
+    if (!ready() || !gate("vines", 0.2)) return;
+    const dest = wOut(0, 0.14);
+    one(dest, (t, keep) => {
+      // pushing through a hanging curtain: heavy leaves dragging, stems knocking, it closing behind you
+      for (let i = 0; i < 5; i++) {
+        const tv = t + i * rnd(0.13, 0.2);
+        keep(fabricRustle(dest, tv, rnd(0.25, 0.4), rnd(2600, 5200), 0.8, rnd(0.1, 0.18), irnd(4, 6)));
+      }
+      keep(fabricRustle(dest, t + 0.1, 0.8, 1500, 0.7, 0.08, 7));
+      for (let i = 0; i < 4; i++) keep(knock(dest, t + rnd(0.1, 0.9), rnd(300, 620), rnd(0.04, 0.09), 0.02));
+      keep(creak(dest, t + 0.25, rnd(260, 360), 0.3, 0.03));
+      keep(crackle(dest, t + 0.1, 0.7, 3600, 0.035, 0.2, false));
+      keep(fabricRustle(dest, t + 1.0, 0.5, 3400, 0.8, 0.07, 5));
+    });
+  }
+
+  function logCreak() {
+    if (!ready() || !gate("log", 0.2)) return;
+    const dest = wOut(rnd(-0.15, 0.15), 0.2);
+    one(dest, (t, keep) => {
+      // a big old trunk taking weight: a slow low groan, fibres ticking, a hollow settle
+      const f = rnd(92, 120);
+      keep(creak(dest, t, f, 0.9, 0.16));
+      keep(creak(dest, t + 0.04, f * 2.03, 0.8, 0.07));
+      keep(creak(dest, t + 0.5, f * 1.48, 0.6, 0.05));
+      for (let i = 0; i < 5; i++) keep(tick(dest, t + rnd(0.1, 0.9), rnd(1500, 2600), rnd(0.03, 0.07), 0.008));
+      keep(knock(dest, t + 0.95, 130, 0.22, 0.07));
+    });
+  }
+
+  // ---- tribe ----------------------------------------------------------------------
+
+  /** A platypus phrase in a given mood at pitch factor k (the friendChirp moods + greet / cheer / war / mourn). */
+  function chirpMood(dest, t, keep, mood, k) {
+    if (mood === "greet") {
+      // "kwee-kwip! prrr": two bright up-chirps and a friendly little trill
+      keep(chirp(dest, t, 980 * k, 1500 * k, 0.12, 0.13));
+      keep(chirp(dest, t + 0.16, 1500 * k, 1900 * k, 0.08, 0.12));
+      keep(chirp(dest, t + 0.3, 1700 * k, 1760 * k, 0.22, 0.09, 22, 0.03));
+    } else if (mood === "cheer") {
+      // a long whoop up and three happy yips
+      keep(chirp(dest, t, 900 * k, 2200 * k, 0.28, 0.14));
+      for (let i = 0; i < 3; i++) keep(chirp(dest, t + 0.34 + i * 0.09, 1900 * k, 2400 * k, 0.05, 0.11));
+    } else if (mood === "war") {
+      // a growl-trill that rises into a bark: brave, not nasty
+      keep(rasp(dest, t, 78 * k, 124 * k, 420, 1.4, 26, 0.34, 0.5));
+      keep(chirp(dest, t + 0.26, 700 * k, 1500 * k, 0.14, 0.16, 30, 0.05));
+      keep(chirp(dest, t + 0.44, 1400 * k, 1100 * k, 0.1, 0.13));
+    } else if (mood === "mourn") {
+      // a long low falling hoot with a tremble, and a smaller one after it
+      keep(chirp(dest, t, 760 * k, 520 * k, 0.9, 0.09, 5, 0.02));
+      keep(chirp(dest, t + 1.1, 600 * k, 430 * k, 0.7, 0.06, 5, 0.025));
+    } else if (mood === "call") {
+      keep(chirp(dest, t, 920 * k, 1380 * k, 0.16, 0.13));
+      keep(chirp(dest, t + 0.2, 1380 * k, 1560 * k, 0.34, 0.12, 7, 0.012));
+    } else if (mood === "giggle") {
+      const n = irnd(5, 7);
+      for (let i = 0; i < n; i++) {
+        const f = (i % 2 ? 1500 : 1820) * k * (1 - i * 0.035);
+        keep(chirp(dest, t + i * 0.075, f, f * 1.12, 0.05, 0.1 - i * 0.008));
+      }
+    } else if (mood === "curious") {
+      keep(chirp(dest, t, 820 * k, 860 * k, 0.08, 0.09));
+      keep(chirp(dest, t + 0.13, 900 * k, 1620 * k, 0.24, 0.12));
+    } else if (mood === "sad") {
+      keep(chirp(dest, t, 1040 * k, 660 * k, 0.5, 0.09, 6, 0.015));
+      keep(chirp(dest, t + 0.62, 820 * k, 600 * k, 0.34, 0.06, 6, 0.018));
+    } else if (mood === "scared") {
+      for (let i = 0; i < 3; i++) {
+        const f = rnd(1650, 1900) * k;
+        keep(chirp(dest, t + i * 0.12, f, f * 0.78, 0.09, 0.1, 28, 0.03));
+      }
+    } else if (mood === "sleepy") {
+      keep(chirp(dest, t, 720 * k, 470 * k, 0.6, 0.07, 4, 0.01));
+      keep(burst(dest, t + 0.05, {
+        buf: pinkBuf, type: "bandpass", q: 1, f0: 1100, f1: 600, sweep: 0.5, attack: 0.2, peak: 0.03, tc: 0.14,
+      }));
+    } else if (mood === "growl") {
+      keep(purr(dest, t, 0.75, 0.34, rnd(72, 86) * Math.sqrt(k), rnd(22, 27)));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "bandpass", q: 1.4, f0: 380, f1: 300, sweep: 0.6, attack: 0.25, peak: 0.05, tc: 0.14,
+      }));
+    } else {
+      // "happy"
+      keep(chirp(dest, t, 1050 * k, 1520 * k, 0.07, 0.12));
+      keep(chirp(dest, t + 0.1, 1250 * k, 1800 * k, 0.07, 0.12));
+      keep(chirp(dest, t + 0.2, 1480 * k, 2250 * k, 0.11, 0.13));
+    }
+  }
+
+  function tribeChirp(mood, volume = 1, pan = 0, pitch = 1) {
+    if (!ready() || !gate("tchirp", 0.03)) return;
+    const vol = clamp(num(volume, 1), 0, 1.5);
+    if (vol < 0.004) return;
+    const dest = wOut(clamp(num(pan, 0), -1, 1) * 0.8, 0.16, vol);
+    const k = clamp(num(pitch, 1), 0.4, 2.5) * rnd(0.96, 1.05);
+    one(dest, (t, keep) => chirpMood(dest, t, keep, mood, k));
+  }
+
+  function buildChatter(L, t) {
+    loopOut(L, wBus, wVerb, 0.2);
+    L.scale = 0.75;
+    L.lv = 0.5;
+    L.set = (lv) => { L.lv = lv; };
+    // a low contented bed: many small bodies purring
+    const bedP = bed(L, t, pinkBuf, "bandpass", 300, 1.2, 0.05, null, 0.6);
+    lfo(L, t, 24, 0.03, bedP.g.gain);
+    lfo(L, t, 0.21, 0.02, bedP.g.gain);
+    let next = t + 0.05;
+    const MOODS = ["happy", "curious", "call", "giggle", "greet"];
+    every(L, 350, (now) => {
+      if (next < now) next = now + 0.04;
+      while (next < now + 0.8) {
+        const d = outTo(L.gain, L.gain, rnd(-0.95, 0.95), 0, rnd(0.25, 0.75));
+        const k = pick([0.8, 0.9, 1, 1, 1.1, 1.25, 1.5]) * rnd(0.96, 1.04); // elders ... pups
+        let e = next;
+        const keep = (x) => { if (x > e) e = x; return x; };
+        const r = Math.random();
+        if (r < 0.34) {
+          // a scrap of a chirp
+          const f = rnd(900, 1700) * k;
+          const n = irnd(1, 3);
+          for (let i = 0; i < n; i++) keep(chirp(d, next + i * rnd(0.08, 0.13), f * rnd(0.9, 1.1), f * rnd(1.1, 1.5), rnd(0.05, 0.1), 0.09));
+        } else if (r < 0.56) {
+          chirpMood(d, next, keep, pick(MOODS), k);
+        } else if (r < 0.8) {
+          keep(purr(d, next, rnd(0.4, 0.9), 0.2, rnd(70, 96) * Math.sqrt(k), rnd(21, 28)));
+        } else {
+          // growl-trill ending in a small chirp
+          keep(rasp(d, next, 88 * k, 104 * k, 460, 1.5, rnd(22, 28), 0.3, 0.26));
+          keep(chirp(d, next + 0.26, 1000 * k, 1300 * k, 0.07, 0.07));
+        }
+        release(d, e + 0.15);
+        next += rnd(0.1, 0.5) / (0.25 + 1.1 * L.lv);
+      }
+    });
+  }
+
+  function tribeChatter(level) {
+    setLoop("tribeChatter", level, buildChatter, 0.8);
+  }
+
+  function tribeCheer(size = 0.7) {
+    if (!ready() || !gate("tcheer", 0.25)) return;
+    const s = clamp(num(size, 0.7), 0.05, 1);
+    const dest = wOut(0, 0.3, 0.85);
+    one(dest, (t, keep) => {
+      // the whole camp at once: whoops and yips from every side, tails slapping the ground
+      const n = 6 + ((s * 16) | 0);
+      const span = 0.8 + 1.4 * s;
+      for (let i = 0; i < n; i++) {
+        const tv = t + Math.pow(Math.random(), 1.3) * span;
+        const d = outTo(dest, dest, rnd(-0.95, 0.95), 0, rnd(0.35, 0.8));
+        const k = pick([0.8, 0.9, 1, 1.1, 1.25, 1.5]) * rnd(0.96, 1.04);
+        chirpMood(d, tv, keep, pick(["cheer", "cheer", "happy", "greet", "giggle"]), k);
+      }
+      const slaps = 4 + ((s * 12) | 0);
+      for (let i = 0; i < slaps; i++) {
+        const ts = t + 0.1 + Math.random() * span;
+        keep(thump(dest, ts, rnd(150, 200), 80, 0.04, 0.003, rnd(0.1, 0.22), 0.03));
+        keep(burst(dest, ts, {
+          buf: pinkBuf, type: "bandpass", q: 0.9, f0: rnd(1200, 2000), attack: 0.002, peak: rnd(0.08, 0.16), tc: 0.014,
+        }));
+      }
+      // one big voice on top when everybody is in
+      if (s > 0.6) keep(chirp(dest, t + 0.1, 800, 2100, 0.4, 0.1, 9, 0.02));
+    });
+  }
+
+  function warCry() {
+    if (!ready() || !gate("warcry", 0.4)) return;
+    const dest = wOut(0, 0.3, 0.9);
+    one(dest, (t, keep) => {
+      // one deep log-drum hit, then the tribe: "RRRRR-ee-YAH!" from a dozen throats, not quite together
+      keep(thump(dest, t, 110, 62, 0.1, 0.004, 0.8, 0.14));
+      keep(knock(dest, t, 180, 0.4, 0.05));
+      for (let i = 0; i < 9; i++) {
+        const d = outTo(dest, dest, rnd(-0.9, 0.9), 0, rnd(0.4, 0.8));
+        const k = pick([0.8, 0.9, 1, 1, 1.12, 1.3]) * rnd(0.97, 1.04);
+        const tv = t + 0.1 + rnd(0, 0.14);
+        keep(rasp(d, tv, 74 * k, 132 * k, 440, 1.3, rnd(22, 29), 0.5, 0.5));
+        keep(chirp(d, tv + 0.42, 760 * k, 1560 * k, 0.16, 0.15, 28, 0.05));
+        keep(chirp(d, tv + 0.62, 1560 * k, 1180 * k, 0.26, 0.15, 9, 0.02));
+      }
+      keep(thump(dest, t + 0.72, 110, 62, 0.1, 0.004, 0.8, 0.14));
+      keep(knock(dest, t + 0.72, 180, 0.4, 0.05));
+      keep(burst(dest, t + 0.72, {
+        buf: pinkBuf, type: "bandpass", q: 0.7, f0: 1500, attack: 0.004, peak: 0.2, tc: 0.03,
+      }));
+    });
+  }
+
+  /** One hit on a hollow log. */
+  function logDrum(dest, t, f, peak) {
+    thump(dest, t, f * 2.42, f * 2.36, 0.03, 0.003, peak * 0.22, 0.03);
+    burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 1.6, f0: f * 4.2, attack: 0.002, peak: peak * 0.5, tc: 0.01 });
+    return thump(dest, t, f * 1.18, f, 0.04, 0.003, peak, 0.085 + 6 / f);
+  }
+
+  const DR_LOW = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0];
+  const DR_MID = [0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1];
+  const DR_HI = [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1];
+  let drumSync = 0.08;
+
+  function buildTribeDrums(L, t, bpm) {
+    loopOut(L, wBus, wVerb, 0.22);
+    L.int = 0.5;
+    L.set = (lv) => { L.int = lv; };
+    const s16 = 60 / bpm / 4;
+    // beat 1 lands on the caller's next beat; the drummers come in there
+    let t0 = ctx.currentTime + drumSync;
+    while (t0 < t + 0.02) t0 += s16 * 4;
+    let n = 0;
+    const lowP = outTo(L.gain, L.gain, -0.25, 0, 1);
+    const midP = outTo(L.gain, L.gain, 0.3, 0, 1);
+    const hiP = outTo(L.gain, L.gain, 0.6, 0, 1);
+    const shP = outTo(L.gain, L.gain, -0.6, 0, 1);
+    every(L, 200, (now) => {
+      for (let guard = 0; guard < 64; guard++) {
+        const ts = t0 + n * s16;
+        if (ts > now + 0.6) break;
+        if (ts > now + 0.01) {
+          const s = n & 15;
+          const bar = (n >> 4) & 3;
+          const it = L.int;
+          const hum = rnd(-0.005, 0.006);
+          const acc = s % 4 === 0 ? 1 : 0.8;
+          const fill = bar === 3 && s >= 12;
+          if (DR_LOW[s]) logDrum(lowP, ts + hum, s === 0 ? 92 : 104, 0.55 * acc);
+          if (it > 0.3 && (DR_MID[s] || fill)) logDrum(midP, ts + hum, fill ? 168 + (s - 12) * 16 : 156, 0.36 * (fill ? 0.9 + (s - 12) * 0.08 : acc));
+          if (it > 0.55 && DR_HI[s]) logDrum(hiP, ts + hum, s % 3 === 0 ? 262 : 233, 0.16 * acc);
+          if (it > 0.75) {
+            // seed-pod shaker on every 16th, pushing the off-beats
+            burst(shP, ts + hum, {
+              buf: whiteBuf, type: "bandpass", q: 1.5, f0: 6200, attack: 0.004, peak: s % 2 ? 0.07 : 0.035, tc: 0.012,
+            });
+          }
+          if (it > 0.9 && s === 8 && bar % 2 === 1) {
+            // somebody slaps a tail on the two of every second bar
+            thump(L.gain, ts, 170, 90, 0.04, 0.003, 0.2, 0.03);
+            burst(L.gain, ts, { buf: pinkBuf, type: "bandpass", q: 0.9, f0: 1700, attack: 0.002, peak: 0.16, tc: 0.016 });
+          }
+        }
+        n++;
+      }
+    });
+  }
+
+  function tribeDrums(on, intensity = 0.5, nextBeatInSeconds, bpm) {
+    drumSync = clamp(num(nextBeatInSeconds, 0.08), 0, 4);
+    setLoop("tribeDrums", on ? clamp(num(intensity, 0.5), 0.05, 1) : 0, buildTribeDrums, 0.4, clamp(num(bpm, 96), 50, 200));
+  }
+
+  function buildFire(L, t) {
+    loopOut(L, wBus, wVerb, 0.06);
+    L.scale = 0.7;
+    L.lv = 0.5;
+    L.set = (lv) => { L.lv = lv; };
+    // the soft roar of the flames, fluttering; over it single cracks, pops and the hiss of sap
+    const roar = bed(L, t, pinkBuf, "lowpass", 360, 0.6, 0.16, null, 0.6);
+    lfo(L, t, 7.3, 0.04, roar.g.gain);
+    lfo(L, t, 0.43, 0.05, roar.g.gain);
+    lfo(L, t, 1.9, 60, roar.f.frequency);
+    const air = bed(L, t, pinkBuf, "bandpass", 1100, 0.6, 0.035, null, 0.9);
+    lfo(L, t, 3.1, 0.015, air.g.gain);
+    let next = t + 0.05;
+    every(L, 300, (now) => {
+      if (next < now) next = now + 0.03;
+      while (next < now + 0.7) {
+        const r = Math.random();
+        const d = outTo(L.gain, L.gain, rnd(-0.4, 0.4), 0, rnd(0.4, 1));
+        let e;
+        if (r < 0.6) {
+          e = tick(d, next, rnd(1800, 5200), rnd(0.05, 0.16), rnd(0.003, 0.008));          // crack
+        } else if (r < 0.85) {
+          e = thump(d, next, rnd(300, 700), rnd(120, 200), 0.02, 0.002, rnd(0.08, 0.2), 0.012); // pop
+          tick(d, next, 2600, 0.08);
+        } else {
+          e = crackle(d, next, rnd(0.15, 0.4), 3000, 0.06, 0.3, false);                     // a run of sparks
+        }
+        release(d, e + 0.1);
+        next += rnd(0.03, 0.4) / (0.3 + L.lv);
+      }
+    });
+  }
+
+  function fire(level) {
+    setLoop("fire", level, buildFire, 0.6);
+  }
+
+  function craft(kind = "weave") {
+    if (!ready() || !gate("craft", 0.05)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.1);
+    one(dest, (t, keep) => {
+      if (kind === "bone") {
+        // two dry bony clicks and a scrape
+        const f = rnd(1300, 1700);
+        keep(knock(dest, t, f * 0.5, 0.2, 0.012));
+        keep(tone(dest, t, "sine", f, f * 0.98, 0.02, 0.06, 0.002, 0.02));
+        keep(knock(dest, t + 0.1, f * 0.56, 0.16, 0.012));
+        keep(tone(dest, t + 0.1, "sine", f * 1.19, f * 1.17, 0.02, 0.05, 0.002, 0.02));
+        keep(rattle(dest, t + 0.16, 0.14, 3200, 3, 0.05, 0.6));
+      } else if (kind === "tie") {
+        // a vine drawn through and knotted: a rising creak and a soft snap
+        keep(fabricRustle(dest, t, 0.2, 3000, 1, 0.08, 3));
+        keep(tone(dest, t + 0.05, "triangle", 320, 560, 0.22, 0.03, 0.05, 0.03));
+        keep(creak(dest, t + 0.05, 380, 0.24, 0.04));
+        keep(tick(dest, t + 0.3, 2400, 0.12));
+        keep(thump(dest, t + 0.3, 300, 180, 0.03, 0.003, 0.1, 0.02));
+      } else if (kind === "tighten") {
+        // the pull that goes right: fibres stretching up in pitch, then a satisfying "thock"
+        keep(creak(dest, t, 300, 0.3, 0.05));
+        keep(tone(dest, t, "triangle", 260, 620, 0.3, 0.035, 0.08, 0.02));
+        keep(fabricRustle(dest, t, 0.3, 3600, 1.1, 0.06, 4));
+        keep(knock(dest, t + 0.32, 330, 0.3, 0.035));
+        keep(pluck(dest, t + 0.33, midi(74), 0.07, 0.3, 0.3));
+      } else if (kind === "done") {
+        // finished: a last snug pull, then a warm little wooden fanfare (D - F# - A - d)
+        keep(creak(dest, t, 340, 0.18, 0.04));
+        keep(knock(dest, t + 0.16, 300, 0.26, 0.03));
+        const n = [62, 66, 69, 74];
+        for (let i = 0; i < 4; i++) {
+          const tn = t + 0.26 + i * 0.1;
+          keep(knock(dest, tn, midi(n[i]), 0.16, 0.09));
+          keep(pluck(dest, tn, midi(n[i] + 12), 0.08, i === 3 ? 0.9 : 0.3, 0.3));
+        }
+        keep(bell(dest, t + 0.56, midi(86), 0.035, 0.7));
+        keep(fabricRustle(dest, t + 0.2, 0.3, 4600, 0.9, 0.05, 4));
+      } else if (kind === "slip") {
+        // it slips: a quick falling zip, a floppy slap. No harm done.
+        keep(tone(dest, t, "triangle", 700, 240, 0.16, 0.05, 0.01, 0.03));
+        keep(whoosh(dest, t, 3600, 1400, 700, 0.06, 0.12, 0.1, 2, whiteBuf));
+        keep(thump(dest, t + 0.17, 150, 90, 0.05, 0.006, 0.16, 0.04));
+        keep(fabricRustle(dest, t + 0.17, 0.16, 2600, 1, 0.08, 3));
+      } else {
+        // weave: leaf over, leaf under: two soft swishes and a fibre creak
+        keep(fabricRustle(dest, t, 0.16, rnd(3600, 5000), 1, 0.1, 3));
+        keep(whoosh(dest, t, 1800, 4200, 2600, 0.08, 0.08, 0.05, 2, whiteBuf));
+        keep(fabricRustle(dest, t + 0.17, 0.16, rnd(4200, 5800), 1, 0.09, 3));
+        keep(creak(dest, t + 0.1, rnd(420, 560), 0.12, 0.022));
+      }
+    });
+  }
+
+  function eatFruit() {
+    if (!ready() || !gate("fruit", 0.08)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.06);
+    one(dest, (t, keep) => {
+      // a juicy crunch, two wet chomps and a happy gulp
+      keep(crackle(dest, t, 0.12, 1800, 0.22, 0.5, false));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "bandpass", q: 1.2, f0: 1900, f1: 800, sweep: 0.07, attack: 0.003, peak: 0.3, tc: 0.03,
+      }));
+      bloops(dest, t + 0.02, 3, 500, 1400, 0.1, 0.06, keep);
+      for (let i = 0; i < 2; i++) {
+        const tc = t + 0.2 + i * 0.16;
+        keep(burst(dest, tc, {
+          buf: pinkBuf, type: "lowpass", q: 1.5, f0: 1100, f1: 340, sweep: 0.06, attack: 0.008, peak: 0.24, tc: 0.03,
+        }));
+        keep(crackle(dest, tc, 0.07, 2400, 0.08, 0.4, false));
+        bloops(dest, tc, 2, 600, 1500, 0.06, 0.04, keep);
+      }
+      keep(thump(dest, t + 0.56, 260, 520, 0.07, 0.01, 0.1, 0.03)); // gulp
+    });
+  }
+
+  function materialPickup(kind = "leaf") {
+    if (!ready() || !gate("mat", 0.05)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.16);
+    one(dest, (t, keep) => {
+      let note = 74;
+      if (kind === "vine") {
+        // a vine pulled free: a stretch, a snap, the leaves shaking
+        keep(tone(dest, t, "triangle", 240, 520, 0.14, 0.04, 0.03, 0.02));
+        keep(tick(dest, t + 0.15, 2200, 0.16));
+        keep(fabricRustle(dest, t + 0.14, 0.22, 3600, 1, 0.1, 4));
+        note = 71;
+      } else if (kind === "bone") {
+        // dry and hollow
+        keep(knock(dest, t, 700, 0.24, 0.016));
+        keep(tone(dest, t, "sine", 1500, 1470, 0.03, 0.06, 0.002, 0.03));
+        keep(knock(dest, t + 0.09, 880, 0.14, 0.012));
+        note = 78;
+      } else if (kind === "stone") {
+        keep(thump(dest, t, 300, 160, 0.03, 0.002, 0.3, 0.02));
+        keep(tick(dest, t, 3200, 0.2));
+        keep(crackle(dest, t + 0.02, 0.1, 3000, 0.05, 0.3, false));
+        note = 69;
+      } else if (kind === "wood") {
+        keep(knock(dest, t, 260, 0.3, 0.04));
+        keep(knock(dest, t + 0.08, 330, 0.18, 0.03));
+        note = 66;
+      } else {
+        // leaf: plucked off its stem
+        keep(tick(dest, t, 2800, 0.12));
+        keep(fabricRustle(dest, t, 0.2, rnd(4200, 5600), 1, 0.13, 4));
+        keep(fabricRustle(dest, t + 0.1, 0.14, 6400, 1.2, 0.05, 3));
+      }
+      keep(pluck(dest, t + 0.1, midi(note), 0.1, 0.3, 0.35));
+      keep(pluck(dest, t + 0.18, midi(note + 7), 0.08, 0.4, 0.35));
+    });
+  }
+
+  // ---- potions --------------------------------------------------------------------
+
+  function buildCauldron(L, t) {
+    loopOut(L, wBus, wVerb, 0.2);
+    L.scale = 0.8;
+    L.lv = 0.5;
+    // a big iron pot: the simmer, the hollow drone of the pot itself, thick bubbles rising and bursting
+    const sim = bed(L, t, whiteBuf, "bandpass", 3000, 0.8, 0.02, null, 1);
+    lfo(L, t, 0.6, 0.008, sim.g.gain);
+    const low = bed(L, t, pinkBuf, "lowpass", 220, 1.2, 0.14, null, 0.5);
+    lfo(L, t, 0.31, 0.05, low.g.gain);
+    const pot = bed(L, t, pinkBuf, "bandpass", 410, 14, 0.12, null, 0.8);
+    lfo(L, t, 0.17, 14, pot.f.frequency);
+    L.set = (lv, tt) => {
+      L.lv = lv;
+      sp(sim.g.gain, 0.008 + 0.04 * lv, tt, 0.3);
+      sp(sim.f.frequency, 2400 + 1800 * lv, tt, 0.3);
+    };
+    let next = t + 0.05;
+    every(L, 300, (now) => {
+      if (next < now) next = now + 0.03;
+      while (next < now + 0.7) {
+        const d = outTo(L.gain, L.gain, rnd(-0.3, 0.3), 0, rnd(0.4, 1));
+        const big = Math.random() < 0.25;
+        const f = big ? rnd(130, 240) : rnd(260, 680);
+        // "bl-OOP": the bubble rises in pitch as it shrinks, and pops
+        let e = thump(d, next, f, f * rnd(1.6, 2.3), big ? 0.11 : 0.06, 0.008, big ? 0.24 : 0.12, big ? 0.05 : 0.03);
+        if (big) e = Math.max(e, tick(d, next + 0.11, rnd(1500, 2400), 0.05, 0.008));
+        release(d, e + 0.1);
+        next += rnd(0.05, 0.45) / (0.2 + 1.3 * L.lv);
+      }
+    });
+  }
+
+  function cauldron(level) {
+    setLoop("cauldron", level, buildCauldron, 0.6);
+  }
+
+  function ingredient(i = 0, correct = true) {
+    if (!ready() || !gate("ingr", 0.08)) return;
+    const idx = clamp(num(i, 0) | 0, 0, 2);
+    const dest = wOut(0, 0.25);
+    one(dest, (t, keep) => {
+      // plop into the pot
+      splashInto(dest, t, 0.3, keep);
+      keep(thump(dest, t, 200, 420, 0.08, 0.008, 0.2, 0.04));
+      if (correct) {
+        // the pot answers with the next note of a rising chord (D, F#, A) and a curl of sparkle
+        const n = [62, 66, 69][idx];
+        keep(pluck(dest, t + 0.14, midi(n), 0.13, 0.7, 0.3));
+        keep(bell(dest, t + 0.14, midi(n + 12), 0.05, 0.6));
+        keep(bell(dest, t + 0.24, midi(n + 19), 0.03, 0.5));
+        keep(crackle(dest, t + 0.16, 0.5, 5600, 0.02, 0.14, false));
+        keep(tone(dest, t + 0.14, "sine", midi(n) * 0.5, midi(n) * 0.5, 0.4, 0.05, 0.1, 0.2));
+      } else {
+        // wrong: the brew burps a sour, sagging two-note "bleh"
+        const lp = filt("lowpass", 800, 2);
+        lp.connect(dest);
+        keep(tone(lp, t + 0.14, "sawtooth", 155.6, 150, 0.14, 0.12, 0.02, 0.03));
+        keep(tone(lp, t + 0.32, "sawtooth", 146.8, 104, 0.3, 0.12, 0.02, 0.06));
+        bloops(dest, t + 0.2, 3, 160, 320, 0.3, 0.1, keep);
+        keep(burst(dest, t + 0.16, {
+          buf: pinkBuf, type: "bandpass", q: 0.8, f0: 700, f1: 300, sweep: 0.4, attack: 0.06, peak: 0.1, tc: 0.12,
+        }));
+      }
+    });
+  }
+
+  function stir(onBeat = true) {
+    if (!ready() || !gate("stir", 0.08)) return;
+    const dest = wOut(0, 0.2);
+    one(dest, (t, keep) => {
+      // the paddle going round: thick liquid swirling, the spoon knocking the rim
+      keep(whoosh(dest, t, 300, 900, 380, 0.16, 0.22, 0.26, 1.4, pinkBuf));
+      bloops(dest, t + 0.05, 3, 240, 700, 0.25, 0.07, keep);
+      if (onBeat) {
+        // in time: the brew sings back, bright and whole
+        keep(knock(dest, t, 420, 0.16, 0.03));
+        keep(pluck(dest, t, midi(74), 0.11, 0.5, 0.3));
+        keep(bell(dest, t, midi(86), 0.04, 0.5));
+        keep(whoosh(dest, t + 0.02, 1800, 5200, 3000, 0.14, 0.2, 0.03, 3, whiteBuf));
+      } else {
+        // out of time: a dull clonk and a slop
+        keep(knock(dest, t, 230, 0.2, 0.03));
+        keep(clang(dest, t, 300, 0.05, 0.08, 3));
+        keep(burst(dest, t + 0.06, {
+          buf: pinkBuf, type: "lowpass", q: 1.2, f0: 700, f1: 240, sweep: 0.12, attack: 0.02, peak: 0.16, tc: 0.05,
+        }));
+      }
+    });
+  }
+
+  function brewDone() {
+    if (!ready() || !gate("brew", 0.3)) return;
+    const dest = wOut(0, 0.45);
+    one(dest, (t, keep) => {
+      // the brew turns: one big soft "FOOM" of bubbles, then light pouring upward
+      keep(thump(dest, t, 120, 320, 0.3, 0.03, 0.4, 0.12));
+      keep(whoosh(dest, t, 300, 3200, 1600, 0.4, 0.5, 0.2, 0.9, pinkBuf));
+      bloops(dest, t, 8, 300, 1600, 0.5, 0.08, keep);
+      keep(pad(dest, t + 0.2, [midi(50), midi(57), midi(62), midi(66), midi(69)], 1.4, 0.07, 0.5, 0.6, 2400));
+      const n = [62, 66, 69, 74, 78, 81, 86, 90];
+      for (let i = 0; i < n.length; i++) {
+        keep(bell(dest, t + 0.25 + i * 0.075, midi(n[i]), 0.08 - i * 0.004, 0.3 + i * 0.07));
+        if (i % 2 === 0) keep(pluck(dest, t + 0.25 + i * 0.075, midi(n[i]), 0.06, 0.4, 0.3));
+      }
+      keep(crackle(dest, t + 0.5, 1.1, 6000, 0.03, 0.14, false));
+    });
+  }
+
+  function brewFail() {
+    if (!ready() || !gate("brew", 0.3)) return;
+    const dest = wOut(0, 0.25);
+    one(dest, (t, keep) => {
+      // "pfffff": a puff of grey smoke, a sad little slide downhill, the pot gurgling empty
+      keep(thump(dest, t, 140, 70, 0.1, 0.01, 0.34, 0.07));
+      keep(whoosh(dest, t, 2600, 900, 300, 0.05, 0.6, 0.3, 0.7, pinkBuf));
+      const lp = filt("lowpass", 900, 2.5);
+      lp.connect(dest);
+      keep(tone(lp, t + 0.12, "sawtooth", 233, 220, 0.2, 0.1, 0.03, 0.04));
+      keep(tone(lp, t + 0.38, "sawtooth", 196, 110, 0.5, 0.1, 0.03, 0.1));
+      keep(crackle(dest, t + 0.05, 0.6, 3000, 0.05, 0.2, false));
+      // glug-glug-glug down the drain
+      for (let i = 0; i < 5; i++) {
+        const f = 420 - i * 50;
+        keep(thump(dest, t + 0.75 + i * 0.11, f, f * 0.6, 0.07, 0.01, 0.12 - i * 0.015, 0.03));
+      }
+    });
+  }
+
+  function potionPickup() {
+    if (!ready() || !gate("ppick", 0.08)) return;
+    const dest = out(0, 0.3);
+    one(dest, (t, keep) => {
+      // glass against a claw, the liquid sloshing once, two glowing notes
+      keep(bell(dest, t, rnd(2600, 3200), 0.09, 0.08));
+      keep(tick(dest, t, 4600, 0.1));
+      bloops(dest, t + 0.04, 3, 500, 1100, 0.14, 0.07, keep);
+      keep(pluck(dest, t + 0.08, midi(78), 0.11, 0.4, 0.35));
+      keep(pluck(dest, t + 0.18, midi(85), 0.11, 0.7, 0.35));
+      keep(bell(dest, t + 0.18, midi(97), 0.03, 0.6));
+    });
+  }
+
+  function potionThrow() {
+    if (!ready() || !gate("pthrow", 0.08)) return;
+    const dest = wOut(0, 0.1);
+    one(dest, (t, keep) => {
+      // a lobbed bottle: the swish of the arm, the bottle tumbling (a glassy flutter), liquid slapping inside
+      keep(whoosh(dest, t, 500, 1900, 900, 0.09, 0.2, 0.22, 1.6, pinkBuf));
+      const g = ctx.createGain();
+      const e = swell(g.gain, t + 0.04, 0.05, 0.03, t + 0.4, 0.08);
+      const o = osc("sine", 1500, t + 0.04, e);
+      o.frequency.linearRampToValueAtTime(1150, t + 0.5);
+      const tr = mkGain(0.5);
+      const l = osc("sine", 13, t + 0.04, e);
+      const lg = mkGain(0.5);
+      l.connect(lg);
+      lg.connect(tr.gain);
+      o.connect(tr);
+      tr.connect(g);
+      g.connect(dest);
+      keep(e);
+      bloops(dest, t + 0.05, 2, 600, 1200, 0.2, 0.04, keep);
+    });
+  }
+
+  function potionSmash(pan = 0) {
+    if (!ready() || !gate("psmash", 0.05)) return;
+    const dest = wd(clamp(num(pan, 0), -1, 1) * 0.8, 0, 0.35);
+    one(dest, (t, keep) => {
+      // a small bottle bursting, the potion splashing out, the magic fizzing up and away
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.6, f0: 2600, attack: 0.002, peak: 0.3, tc: 0.03 }));
+      keep(thump(dest, t, 320, 120, 0.05, 0.003, 0.24, 0.03));
+      for (let i = 0; i < 10; i++) {
+        keep(bell(dest, t + Math.pow(Math.random(), 1.6) * 0.3, rnd(2400, 6400), rnd(0.015, 0.05), rnd(0.03, 0.08)));
+      }
+      splashInto(dest, t + 0.01, 0.4, keep);
+      keep(crackle(dest, t + 0.05, 0.9, 4200, 0.07, 0.25, false));
+      keep(whoosh(dest, t + 0.05, 1500, 5200, 6500, 0.5, 0.3, 0.07, 2, whiteBuf));
+      const n = [74, 78, 81, 86, 90];
+      for (let i = 0; i < n.length; i++) keep(bell(dest, t + 0.12 + i * 0.08, midi(n[i]), 0.04, 0.35));
+    });
+  }
+
+  function transform(seconds = 2.6) {
+    if (!ready() || !gate("transform", 0.2)) return;
+    const dur = clamp(num(seconds, 2.6), 0.8, 8);
+    const dest = wOut(0, 0.5);
+    one(dest, (t, keep) => {
+      const tB = t + dur; // the bloom
+      // 1. the swirl: air and light winding upward, faster and faster
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.22, tB);
+      g.gain.setTargetAtTime(0, tB, 0.12);
+      const src = noise(pinkBuf, t, tB + 1, 1.1);
+      const bp = filt("bandpass", 300, 2.4);
+      bp.frequency.setValueAtTime(300, t);
+      bp.frequency.exponentialRampToValueAtTime(4800, tB);
+      const tr = mkGain(0.6);
+      const l = osc("sine", 3, t, tB + 1);
+      l.frequency.exponentialRampToValueAtTime(15, tB);
+      const lg = mkGain(0.4);
+      l.connect(lg);
+      lg.connect(tr.gain);
+      src.connect(bp);
+      bp.connect(tr);
+      tr.connect(g);
+      g.connect(dest);
+      // 2. three voices climbing two octaves, entering one after the other (D, A, d): warm, never shrill
+      const base = [146.83, 220, 293.66];
+      for (let i = 0; i < 3; i++) {
+        const ts = t + i * dur * 0.18;
+        const gv = ctx.createGain();
+        gv.gain.setValueAtTime(0, ts);
+        gv.gain.linearRampToValueAtTime(0.055, tB - 0.05);
+        gv.gain.setTargetAtTime(0, tB, 0.2);
+        const a = osc("sine", base[i], ts, tB + 1.5);
+        const b = osc("triangle", base[i] * 1.004, ts, tB + 1.5);
+        a.frequency.exponentialRampToValueAtTime(base[i] * 4, tB);
+        b.frequency.exponentialRampToValueAtTime(base[i] * 4.01, tB);
+        const bg = mkGain(0.3);
+        const v = osc("sine", 5.5, ts, tB + 1.5);
+        const vg = mkGain(base[i] * 0.03);
+        v.connect(vg);
+        vg.connect(a.frequency);
+        a.connect(gv);
+        b.connect(bg);
+        bg.connect(gv);
+        gv.connect(dest);
+      }
+      // 3. sparkles gathering: sparse at first, a shower by the end, climbing a D major scale
+      const SC = [62, 64, 66, 69, 71, 74, 76, 78, 81, 83, 86, 88, 90, 93];
+      const nSp = Math.round(8 + dur * 7);
+      for (let i = 0; i < nSp; i++) {
+        const x = Math.sqrt((i + Math.random()) / nSp);          // denser toward the end
+        const deg = clamp(Math.round(x * (SC.length - 1) + rnd(-2, 2)), 0, SC.length - 1);
+        keep(bell(dest, t + x * dur, midi(SC[deg] + 12), 0.016 + 0.03 * x, 0.12 + 0.2 * x));
+      }
+      keep(crackle(dest, t + dur * 0.3, dur * 0.7, 5600, 0.035, 0.16, true));
+      // 4. THE BLOOM: a soft major chord opening like a flower, a deep gentle breath under it
+      keep(pad(dest, tB, [midi(38), midi(50), midi(57), midi(62), midi(66), midi(69), midi(76)], 1.5, 0.085, 0.14, 0.7, 2600));
+      keep(thump(dest, tB, 110, 55, 0.5, 0.03, 0.34, 0.25));
+      const BL = [74, 78, 81, 86, 90, 93];
+      for (let i = 0; i < BL.length; i++) {
+        keep(bell(dest, tB + i * 0.055, midi(BL[i]), 0.07 - i * 0.006, 0.9));
+        keep(pluck(dest, tB + i * 0.055, midi(BL[i] - 12), 0.05, 1.1, 0.3));
+      }
+      keep(whoosh(dest, tB, 5000, 2400, 900, 0.03, 1.2, 0.1, 0.7, whiteBuf));
+      keep(crackle(dest, tB + 0.05, 1.3, 6500, 0.03, 0.14, false));
+      // 5. ...and one new platypus chirp: a small, surprised, delighted "kwee?"
+      const k = rnd(1.05, 1.2);
+      keep(chirp(dest, tB + 0.75, 900 * k, 1250 * k, 0.1, 0.11));
+      keep(chirp(dest, tB + 0.9, 1200 * k, 1750 * k, 0.2, 0.12, 8, 0.012));
+      keep(tB + 1.2);
+    });
+  }
+
+  function livingPotion() {
+    if (!ready() || !gate("living", 0.5)) return;
+    const dest = wOut(0, 0.5);
+    one(dest, (t, keep) => {
+      // three slow glass heartbeats, each one a glow: lub (D) - dub (A), fading, over a held breath of light
+      keep(pad(dest, t, [midi(50), midi(62), midi(69), midi(78)], 2.4, 0.045, 0.8, 0.6, 2200));
+      for (let i = 0; i < 3; i++) {
+        const tb = t + 0.1 + i * 0.95;
+        const a = 1 - i * 0.22;
+        keep(bell(dest, tb, midi(74), 0.11 * a, 0.5));
+        keep(pluck(dest, tb, midi(62), 0.1 * a, 0.6, 0.2));
+        keep(thump(dest, tb, 73.4, 60, 0.2, 0.03, 0.2 * a, 0.12));
+        keep(bell(dest, tb + 0.26, midi(81), 0.08 * a, 0.7));
+        keep(pluck(dest, tb + 0.26, midi(69), 0.07 * a, 0.7, 0.2));
+        keep(thump(dest, tb + 0.26, 55, 46, 0.2, 0.03, 0.14 * a, 0.14));
+        // the glow itself: a soft swell of high air after each beat
+        keep(whoosh(dest, tb, 3000, 6000, 4000, 0.3, 0.4, 0.018 * a, 3, whiteBuf));
+      }
+      keep(bell(dest, t + 2.6, midi(86), 0.03, 0.9));
+    });
+  }
+
+  // ---- THE SCREAM -----------------------------------------------------------------
+
+  let screamCurve = null;
+  let afterG = null;     // the ring + heartbeat of the last scream / shotDown (stopAll fades it)
+
+  function buildScreamCharge(L, t) {
+    L.gain.connect(bus);
+    const s = mkGain(0.25);
+    L.gain.connect(s);
+    s.connect(verbIn);
+    const far = t + 1e6;
+    // the inhale: air being pulled in, tightening ...
+    const inh = bed(L, t, pinkBuf, "bandpass", 600, 1, 0.3, null, 1);
+    // ... into a whistle-tone that climbs, with a nervous flutter
+    const wh = osc("sine", 700, t, far);
+    const wh2 = osc("triangle", 1400, t, far);
+    const whG = mkGain(0);
+    const wh2G = mkGain(0.12);
+    wh.connect(whG);
+    wh2.connect(wh2G);
+    wh2G.connect(whG);
+    whG.connect(L.gain);
+    L.nodes.push(wh, wh2);
+    const flut = osc("sine", 8, t, far);
+    const flG = mkGain(0);
+    flut.connect(flG);
+    flG.connect(wh.frequency);
+    L.nodes.push(flut);
+    const body = osc("sine", 70, t, far);          // the chest filling: felt more than heard
+    const bodyG = mkGain(0);
+    body.connect(bodyG);
+    bodyG.connect(L.gain);
+    L.nodes.push(body);
+    L.set = (lv, tt) => {
+      // L.gain already follows the level; keep the breath audible when the charge has only just begun
+      const f = 700 * Math.pow(2, 2.3 * lv);
+      sp(inh.f.frequency, 500 + 3400 * lv, tt, 0.06);
+      sp(inh.f.Q, 1 + 9 * lv * lv, tt, 0.06);
+      sp(inh.g.gain, 0.3 / Math.max(0.18, lv), tt, 0.06);
+      sp(wh.frequency, f, tt, 0.06);
+      sp(wh2.frequency, f * 2.003, tt, 0.06);
+      sp(whG.gain, 0.02 + 0.14 * lv * lv, tt, 0.06);
+      sp(flut.frequency, 7 + 16 * lv, tt, 0.06);
+      sp(flG.gain, f * 0.012 * lv, tt, 0.06);
+      sp(body.frequency, 60 + 50 * lv, tt, 0.06);
+      sp(bodyG.gain, 0.3 * lv, tt, 0.06);
+    };
+  }
+
+  function screamCharge(frac) {
+    setLoop("screamCharge", clamp(num(frac, 0), 0, 1), buildScreamCharge, 0.3);
+  }
+
+  function scream(power = 1, controlled = true) {
+    const p = clamp(num(power, 1), 0, 1);
+    const ctl = controlled !== false;
+    const D = 0.5 + 0.5 * p;                 // the scream
+    const S = ctl ? 1.2 + 2 * p : 4;         // THE SILENCE
+    setLoop("screamCharge", 0, buildScreamCharge, 0.3);
+    if (!ready()) return S;
+    const t = ctx.currentTime + 0.012;
+    const tD = t + D;
+    const tBack = tD + S;
+
+    // the world: flattened at once by the scream, gone when it ends, back over 1.5 s after the silence
+    duck.gain.cancelScheduledValues(t);
+    duck.gain.setValueAtTime(duck.gain.value, t);
+    duck.gain.linearRampToValueAtTime(0.25, t + 0.07);
+    duck.gain.linearRampToValueAtTime(0, tD);
+    duck.gain.setValueAtTime(0, tBack);
+    duck.gain.linearRampToValueAtTime(1, tBack + 1.5);
+    // the birds come back last
+    const J = loops.jungle;
+    if (J && J.birdGate) {
+      J.birdGate.gain.cancelScheduledValues(t);
+      J.birdGate.gain.setTargetAtTime(0, t, 0.03);
+      J.birdGate.gain.setTargetAtTime(1, tBack + 1.4, 0.9);
+    }
+
+    // ---- the voice: everything below is summed, driven hard through a shaper and sent to the limiter
+    if (!screamCurve) {
+      screamCurve = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) screamCurve[i] = Math.tanh(((i / 1023) * 2 - 1) * 4);
+    }
+    const pre = ctx.createGain();
+    pre.gain.setValueAtTime(0, t);
+    pre.gain.linearRampToValueAtTime(1, t + 0.025);
+    pre.gain.setValueAtTime(1, tD - 0.03);
+    pre.gain.linearRampToValueAtTime(0, tD + 0.02);       // it does not fade. It STOPS.
+    const brk = mkGain(1);                               // break-up (uncontrolled only)
+    const drive = ctx.createWaveShaper();
+    drive.curve = screamCurve;
+    drive.oversample = "2x";
+    const post = mkGain(0.55 + 0.45 * p);
+    pre.connect(brk);
+    brk.connect(drive);
+    drive.connect(post);
+    post.connect(storyBus);
+    const vs = mkGain(0.32);
+    post.connect(vs);
+    vs.connect(storyVerb);                                // its echo is the only thing left in the silence
+    const tStop = tD + 0.3;
+
+    const f0 = (ctl ? 1320 : 1180) * rnd(0.98, 1.02);
+    const srcs = [osc("sawtooth", f0 * 0.5, t, tStop), osc("sawtooth", f0 * 0.5, t, tStop), osc("square", f0 * 0.25, t, tStop)];
+    srcs[1].detune.value = 17;
+    const mult = [1, 1, 0.5];
+    const vib = osc("sine", 6.5, t, tStop);
+    vib.frequency.linearRampToValueAtTime(ctl ? 11 : 15, tD);
+    const vibG = ctx.createGain();
+    vibG.gain.setValueAtTime(f0 * 0.01, t);
+    vibG.gain.linearRampToValueAtTime(f0 * (ctl ? 0.035 : 0.06), tD);
+    vib.connect(vibG);
+    const voiceMix = mkGain(1);
+    for (let i = 0; i < 3; i++) {
+      const o = srcs[i];
+      const m = mult[i];
+      // the pitch: torn upward in 70 ms, pushed a little higher, sagging only at the very end
+      o.frequency.setValueAtTime(f0 * 0.5 * m, t);
+      o.frequency.exponentialRampToValueAtTime(f0 * m, t + 0.07);
+      o.frequency.linearRampToValueAtTime(f0 * 1.12 * m, t + D * 0.6);
+      o.frequency.linearRampToValueAtTime(f0 * 0.84 * m, tD);
+      vibG.connect(o.frequency);
+      if (!ctl) {
+        // the voice cracks: it flips up a fifth for an instant, three or four times
+        const cracks = irnd(3, 4);
+        for (let c = 0; c < cracks; c++) {
+          const tc = t + 0.12 + ((c + Math.random() * 0.7) / cracks) * (D - 0.2);
+          o.detune.setValueAtTime((i === 1 ? 17 : 0) + 700, tc);
+          o.detune.setValueAtTime(i === 1 ? 17 : 0, tc + rnd(0.03, 0.07));
+        }
+      }
+      const og = mkGain(i === 2 ? 0.35 : 0.6);
+      o.connect(og);
+      og.connect(voiceMix);
+    }
+    // formants: a mouth opening as wide as it goes
+    const FM = [[1150, 4, 1.0], [2750, 6, 0.8], [3900, 7, 0.45], [6200, 5, 0.2]];
+    for (let i = 0; i < FM.length; i++) {
+      const bp = filt("bandpass", FM[i][0], FM[i][1]);
+      bp.frequency.setValueAtTime(FM[i][0] * 0.8, t);
+      bp.frequency.exponentialRampToValueAtTime(FM[i][0] * 1.12, t + D * 0.5);
+      const fg = mkGain(FM[i][2]);
+      voiceMix.connect(bp);
+      bp.connect(fg);
+      fg.connect(pre);
+    }
+    const direct = filt("lowpass", 4200, 0.5);
+    const dg = mkGain(0.12);
+    voiceMix.connect(direct);
+    direct.connect(dg);
+    dg.connect(pre);
+    // noise: the air itself tearing
+    const n1 = noise(whiteBuf, t, tStop, 1);
+    const n1f = filt("bandpass", 3000, 0.6);
+    const n1g = mkGain(ctl ? 0.3 : 0.5);
+    n1.connect(n1f);
+    n1f.connect(n1g);
+    n1g.connect(pre);
+    const n2 = noise(pinkBuf, t, tStop, 0.7);
+    const n2f = filt("lowpass", 700, 0.7);
+    const n2g = mkGain(0.5);
+    n2.connect(n2f);
+    n2f.connect(n2g);
+    n2g.connect(pre);
+    if (!ctl) {
+      // raw: the whole thing stutters and tears, it is not something it knows how to do
+      const n = 48;
+      const c = new Float32Array(n);
+      let v = 1;
+      for (let i = 0; i < n; i++) {
+        if (Math.random() < 0.3) v = rnd(0.15, 0.6);
+        else v += (1 - v) * 0.6;
+        c[i] = v;
+      }
+      c[0] = 1;
+      c[n - 1] = 1;
+      brk.gain.setValueCurveAtTime(c, t + 0.05, D - 0.06);
+    }
+    // the sub drop: bypasses the shaper so it stays one clean falling floor under everything
+    const subG = ctx.createGain();
+    subG.gain.setValueAtTime(0, t);
+    subG.gain.linearRampToValueAtTime(0.9, t + 0.03);
+    subG.gain.setValueAtTime(0.9, tD - 0.05);
+    subG.gain.linearRampToValueAtTime(0, tD + 0.03);
+    const sub = osc("sine", 130, t, tStop);
+    sub.frequency.exponentialRampToValueAtTime(30, tD);
+    const sub2 = osc("triangle", 260, t, tStop);
+    sub2.frequency.exponentialRampToValueAtTime(60, tD);
+    const sub2g = mkGain(0.3);
+    sub.connect(subG);
+    sub2.connect(sub2g);
+    sub2g.connect(subG);
+    subG.connect(post);
+    // the front of it: a shockwave leaving
+    thump(post, t, 240, 50, 0.12, 0.003, 0.9, 0.07);
+    burst(post, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1500, attack: 0.001, peak: 0.7, tc: 0.02 });
+
+    // ---- THE SILENCE: what is left
+    const after = outTo(storyBus, storyVerb, 0, 0.25);
+    afterG = after;
+    // the air falling back in where the sound was
+    thump(after, tD, 80, 24, 0.5, 0.012, 0.6, 0.2);
+    // a faint high ring (two tones beating), fading through the silence
+    const ring = ctx.createGain();
+    ring.gain.setValueAtTime(0, tD);
+    ring.gain.linearRampToValueAtTime(ctl ? 0.014 : 0.022, tD + 0.15);
+    ring.gain.setTargetAtTime(0, tD + 0.2, S / 2.6);
+    const r1 = osc("sine", 4186, tD, tBack + 1.6);
+    const r2 = osc("sine", 4193, tD, tBack + 1.6);
+    r1.connect(ring);
+    r2.connect(ring);
+    ring.connect(after);
+    // a muffled heartbeat, its own, loud inside its head and slowing as the world returns
+    const hb = filt("lowpass", 115, 0.7);
+    hb.connect(after);
+    let tb = tD + 0.42;
+    let gap = 0.78;
+    for (let i = 0; i < 8 && tb < tBack - 0.25; i++) {
+      const pk = 0.55 * Math.min(1, 0.6 + i * 0.3) * (tb > tBack - 1.2 ? 0.6 : 1);
+      thump(hb, tb, 62, 38, 0.1, 0.014, pk, 0.075);
+      thump(hb, tb + 0.24, 54, 34, 0.1, 0.014, pk * 0.7, 0.085);
+      tb += gap;
+      gap += 0.05;
+    }
+    release(post, tStop + 0.2);
+    release(after, tBack + 2);
+    return S;
+  }
+
+  function screamFizzle() {
+    setLoop("screamCharge", 0, buildScreamCharge, 0.3);
+    if (!ready() || !gate("fizzle", 0.2)) return;
+    const dest = out(0, 0.12);
+    one(dest, (t, keep) => {
+      // a squeak that cracks ...
+      const k = rnd(0.95, 1.08);
+      keep(chirp(dest, t, 1500 * k, 2100 * k, 0.07, 0.12));
+      keep(chirp(dest, t + 0.07, 2500 * k, 1300 * k, 0.1, 0.09, 40, 0.06));
+      // ... and a cough: two little "khh"s
+      for (let i = 0; i < 2; i++) {
+        const tc = t + 0.34 + i * 0.2;
+        keep(burst(dest, tc, {
+          buf: pinkBuf, type: "bandpass", q: 1.1, f0: 1500, f1: 700, sweep: 0.08, attack: 0.006, peak: 0.34 - i * 0.1, tc: 0.035,
+        }));
+        keep(rasp(dest, tc, 300 * k, 210 * k, 900, 2, 60, 0.08, 0.14 - i * 0.04));
+        keep(thump(dest, tc, 160, 90, 0.04, 0.004, 0.16, 0.03));
+      }
+    });
+  }
+
+  // ---- dream ----------------------------------------------------------------------
+
+  const DREAM_SCALE = [66, 68, 70, 73, 75, 78, 80, 82, 85, 87]; // F# pentatonic out of F# lydian: nothing can clash
+
+  function buildDream(L, t) {
+    L.gain.connect(bus);
+    const s = mkGain(0.9);
+    L.gain.connect(s);
+    s.connect(verbIn);
+    L.scale = 0.9;
+    const far = t + 1e6;
+    // slow glass pad: F# lydian over a low D, every partial breathing at its own pace
+    const padLP = filt("lowpass", 1700, 0.5);
+    const padG = mkGain(0.028);
+    padLP.connect(padG);
+    padG.connect(L.gain);
+    lfo(L, t, 0.05, 500, padLP.frequency);
+    const notes = [38, 50, 54, 61, 66, 68, 73, 77];
+    const amps = [0.9, 0.7, 0.6, 0.5, 0.5, 0.4, 0.35, 0.22];
+    for (let i = 0; i < notes.length; i++) {
+      const f = midi(notes[i]);
+      const a = osc("sine", f, t, far);
+      const b = osc("sine", f * 1.003, t, far);
+      const g = mkGain(amps[i] * 0.6);
+      a.connect(g);
+      b.connect(g);
+      g.connect(padLP);
+      L.nodes.push(a, b);
+      lfo(L, t, 0.031 + i * 0.013, amps[i] * 0.35, g.gain);
+    }
+    // glass: a thin high shimmer, like a wet finger on a rim
+    const rim = osc("sine", midi(90), t, far);
+    const rimG = mkGain(0.004);
+    rim.connect(rimG);
+    rimG.connect(L.gain);
+    L.nodes.push(rim);
+    lfo(L, t, 0.07, 0.004, rimG.gain);
+    lfo(L, t, 4.6, 5, rim.frequency);
+    // far air
+    const air = bed(L, t, pinkBuf, "bandpass", 700, 0.6, 0.012, null, 0.5);
+    lfo(L, t, 0.04, 300, air.f.frequency);
+
+    let nextChime = t + 1.5;
+    let nextBreath = t + 4;
+    every(L, 400, (now) => {
+      if (nextChime < now) nextChime = now + 0.1;
+      while (nextChime < now + 0.9) {
+        // far wind chimes: two to five notes knocked by one breath of wind
+        const d = outTo(L.gain, L.gain, rnd(-0.8, 0.8), 0, rnd(0.4, 1));
+        const n = irnd(2, 5);
+        let e = nextChime;
+        let deg = irnd(2, DREAM_SCALE.length - 1);
+        for (let i = 0; i < n; i++) {
+          deg = clamp(deg + irnd(-2, 2), 0, DREAM_SCALE.length - 1);
+          e = Math.max(e, bell(d, nextChime + i * rnd(0.12, 0.3), midi(DREAM_SCALE[deg] + 12), rnd(0.012, 0.03), rnd(0.6, 1.2)));
+        }
+        release(d, e + 0.2);
+        nextChime += rnd(2.5, 7);
+      }
+      if (nextBreath < now + 0.9) {
+        // a reversed breath: it grows out of nothing and is cut off
+        const tb = Math.max(nextBreath, now + 0.05);
+        const rise = rnd(1.4, 2.4);
+        const d = outTo(L.gain, L.gain, rnd(-0.6, 0.6), 0, 1);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, tb);
+        g.gain.linearRampToValueAtTime(0.0001, tb + 0.01);
+        g.gain.exponentialRampToValueAtTime(rnd(0.03, 0.05), tb + rise);
+        g.gain.setTargetAtTime(0, tb + rise, 0.025);
+        const src = noise(pinkBuf, tb, tb + rise + 0.4, 0.9);
+        const f0 = rnd(500, 900);
+        const bp = filt("bandpass", f0, 1.6);
+        bp.frequency.setValueAtTime(f0, tb);
+        bp.frequency.exponentialRampToValueAtTime(f0 * rnd(1.6, 2.4), tb + rise);
+        src.connect(bp);
+        bp.connect(g);
+        g.connect(d);
+        // and a reversed note inside it
+        const gn = ctx.createGain();
+        gn.gain.setValueAtTime(0, tb);
+        gn.gain.linearRampToValueAtTime(0.0001, tb + 0.01);
+        gn.gain.exponentialRampToValueAtTime(0.02, tb + rise);
+        gn.gain.setTargetAtTime(0, tb + rise, 0.02);
+        const on = osc("sine", midi(pick(DREAM_SCALE)), tb, tb + rise + 0.3);
+        on.connect(gn);
+        gn.connect(d);
+        release(d, tb + rise + 0.6);
+        nextBreath = tb + rise + rnd(5, 12);
+      }
+    });
+  }
+
+  function dreamAmbience(on) {
+    setLoop("dream", on ? 1 : 0, buildDream, 2);
+  }
+
+  function dissolve(pan = 0) {
+    if (!ready() || !gate("dissolve", 0.05)) return;
+    const dest = outTo(bus, verbIn, clamp(num(pan, 0), -1, 1) * 0.8, 0.5, 1);
+    one(dest, (t, keep) => {
+      // a figure of glass turning to mist: a long airy "fffff" thinning upward, sparkles falling out of it
+      keep(whoosh(dest, t, 1400, 5200, 7500, 0.25, 0.7, 0.12, 1.2, whiteBuf));
+      keep(whoosh(dest, t, 500, 1100, 2400, 0.2, 0.6, 0.1, 0.9, pinkBuf));
+      const n = irnd(9, 12);
+      const top = irnd(6, 9);
+      for (let i = 0; i < n; i++) {
+        const x = i / n;
+        const deg = clamp(top - Math.round(x * top) + irnd(-1, 1), 0, DREAM_SCALE.length - 1);
+        keep(bell(dest, t + 0.08 + x * 0.9 + rnd(0, 0.05), midi(DREAM_SCALE[deg] + 12), 0.04 * (1 - x * 0.6), 0.25));
+      }
+      keep(tone(dest, t, "sine", 740, 370, 0.9, 0.025, 0.1, 0.25)); // the shape of him, sighing away
+    });
+  }
+
+  function farVoice(syllables = 5, urgency = 0) {
+    if (!ready() || !gate("farvoice", 0.15)) return;
+    const u = clamp(num(urgency, 0), 0, 1);
+    const n = clamp(num(syllables, 5) | 0, 1, 12);
+    // Wobble's voice with no Wobble: from very far, through water, and it gets higher the more it matters
+    const dry = outTo(bus, verbIn, rnd(-0.3, 0.3), 1.6, 0.26 + 0.14 * u);
+    const lp = filt("lowpass", 1500 + 1300 * u, 0.6);
+    const hp = filt("highpass", 300, 0.5);
+    lp.connect(hp);
+    hp.connect(dry);
+    const t = ctx.currentTime + 0.02;
+    let tt = t;
+    let tEnd = t;
+    const base = 108 * (1.15 + 0.75 * u);
+    for (let i = 0; i < n; i++) {
+      const dur = rnd(0.09, 0.14) * (1 - 0.3 * u) * (i === n - 1 ? 1.8 : 1);
+      // the line rises toward its end when it is urgent ("...wait, don't go!"), falls gently when it is not
+      const contour = u > 0.5 ? 1 + 0.22 * (i / n) : 1 - 0.08 * (i / n);
+      const f = base * contour * rnd(0.94, 1.08);
+      const v = pick(VOWELS);
+      const g = ctx.createGain();
+      const e = swell(g.gain, tt, 0.02, 1, tt + dur * 0.6, dur * 0.22);
+      const o = osc("sawtooth", f, tt, e);
+      const tri = osc("triangle", f, tt, e);
+      const bend = i === n - 1 ? (u > 0.5 ? 1.18 : 0.86) : rnd(0.92, 1.1);
+      o.frequency.linearRampToValueAtTime(f * bend, tt + dur);
+      tri.frequency.linearRampToValueAtTime(f * bend, tt + dur);
+      const vb = osc("sine", rnd(5.5, 7.5), tt, e);
+      const vbG = mkGain(f * 0.02);
+      vb.connect(vbG);
+      vbG.connect(o.frequency);
+      vbG.connect(tri.frequency);
+      const pre = filt("lowpass", 2800, 0.5);
+      const fa = filt("bandpass", v[0], 5);
+      const fb = filt("bandpass", v[1], 7);
+      const ga = mkGain(0.62);
+      const gb = mkGain(0.34);
+      const gt = mkGain(0.085);
+      o.connect(pre);
+      pre.connect(fa);
+      pre.connect(fb);
+      fa.connect(ga);
+      fb.connect(gb);
+      tri.connect(gt);
+      ga.connect(g);
+      gb.connect(g);
+      gt.connect(g);
+      g.connect(lp);
+      if (e > tEnd) tEnd = e;
+      tt += dur + rnd(0.05, 0.1) * (1 - 0.45 * u);
+    }
+    // a glassy halo on the last syllable, so the ear can find it in the dark
+    tEnd = Math.max(tEnd, bell(dry, tt - 0.1, midi(u > 0.5 ? 85 : 78), 0.03, 0.8));
+    release(lp, tEnd + 0.2);
+    release(dry, tEnd + 0.3);
+  }
+
+  function pillarShatter(n = 0) {
+    if (!ready() || !gate("pillar", 0.06)) return;
+    const idx = Math.abs(num(n, 0) | 0);
+    const dest = outTo(bus, verbIn, rnd(-0.4, 0.4), 0.6, 1);
+    one(dest, (t, keep) => {
+      // a glass pillar: it sings its own note as it goes (each pillar a different one), then comes down in pieces
+      const note = DREAM_SCALE[idx % DREAM_SCALE.length];
+      keep(bell(dest, t, midi(note), 0.14, 1.1));
+      keep(bell(dest, t, midi(note - 12), 0.08, 0.9));
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.6, f0: 2000, attack: 0.002, peak: 0.36, tc: 0.045 }));
+      keep(thump(dest, t, 180, 46, 0.2, 0.004, 0.5, 0.12));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, f0: 2600, f1: 300, sweep: 0.2, attack: 0.004, peak: 0.4, tc: 0.08,
+      }));
+      keep(crackle(dest, t, 0.7, 3000, 0.1, 0.3, false));
+      for (let i = 0; i < 26; i++) {
+        const ts = t + Math.pow(Math.random(), 1.5) * 1.1;
+        keep(bell(dest, ts, rnd(1800, 6400), rnd(0.012, 0.05), rnd(0.04, 0.16)));
+      }
+      // the big pieces landing
+      for (let i = 0; i < 4; i++) {
+        const tp = t + 0.3 + i * rnd(0.12, 0.22);
+        keep(thump(dest, tp, rnd(110, 170), 60, 0.06, 0.004, 0.24 - i * 0.04, 0.05));
+        keep(bell(dest, tp, midi(note + pick([0, 7, 12])) * 2, 0.03, 0.3));
+      }
+      keep(crackle(dest, t + 0.8, 0.8, 4600, 0.035, 0.12, false));
+    });
+  }
+
+  // ---- boss: the Platypus King ----------------------------------------------------
+
+  /** His voice: a huge platypus. Deep growl-trill body + a mouth formant + the octave of a real chirp on top. */
+  function kingVoice(dest, t, f0, f1, dur, peak, amHz) {
+    let e = rasp(dest, t, f0, f1, 300, 1.1, amHz, dur, peak, dur * 0.2);
+    e = Math.max(e, rasp(dest, t, f0 * 2.01, f1 * 2.01, 760, 2.2, amHz * 1.02, dur, peak * 0.6, dur * 0.2));
+    e = Math.max(e, rasp(dest, t, f0 * 4, f1 * 4, 1500, 3, amHz, dur * 0.9, peak * 0.22, dur * 0.25));
+    e = Math.max(e, tone(dest, t, "sine", f0 * 0.5, f1 * 0.5, dur, peak * 0.5, dur * 0.2, dur * 0.12));
+    return e;
+  }
+
+  function bossRoar(size = 1) {
+    if (!ready() || !gate("roar", 0.3)) return;
+    const s = clamp(num(size, 1), 0.2, 1.5);
+    const dest = wOut(0, 0.4, 0.7 + 0.3 * Math.min(1, s));
+    one(dest, (t, keep) => {
+      const dur = 0.9 + 0.7 * s;
+      // intake, then the roar: it rises, holds, and rolls downhill
+      keep(whoosh(dest, t, 300, 900, 500, 0.16, 0.05, 0.1, 1, pinkBuf));
+      const tr = t + 0.16;
+      keep(kingVoice(dest, tr, 96, 60, dur, 0.9, 21));
+      keep(kingVoice(dest, tr + 0.03, 131, 82, dur * 0.8, 0.4, 27));
+      keep(burst(dest, tr, {
+        buf: pinkBuf, type: "bandpass", q: 0.7, rate: 0.8, f0: 900, f1: 380, sweep: dur,
+        attack: 0.12, peak: 0.4, tc: dur * 0.3,
+      }));
+      keep(rumble(dest, tr, dur + 0.5, 150, 0.6 * s, 5, 0.5));
+      // because he is, after all, a platypus: a giant "KWEEE" riding on top
+      keep(chirp(dest, tr + 0.02, 330, 520, 0.2, 0.08, 20, 0.04));
+      keep(chirp(dest, tr + 0.22, 520, 300, dur * 0.7, 0.07, 22, 0.05));
+    });
+  }
+
+  function bossStep(strength = 0.7) {
+    if (!ready() || !gate("bstep", 0.08)) return;
+    const s = clamp(num(strength, 0.7), 0.05, 1.2);
+    const dest = wOut(rnd(-0.15, 0.15), 0.25);
+    one(dest, (t, keep) => {
+      keep(thump(dest, t, 78, 26, 0.22, 0.006, 0.95 * s, 0.14));
+      keep(thump(dest, t, 150, 50, 0.1, 0.005, 0.4 * s, 0.06));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, f0: 1500, f1: 200, sweep: 0.15, attack: 0.004, peak: 0.6 * s, tc: 0.07,
+      }));
+      keep(crackle(dest, t + 0.04, 0.4, 2200, 0.05 * s, 0.2, false)); // pebbles jumping
+      keep(clang(dest, t + 0.02, rnd(380, 520), 0.03 * s, 0.1, 4));   // his armour shifting
+    });
+  }
+
+  function bossWindup(kind = "sweep") {
+    if (!ready() || !gate("windup", 0.15)) return;
+    const dest = wOut(0, 0.3);
+    one(dest, (t, keep) => {
+      if (kind === "slam") {
+        // 1.0 s: he rears. A deep growl climbing an octave, armour creaking, the air pulled upward.
+        keep(kingVoice(dest, t, 52, 108, 1.0, 0.6, 18));
+        keep(creak(dest, t + 0.1, 160, 0.7, 0.07));
+        keep(whoosh(dest, t, 200, 1300, 1500, 0.95, 0.05, 0.22, 1, pinkBuf));
+        keep(tone(dest, t, "sine", 196, 392, 0.98, 0.07, 0.6, 0.02));
+        keep(clang(dest, t + 0.5, 480, 0.04, 0.2, 4));
+      } else if (kind === "charge") {
+        // 1.1 s: three paw-scrapes, each quicker, a snort, a rising whine. Get out of the lane.
+        const at = [0, 0.36, 0.64];
+        for (let i = 0; i < 3; i++) {
+          keep(thump(dest, t + at[i], 96, 44, 0.1, 0.005, 0.5 + i * 0.1, 0.07));
+          keep(rattle(dest, t + at[i] + 0.02, 0.2, 1500, 1, 0.24, 0.6));
+          keep(tone(dest, t + at[i], "triangle", 330 * (1 + i * 0.19), 330 * (1 + i * 0.19), 0.08, 0.05, 0.01, 0.03));
+        }
+        keep(burst(dest, t + 0.84, {
+          buf: pinkBuf, type: "bandpass", q: 1.2, f0: 700, f1: 1600, sweep: 0.2, attack: 0.03, peak: 0.36, tc: 0.06,
+        }));
+        keep(kingVoice(dest, t + 0.8, 80, 130, 0.3, 0.45, 30));
+        keep(tone(dest, t + 0.5, "sine", 262, 587, 0.58, 0.06, 0.4, 0.02));
+      } else if (kind === "pound") {
+        // 0.9 s: "hm - HM!" two stepped grunts a fifth apart, both paws going up
+        keep(kingVoice(dest, t, 98, 94, 0.3, 0.5, 24));
+        keep(tone(dest, t, "triangle", 196, 196, 0.26, 0.06, 0.03, 0.04));
+        keep(clang(dest, t, 520, 0.04, 0.12, 4));
+        keep(kingVoice(dest, t + 0.42, 147, 150, 0.44, 0.7, 28));
+        keep(tone(dest, t + 0.42, "triangle", 293.7, 311, 0.44, 0.07, 0.03, 0.03));
+        keep(clang(dest, t + 0.42, 660, 0.05, 0.14, 4));
+        keep(whoosh(dest, t + 0.42, 300, 1500, 1700, 0.45, 0.04, 0.16, 1.2, pinkBuf));
+      } else if (kind === "spit") {
+        // 0.8 s: a wet gurgle rising in his throat and a hissing breath in
+        for (let i = 0; i < 9; i++) {
+          const f = 160 + i * 42;
+          keep(thump(dest, t + i * 0.075 + rnd(0, 0.02), f, f * 1.7, 0.06, 0.008, 0.2, 0.03));
+        }
+        keep(rasp(dest, t, 70, 120, 520, 2, 34, 0.75, 0.3, 0.3));
+        keep(whoosh(dest, t + 0.1, 900, 4200, 4600, 0.66, 0.04, 0.14, 2.5, whiteBuf));
+        keep(tone(dest, t + 0.2, "sine", 440, 880, 0.56, 0.035, 0.4, 0.02));
+      } else {
+        // sweep, 0.7 s: the tail drawn back - a long rising swish and a tightening creak
+        keep(whoosh(dest, t, 260, 2200, 2600, 0.66, 0.04, 0.3, 1.4, pinkBuf));
+        keep(tone(dest, t, "sawtooth", 110, 300, 0.66, 0.03, 0.4, 0.02));
+        keep(tone(dest, t, "sine", 220, 600, 0.66, 0.06, 0.4, 0.02));
+        keep(creak(dest, t + 0.1, 200, 0.5, 0.08));
+        keep(kingVoice(dest, t, 70, 92, 0.6, 0.3, 22));
+      }
+    });
+  }
+
+  function bossSwipe() {
+    if (!ready() || !gate("bswipe", 0.1)) return;
+    const t = ctx.currentTime + 0.004;
+    const g = mkGain(1);
+    let last = g;
+    if (ctx.createStereoPanner) {
+      const pn = ctx.createStereoPanner();
+      const side = Math.random() < 0.5 ? -1 : 1;
+      pn.pan.setValueAtTime(-0.8 * side, t);
+      pn.pan.linearRampToValueAtTime(0.8 * side, t + 0.3);
+      g.connect(pn);
+      last = pn;
+    }
+    last.connect(wBus);
+    // a tree-trunk of a tail going past: a huge low whoosh with a hissing edge
+    let e = whoosh(g, t, 180, 1300, 260, 0.14, 0.28, 0.9, 0.8, pinkBuf);
+    e = Math.max(e, whoosh(g, t + 0.02, 900, 4200, 1200, 0.12, 0.2, 0.2, 1.6, whiteBuf));
+    e = Math.max(e, thump(g, t + 0.1, 120, 40, 0.2, 0.05, 0.4, 0.1));
+    e = Math.max(e, tone(g, t, "sine", 420, 150, 0.3, 0.05, 0.1, 0.06));
+    release(g, e + 0.15);
+  }
+
+  function bossSlam() {
+    if (!ready() || !gate("bslam", 0.15)) return;
+    const dest = wOut(0, 0.4, 1.2);
+    one(dest, (t, keep) => {
+      // the ground takes it: sub drop, a crack through the rock, everything loose jumping, a long rolling tail
+      keep(thump(dest, t, 110, 22, 0.5, 0.004, 1.2, 0.26));
+      keep(thump(dest, t, 220, 44, 0.16, 0.003, 0.6, 0.08));
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1300, attack: 0.001, peak: 0.6, tc: 0.02 }));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, f0: 3600, f1: 120, sweep: 0.5, attack: 0.002, peak: 1.0, tc: 0.16,
+      }));
+      keep(crackle(dest, t, 0.5, 1800, 0.25, 0.35, false));
+      keep(rumble(dest, t + 0.05, 1.6, 240, 0.6, 5, 0.5));
+      keep(crackle(dest, t + 0.3, 1.2, 2600, 0.07, 0.15, false));
+      keep(clang(dest, t + 0.02, 330, 0.1, 0.4, 5));
+      for (let i = 0; i < 5; i++) keep(thump(dest, t + rnd(0.25, 1.1), rnd(120, 220), 70, 0.05, 0.004, rnd(0.06, 0.16), 0.03));
+    });
+  }
+
+  function buildBossCharge(L, t) {
+    loopOut(L, wBus, wVerb, 0.2);
+    L.scale = 0.95;
+    // a gallop: da-da-DUM, da-da-DUM, the ground drumming under him, armour jangling, breath like a bellows
+    const rum = bed(L, t, pinkBuf, "lowpass", 130, 0.7, 0.3, null, 0.5);
+    lfo(L, t, 7.6, 0.14, rum.g.gain);
+    const jing = bed(L, t, whiteBuf, "bandpass", 2600, 3, 0.02, null, 1);
+    lfo(L, t, 7.6, 0.018, jing.g.gain);
+    let next = t + 0.02;
+    let n = 0;
+    every(L, 200, (now) => {
+      if (next < now) next = now + 0.02;
+      while (next < now + 0.6) {
+        const cyc = 0.4;
+        const at = [0, 0.1, 0.2];
+        const pk = [0.5, 0.6, 0.95];
+        for (let i = 0; i < 3; i++) {
+          const th = next + at[i];
+          thump(L.gain, th, 84 + i * 6, 28, 0.14, 0.004, pk[i], 0.07 + i * 0.02);
+          burst(L.gain, th, {
+            buf: pinkBuf, type: "lowpass", q: 0.6, f0: 1300, f1: 220, sweep: 0.08, attack: 0.003, peak: pk[i] * 0.5, tc: 0.04,
+          });
+        }
+        clang(L.gain, next + 0.2, rnd(420, 560), 0.035, 0.1, 4);
+        if (n % 2 === 0) {
+          // a snort every second stride
+          burst(L.gain, next + 0.26, {
+            buf: pinkBuf, type: "bandpass", q: 1.1, f0: 900, f1: 500, sweep: 0.12, attack: 0.02, peak: 0.2, tc: 0.04,
+          });
+          rasp(L.gain, next + 0.26, 86, 70, 420, 1.5, 30, 0.12, 0.2);
+        }
+        n++;
+        next += cyc;
+      }
+    });
+  }
+
+  function bossCharge(on) {
+    setLoop("bossCharge", on ? 1 : 0, buildBossCharge, 0.3);
+  }
+
+  function bossHitWall() {
+    if (!ready() || !gate("bwall", 0.2)) return;
+    const dest = wOut(0, 0.4, 1.15);
+    one(dest, (t, keep) => {
+      // WHAM. Rock cracking, his armour ringing like a dropped bell ... and then the little birds: he is dizzy.
+      keep(thump(dest, t, 130, 26, 0.4, 0.003, 1.2, 0.2));
+      keep(burst(dest, t, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, f0: 4200, f1: 180, sweep: 0.35, attack: 0.002, peak: 1.0, tc: 0.12,
+      }));
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1600, attack: 0.001, peak: 0.5, tc: 0.02 }));
+      keep(clang(dest, t, 246, 0.26, 0.9, 6));
+      keep(clang(dest, t + 0.01, 370, 0.12, 0.6, 5));
+      keep(crackle(dest, t, 0.7, 1600, 0.22, 0.3, false));
+      keep(rumble(dest, t + 0.1, 1.4, 300, 0.4, 5, 0.5));
+      for (let i = 0; i < 5; i++) keep(thump(dest, t + rnd(0.3, 1.2), rnd(110, 200), 60, 0.06, 0.004, rnd(0.08, 0.2), 0.04));
+      keep(kingVoice(dest, t + 0.12, 150, 70, 0.5, 0.5, 14)); // "hrrnngh"
+      // dizzy: a wobbling whistle going round and round, with stars
+      const g = ctx.createGain();
+      const e = swell(g.gain, t + 0.5, 0.2, 0.05, t + 2.0, 0.25);
+      const o = osc("sine", 880, t + 0.5, e);
+      o.frequency.linearRampToValueAtTime(700, t + 2.3);
+      const w = osc("sine", 3.2, t + 0.5, e);
+      const wg = mkGain(120);
+      w.connect(wg);
+      wg.connect(o.frequency);
+      o.connect(g);
+      g.connect(dest);
+      keep(e);
+      for (let i = 0; i < 7; i++) keep(bell(dest, t + 0.6 + i * 0.21, midi(pick([86, 88, 91, 93, 98])), 0.03, 0.2));
+    });
+  }
+
+  function bossHurt(weakSpot = false) {
+    if (!ready() || !gate("bhurt", 0.05)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.25);
+    one(dest, (t, keep) => {
+      if (weakSpot) {
+        // it lands: a deep padded thump, a bright "got him" ping, and an outraged yelp two octaves above his dignity
+        keep(thump(dest, t, 170, 46, 0.1, 0.004, 0.75, 0.07));
+        keep(burst(dest, t, {
+          buf: pinkBuf, type: "lowpass", q: 0.6, f0: 2400, f1: 400, sweep: 0.07, attack: 0.003, peak: 0.6, tc: 0.035,
+        }));
+        keep(bell(dest, t, midi(86), 0.07, 0.25));
+        keep(bell(dest, t + 0.05, midi(93), 0.05, 0.35));
+        keep(kingVoice(dest, t + 0.03, 196, 104, 0.4, 0.6, 34));
+        keep(chirp(dest, t + 0.03, 700, 420, 0.3, 0.1, 30, 0.06));
+        keep(crackle(dest, t, 0.25, 3600, 0.05, 0.25, false));
+      } else {
+        // armour: a dull heavy clank that goes nowhere, and an unimpressed "hmf"
+        keep(clang(dest, t, rnd(250, 300), 0.22, 0.2, 6));
+        keep(thump(dest, t, 150, 80, 0.04, 0.003, 0.4, 0.03));
+        keep(tick(dest, t, 2600, 0.2));
+        keep(burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 1.5, f0: 900, attack: 0.002, peak: 0.3, tc: 0.02 }));
+        keep(kingVoice(dest, t + 0.1, 92, 78, 0.16, 0.3, 24));
+      }
+    });
+  }
+
+  function bossPhase() {
+    if (!ready() || !gate("bphase", 0.5)) return;
+    const dest = wOut(0, 0.45, 1.1);
+    one(dest, (t, keep) => {
+      // plates of armour bursting off, then he gathers himself: a rising power-growl that opens into a roar
+      keep(thump(dest, t, 140, 30, 0.3, 0.004, 1.0, 0.16));
+      keep(burst(dest, t, { buf: whiteBuf, type: "highpass", q: 0.5, f0: 1500, attack: 0.001, peak: 0.5, tc: 0.03 }));
+      for (let i = 0; i < 6; i++) {
+        const tc = t + 0.03 + Math.pow(Math.random(), 1.4) * 0.9;
+        keep(clang(dest, tc, rnd(300, 1100), rnd(0.08, 0.18), rnd(0.15, 0.5), 5));
+      }
+      keep(rattle(dest, t, 0.9, 2200, 1.5, 0.2, 0.4));
+      const tr = t + 0.5;
+      keep(kingVoice(dest, tr, 55, 110, 0.9, 0.6, 16));
+      keep(whoosh(dest, tr, 200, 2400, 2600, 0.9, 0.06, 0.3, 0.9, pinkBuf));
+      keep(pad(dest, tr, [midi(38), midi(45), midi(51), midi(57)], 0.9, 0.09, 0.8, 0.2, 900));  // D phrygian colour (Eb on top)
+      const tx = tr + 0.95;
+      keep(thump(dest, tx, 100, 24, 0.5, 0.004, 1.1, 0.24));
+      keep(kingVoice(dest, tx, 104, 60, 1.3, 0.95, 22));
+      keep(kingVoice(dest, tx + 0.03, 139, 80, 1.0, 0.4, 28));
+      keep(rumble(dest, tx, 1.8, 180, 0.7, 5, 0.5));
+      keep(chirp(dest, tx + 0.02, 360, 560, 0.2, 0.08, 20, 0.04));
+      keep(chirp(dest, tx + 0.22, 560, 300, 0.9, 0.07, 22, 0.05));
+      keep(crackle(dest, tx, 0.9, 2000, 0.12, 0.25, false));
+    });
+  }
+
+  /** A crown hitting stone, bouncing ever faster, then spinning itself flat like a dropped coin. */
+  function crownInto(dest, t, keep, vol) {
+    const f = rnd(1150, 1300);
+    let tb = t;
+    let gap = 0.3;
+    for (let i = 0; i < 7; i++) {
+      const a = vol * (1 - i * 0.12);
+      keep(clang(dest, tb, f * (i % 2 ? 1.06 : 1), 0.16 * a, 0.25, 6));
+      keep(tick(dest, tb, 4200, 0.14 * a));
+      keep(thump(dest, tb, 300, 160, 0.03, 0.002, 0.12 * a, 0.02));
+      tb += gap;
+      gap *= 0.7;
+    }
+    // the spin-down: a ring whose wobble accelerates until it stops dead
+    const dur = 1.1;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, tb);
+    g.gain.linearRampToValueAtTime(0.07 * vol, tb + 0.05);
+    g.gain.linearRampToValueAtTime(0.05 * vol, tb + dur - 0.05);
+    g.gain.linearRampToValueAtTime(0, tb + dur);
+    const tr = mkGain(0.5);
+    const l = osc("sine", 7, tb, tb + dur + 0.05);
+    l.frequency.exponentialRampToValueAtTime(42, tb + dur);
+    const lg = mkGain(0.5);
+    l.connect(lg);
+    lg.connect(tr.gain);
+    for (let i = 0; i < 3; i++) {
+      const o = osc("sine", f * CLANG[i], tb, tb + dur + 0.05);
+      const og = mkGain(1 / (1 + i));
+      o.connect(og);
+      og.connect(tr);
+    }
+    tr.connect(g);
+    g.connect(dest);
+    keep(rattle(dest, tb, dur, 3200, 4, 0.05 * vol, 0.5));
+    keep(tb + dur + 0.1);
+    keep(clang(dest, tb + dur, f * 0.5, 0.05 * vol, 0.1, 4)); // flat. Done.
+    return tb + dur;
+  }
+
+  function crownClatter() {
+    if (!ready() || !gate("crown", 0.3)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.3);
+    one(dest, (t, keep) => { crownInto(dest, t, keep, 1); });
+  }
+
+  function kingFall() {
+    if (!ready() || !gate("kingfall", 1)) return;
+    const dest = wOut(0, 0.45, 1.15);
+    one(dest, (t, keep) => {
+      // 0.0 - 1.9  the long groan: all the air and all the fight going out of him, sliding down two octaves
+      keep(kingVoice(dest, t, 150, 46, 1.9, 0.75, 12));
+      keep(tone(dest, t, "sine", 300, 92, 1.8, 0.05, 0.3, 0.2));
+      keep(burst(dest, t + 0.3, {
+        buf: pinkBuf, type: "bandpass", q: 0.7, f0: 1100, f1: 300, sweep: 1.5, attack: 0.5, peak: 0.16, tc: 0.4,
+      }));
+      keep(creak(dest, t + 0.5, 130, 0.9, 0.1));       // armour folding as he topples
+      keep(creak(dest, t + 0.9, 190, 0.7, 0.06));
+      keep(whoosh(dest, t + 1.5, 200, 700, 300, 0.7, 0.1, 0.3, 0.8, pinkBuf)); // the fall itself: displaced air
+      // 1.0 - 3.1  the crown comes off, clatters, rolls, spins flat
+      const crown = outTo(dest, dest, 0.35, 0, 1);
+      crownInto(crown, t + 1.0, keep, 0.8);
+      // 2.3  the body hits the ground
+      const tb = t + 2.3;
+      keep(thump(dest, tb, 100, 20, 0.7, 0.004, 1.3, 0.34));
+      keep(thump(dest, tb, 200, 40, 0.2, 0.003, 0.6, 0.1));
+      keep(burst(dest, tb, {
+        buf: pinkBuf, type: "lowpass", q: 0.6, f0: 3000, f1: 100, sweep: 0.6, attack: 0.003, peak: 1.0, tc: 0.2,
+      }));
+      keep(clang(dest, tb, 220, 0.2, 0.7, 6));
+      keep(clang(dest, tb + 0.05, 311, 0.1, 0.5, 5));
+      keep(crackle(dest, tb, 0.6, 1600, 0.2, 0.3, false));
+      keep(rumble(dest, tb + 0.05, 1.3, 200, 0.6, 4, 0.5));
+      keep(thump(dest, tb + 0.34, 84, 30, 0.3, 0.006, 0.5, 0.16)); // the tail, last
+      // 2.5 - 4.3  dust and pebbles settling, thinner and thinner
+      keep(rumble(dest, tb + 0.2, 1.8, 900, 0.14, 3, 0.9));
+      keep(crackle(dest, tb + 0.3, 1.6, 3000, 0.06, 0.12, false));
+      for (let i = 0; i < 6; i++) {
+        const tp = tb + 0.4 + Math.pow(Math.random(), 0.8) * 1.4;
+        keep(tick(dest, tp, rnd(1800, 3600), rnd(0.03, 0.08), 0.008));
+      }
+      // one last breath out. Then nothing.
+      keep(burst(dest, tb + 0.8, {
+        buf: pinkBuf, type: "bandpass", q: 0.8, f0: 700, f1: 320, sweep: 0.9, attack: 0.3, peak: 0.1, tc: 0.25,
+      }));
+    });
+  }
+
+  // ---- housekeeping (levels 6-11) ---------------------------------------------------
+
+  /** Extra: muffle the WORLD bus (flashbacks, inside the armoury): 0 = open ... 1 = behind a wall. */
+  function muffle(amount = 0, seconds = 0.4) {
+    if (!ctx || !wLP || ctx.state === "closed") return;
+    const a = clamp(num(amount, 0), 0, 1);
+    const f = 20000 * Math.pow(0.02, a); // 20 kHz ... 400 Hz
+    const t = ctx.currentTime;
+    const tc = Math.max(0.02, num(seconds, 0.4) / 3);
+    wLP.frequency.cancelScheduledValues(t);
+    wLP.frequency.setTargetAtTime(f, t, tc);
+    wVerbLP.frequency.cancelScheduledValues(t);
+    wVerbLP.frequency.setTargetAtTime(f, t, tc);
+  }
+
+  function stopAll2() {
+    H.on = false;
+    JL.birds = 1;
+    JL.insects = 1;
+    JL.wind = 1;
+    if (afterG && ctx && ctx.state !== "closed") {
+      afterG.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+      afterG = null;
+    }
+    stopAll(); // kills every loop above (they all live in `loops`), restores the duck and the world low-pass
+  }
+
+
   return {
     resume,
     setListenerMuted,
@@ -3340,7 +7031,7 @@ export function createAudio() {
     startAmbience,
     stopAmbience,
     // extensions (levels 2-5)
-    stopAll, titleCard, levelUnlock,
+    stopAll: stopAll2, titleCard, levelUnlock,
     step, zooAmbience, waterfall, splash, diveIn, surface, underwater, ballBounce, doorOpen,
     friendChirp, eat, yawn, nuzzle, snore,
     coin, payout, questDone, friendship, trickWhoosh, trickLand, comboUp,
@@ -3348,6 +7039,27 @@ export function createAudio() {
     showMusic, preShow, afterShow,
     lullaby, alarm, glassShatter, heartDrop, sadTheme, wizardMotif, lavaRumble, chainCreak, timerTick,
     tailSlap, tailSlapHit, pickup, drop, throwWhoosh, cushionHit, posterFall, eyeOpen, sensePulse,
+    // extensions 2 (levels 6-11, LEVELS2.md B2)
+    checkpoint, denied, armyUp, armyDown, gearOn, visorOn,
+    gunshot, bulletWhiz, ricochet, bulletHit, emptyClick, aimWarn, shotDown,
+    guardVoice, punch, bodyFall, siren, searchlightHum, explosion,
+    heli, wind, gust, crash, metalScrape, warnBeep, rotorWash,
+    circusAmbience, calliope, canvasFlap, cageRattle, latchBreak, bell: strikerBell, generator, bottles,
+    jungleAmbience, jungleLayers, river, rain, thunder, birdsFlush, mysteryCall, vines, logCreak,
+    tribeChatter, tribeChirp, tribeCheer, warCry, tribeDrums, fire, craft, eatFruit, materialPickup,
+    cauldron, ingredient, stir, brewDone, brewFail, potionPickup, potionThrow, potionSmash, transform, livingPotion,
+    screamCharge, scream, screamFizzle,
+    dreamAmbience, dissolve, farVoice, pillarShatter,
+    bossRoar, bossStep, bossWindup, bossSwipe, bossSlam, bossCharge, bossHitWall, bossHurt, bossPhase, kingFall, crownClatter,
+    paperRustle, paperUnfold, armorClank, leverPull, gateOpen, fenceRattle, truckEngine,
+    muffle,
+    // the hook for src/music.js (LEVELS2.md B1): a gain that feeds the master compressor -> limiter -> soft clip -> mute chain
+    // directly (NOT through the heartDrop duck), plus the reverb send and the noise buffers. null until resume() has built the graph.
+    musicBus() {
+      if (!ctx || !bus) return null;
+      if (!musicBusNode) { musicBusNode = ctx.createGain(); musicBusNode.gain.value = 1; musicBusNode.connect(storyBus); }
+      return { ctx, input: musicBusNode, verb: storyVerb, room: verbIn, white: whiteBuf, pink: pinkBuf, duck };
+    },
     get context() { return ctx; },
   };
 }

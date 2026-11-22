@@ -3,7 +3,7 @@
 //                                                           --chain  : skip level 1, only test menu + levels 2..5
 // Serves the game folder on a free port, plays main screen -> level 1 -> victory -> main screen (level 2
 // unlocked) with real key presses (plus the window.__platy debug seam for positioning), then walks the
-// unlock chain 2 -> 3 -> 4 -> 5, saves screenshots to tools/shots/ and measures fps.
+// unlock chain 2 -> 3 -> 4 -> 5 (6..11: see playtest-engine2.cjs), saves screenshots to tools/shots/ and measures fps.
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
@@ -75,7 +75,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     {
       const m = await page.evaluate(() => Array.from(document.querySelectorAll(".lvl")).map((b) => ({ n: b.dataset.n, locked: b.classList.contains("locked"), bg: getComputedStyle(b).backgroundImage.slice(0, 80) })));
       log("menu: " + m.map((b) => b.n + (b.locked ? " locked" : " open")).join(", "));
-      if (m.length !== 5 || m[0].locked || !m[1].locked || !m[4].locked) throw new Error("fresh menu must show 5 circles with only level 1 open");
+      if (m.length !== 11 || m[0].locked || !m.slice(1).every((b) => b.locked)) throw new Error("fresh menu must show 11 circles with only level 1 open");
       // a locked circle only shakes
       await page.click("#lvl3");
       await sleep(250); await shot("menu-locked-shake");
@@ -280,7 +280,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await sleep(200);
       }
       s2 = await waitFor((x) => x.mode === "menu", 5000, "main screen after level " + n);
-      const want = Math.min(5, n + 1);
+      const want = n + 1; // (off platyfy.com beating level 5 opens level 6: placeholders until levels 6-11 land)
       if (s2.progress.unlocked !== want || !s2.progress.beaten[n - 1]) throw new Error("after level " + n + ": " + JSON.stringify(s2.progress));
       await sleep(1700); await shot("menu-after-L" + n);
       await sleep(1500);
@@ -292,7 +292,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await page.reload({ waitUntil: "load" });
     await page.waitForFunction(() => window.__platy && !document.getElementById("levelBtn").disabled, { timeout: 60000 });
     s = await st();
-    if (s.progress.unlocked !== 5) throw new Error("progress was not saved: " + JSON.stringify(s.progress));
+    if (s.progress.unlocked !== 6) throw new Error("progress was not saved: " + JSON.stringify(s.progress));
     log("progress persisted ok");
 
     // 11. touch layout (level 1 replayed from the main screen through the debug seam)

@@ -72,11 +72,12 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
 
   // ---------------- cards ----------------
   let cardOp = 0, cardTo = 0, cardRate = 1, cardShown = -1;
-  function showCard(kicker, title, dark) {
+  function showCard(kicker, title, dark, day) {
     cardKick.textContent = kicker || "";
     cardTitle.textContent = title || "";
     cardEl.classList.remove("in");
     cardEl.classList.toggle("dark", !!dark);
+    cardEl.classList.toggle("day", !!day);
     void cardEl.offsetWidth;
     cardEl.classList.add("in");
     cardTo = 1; cardRate = 1.1;
@@ -105,6 +106,22 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
       after(0.7 + 1.0 + hold, () => { cardTo = 0; cardRate = 0.9; });
       after(0.7 + 1.0 + hold + 1.4, () => { if (cb) cb(); });
     });
+  }
+
+  // The countdown to Pip ("5 DAYS", "3 DAYS...") in the red glowing digits of the lair timer.
+  // o: { kicker: "" (small line above), hold: 3.2, sound: true }. Fades to black if the screen is not black yet, shows the
+  // text ticking (audio.timerTick once a second), fades the TEXT away and calls cb with the screen still black.
+  function dayCard(text, o, cb) {
+    const g = gen;
+    const hold = (o && o.hold) || 3.2;
+    const go = () => {
+      if (g !== gen) return;
+      showCard((o && o.kicker) || "", text, false, true);
+      if (!(o && o.sound === false) && audio && audio.timerTick) for (let i = 0; i < hold + 0.5; i++) after(0.25 + i, () => { if (g === gen) audio.timerTick(); });
+      after(1.0 + hold, () => { cardTo = 0; cardRate = 1.2; });
+      after(1.0 + hold + 1.1, () => { if (cb) cb(); });
+    };
+    if (fd.cur < 1 || fd.color !== "#000") fade("black", fd.cur >= 1 ? 0 : 0.8, go); else go();
   }
 
   // ---------------- captions ----------------
@@ -423,6 +440,7 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
       else if (s.tint !== undefined) tint(s.tint, s.opacity);
       else if (s.shake !== undefined) shake(s.shake, s.dur);
       else if (s.card) { seq.blocked = true; titleCard(s.card, unblock(gen)); }
+      else if (s.day) { seq.blocked = true; dayCard(s.day, s, unblock(gen)); }
     }
   }
   function finish(skipped) {
@@ -542,7 +560,7 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
 
   return {
     update, reset, after,
-    fade, letterbox, tint, titleCard, endCard, caption,
+    fade, letterbox, tint, titleCard, endCard, dayCard, caption,
     eye, shot, releaseCamera, shake, play, skip,
     slowMo(scale, ramp) { setTimeScale(scale, ramp || 0); },
     get playing() { return seq.on; },

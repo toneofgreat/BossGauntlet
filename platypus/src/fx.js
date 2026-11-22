@@ -6,6 +6,7 @@
 // writes a few floats when an effect is spawned, and nothing is allocated after construction
 // (except in createWater, which is a setup-time call).
 // The level 2-5 extensions (see EXTENSIONS below) add at most 4 more draw calls, each hidden while idle.
+// The level 6-11 extensions (LEVELS2.md B4) add at most 7 more, again each hidden while idle.
 
 const MAX_PARTICLES = 384;
 const P_STRIDE = 20; // 5 x vec4
@@ -989,6 +990,756 @@ void main() {
 		if (a < 0.003) discard;
 		gl_FragColor = vec4(vec3(1.0, 0.96, 0.86) * a, a * 0.15);
 	}
+}
+`;
+
+// ---------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------------
+// EXTENSIONS (levels 6-11, LEVELS2.md B4): seven more pooled draw calls, each hidden while idle.
+//   fx-lines  : camera-facing ribbons between two world points (bullet tracers, aim telegraphs)
+//   fx-ground : flat ground decals (danger zones, crack decals, travelling dust / scream rings, glow and
+//               mist discs)
+//   fx-cards  : upright cards (beacon pillars, guide gates, light shafts, mist, flames, halos)
+//   fx-scream : the two air-distortion shells of the scream
+//   fx-swirl  : the counter-rotating light ribbons of the transformation
+//   fx-air    : things that live in the air around the camera (dream motes, fireflies, wind streaks)
+//   fx-birds  : a flock of flapping chevrons
+// Everything else in B4 is built from the existing pooled particles, rings and flakes.
+// ---------------------------------------------------------------------------------------------
+
+const MAX_TRACERS = 32;
+const MAX_TELEGRAPHS = 8;
+const MAX_LINES = MAX_TRACERS + MAX_TELEGRAPHS;
+const LN_STRIDE = 16; // 4 x vec4
+const L_TRACER = 0, L_TELEGRAPH = 1;
+
+const GD_STRIDE = 20; // 5 x vec4
+const MAX_DANGER = 8;
+const MAX_CRACKS = 6;
+const MAX_SHOCKRINGS = 6;
+const MAX_GLOWS = 22; // persistent glow discs: 6 camp fires + 8 beacons + 8 spare
+const MAX_GTRANS = 22; // transient discs / rings, round robin
+const GD_DANGER0 = 0;
+const GD_CRACK0 = GD_DANGER0 + MAX_DANGER;
+const GD_SHOCK0 = GD_CRACK0 + MAX_CRACKS;
+const GD_GLOW0 = GD_SHOCK0 + MAX_SHOCKRINGS;
+const GD_TRANS0 = GD_GLOW0 + MAX_GLOWS;
+const MAX_GROUND = GD_TRANS0 + MAX_GTRANS;
+// ground styles
+const G_CIRCLE = 0, G_CONE = 1, G_LINE = 2, G_RING = 3, G_CRACK = 4, G_DUST = 5, G_GLOW = 6, G_MIST = 7, G_SCREAM = 8;
+const DANGER_FLASH = 0.1; // seconds of white flash after a danger zone has filled
+
+const CD_STRIDE = 16; // 4 x vec4
+const MAX_BEACONS = 8;
+const MAX_GATES = 16;
+const MAX_SHAFTS = 8;
+const MAX_MIST = 10;
+const MAX_CAMPFIRES = 6;
+const CAMP_CARDS = 5;
+const MAX_TORCHES = 8;
+const TORCH_CARDS = 3; // two flames + a halo
+const CD_BEACON0 = 0;
+const CD_GATE0 = CD_BEACON0 + MAX_BEACONS;
+const CD_SHAFT0 = CD_GATE0 + MAX_GATES;
+const CD_MIST0 = CD_SHAFT0 + MAX_SHAFTS;
+const CD_CAMP0 = CD_MIST0 + MAX_MIST;
+const CD_TORCH0 = CD_CAMP0 + MAX_CAMPFIRES * CAMP_CARDS;
+const MAX_CARDS = CD_TORCH0 + MAX_TORCHES * TORCH_CARDS;
+// card styles
+const C_PILLAR = 0, C_GATE = 1, C_SHAFT = 2, C_MIST = 3, C_FLAME = 4, C_HALO = 5;
+const GATE_BURST = 0.6; // seconds a guide ring takes to burst after pass()
+
+const MAX_SWIRLS = 6;
+const SW_STRIDE = 8;
+const SWIRL_SEGS = 56;
+
+const AIR_DREAM = 160;
+const AIR_FLIES = 64;
+const AIR_WIND = 48;
+const AIR_COUNT = AIR_DREAM + AIR_FLIES + AIR_WIND;
+const AIR_STRIDE = 8;
+
+const MAX_BIRDS = 48;
+const BD_STRIDE = 12;
+
+const MAX_GLOBS = 8;
+const SCREAM_SPEED = 24; // m/s, the ground ring of the scream
+const SHOCK_RECOVER = 3; // seconds the flattened foliage takes to spring back
+
+const LINE_VERT = /* glsl */ `
+uniform float uTime;
+attribute vec4 aA; // from xyz, start time
+attribute vec4 aB; // to xyz, life
+attribute vec4 aC; // rgb, style (0 tracer, 1 telegraph)
+attribute vec4 aD; // half width, speed, seed, alpha
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vA;
+varying float vLen;
+varying float vU;
+void main() {
+	vUv = position.xy;
+	vCol = aC;
+	vA = 0.0;
+	vLen = 1.0;
+	vU = 0.0;
+	float age = uTime - aA.w;
+	float life = aB.w;
+	if (life <= 0.0 || age < 0.0 || age >= life) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	vec3 d = aB.xyz - aA.xyz;
+	float dist = max(length(d), 1e-3);
+	vec3 dir = d / dist;
+	float u = age / life;
+	float a0 = 0.0;
+	float a1 = dist;
+	float al = aD.w;
+	if (aC.w < 0.5) {
+		// a streak whose head travels the segment at aD.y m/s
+		float sl = clamp(aD.y * 0.045, 0.8, 5.0);
+		float hd = aD.y * age;
+		a1 = min(hd, dist);
+		a0 = clamp(hd - sl, 0.0, dist);
+		al *= smoothstep(0.0, 0.3, (a1 - a0) / sl + 0.04);
+	} else {
+		// the aim line: blinks faster and brighter as the shot comes
+		float ph = 6.2831853 * (2.2 * age + 5.5 * age * u);
+		float blink = 0.5 + 0.5 * sin(ph);
+		al *= mix(0.3, 1.0, u) * mix(0.35 + 0.65 * blink, 1.0, smoothstep(0.9, 1.0, u)) * smoothstep(0.0, 0.07, age);
+	}
+	vU = u;
+	vLen = a1 - a0;
+	float s = position.x * 0.5 + 0.5;
+	vec3 p = aA.xyz + dir * mix(a0, a1, s);
+	vec3 toCam = cameraPosition - p;
+	vec3 side = cross(dir, toCam);
+	float sl2 = length(side);
+	side = sl2 > 1e-5 ? side / sl2 : vec3(1.0, 0.0, 0.0);
+	float w = max(aD.x, length(toCam) * 0.0019); // never thinner than about a pixel and a half
+	p += side * (position.y * w);
+	vA = al;
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const LINE_FRAG = /* glsl */ `
+uniform float uTime;
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vA;
+varying float vLen;
+varying float vU;
+void main() {
+	float across = max(1.0 - abs(vUv.y), 0.0);
+	float core = across * across;
+	float s = vUv.x * 0.5 + 0.5;
+	vec3 col = vCol.rgb;
+	float a;
+	float solid;
+	if (vCol.w < 0.5) {
+		float taper = s * s;
+		float tip = smoothstep(1.0, 0.9, s);
+		a = (core * 1.2 + across * 0.25) * taper * tip;
+		col = mix(col, vec3(1.0), clamp(core * s * 1.2, 0.0, 1.0));
+		solid = 0.25;
+	} else {
+		float dash = 0.62 + 0.38 * step(0.5, fract(s * vLen * 2.2 - uTime * 2.5));
+		float ends = smoothstep(0.0, 0.03, s);
+		a = (core + across * 0.3) * dash * ends;
+		col = mix(col, vec3(1.0, 0.85, 0.8), core * core * (0.35 + 0.45 * vU));
+		solid = 0.6;
+	}
+	a = clamp(a * vA, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(col * a, a * solid);
+}
+`;
+
+const GROUND_VERT = /* glsl */ `
+uniform float uTime;
+attribute vec4 aA; // centre xyz, start time
+attribute vec4 aB; // life, half extent of the quad (m), yaw, style
+attribute vec4 aC; // rgb, alpha
+attribute vec4 aD; // style parameters (see the fragment shader)
+attribute vec4 aE; // seed, fill seconds | fade-in seconds, additive 0..1, spare
+varying vec2 vP;
+varying vec4 vCol;
+varying vec4 vD;
+varying vec4 vE;
+varying float vStyle;
+varying float vAge;
+varying float vU;
+void main() {
+	vP = position.xy * aB.y;
+	vCol = aC;
+	vD = aD;
+	vE = aE;
+	vStyle = aB.w;
+	vAge = 0.0;
+	vU = 0.0;
+	float age = uTime - aA.w;
+	float life = aB.x;
+	if (life <= 0.0 || age < 0.0 || age >= life || aC.w <= 0.0) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	vAge = age;
+	vU = age / life;
+	float sy = sin(aB.z);
+	float cy = cos(aB.z);
+	// local +y is "forward" (sin yaw, cos yaw), local +x is its right-hand side
+	vec3 p = aA.xyz + vec3(sy, 0.0, cy) * vP.y + vec3(cy, 0.0, -sy) * vP.x;
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const GROUND_FRAG = /* glsl */ `
+uniform float uTime;
+varying vec2 vP;
+varying vec4 vCol;
+varying vec4 vD;
+varying vec4 vE;
+varying float vStyle;
+varying float vAge;
+varying float vU;
+float gh(float n) { return fract(sin(n) * 43758.5453123); }
+void main() {
+	float r = length(vP);
+	float an = atan(vP.x, vP.y); // 0 = forward
+	float seed = vE.x;
+	vec3 col = vCol.rgb;
+	float a = 0.0;
+	float add = vE.z;
+	if (vStyle < 3.5) {
+		// ---- danger zones: D = (radius, half arc, length, width). The fill sweeps over vE.y seconds,
+		// then the whole shape flashes white for a moment.
+		float fillT = max(vE.y, 1e-3);
+		float k = clamp(vAge / fillT, 0.0, 1.0);
+		float flash = step(fillT, vAge);
+		float inside;
+		float edge;
+		float fill;
+		float e = 0.035 + 0.012 * vD.x;
+		if (vStyle < 0.5) {            // circle
+			inside = smoothstep(vD.x, vD.x - 0.03, r);
+			edge = smoothstep(e, 0.0, abs(r - vD.x + e * 0.5));
+			fill = smoothstep(vD.x * k, vD.x * k - 0.06, r) * inside;
+			edge += smoothstep(0.05, 0.0, abs(r - vD.x * k)) * inside * 0.6;
+		} else if (vStyle < 1.5) {     // cone, apex at the centre
+			float da = (vD.y - abs(an)) * max(r, 0.05); // metres to the nearest side
+			inside = smoothstep(0.0, 0.03, da) * smoothstep(vD.x, vD.x - 0.03, r);
+			edge = max(smoothstep(e, 0.0, abs(da - e * 0.5)) * step(r, vD.x), smoothstep(e, 0.0, abs(r - vD.x + e * 0.5)) * step(0.0, da));
+			fill = smoothstep(vD.x * k, vD.x * k - 0.06, r) * inside;
+			edge += smoothstep(0.05, 0.0, abs(r - vD.x * k)) * inside * 0.6;
+		} else if (vStyle < 2.5) {     // line: a lane from the centre forward
+			float hw = vD.w * 0.5;
+			float dx = hw - abs(vP.x);
+			float dy = min(vP.y, vD.z - vP.y);
+			float dd = min(dx, dy);
+			inside = smoothstep(0.0, 0.03, dd);
+			edge = smoothstep(e, 0.0, abs(dd - e * 0.5)) * step(0.0, dd);
+			fill = smoothstep(vD.z * k, vD.z * k - 0.08, vP.y) * inside;
+			edge += smoothstep(0.05, 0.0, abs(vP.y - vD.z * k)) * inside * 0.6;
+			// chevrons running down the lane
+			fill *= 0.8 + 0.2 * step(0.5, fract((vP.y + abs(vP.x) * 0.8) * 0.9 - uTime * 1.6));
+		} else {                       // ring (annulus): radius D.x, width D.w
+			float hw = vD.w * 0.5;
+			float dd = hw - abs(r - vD.x);
+			inside = smoothstep(0.0, 0.03, dd);
+			edge = smoothstep(e, 0.0, abs(dd - e * 0.5)) * step(0.0, dd);
+			float fr = vD.x - hw + vD.w * k;
+			fill = smoothstep(fr, fr - 0.06, r) * inside;
+			edge += smoothstep(0.05, 0.0, abs(r - fr)) * inside * 0.6;
+		}
+		float pulse = 0.85 + 0.15 * sin(uTime * 9.0 + k * 9.0);
+		a = inside * 0.14 + fill * (0.3 + 0.22 * k) * pulse + edge * (0.65 + 0.35 * k);
+		float fl = flash * inside;
+		col = mix(col, vec3(1.0), clamp(edge * 0.25 + fl, 0.0, 1.0));
+		a = mix(a, 0.95, fl);
+		a *= vCol.a;
+		add = 0.35;
+	} else if (vStyle < 4.5) {       // ---- crack decal: D.x = radius
+		float R = vD.x;
+		float a2 = an + sin(r * 5.0 / R + seed * 20.0) * 0.1 + sin(r * 14.0 / R + seed * 5.0) * 0.04;
+		float nk = 9.0;
+		float cell = a2 * nk / 6.2831853 + seed + 0.5;
+		float id = floor(cell);
+		float c = abs(fract(cell) - 0.5);                 // 0 = on a crack (the middle of its cell)
+		float dm = c * (6.2831853 / nk) * r;              // metres to the crack
+		float len = R * (0.5 + 0.5 * gh(id * 7.31 + seed * 3.0));
+		float wdt = 0.012 + 0.03 * (1.0 - r / R);
+		float line = smoothstep(wdt, wdt * 0.25, dm) * smoothstep(len, len * 0.55, r);
+		float rr = R * (0.36 + 0.07 * sin(an * 5.0 + seed * 9.0));
+		float hoop = smoothstep(0.03, 0.0, abs(r - rr)) * step(0.45, gh(id * 3.7 + seed));
+		float soot = smoothstep(R * 0.8, 0.0, r);
+		a = clamp(line * 0.8 + hoop * 0.45 + soot * 0.2, 0.0, 1.0);
+		a *= vCol.a * smoothstep(0.0, 0.02, vU) * (1.0 - smoothstep(0.65, 1.0, vU));
+		add = 0.0;
+	} else if (vStyle < 5.5) {       // ---- travelling dust ring: D = (speed, max radius, band width, start radius)
+		float R = min(vD.w + vD.x * vAge, vD.y);
+		float x = r - R;
+		float lump = sin(an * 9.0 + seed * 30.0) * 0.5 + sin(an * 23.0 - seed * 50.0 + vAge * 2.0) * 0.3 + sin(an * 41.0 + seed * 9.0) * 0.2;
+		float band = smoothstep(0.3, 0.0, x - lump * 0.12) * smoothstep(-vD.z, -vD.z * 0.15, x + lump * 0.25);
+		float front = smoothstep(0.22, 0.0, abs(x - lump * 0.1));
+		a = band * (0.5 + 0.3 * lump) + front * 0.5;
+		float endF = 1.0 - smoothstep(vD.y * 0.93, vD.y, R);
+		a *= vCol.a * smoothstep(0.0, 0.08, vAge) * endF;
+		col = mix(col, vec3(1.0), front * 0.35);
+	} else if (vStyle < 6.5) {       // ---- glow disc: D = (radius, flicker amount, flicker rate)
+		float f = max(1.0 - r / vD.x, 0.0);
+		float fl = 1.0 - vD.y * (0.5 + 0.3 * sin(uTime * vD.z + seed * 40.0) + 0.2 * sin(uTime * vD.z * 2.7 + seed * 11.0));
+		a = f * f * fl * vCol.a * smoothstep(0.0, max(vE.y, 1e-3), vAge);
+		col = mix(col, vec3(1.0), f * f * f * 0.35);
+	} else if (vStyle < 7.5) {       // ---- low glowing mist: D.x = radius
+		float f = smoothstep(vD.x, vD.x * 0.25, r);
+		float sw = sin(an * 3.0 + r * 4.5 - vAge * 1.6 + seed * 6.0) * sin(an * 5.0 - r * 2.0 + vAge * 0.9 + seed * 17.0);
+		float grow = smoothstep(0.0, 0.12, vU);
+		a = f * (0.55 + 0.45 * sw) * grow * pow(1.0 - vU, 1.3) * vCol.a;
+		a *= smoothstep(vD.x * grow + 0.05, vD.x * grow * 0.6, r);
+		col = mix(col, vec3(1.0), f * f * 0.25 * (1.0 - vU));
+	} else {                         // ---- scream ring: D = (speed, max radius, power, 0)
+		float R = min(vD.x * vAge, vD.y);
+		float x = r - R;
+		float band = smoothstep(0.35, 0.0, abs(x));
+		band *= band;
+		float spk = pow(max(sin(an * 31.0 + seed * 20.0), 0.0), 6.0) + pow(max(sin(an * 13.0 - seed * 31.0), 0.0), 9.0) * 0.8;
+		float wake = smoothstep(-7.0, 0.0, x) * step(x, 0.0);
+		float streak = spk * wake * wake * 0.55;
+		float haze = wake * 0.12;
+		float flash = smoothstep(vD.y * 0.6, 0.0, r) * max(1.0 - vAge * 4.0, 0.0);
+		float endF = 1.0 - smoothstep(vD.y * 0.7, vD.y, R);
+		a = (band * 1.3 + streak + haze) * endF + flash;
+		a *= vCol.a;
+		col = mix(col, vec3(1.0), clamp(band + flash, 0.0, 1.0));
+	}
+	a = clamp(a, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(col * a, a * (1.0 - add));
+}
+`;
+
+const CARD_VERT = /* glsl */ `
+uniform float uTime;
+attribute vec4 aA; // anchor xyz, style
+attribute vec4 aB; // width, height, yaw, tilt
+attribute vec4 aC; // rgb, alpha
+attribute vec4 aD; // start time, seed, level, pass time (gates; 0 = not passed)
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vStyle;
+varying float vSeed;
+varying float vLevel;
+varying float vA;
+varying float vK;
+void main() {
+	vUv = position.xy;
+	vCol = aC;
+	vStyle = aA.w;
+	vSeed = aD.y;
+	vLevel = aD.z;
+	vA = 0.0;
+	vK = 0.0;
+	if (aC.w <= 0.0) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	float age = uTime - aD.x;
+	float style = aA.w;
+	vec3 toCam = cameraPosition - aA.xyz;
+	float camD = length(toCam);
+	vec3 flatv = vec3(toCam.x, 0.0, toCam.z);
+	float fl = length(flatv);
+	vec3 bright = fl > 1e-4 ? vec3(flatv.z, 0.0, -flatv.x) / fl : vec3(1.0, 0.0, 0.0);
+	float sy = sin(aB.z);
+	float cy = cos(aB.z);
+	vec3 fright = vec3(cy, 0.0, -sy);
+	vec3 up = vec3(0.0, 1.0, 0.0);
+	float y01 = position.y * 0.5 + 0.5;
+	float fadeIn = smoothstep(0.0, 0.45, age);
+	vec3 p;
+	if (style < 0.5) {            // beacon pillar: stands on its anchor, turns to the camera
+		p = aA.xyz + bright * (position.x * aB.x * 0.5) + up * (y01 * aB.y);
+		vA = aC.w * fadeIn * smoothstep(0.6, 2.2, camD);
+	} else if (style < 1.5) {     // guide ring in a fixed vertical plane; bursts when passed
+		float k = aD.w > 0.0 ? clamp((uTime - aD.w) / ${GATE_BURST.toFixed(2)}, 0.0, 1.0) : 0.0;
+		vK = k;
+		float sc = aB.x * 0.5 * 1.18 * (1.0 + 0.9 * k);
+		p = aA.xyz + (fright * position.x + up * position.y) * sc;
+		vA = aC.w * fadeIn * (aD.w > 0.0 ? (1.0 - k) * (1.0 - k) * 1.8 : 1.0);
+	} else if (style < 2.5) {     // light shaft: fixed plane, leaning by tilt
+		float st = sin(aB.w);
+		float ct = cos(aB.w);
+		p = aA.xyz + fright * (position.x * aB.x * 0.5) + (fright * st + up * ct) * (y01 * aB.y);
+		// a shaft seen edge-on is a line: let it fade there
+		vec3 nrm = vec3(sy, 0.0, cy);
+		float facing = abs(dot(nrm, toCam)) / max(camD, 1e-3);
+		vA = aC.w * fadeIn * smoothstep(0.08, 0.45, facing) * smoothstep(0.8, 3.0, camD);
+	} else if (style < 3.5) {     // mist card: big, soft, turns to the camera, drifts a little
+		vec3 c = aA.xyz + vec3(sin(uTime * 0.07 + aD.y * 20.0), 0.0, cos(uTime * 0.05 + aD.y * 31.0)) * 0.6;
+		p = c + bright * (position.x * aB.x * 0.5) + up * (position.y * aB.y * 0.5);
+		vA = aC.w * fadeIn * smoothstep(1.5, 7.0, camD);
+	} else if (style < 4.5) {     // flame: stands on its anchor, turns to the camera
+		p = aA.xyz + bright * (position.x * aB.x * 0.5) + up * (y01 * aB.y);
+		vA = aC.w;
+	} else {                      // halo: a soft ball of light, faces the camera
+		vec4 mvh = viewMatrix * vec4(aA.xyz, 1.0);
+		mvh.xy += position.xy * aB.x * 0.5;
+		vA = aC.w;
+		gl_Position = projectionMatrix * mvh;
+		return;
+	}
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const CARD_FRAG = /* glsl */ `
+uniform float uTime;
+varying vec2 vUv;
+varying vec4 vCol;
+varying float vStyle;
+varying float vSeed;
+varying float vLevel;
+varying float vA;
+varying float vK;
+float ch(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+void main() {
+	float y01 = vUv.y * 0.5 + 0.5;
+	float ax = abs(vUv.x);
+	float t = uTime;
+	float s = vSeed * 6.2831853;
+	vec3 col = vCol.rgb;
+	float a;
+	float solid = 0.0;
+	if (vStyle < 0.5) {            // beacon pillar
+		float beam = max(1.0 - ax, 0.0);
+		float core = pow(beam, 6.0);
+		float soft = beam * beam;
+		float rise = 0.75 + 0.25 * sin(y01 * 16.0 - t * 2.4 + s);
+		float hgt = pow(max(1.0 - y01, 0.0), 1.6) * smoothstep(0.0, 0.04, y01);
+		float breathe = 0.8 + 0.2 * sin(t * 2.1 + s);
+		a = (soft * 0.42 * rise + core * 0.75) * hgt * breathe;
+		col = mix(col, vec3(1.0), core * 0.6);
+	} else if (vStyle < 1.5) {     // guide ring
+		float r = length(vUv) * 1.18;
+		float an = atan(vUv.y, vUv.x);
+		float band = smoothstep(0.075, 0.0, abs(r - 1.0));
+		float halo = smoothstep(0.34, 0.0, abs(r - 1.0));
+		float dash = 0.7 + 0.3 * sin(an * 14.0 - t * 2.2 + s);
+		float inner = smoothstep(1.0, 0.2, r) * 0.05;
+		a = band * band * dash + halo * halo * 0.3 + inner;
+		a *= 0.85 + 0.15 * sin(t * 3.0 + s);
+		col = mix(col, vec3(1.0), clamp(band * band * 0.6 + vK, 0.0, 1.0));
+	} else if (vStyle < 2.5) {     // light shaft with slow dust in it
+		float edge = smoothstep(1.0, 0.25, ax);
+		float rays = 0.72 + 0.28 * sin(vUv.x * 7.0 + s * 3.0 + sin(t * 0.17 + s) * 1.2) * sin(vUv.x * 17.0 - s * 5.0 + t * 0.09);
+		float hgt = smoothstep(0.0, 0.16, y01) * smoothstep(1.0, 0.55, y01);
+		vec2 g = vec2(vUv.x * 5.0 + s, y01 * 16.0 - t * 0.06);
+		vec2 gi = floor(g);
+		vec2 gf = fract(g) - 0.5;
+		float h1 = ch(gi + vSeed * 13.0);
+		vec2 o = (vec2(h1, ch(gi + 7.7)) - 0.5) * 0.6 + vec2(sin(t * 0.4 + h1 * 30.0), cos(t * 0.33 + h1 * 17.0)) * 0.08;
+		float speck = smoothstep(0.11, 0.0, length(gf - o)) * step(0.55, h1) * (0.5 + 0.5 * sin(t * (1.0 + h1 * 2.0) + h1 * 40.0));
+		a = edge * edge * rays * hgt * 0.6 + speck * edge * hgt * 0.55;
+	} else if (vStyle < 3.5) {     // mist
+		float r2 = dot(vUv, vUv);
+		float body = max(1.0 - r2, 0.0);
+		float n = sin(vUv.x * 3.1 + t * 0.11 + s) * sin(vUv.y * 4.3 - t * 0.07 + s * 2.0) * 0.5
+			+ sin(vUv.x * 6.7 - t * 0.09 + s * 3.0) * sin(vUv.y * 2.1 + s) * 0.3;
+		a = body * body * (0.7 + 0.3 * n) * smoothstep(-1.0, -0.55, vUv.y);
+		solid = 1.0;
+	} else if (vStyle < 4.5) {     // flame
+		float lv = max(vLevel, 0.0);
+		float top = lv * (0.82 + 0.18 * sin(t * 11.0 + s * 3.0) * sin(t * 6.3 + s));
+		float yy = y01 / max(top, 1e-3);
+		float sway = sin(y01 * 5.0 - t * 7.0 + s * 2.0) * 0.2 + sin(y01 * 11.0 - t * 13.0 + s * 5.0) * 0.08;
+		float wd = pow(max(1.0 - yy, 0.0), 0.65) * (0.62 + 0.14 * sin(y01 * 9.0 - t * 10.0 + s)) + 0.02;
+		float d = abs(vUv.x - sway * y01) / wd;
+		float body = smoothstep(1.0, 0.25, d) * smoothstep(0.0, 0.05, y01) * step(yy, 1.0);
+		float lick = smoothstep(0.55, 0.0, abs(fract(y01 * 2.3 - t * 2.1 + vSeed) - 0.5)) * 0.25 + 0.75;
+		float heat = body * (1.0 - yy * 0.75) * lick;
+		col = mix(vec3(1.0, 0.2, 0.02), vec3(1.0, 0.58, 0.1), smoothstep(0.1, 0.55, heat));
+		col = mix(col, vec3(1.0, 0.94, 0.7), smoothstep(0.55, 0.95, heat));
+		col *= vCol.rgb;
+		a = body * (0.45 + 0.55 * heat) * min(lv * 3.0, 1.0);
+	} else {                       // halo
+		float f = max(1.0 - length(vUv), 0.0);
+		a = f * f * (0.85 + 0.15 * sin(t * 13.0 + s) * sin(t * 7.1 + s * 2.0)) * (0.3 + 0.7 * vLevel);
+	}
+	a = clamp(a * vA, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(col * a, a * solid);
+}
+`;
+
+const SCREAM_VERT = /* glsl */ `
+uniform vec4 uC; // centre xyz, radius of the outer shell
+uniform vec4 uP; // power, age, fade, max radius
+attribute float aShell;
+varying vec3 vDir;
+varying vec3 vW;
+varying float vShell;
+void main() {
+	vDir = position;
+	vShell = aShell;
+	float rad = uC.w * (aShell < 0.5 ? 1.0 : 0.74);
+	vec3 p = uC.xyz + vec3(position.x, position.y * 0.62, position.z) * rad;
+	vW = p;
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const SCREAM_FRAG = /* glsl */ `
+uniform vec4 uC;
+uniform vec4 uP;
+varying vec3 vDir;
+varying vec3 vW;
+varying float vShell;
+void main() {
+	vec3 N = normalize(vec3(vDir.x, vDir.y / 0.62, vDir.z));
+	vec3 V = normalize(cameraPosition - vW);
+	float ndv = abs(dot(N, V));
+	float fres = pow(1.0 - ndv, 2.2);
+	float an = atan(vDir.z, vDir.x);
+	float el = vDir.y;
+	// radial streaks whose pattern scrolls up the wall and round it: reads as bending air
+	float sc = uP.y * (vShell < 0.5 ? 9.0 : -6.0);
+	float s1 = sin(an * 37.0 + sin(el * 9.0 - sc) * 1.6 + vShell * 2.0);
+	float s2 = sin(an * 71.0 - el * 13.0 + sc * 1.7);
+	float streak = pow(max(s1, 0.0), 5.0) * 0.7 + pow(max(s2, 0.0), 9.0) * 0.5;
+	float bands = 0.5 + 0.5 * sin(el * 26.0 - sc * 2.0 + an * 3.0);
+	float foot = smoothstep(0.0, 0.1, el) * (1.0 - smoothstep(0.55, 1.0, el));
+	float a = (fres * (0.5 + 0.5 * bands) + streak * (0.25 + 0.75 * fres)) * foot;
+	a += fres * fres * 0.5 * smoothstep(0.0, 0.1, el);
+	a *= uP.z * (vShell < 0.5 ? 1.0 : 0.6);
+	a = clamp(a, 0.0, 1.0);
+	if (a < 0.004) discard;
+	vec3 col = mix(vec3(0.72, 0.86, 1.0), vec3(1.0), clamp(fres * 0.8 + streak * 0.4, 0.0, 1.0));
+	gl_FragColor = vec4(col * a, a * 0.06);
+}
+`;
+
+const SWIRL_VERT = /* glsl */ `
+uniform float uTime;
+attribute float aT;    // 0 (tail) .. 1 (head) along the ribbon
+attribute float aSide; // -1 | +1
+attribute float aDir;  // -1 | +1: the two ribbons turn against each other
+attribute vec4 aS;     // centre xyz, start time
+attribute vec4 aS2;    // seconds, height, seed, radius
+varying float vT;
+varying float vSide;
+varying float vDirv;
+varying float vA;
+vec3 helix(float t, float u, float age) {
+	float rise = smoothstep(0.0, 0.5, u);
+	float lift = smoothstep(0.5, 0.92, u);
+	float hv = mix(lift, rise, t);
+	float turns = 2.4;
+	float ang = aDir * (hv * turns * 6.2831853 + age * (4.5 + 5.0 * u)) + (aDir > 0.0 ? 0.0 : 3.14159265) + aS2.z * 6.2831853;
+	float R = aS2.w * mix(1.0, 0.3, smoothstep(0.08, 0.8, u)) * (1.0 - 0.5 * hv);
+	R *= 1.0 + 1.3 * smoothstep(0.8, 1.0, u);
+	return aS.xyz + vec3(cos(ang) * R, hv * aS2.y, sin(ang) * R);
+}
+void main() {
+	vT = aT;
+	vSide = aSide;
+	vDirv = aDir;
+	vA = 0.0;
+	float age = uTime - aS.w;
+	float secs = aS2.x;
+	float u = age / max(secs, 1e-3);
+	if (secs <= 0.0 || u < 0.0 || u >= 1.0) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	vec3 p = helix(aT, u, age);
+	vec3 p2 = helix(aT + 0.012, u, age);
+	vec3 tg = p2 - p;
+	vec3 toCam = cameraPosition - p;
+	vec3 side = cross(tg, toCam);
+	float sl = length(side);
+	side = sl > 1e-6 ? side / sl : vec3(0.0, 1.0, 0.0);
+	float w = (0.035 + 0.075 * aS2.w) * sqrt(max(sin(aT * 3.14159265), 0.0)) * (1.0 - 0.35 * u);
+	p += side * (aSide * w);
+	vA = smoothstep(0.0, 0.08, u) * (1.0 - smoothstep(0.8, 1.0, u)) * mix(0.3, 1.0, aT) * (1.0 + 1.2 * smoothstep(0.7, 0.8, u));
+	gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+}
+`;
+
+const SWIRL_FRAG = /* glsl */ `
+uniform float uTime;
+varying float vT;
+varying float vSide;
+varying float vDirv;
+varying float vA;
+void main() {
+	float across = max(1.0 - abs(vSide), 0.0);
+	float core = across * across * across;
+	float shimmer = 0.72 + 0.28 * sin(vT * 46.0 - uTime * 13.0 * vDirv);
+	vec3 green = vec3(0.36, 1.0, 0.62);
+	vec3 gold = vec3(1.0, 0.86, 0.42);
+	vec3 col = mix(vDirv > 0.0 ? green : gold, vDirv > 0.0 ? gold : green, vT * 0.6);
+	col = mix(col, vec3(1.0), core * 0.85);
+	float a = clamp((across * 0.55 * shimmer + core * 0.9) * vA, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(col * a, 0.0);
+}
+`;
+
+const AIR_VERT = /* glsl */ `
+uniform float uTime;
+uniform vec4 uDream;   // strength, radius, 0, 0
+uniform vec3 uDreamCol;
+uniform vec4 uFly;     // strength, centre x, centre z, radius
+uniform vec2 uFlyY;    // base height, fraction of the swarm that is out
+uniform vec4 uWind;    // dir x, dir z, strength, speed
+attribute vec4 aA; // seed xyz (0..1), kind (0 dream mote, 1 firefly, 2 wind streak)
+attribute vec4 aB; // size, rate, phase / rank, alpha
+varying vec2 vUv;
+varying vec3 vCol;
+varying float vA;
+varying float vKind;
+float ah2(float n) { return fract(sin(n) * 43758.5453123); }
+void main() {
+	vUv = position.xy;
+	vKind = aA.w;
+	vA = 0.0;
+	vCol = vec3(1.0);
+	gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+	if (aA.w < 0.5) {
+		if (uDream.x <= 0.002) return;
+		vec3 S = vec3(uDream.y * 2.0, min(uDream.y, 9.0), uDream.y * 2.0);
+		vec3 vel = (vec3(ah2(aB.z * 3.1 + 0.2), ah2(aB.z * 7.7 + 1.1), ah2(aB.z * 5.3 + 2.4)) - 0.5) * vec3(0.16, 0.07, 0.16);
+		vel.y += 0.03;
+		vec3 q = aA.xyz + vel * uTime / S - cameraPosition / S;
+		q.x += sin(uTime * 0.23 + aB.z * 20.0) * 0.01;
+		q.z += cos(uTime * 0.19 + aB.z * 31.0) * 0.01;
+		q = fract(q);
+		vec3 ef = smoothstep(vec3(0.0), vec3(0.12), q) * (1.0 - smoothstep(vec3(0.88), vec3(1.0), q));
+		float tw = 0.5 + 0.5 * sin(uTime * (0.4 + aB.y * 1.6) + aB.z * 40.0);
+		vA = aB.w * ef.x * ef.y * ef.z * (0.3 + 0.7 * tw * tw) * uDream.x;
+		vCol = mix(uDreamCol, vec3(1.0), ah2(aB.z * 11.0) * 0.4);
+		vec4 mv = viewMatrix * vec4(cameraPosition + (q - 0.5) * S, 1.0);
+		mv.xy += position.xy * aB.x * (1.0 + 0.5 * tw);
+		gl_Position = projectionMatrix * mv;
+	} else if (aA.w < 1.5) {
+		if (uFly.x <= 0.002 || aB.z >= uFlyY.y) return;
+		float ang = aA.x * 6.2831853;
+		float rr = sqrt(aA.y) * uFly.w;
+		float ph = aB.z * 40.0;
+		float rt = 0.25 + aB.y * 0.35;
+		vec3 c = vec3(uFly.y + cos(ang) * rr, uFlyY.x + 0.35 + aA.z * 2.3, uFly.z + sin(ang) * rr);
+		c += vec3(sin(uTime * rt + ph) + 0.5 * sin(uTime * rt * 2.3 + ph * 1.7), 0.35 * sin(uTime * rt * 1.7 + ph * 0.6),
+			cos(uTime * rt * 0.9 + ph * 1.3) + 0.5 * cos(uTime * rt * 2.1 + ph)) * 0.9;
+		float bl = max(sin(uTime * (0.7 + aB.y * 0.9) + ph), 0.0);
+		bl = bl * bl * bl;
+		vA = aB.w * (0.06 + 0.94 * bl) * uFly.x;
+		vCol = vec3(0.78, 1.0, 0.32);
+		vec4 mv = viewMatrix * vec4(c, 1.0);
+		mv.xy += position.xy * aB.x * (0.6 + 0.8 * bl);
+		gl_Position = projectionMatrix * mv;
+	} else {
+		if (uWind.z <= 0.002) return;
+		vec3 S = vec3(26.0, 9.0, 26.0);
+		vec3 dir = vec3(uWind.x, 0.0, uWind.y);
+		vec3 q = aA.xyz + dir * (uWind.w * (0.75 + 0.5 * aB.y) * uTime) / S - cameraPosition / S;
+		q.y += sin(uTime * 0.6 + aB.z * 30.0) * 0.02;
+		q = fract(q);
+		vec3 ef = smoothstep(vec3(0.0), vec3(0.14), q) * (1.0 - smoothstep(vec3(0.86), vec3(1.0), q));
+		vec3 p = cameraPosition + (q - 0.5) * S;
+		float len = (1.1 + 1.9 * aB.y) * (0.6 + 0.4 * uWind.z);
+		p += dir * (position.x * len);
+		vec3 toCam = cameraPosition - p;
+		vec3 side = cross(dir, toCam);
+		float sl = length(side);
+		side = sl > 1e-5 ? side / sl : vec3(0.0, 1.0, 0.0);
+		p += side * (position.y * max(aB.x, length(toCam) * 0.0016));
+		vA = aB.w * ef.x * ef.y * ef.z * uWind.z;
+		gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+	}
+}
+`;
+
+const AIR_FRAG = /* glsl */ `
+varying vec2 vUv;
+varying vec3 vCol;
+varying float vA;
+varying float vKind;
+void main() {
+	float a;
+	float solid;
+	if (vKind < 1.5) {
+		float f = max(1.0 - length(vUv), 0.0);
+		a = f * f * f + (vKind > 0.5 ? smoothstep(0.75, 1.0, f) : 0.0);
+		solid = vKind < 0.5 ? 0.12 : 0.0;
+	} else {
+		float across = max(1.0 - abs(vUv.y), 0.0);
+		float along = max(1.0 - vUv.x * vUv.x, 0.0);
+		a = across * across * along * along;
+		solid = 0.55;
+	}
+	a = clamp(a * vA, 0.0, 1.0);
+	if (a < 0.004) discard;
+	gl_FragColor = vec4(vCol * a, a * solid);
+}
+`;
+
+const BIRD_VERT = /* glsl */ `
+uniform float uTime;
+attribute float aWing; // 0 at the body .. 1 at the wing tip
+attribute vec4 aA; // start xyz, start time
+attribute vec4 aB; // velocity xyz, life
+attribute vec4 aC; // seed, size, flap rate, tone
+varying float vA;
+varying float vShade;
+varying float vTone;
+void main() {
+	vA = 0.0;
+	vShade = 1.0;
+	vTone = aC.w;
+	float age = uTime - aA.w;
+	float life = aB.w;
+	if (life <= 0.0 || age < 0.0 || age >= life) {
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	float u = age / life;
+	float ph = aC.x * 6.2831853;
+	// a startled leap, then the flock strings out and climbs away
+	float go = age + 0.35 * age * age;
+	vec3 c = aA.xyz + vec3(aB.x, 0.0, aB.z) * go + vec3(0.0, aB.y * age + 1.4 * (1.0 - exp(-age * 2.5)), 0.0);
+	vec2 hd = vec2(aB.x, aB.z);
+	float hl = length(hd);
+	hd = hl > 1e-4 ? hd / hl : vec2(0.0, 1.0);
+	vec3 fwd = vec3(hd.x, 0.0, hd.y);
+	vec3 right = vec3(hd.y, 0.0, -hd.x);
+	c += right * (sin(age * 2.1 + ph) * 0.35) + vec3(0.0, sin(age * 3.3 + ph * 2.0) * 0.12, 0.0);
+	// flap: fast and deep at first, then long glides between bursts
+	float burst = 0.45 + 0.55 * smoothstep(-0.2, 0.4, sin(age * 1.3 + ph * 3.0));
+	float fa = age * aC.z + ph;
+	float flap = sin(fa) * aWing + step(0.75, aWing) * 0.45 * sin(fa - 0.9);
+	float bank = sin(age * 2.1 + ph) * 0.3;
+	vec3 l = position * aC.y;
+	float wy = flap * 0.55 * burst * aC.y + position.x * bank * aC.y;
+	l.x *= 1.0 - 0.25 * abs(sin(fa)) * aWing;
+	vec3 p = c + right * l.x + vec3(0.0, wy + 0.12 * aC.y * sin(fa + 1.57) * (1.0 - aWing), 0.0) + fwd * l.z;
+	vShade = 0.75 + 0.25 * flap;
+	vec4 mv = viewMatrix * vec4(p, 1.0);
+	vA = smoothstep(0.0, 0.05, u) * (1.0 - smoothstep(0.7, 1.0, u));
+	gl_Position = projectionMatrix * mv;
+}
+`;
+
+const BIRD_FRAG = /* glsl */ `
+varying float vA;
+varying float vShade;
+varying float vTone;
+void main() {
+	if (vA < 0.01) discard;
+	vec3 col = mix(vec3(0.07, 0.065, 0.06), vec3(0.3, 0.24, 0.18), vTone) * vShade;
+	gl_FragColor = vec4(col * vA, vA);
 }
 `;
 
@@ -2196,6 +2947,7 @@ export function createFx(THREE) {
 	}
 
 	function sandPuff(x, y, z, strength = 0.6) {
+		noteY(y);
 		const s = clampF(strength, 0.6, 0, 2);
 		const k = 0.55 + 0.45 * s;
 		const nm = 4 + Math.round(5 * Math.min(s, 1.5));
@@ -2223,6 +2975,7 @@ export function createFx(THREE) {
 	}
 
 	function dust(x, y, z, strength = 0.5) {
+		noteY(y);
 		const s = clampF(strength, 0.5, 0, 2);
 		const k = 0.5 + 0.5 * s;
 		const nm = 4 + Math.round(6 * Math.min(s, 1.5));
@@ -2627,8 +3380,1702 @@ export function createFx(THREE) {
 		if (ambient.visible !== ambOn) ambient.visible = ambOn;
 	}
 
+	// =============================================================================================
+	// EXTENSIONS (levels 6-11, LEVELS2.md B4)
+	// =============================================================================================
+	// Seven pooled draw calls (lines, ground decals, cards, scream shells, swirl ribbons, air, birds),
+	// each hidden while it has nothing to show; everything else reuses the particle / ring / flake pools.
+	// Handles and ids go stale on clear(): calling a stale handle or cancelling a stale id does nothing.
+
+	let fxEpoch = 0; // bumped by clear(): invalidates every handle and id given out before it
+	// Ground height for effects that are not told one: setGround() if a level called it, else the height
+	// most recently named by a caller (a footstep, a splash ...), else 0.
+	let hintY = null;
+	function noteY(y) {
+		if (typeof y === "number" && y === y) hintY = y;
+	}
+	function groundAt(x, z, y) {
+		if (typeof y === "number" && y === y) return y;
+		return floorAt(x, z, hintY !== null ? hintY : 0);
+	}
+	function num(v, def) {
+		return typeof v === "number" && v === v ? v : def;
+	}
+	const tmpPos = { x: 0, y: 0, z: 0 };
+
+	// ------------------------------------------------------------------ lines: tracers + telegraphs (1 draw call)
+	const lnData = new Float32Array(MAX_LINES * LN_STRIDE);
+	const lnBuffer = new THREE.InstancedInterleavedBuffer(lnData, LN_STRIDE, 1);
+	lnBuffer.setUsage(THREE.DynamicDrawUsage);
+	const lnGeo = new THREE.InstancedBufferGeometry();
+	lnGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	lnGeo.setIndex(quadIndex);
+	lnGeo.setAttribute("aA", new THREE.InterleavedBufferAttribute(lnBuffer, 4, 0));
+	lnGeo.setAttribute("aB", new THREE.InterleavedBufferAttribute(lnBuffer, 4, 4));
+	lnGeo.setAttribute("aC", new THREE.InterleavedBufferAttribute(lnBuffer, 4, 8));
+	lnGeo.setAttribute("aD", new THREE.InterleavedBufferAttribute(lnBuffer, 4, 12));
+	lnGeo.instanceCount = MAX_LINES;
+	const lnMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: LINE_VERT,
+		fragmentShader: LINE_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const lines = new THREE.Mesh(lnGeo, lnMat);
+	lines.name = "fx-lines";
+	lines.frustumCulled = false;
+	lines.renderOrder = 4;
+	lines.visible = false;
+	lines.castShadow = false;
+	lines.receiveShadow = false;
+	group.add(lines);
+	let lnDirty = false;
+	let lnAliveUntil = -1;
+	let tracerCursor = 0;
+	const tgEnd = new Float64Array(MAX_TELEGRAPHS).fill(-1);
+	const tgGen = new Int32Array(MAX_TELEGRAPHS);
+
+	function lineSet(i, ax, ay, az, bx, by, bz, life, r, g, b, style, halfW, speed, alpha) {
+		const o = i * LN_STRIDE;
+		lnData[o] = ax; lnData[o + 1] = ay; lnData[o + 2] = az; lnData[o + 3] = now;
+		lnData[o + 4] = bx; lnData[o + 5] = by; lnData[o + 6] = bz; lnData[o + 7] = life;
+		lnData[o + 8] = r; lnData[o + 9] = g; lnData[o + 10] = b; lnData[o + 11] = style;
+		lnData[o + 12] = halfW; lnData[o + 13] = speed; lnData[o + 14] = Math.random(); lnData[o + 15] = alpha;
+		lnDirty = true;
+		if (now + life > lnAliveUntil) lnAliveUntil = now + life;
+		lines.visible = true;
+	}
+
+	// tracer(from, to, speed = 90, colorHex) -> seconds until the streak's head reaches `to`
+	function tracer(from, to, speed = 90, colorHex = 0xffe9a0) {
+		const sp = clampF(speed, 90, 5, 600);
+		hexRGB(colorHex, 0xffe9a0);
+		const dx = to.x - from.x;
+		const dy = to.y - from.y;
+		const dz = to.z - from.z;
+		const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		const flight = dist / sp;
+		const streak = Math.min(Math.max(sp * 0.045, 0.8), 5);
+		const i = tracerCursor;
+		tracerCursor = (tracerCursor + 1) % MAX_TRACERS;
+		lineSet(i, from.x, from.y, from.z, to.x, to.y, to.z, flight + streak / sp, cR, cG, cB, L_TRACER, 0.022, sp, 1);
+		return flight;
+	}
+
+	function telegraphSlot(id) {
+		if (typeof id !== "number" || id < 0) return -1;
+		const s = id % MAX_TELEGRAPHS;
+		if (tgGen[s] !== (id - s) / MAX_TELEGRAPHS || tgEnd[s] <= now) return -1;
+		return s;
+	}
+	// telegraph(from, to, seconds, colorHex) -> id. The aim line: blinks faster and brightens, then goes.
+	function telegraph(from, to, seconds = 0.75, colorHex = 0xff3020) {
+		const secs = clampF(seconds, 0.75, 0.05, 30);
+		hexRGB(colorHex, 0xff3020);
+		let s = 0;
+		let best = Infinity;
+		for (let i = 0; i < MAX_TELEGRAPHS; i++) {
+			if (tgEnd[i] <= now) { s = i; break; }
+			if (tgEnd[i] < best) { best = tgEnd[i]; s = i; }
+		}
+		tgGen[s]++;
+		tgEnd[s] = now + secs;
+		lineSet(MAX_TRACERS + s, from.x, from.y, from.z, to.x, to.y, to.z, secs, cR, cG, cB, L_TELEGRAPH, 0.014, 0, 1);
+		return s + tgGen[s] * MAX_TELEGRAPHS;
+	}
+	function telegraphMove(id, from, to) {
+		const s = telegraphSlot(id);
+		if (s < 0) return false;
+		const o = (MAX_TRACERS + s) * LN_STRIDE;
+		if (from) { lnData[o] = from.x; lnData[o + 1] = from.y; lnData[o + 2] = from.z; }
+		if (to) { lnData[o + 4] = to.x; lnData[o + 5] = to.y; lnData[o + 6] = to.z; }
+		lnDirty = true;
+		return true;
+	}
+	function telegraphCancel(id) {
+		const s = telegraphSlot(id);
+		if (s < 0) return false;
+		lnData[(MAX_TRACERS + s) * LN_STRIDE + 7] = 0;
+		tgEnd[s] = -1;
+		lnDirty = true;
+		return true;
+	}
+
+	// ------------------------------------------------------------------ ground decals (1 draw call)
+	const gdData = new Float32Array(MAX_GROUND * GD_STRIDE);
+	const gdBuffer = new THREE.InstancedInterleavedBuffer(gdData, GD_STRIDE, 1);
+	gdBuffer.setUsage(THREE.DynamicDrawUsage);
+	const gdGeo = new THREE.InstancedBufferGeometry();
+	gdGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	gdGeo.setIndex(quadIndex);
+	gdGeo.setAttribute("aA", new THREE.InterleavedBufferAttribute(gdBuffer, 4, 0));
+	gdGeo.setAttribute("aB", new THREE.InterleavedBufferAttribute(gdBuffer, 4, 4));
+	gdGeo.setAttribute("aC", new THREE.InterleavedBufferAttribute(gdBuffer, 4, 8));
+	gdGeo.setAttribute("aD", new THREE.InterleavedBufferAttribute(gdBuffer, 4, 12));
+	gdGeo.setAttribute("aE", new THREE.InterleavedBufferAttribute(gdBuffer, 4, 16));
+	gdGeo.instanceCount = MAX_GROUND;
+	const gdMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: GROUND_VERT,
+		fragmentShader: GROUND_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+		polygonOffset: true,
+		polygonOffsetFactor: -2,
+		polygonOffsetUnits: -4,
+	});
+	const ground = new THREE.Mesh(gdGeo, gdMat);
+	ground.name = "fx-ground";
+	ground.frustumCulled = false;
+	ground.renderOrder = 2;
+	ground.visible = false;
+	ground.castShadow = false;
+	ground.receiveShadow = false;
+	group.add(ground);
+	let gdDirty = false;
+	let gdAliveUntil = -1;
+	let gdLive = 0; // persistent glow discs showing
+	let gdTransCursor = 0;
+	let crackCursor = 0;
+
+	function gdSet(i, x, y, z, life, ext, yaw, style, r, g, b, alpha, d0, d1, d2, d3, e1, add, delay) {
+		const o = i * GD_STRIDE;
+		const t0 = now + delay;
+		gdData[o] = x; gdData[o + 1] = y; gdData[o + 2] = z; gdData[o + 3] = t0;
+		gdData[o + 4] = life; gdData[o + 5] = ext; gdData[o + 6] = yaw; gdData[o + 7] = style;
+		gdData[o + 8] = r; gdData[o + 9] = g; gdData[o + 10] = b; gdData[o + 11] = alpha;
+		gdData[o + 12] = d0; gdData[o + 13] = d1; gdData[o + 14] = d2; gdData[o + 15] = d3;
+		gdData[o + 16] = Math.random(); gdData[o + 17] = e1; gdData[o + 18] = add; gdData[o + 19] = 0;
+		gdDirty = true;
+		if (life < NEVER * 0.5 && t0 + life > gdAliveUntil) gdAliveUntil = t0 + life;
+		ground.visible = true;
+	}
+	function gdTrans(x, y, z, life, ext, style, r, g, b, alpha, d0, d1, d2, d3, e1, add, delay) {
+		const i = GD_TRANS0 + gdTransCursor;
+		gdTransCursor = (gdTransCursor + 1) % MAX_GTRANS;
+		gdSet(i, x, y, z, life, ext, Math.random() * 6.28, style, r, g, b, alpha, d0, d1, d2, d3, e1, add, delay);
+	}
+	// persistent glow discs: slot g (0 .. MAX_GLOWS - 1)
+	function glowOn(g, x, y, z, radius, r, gg, b, alpha, flicker, rate) {
+		const i = GD_GLOW0 + g;
+		const o = i * GD_STRIDE;
+		if (!(gdData[o + 4] > 0)) gdLive++;
+		gdSet(i, x, y, z, NEVER, radius, 0, G_GLOW, r, gg, b, Math.max(alpha, 0.0005), radius, flicker, rate, 0, 0.4, 1, 0);
+	}
+	function glowOff(g) {
+		const o = (GD_GLOW0 + g) * GD_STRIDE;
+		if (gdData[o + 4] > 0) {
+			gdData[o + 4] = 0;
+			gdLive--;
+			gdDirty = true;
+		}
+	}
+	function glowAlpha(g, alpha) {
+		const o = (GD_GLOW0 + g) * GD_STRIDE;
+		if (gdData[o + 4] > 0) {
+			gdData[o + 11] = Math.max(alpha, 0.0005);
+			gdDirty = true;
+		}
+	}
+	function glowMove(g, x, y, z) {
+		const o = (GD_GLOW0 + g) * GD_STRIDE;
+		if (gdData[o + 4] > 0) {
+			gdData[o] = x; gdData[o + 1] = y; gdData[o + 2] = z;
+			gdDirty = true;
+		}
+	}
+
+	// ---- danger zones
+	const dzEnd = new Float64Array(MAX_DANGER).fill(-1);
+	const dzGen = new Int32Array(MAX_DANGER);
+	// dangerZone({ shape, x, z, y?, r, yaw, arc, len, width, seconds, colorHex }) -> id
+	//   circle: radius r | cone: apex (x, z), heading yaw, full angle arc (rad), reach r
+	//   line: a lane from (x, z) along yaw, len long, width wide | ring: radius r, band `width` wide
+	// The fill sweeps to full over `seconds` (that is the moment of the hit), then a white flash.
+	function dangerZone(o) {
+		if (!o) return -1;
+		const shape = o.shape === "cone" ? G_CONE : o.shape === "line" ? G_LINE : o.shape === "ring" ? G_RING : G_CIRCLE;
+		const x = num(o.x, 0);
+		const z = num(o.z, 0);
+		const r = clampF(o.r, 1.5, 0.1, 60);
+		const yaw = num(o.yaw, 0);
+		const arc = clampF(o.arc, Math.PI * 0.5, 0.05, Math.PI * 2);
+		const len = clampF(o.len, 6, 0.2, 80);
+		const width = clampF(o.width, shape === G_RING ? 1 : 1.2, 0.05, 40);
+		const secs = clampF(o.seconds, 1, 0.05, 30);
+		hexRGB(o.colorHex, 0xff3020);
+		let s = 0;
+		let best = Infinity;
+		for (let i = 0; i < MAX_DANGER; i++) {
+			if (dzEnd[i] <= now) { s = i; break; }
+			if (dzEnd[i] < best) { best = dzEnd[i]; s = i; }
+		}
+		dzGen[s]++;
+		dzEnd[s] = now + secs + DANGER_FLASH;
+		const ext = shape === G_LINE ? Math.max(len, width * 0.5) + 0.15 : shape === G_RING ? r + width * 0.5 + 0.15 : r * 1.06 + 0.15;
+		gdSet(GD_DANGER0 + s, x, groundAt(x, z, o.y) + 0.06, z, secs + DANGER_FLASH, ext, yaw, shape, cR, cG, cB, 1,
+			r, arc * 0.5, len, width, secs, 0.35, 0);
+		return s + dzGen[s] * MAX_DANGER;
+	}
+	function dangerCancel(id) {
+		if (typeof id !== "number" || id < 0) return false;
+		const s = id % MAX_DANGER;
+		if (dzGen[s] !== (id - s) / MAX_DANGER || dzEnd[s] <= now) return false;
+		gdData[(GD_DANGER0 + s) * GD_STRIDE + 4] = 0;
+		dzEnd[s] = -1;
+		gdDirty = true;
+		return true;
+	}
+
+	// ---- slam: impact burst + dust ring + crack decal. slam(x, z, radius, colorHex, y?)
+	function slam(x, z, radius = 2.4, colorHex = 0xffd9a0, y) {
+		const R = clampF(radius, 2.4, 0.3, 12);
+		const gy = groundAt(x, z, y);
+		hexRGB(colorHex, 0xffd9a0);
+		const r = cR;
+		const g = cG;
+		const b = cB;
+		spawn(x, gy + 0.25, z, 0, 0, 0, 0.22, 0.3 * R, 1.3 * R, 0, 0, r, g, b, 0.6, FLASH, 0, 0, 0.9);
+		xring(x, gy + 0.07, z, 0.42, 0.2, R * 1.15, 0.1, r, g, b, 0.6, R_IMPACT, rnd(0, 6.28), 1, 0.95, 0, 0, 0);
+		xring(x, gy + 0.06, z, 0.7, 0.1, R * 1.6, 0.07, 1, 0.97, 0.9, 0.5, R_CLEAN, 0, 1, 0.5, 0, 0, 0.05);
+		gdTrans(x, gy + 0.05, z, R * 1.7 / (R * 3.2) + 0.25, R * 2, G_DUST, 0.72, 0.66, 0.56, 0.55, R * 3.2, R * 1.7, 0.9, R * 0.25, 0, 0, 0);
+		const ci = GD_CRACK0 + crackCursor;
+		crackCursor = (crackCursor + 1) % MAX_CRACKS;
+		gdSet(ci, x, gy + 0.03, z, 9, R, Math.random() * 6.28, G_CRACK, 0.08, 0.06, 0.05, 0.85, R * 0.95, 0, 0, 0, 0, 0, 0);
+		const nd = 10 + Math.round(R * 4);
+		for (let i = 0; i < nd; i++) {
+			const a = ((i + rnd(-0.4, 0.4)) / nd) * Math.PI * 2;
+			const ca = Math.cos(a);
+			const sa = Math.sin(a);
+			const rr = R * rnd(0.25, 0.7);
+			const sp = rnd(1.6, 4.2) * (0.6 + 0.2 * R);
+			const tone = Math.random();
+			xs(x + ca * rr, gy + 0.08, z + sa * rr, ca * sp, rnd(0.5, 1.8), sa * sp, rnd(0.8, 1.5), rnd(0.14, 0.24), rnd(0.5, 0.9),
+				0.15, 2.6, 0.68 + tone * 0.1, 0.62 + tone * 0.1, 0.52 + tone * 0.1, 0.0, X_SOFT, 0, 0, rnd(0.3, 0.45), NEVER, 0, 0, 0);
+		}
+		const nc = 8 + Math.round(R * 3);
+		for (let i = 0; i < nc; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(1.5, 4.5);
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(2.5, 6.5);
+			solveLand(x, gy + 0.1, z, vx, vy, vz, -9.8, 0.5, gy + 0.01, true, 3);
+			const tone = Math.random();
+			xs(x + Math.cos(a) * R * 0.3, gy + 0.1, z + Math.sin(a) * R * 0.3, vx, vy, vz, landT + rnd(0.6, 1.4), rnd(0.014, 0.032), 0.012,
+				-9.8, 0.5, 0.36 + tone * 0.14, 0.32 + tone * 0.12, 0.27 + tone * 0.1, 0.0, X_GRAIN, rnd(-14, 14), rnd(0, 6.28), 1.0, landT, 0, 0, 0);
+		}
+	}
+
+	// ---- shock rings: a travelling ring of dust the boss tests the player against
+	const srT0 = new Float64Array(MAX_SHOCKRINGS).fill(-1);
+	const srSpeed = new Float32Array(MAX_SHOCKRINGS);
+	const srMax = new Float32Array(MAX_SHOCKRINGS);
+	const srX = new Float32Array(MAX_SHOCKRINGS);
+	const srY = new Float32Array(MAX_SHOCKRINGS);
+	const srZ = new Float32Array(MAX_SHOCKRINGS);
+	const srAcc = new Float32Array(MAX_SHOCKRINGS);
+	const srGen = new Int32Array(MAX_SHOCKRINGS);
+	let srCursor = 0;
+	let srLive = 0;
+	function shockRing(x, z, speed = 9, maxRadius = 12, colorHex = 0xd8c8a6, y) {
+		const sp = clampF(speed, 9, 0.5, 60);
+		const mr = clampF(maxRadius, 12, 0.5, 60);
+		hexRGB(colorHex, 0xd8c8a6);
+		let s = -1;
+		for (let i = 0; i < MAX_SHOCKRINGS; i++) {
+			const k = (srCursor + i) % MAX_SHOCKRINGS;
+			if (srT0[k] < 0) { s = k; break; }
+		}
+		if (s < 0) { s = srCursor; srLive--; }
+		srCursor = (s + 1) % MAX_SHOCKRINGS;
+		const gy = groundAt(x, z, y);
+		srGen[s]++;
+		srT0[s] = now;
+		srSpeed[s] = sp;
+		srMax[s] = mr;
+		srX[s] = x; srY[s] = gy; srZ[s] = z;
+		srAcc[s] = 0;
+		srLive++;
+		gdSet(GD_SHOCK0 + s, x, gy + 0.07, z, mr / sp + 0.05, mr + 0.6, Math.random() * 6.28, G_DUST, cR, cG, cB, 0.9,
+			sp, mr, 1.25, 0, 0, 0.1, 0);
+		xring(x, gy + 0.08, z, 0.35, 0.1, Math.min(mr, 2.2), 0.12, 1, 0.96, 0.86, 0.5, R_IMPACT, rnd(0, 6.28), 1, 0.7, 0, 0, 0);
+		return s + srGen[s] * MAX_SHOCKRINGS;
+	}
+	// current radius of a shock ring, or -1 once it has run out (or the id is stale)
+	function shockRadius(id) {
+		if (typeof id !== "number" || id < 0) return -1;
+		const s = id % MAX_SHOCKRINGS;
+		if (srGen[s] !== (id - s) / MAX_SHOCKRINGS || srT0[s] < 0) return -1;
+		const r = srSpeed[s] * (now - srT0[s]);
+		return r >= srMax[s] ? -1 : r;
+	}
+
+	// ------------------------------------------------------------------ cards (1 draw call)
+	const cdData = new Float32Array(MAX_CARDS * CD_STRIDE);
+	const cdBuffer = new THREE.InstancedInterleavedBuffer(cdData, CD_STRIDE, 1);
+	cdBuffer.setUsage(THREE.DynamicDrawUsage);
+	const cdGeo = new THREE.InstancedBufferGeometry();
+	cdGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	cdGeo.setIndex(quadIndex);
+	cdGeo.setAttribute("aA", new THREE.InterleavedBufferAttribute(cdBuffer, 4, 0));
+	cdGeo.setAttribute("aB", new THREE.InterleavedBufferAttribute(cdBuffer, 4, 4));
+	cdGeo.setAttribute("aC", new THREE.InterleavedBufferAttribute(cdBuffer, 4, 8));
+	cdGeo.setAttribute("aD", new THREE.InterleavedBufferAttribute(cdBuffer, 4, 12));
+	cdGeo.instanceCount = MAX_CARDS;
+	const cdMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: CARD_VERT,
+		fragmentShader: CARD_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const cards = new THREE.Mesh(cdGeo, cdMat);
+	cards.name = "fx-cards";
+	cards.frustumCulled = false;
+	cards.renderOrder = 5;
+	cards.visible = false;
+	cards.castShadow = false;
+	cards.receiveShadow = false;
+	group.add(cards);
+	let cdDirty = false;
+	let cdLive = 0;
+
+	function cardSet(i, x, y, z, style, w, h, yaw, tilt, r, g, b, alpha, level) {
+		const o = i * CD_STRIDE;
+		if (!(cdData[o + 11] > 0)) cdLive++;
+		cdData[o] = x; cdData[o + 1] = y; cdData[o + 2] = z; cdData[o + 3] = style;
+		cdData[o + 4] = w; cdData[o + 5] = h; cdData[o + 6] = yaw; cdData[o + 7] = tilt;
+		cdData[o + 8] = r; cdData[o + 9] = g; cdData[o + 10] = b; cdData[o + 11] = Math.max(alpha, 0.0005);
+		cdData[o + 12] = now; cdData[o + 13] = Math.random(); cdData[o + 14] = level; cdData[o + 15] = 0;
+		cdDirty = true;
+		cards.visible = true;
+	}
+	function cardOff(i) {
+		const o = i * CD_STRIDE;
+		if (cdData[o + 11] > 0) {
+			cdData[o + 11] = 0;
+			cdLive--;
+			cdDirty = true;
+		}
+	}
+	function cardMove(i, x, y, z) {
+		const o = i * CD_STRIDE;
+		cdData[o] = x; cdData[o + 1] = y; cdData[o + 2] = z;
+		cdDirty = true;
+	}
+
+	// ---- beacons: beacon(x, y, z, colorHex) -> { set(x, y, z), remove() }. Pool of 8 (the oldest is
+	// taken over when all are out). y is the ground under the thing being marked.
+	const bcSerial = new Int32Array(MAX_BEACONS);
+	const bcOn = new Uint8Array(MAX_BEACONS);
+	let bcCursor = 0;
+	function beacon(x, y, z, colorHex = 0xffe08a) {
+		hexRGB(colorHex, 0xffe08a);
+		let s = -1;
+		for (let i = 0; i < MAX_BEACONS; i++) {
+			const k = (bcCursor + i) % MAX_BEACONS;
+			if (!bcOn[k]) { s = k; break; }
+		}
+		if (s < 0) s = bcCursor;
+		bcCursor = (s + 1) % MAX_BEACONS;
+		const serial = ++bcSerial[s];
+		const epoch = fxEpoch;
+		bcOn[s] = 1;
+		const by = num(y, groundAt(x, z));
+		noteY(by);
+		cardSet(CD_BEACON0 + s, x, by, z, C_PILLAR, 0.62, 3.4, 0, 0, cR, cG, cB, 0.8, 1);
+		glowOn(MAX_CAMPFIRES + s, x, by + 0.05, z, 0.85, cR, cG, cB, 0.6, 0.35, 2.3);
+		const live = () => epoch === fxEpoch && bcSerial[s] === serial && bcOn[s] === 1;
+		const h = {
+			set(nx, ny, nz) {
+				if (!live()) return h;
+				const o = (CD_BEACON0 + s) * CD_STRIDE;
+				const yy = num(ny, cdData[o + 1]);
+				cardMove(CD_BEACON0 + s, nx, yy, nz);
+				glowMove(MAX_CAMPFIRES + s, nx, yy + 0.05, nz);
+				return h;
+			},
+			remove() {
+				if (!live()) return;
+				bcOn[s] = 0;
+				cardOff(CD_BEACON0 + s);
+				glowOff(MAX_CAMPFIRES + s);
+			},
+		};
+		return h;
+	}
+
+	// ---- guide rings: ringGate(x, y, z, yaw, r, colorHex) -> { pass(), set(x, y, z, yaw, r), remove() }
+	// A hoop of light standing in the air, its axis along yaw. pass() bursts it and frees it.
+	const gtSerial = new Int32Array(MAX_GATES);
+	const gtState = new Uint8Array(MAX_GATES); // 0 free, 1 showing, 2 bursting
+	const gtEnd = new Float64Array(MAX_GATES);
+	let gtCursor = 0;
+	let gtBursting = 0;
+	function ringGate(x, y, z, yaw = 0, r = 4, colorHex = 0x8fe9ff) {
+		hexRGB(colorHex, 0x8fe9ff);
+		const cr = cR;
+		const cg = cG;
+		const cb = cB;
+		let s = -1;
+		for (let i = 0; i < MAX_GATES; i++) {
+			const k = (gtCursor + i) % MAX_GATES;
+			if (gtState[k] === 0) { s = k; break; }
+		}
+		if (s < 0) {
+			s = gtCursor;
+			if (gtState[s] === 2) gtBursting--;
+		}
+		gtCursor = (s + 1) % MAX_GATES;
+		const serial = ++gtSerial[s];
+		const epoch = fxEpoch;
+		gtState[s] = 1;
+		const ci = CD_GATE0 + s;
+		cardSet(ci, x, y, z, C_GATE, clampF(r, 4, 0.2, 60) * 2, 0, num(yaw, 0), 0, cr, cg, cb, 0.9, 1);
+		const live = () => epoch === fxEpoch && gtSerial[s] === serial && gtState[s] === 1;
+		const h = {
+			pass() {
+				if (!live()) return;
+				const o = ci * CD_STRIDE;
+				gtState[s] = 2;
+				gtBursting++;
+				gtEnd[s] = now + GATE_BURST;
+				cdData[o + 15] = Math.max(now, 1e-4);
+				cdDirty = true;
+				const rad = cdData[o + 4] * 0.5;
+				const yw = cdData[o + 6];
+				const rx = Math.cos(yw);
+				const rz = -Math.sin(yw);
+				for (let i = 0; i < 18; i++) {
+					const a = (i / 18) * Math.PI * 2 + rnd(-0.1, 0.1);
+					const ca = Math.cos(a);
+					const sa = Math.sin(a);
+					const sp = rnd(1.5, 4.5);
+					xs(cdData[o] + rx * ca * rad, cdData[o + 1] + sa * rad, cdData[o + 2] + rz * ca * rad,
+						rx * ca * sp, sa * sp, rz * ca * sp, rnd(0.45, 0.9), rnd(0.05, 0.12) * (0.6 + rad * 0.12), 0.02, -0.6, 2.2,
+						cr + (1 - cr) * 0.4, cg + (1 - cg) * 0.4, cb + (1 - cb) * 0.4, 0.75, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+				}
+			},
+			set(nx, ny, nz, nyaw, nr) {
+				if (!live()) return h;
+				const o = ci * CD_STRIDE;
+				cdData[o] = num(nx, cdData[o]); cdData[o + 1] = num(ny, cdData[o + 1]); cdData[o + 2] = num(nz, cdData[o + 2]);
+				cdData[o + 6] = num(nyaw, cdData[o + 6]);
+				if (typeof nr === "number" && nr > 0) cdData[o + 4] = nr * 2;
+				cdDirty = true;
+				return h;
+			},
+			remove() {
+				if (!live()) return;
+				gtState[s] = 0;
+				cardOff(ci);
+			},
+		};
+		return h;
+	}
+
+	// ---- light shafts: lightShafts(list | null, colorHex, strength). Each { x, y, z, yaw, w, h, tilt }:
+	// (x, y, z) is the middle of the shaft's foot (where the light lands), the card stands in the plane
+	// facing yaw, w wide and h tall, leaning sideways by tilt radians.
+	function lightShafts(list, colorHex = 0xfff2c0, strength = 0.5) {
+		hexRGB(colorHex, 0xfff2c0);
+		const st = clampF(strength, 0.5, 0, 2);
+		const n = list && list.length ? Math.min(list.length, MAX_SHAFTS) : 0;
+		for (let i = 0; i < MAX_SHAFTS; i++) {
+			if (i < n && list[i] && st > 0) {
+				const s = list[i];
+				const sx = num(s.x, 0);
+				const sz = num(s.z, 0);
+				cardSet(CD_SHAFT0 + i, sx, num(s.y, groundAt(sx, sz)), sz, C_SHAFT, clampF(s.w, 2.4, 0.1, 40), clampF(s.h, 12, 0.5, 80),
+					num(s.yaw, 0), clampF(s.tilt, 0.3, -1.3, 1.3), cR, cG, cB, st, 1);
+			} else {
+				cardOff(CD_SHAFT0 + i);
+			}
+		}
+	}
+	// ---- mist: mistCards(list | null, colorHex, opacity). Each { x, y, z, w, h }: centre and size.
+	function mistCards(list, colorHex = 0xdfe9e4, opacity = 0.3) {
+		hexRGB(colorHex, 0xdfe9e4);
+		const op = clampF(opacity, 0.3, 0, 1);
+		const n = list && list.length ? Math.min(list.length, MAX_MIST) : 0;
+		for (let i = 0; i < MAX_MIST; i++) {
+			if (i < n && list[i] && op > 0) {
+				const s = list[i];
+				cardSet(CD_MIST0 + i, num(s.x, 0), num(s.y, 1.2), num(s.z, 0), C_MIST, clampF(s.w, 10, 0.5, 80), clampF(s.h, 3.5, 0.3, 40),
+					0, 0, cR, cG, cB, op, 1);
+			} else {
+				cardOff(CD_MIST0 + i);
+			}
+		}
+	}
+
+	// ---- fire: campfire(x, y, z, size) -> { level(0..1), set(x, y, z), remove() } (pool of 6);
+	// torch(x, y, z) -> the same handle shape (pool of 8). Flame cards + embers + glow, no light.
+	const cfOn = new Uint8Array(MAX_CAMPFIRES);
+	const cfSerial = new Int32Array(MAX_CAMPFIRES);
+	const cfX = new Float32Array(MAX_CAMPFIRES);
+	const cfY = new Float32Array(MAX_CAMPFIRES);
+	const cfZ = new Float32Array(MAX_CAMPFIRES);
+	const cfSize = new Float32Array(MAX_CAMPFIRES);
+	const cfLevel = new Float32Array(MAX_CAMPFIRES);
+	const cfAcc = new Float32Array(MAX_CAMPFIRES);
+	let cfCursor = 0;
+	let fireLive = 0;
+	// flame card layout: dx, dz, width, height, tint (per unit of size)
+	const CAMP_LAYOUT = [0, 0, 0.62, 1.25, 1.0, 0.17, 0.06, 0.46, 0.95, 0.92, -0.15, 0.1, 0.42, 0.85, 0.9,
+		0.04, -0.17, 0.4, 0.75, 0.85, -0.05, 0.02, 0.9, 0.62, 0.7];
+	function campPlace(s) {
+		const sz = cfSize[s];
+		const lv = cfLevel[s];
+		for (let j = 0; j < CAMP_CARDS; j++) {
+			const L = j * 5;
+			const t = CAMP_LAYOUT[L + 4];
+			cardSet(CD_CAMP0 + s * CAMP_CARDS + j, cfX[s] + CAMP_LAYOUT[L] * sz, cfY[s] + 0.02, cfZ[s] + CAMP_LAYOUT[L + 1] * sz, C_FLAME,
+				CAMP_LAYOUT[L + 2] * sz, CAMP_LAYOUT[L + 3] * sz, 0, 0, t, t, t, j === 4 ? 0.55 : 0.9, lv);
+		}
+		glowOn(s, cfX[s], cfY[s] + 0.05, cfZ[s], 3.0 * sz, 1.0, 0.5, 0.14, 0.5 * lv, 0.4, 9);
+	}
+	function campLevel(s, v) {
+		cfLevel[s] = v;
+		for (let j = 0; j < CAMP_CARDS; j++) cdData[(CD_CAMP0 + s * CAMP_CARDS + j) * CD_STRIDE + 14] = v;
+		cdDirty = true;
+		glowAlpha(s, 0.5 * v);
+	}
+	function campfire(x, y, z, size = 1) {
+		let s = -1;
+		for (let i = 0; i < MAX_CAMPFIRES; i++) {
+			const k = (cfCursor + i) % MAX_CAMPFIRES;
+			if (!cfOn[k]) { s = k; break; }
+		}
+		if (s < 0) { s = cfCursor; fireLive--; }
+		cfCursor = (s + 1) % MAX_CAMPFIRES;
+		const serial = ++cfSerial[s];
+		const epoch = fxEpoch;
+		cfOn[s] = 1;
+		fireLive++;
+		cfX[s] = x; cfY[s] = num(y, groundAt(x, z)); cfZ[s] = z;
+		cfSize[s] = clampF(size, 1, 0.2, 5);
+		cfLevel[s] = 1;
+		cfAcc[s] = 0;
+		campPlace(s);
+		const live = () => epoch === fxEpoch && cfSerial[s] === serial && cfOn[s] === 1;
+		const h = {
+			level(v) {
+				if (live()) campLevel(s, clampF(v, 1, 0, 1));
+				return h;
+			},
+			set(nx, ny, nz) {
+				if (!live()) return h;
+				cfX[s] = num(nx, cfX[s]); cfY[s] = num(ny, cfY[s]); cfZ[s] = num(nz, cfZ[s]);
+				const lv = cfLevel[s];
+				campPlace(s);
+				campLevel(s, lv);
+				return h;
+			},
+			remove() {
+				if (!live()) return;
+				cfOn[s] = 0;
+				fireLive--;
+				for (let j = 0; j < CAMP_CARDS; j++) cardOff(CD_CAMP0 + s * CAMP_CARDS + j);
+				glowOff(s);
+			},
+		};
+		return h;
+	}
+	const tcOn = new Uint8Array(MAX_TORCHES);
+	const tcSerial = new Int32Array(MAX_TORCHES);
+	const tcX = new Float32Array(MAX_TORCHES);
+	const tcY = new Float32Array(MAX_TORCHES);
+	const tcZ = new Float32Array(MAX_TORCHES);
+	const tcLevel = new Float32Array(MAX_TORCHES);
+	const tcAcc = new Float32Array(MAX_TORCHES);
+	let tcCursor = 0;
+	function torchPlace(s) {
+		const b = CD_TORCH0 + s * TORCH_CARDS;
+		const lv = tcLevel[s];
+		cardSet(b, tcX[s], tcY[s], tcZ[s], C_FLAME, 0.24, 0.52, 0, 0, 1, 1, 1, 0.95, lv);
+		cardSet(b + 1, tcX[s] + 0.02, tcY[s], tcZ[s] - 0.02, C_FLAME, 0.16, 0.36, 0, 0, 0.9, 0.9, 0.9, 0.8, lv);
+		cardSet(b + 2, tcX[s], tcY[s] + 0.16, tcZ[s], C_HALO, 1.7, 0, 0, 0, 1.0, 0.55, 0.18, 0.32, lv);
+	}
+	function torch(x, y, z) {
+		let s = -1;
+		for (let i = 0; i < MAX_TORCHES; i++) {
+			const k = (tcCursor + i) % MAX_TORCHES;
+			if (!tcOn[k]) { s = k; break; }
+		}
+		if (s < 0) { s = tcCursor; fireLive--; }
+		tcCursor = (s + 1) % MAX_TORCHES;
+		const serial = ++tcSerial[s];
+		const epoch = fxEpoch;
+		tcOn[s] = 1;
+		fireLive++;
+		tcX[s] = x; tcY[s] = num(y, 1.6); tcZ[s] = z;
+		tcLevel[s] = 1;
+		tcAcc[s] = 0;
+		torchPlace(s);
+		const live = () => epoch === fxEpoch && tcSerial[s] === serial && tcOn[s] === 1;
+		const h = {
+			level(v) {
+				if (!live()) return h;
+				tcLevel[s] = clampF(v, 1, 0, 1);
+				for (let j = 0; j < TORCH_CARDS; j++) cdData[(CD_TORCH0 + s * TORCH_CARDS + j) * CD_STRIDE + 14] = tcLevel[s];
+				cdDirty = true;
+				return h;
+			},
+			set(nx, ny, nz) {
+				if (!live()) return h;
+				tcX[s] = num(nx, tcX[s]); tcY[s] = num(ny, tcY[s]); tcZ[s] = num(nz, tcZ[s]);
+				const b = CD_TORCH0 + s * TORCH_CARDS;
+				cardMove(b, tcX[s], tcY[s], tcZ[s]);
+				cardMove(b + 1, tcX[s] + 0.02, tcY[s], tcZ[s] - 0.02);
+				cardMove(b + 2, tcX[s], tcY[s] + 0.16, tcZ[s]);
+				return h;
+			},
+			remove() {
+				if (!live()) return;
+				tcOn[s] = 0;
+				fireLive--;
+				for (let j = 0; j < TORCH_CARDS; j++) cardOff(CD_TORCH0 + s * TORCH_CARDS + j);
+			},
+		};
+		return h;
+	}
+
+	// ------------------------------------------------------------------ the scream (1 draw call)
+	function buildScreamGeometry() {
+		const LON = 48;
+		const LAT = 9;
+		const per = (LON + 1) * (LAT + 1);
+		const pos = new Float32Array(per * 2 * 3);
+		const shell = new Float32Array(per * 2);
+		const index = new Uint16Array(LON * LAT * 6 * 2);
+		let v = 0;
+		let ii = 0;
+		for (let s = 0; s < 2; s++) {
+			const base = v;
+			for (let j = 0; j <= LAT; j++) {
+				const el = (j / LAT) * Math.PI * 0.5;
+				for (let i = 0; i <= LON; i++) {
+					const an = (i / LON) * Math.PI * 2;
+					pos[v * 3] = Math.cos(el) * Math.cos(an);
+					pos[v * 3 + 1] = Math.sin(el);
+					pos[v * 3 + 2] = Math.cos(el) * Math.sin(an);
+					shell[v] = s;
+					v++;
+				}
+			}
+			for (let j = 0; j < LAT; j++) {
+				for (let i = 0; i < LON; i++) {
+					const a = base + j * (LON + 1) + i;
+					const b = a + 1;
+					const c = a + LON + 1;
+					const d = c + 1;
+					index[ii++] = a; index[ii++] = c; index[ii++] = b;
+					index[ii++] = b; index[ii++] = c; index[ii++] = d;
+				}
+			}
+		}
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+		geo.setAttribute("aShell", new THREE.BufferAttribute(shell, 1));
+		geo.setIndex(new THREE.BufferAttribute(index, 1));
+		return geo;
+	}
+	const uScreamC = { value: new THREE.Vector4(0, 0, 0, 0) };
+	const uScreamP = { value: new THREE.Vector4(0, 0, 0, 1) };
+	const scMat = new THREE.ShaderMaterial({
+		uniforms: { uC: uScreamC, uP: uScreamP },
+		vertexShader: SCREAM_VERT,
+		fragmentShader: SCREAM_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const screamMesh = new THREE.Mesh(buildScreamGeometry(), scMat);
+	screamMesh.name = "fx-scream";
+	screamMesh.frustumCulled = false;
+	screamMesh.renderOrder = 6;
+	screamMesh.visible = false;
+	screamMesh.castShadow = false;
+	screamMesh.receiveShadow = false;
+	group.add(screamMesh);
+
+	// fx.shock: ALWAYS present. Worlds bind shock.uniform in their foliage shaders.
+	const shock = {
+		uniform: { value: new THREE.Vector4(0, 0, 0, 0) }, // x, z, radius, strength
+		x: 0,
+		z: 0,
+		radius: 0,
+		strength: 0,
+		active: false,
+	};
+	const scr = { phase: 0, t: 0, x: 0, y: 0, z: 0, power: 1, maxR: 22, acc: 0, leaf: 0 };
+	function shockWrite() {
+		shock.uniform.value.set(shock.x, shock.z, shock.radius, shock.strength);
+	}
+	const LEAF_TONES = [0.2, 0.42, 0.12, 0.3, 0.5, 0.14, 0.42, 0.52, 0.16, 0.16, 0.33, 0.1, 0.5, 0.44, 0.14, 0.36, 0.26, 0.1];
+
+	function leafFlake(x, y, z, vx, vy, vz, floorY, r, g, b, big) {
+		const k = rnd(1.5, 2.4);
+		const grav = -rnd(0.8, 1.5) * k;
+		solveLand(x, y, z, vx, vy, vz, grav, k, floorY + 0.004, true, 9);
+		const hx = rnd(0.022, 0.045) * big;
+		const idx = confCursor;
+		confCursor = (confCursor + 1) % MAX_CONFETTI;
+		flake(idx, x, y, z, vx, vy, vz, landT + rnd(2.5, 4.5), grav, k, landT, 0, rnd(0, 6.28), rnd(-0.5, 0.5),
+			rnd(4, 12) * (Math.random() < 0.5 ? -1 : 1), rnd(0, 6.28), r, g, b, 1, hx, hx * rnd(1.5, 2.3), rnd(0.06, 0.2));
+	}
+
+	// screamWave(x, y, z, power = 1) -> seconds the ground ring takes to reach its full radius.
+	// (x, y, z) = the screamer's mouth; the ground is taken as setGround / y - 0.25.
+	function screamWave(x, y, z, power = 1) {
+		const p = clampF(power, 1, 0.05, 1.5);
+		const maxR = 8 + 14 * p;
+		const gy = floorAt(x, z, num(y, 0.25) - 0.25);
+		noteY(gy);
+		scr.phase = 1;
+		scr.t = 0;
+		scr.x = x; scr.y = gy; scr.z = z;
+		scr.power = p;
+		scr.maxR = maxR;
+		scr.acc = 0;
+		scr.leaf = 0;
+		shock.x = x;
+		shock.z = z;
+		shock.radius = 0;
+		shock.strength = p;
+		shock.active = true;
+		shockWrite();
+		uScreamC.value.set(x, gy, z, 0.01);
+		uScreamP.value.set(p, 0, Math.min(p * 1.1, 1.2), maxR);
+		screamMesh.visible = true;
+
+		const my = num(y, gy + 0.25);
+		// white-hot core
+		spawn(x, my, z, 0, 0, 0, 0.3, 0.4, 3.2 + 3.5 * p, 0, 0, 1, 1, 1, 0.75, FLASH, 0, 0, 1.0);
+		spawn(x, my, z, 0, 0, 0, 0.55, 1.2, 5 + 5 * p, 0, 0, 0.82, 0.92, 1.0, 1.0, SOFT, 0, 0, 0.5 * p + 0.2);
+		xs(x, my, z, 0, 0, 0, 0.38, 0.3, 2.2 + 2.4 * p, 0, 1, 1, 1, 1, 0.9, X_STAR, 0.4, rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+		// the ground ring racing out, and a second, slower, lower one
+		gdTrans(x, gy + 0.09, z, maxR / SCREAM_SPEED + 0.12, maxR + 0.5, G_SCREAM, 0.86, 0.94, 1.0, Math.min(0.55 + 0.45 * p, 1),
+			SCREAM_SPEED, maxR, p, 0, 0, 0.9, 0);
+		gdTrans(x, gy + 0.07, z, (maxR * 0.7) / 10 + 0.12, maxR * 0.7 + 0.5, G_DUST, 0.84, 0.8, 0.72, 0.6,
+			10, maxR * 0.7, 2.2, 0, 0, 0.15, 0.1);
+		xring(x, gy + 0.1, z, 0.5, 0.3, 4 + 3 * p, 0.09, 1, 1, 1, 0.8, R_IMPACT, rnd(0, 6.28), 1, 0.9, 0, 0, 0);
+		// bits torn loose at the centre
+		const nb = 10 + Math.round(14 * p);
+		for (let i = 0; i < nb; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(5, 13) * (0.5 + 0.5 * p);
+			xs(x + Math.cos(a) * 0.3, gy + 0.1, z + Math.sin(a) * 0.3, Math.cos(a) * sp, rnd(1.5, 5), Math.sin(a) * sp,
+				rnd(0.5, 1.0), rnd(0.02, 0.04), 0.012, -6, 1.6, 1, 0.98, 0.9, 0.7, X_EMBER, 0.05, 0, 1.0, NEVER, 0, 0, 0);
+		}
+		return maxR / SCREAM_SPEED;
+	}
+
+	function screamUpdate(dt) {
+		if (scr.phase === 0) return;
+		scr.t += dt;
+		if (scr.phase === 1) {
+			let R = SCREAM_SPEED * scr.t;
+			const done = R >= scr.maxR;
+			if (done) R = scr.maxR;
+			const k = R / scr.maxR;
+			shock.radius = R;
+			shock.strength = scr.power;
+			uScreamC.value.w = Math.max(R, 0.01);
+			uScreamP.value.y = scr.t;
+			uScreamP.value.z = Math.min(scr.power * 1.1, 1.2) * Math.pow(1 - k, 0.75);
+			// the wall of dust and torn leaves riding just behind the front
+			scr.acc += dt;
+			let guard = 0;
+			while (scr.acc > 0.016 && guard++ < 4 && !done) {
+				scr.acc -= 0.016;
+				const per = 3 + Math.round(3 * scr.power);
+				for (let i = 0; i < per; i++) {
+					const a = Math.random() * Math.PI * 2;
+					const ca = Math.cos(a);
+					const sa = Math.sin(a);
+					const rr = Math.max(R - rnd(0.2, 1.2), 0.2);
+					const px = scr.x + ca * rr;
+					const pz = scr.z + sa * rr;
+					const fy = floorAt(px, pz, scr.y);
+					const sp = rnd(3, 8);
+					const tone = Math.random();
+					xs(px, fy + rnd(0.05, 0.5), pz, ca * sp, rnd(0.6, 3.2), sa * sp, rnd(0.8, 1.7), rnd(0.2, 0.4), rnd(0.8, 1.5),
+						0.2, 2.2, 0.72 + tone * 0.12, 0.67 + tone * 0.11, 0.57 + tone * 0.1, 0.0, X_SOFT, 0, 0,
+						rnd(0.22, 0.4) * (1 - 0.5 * k), NEVER, 0, 0, 0);
+				}
+				scr.leaf++;
+				const nl = scr.leaf % 2 === 0 ? 2 : 3;
+				for (let i = 0; i < nl; i++) {
+					const a = Math.random() * Math.PI * 2;
+					const ca = Math.cos(a);
+					const sa = Math.sin(a);
+					const px = scr.x + ca * R;
+					const pz = scr.z + sa * R;
+					const fy = floorAt(px, pz, scr.y);
+					const sp = rnd(5, 12);
+					const li = ((Math.random() * 6) | 0) * 3;
+					leafFlake(px, fy + rnd(0.1, 1.6), pz, ca * sp + rnd(-1.5, 1.5), rnd(1.5, 6.5), sa * sp + rnd(-1.5, 1.5), fy,
+						LEAF_TONES[li], LEAF_TONES[li + 1], LEAF_TONES[li + 2], 1.15);
+				}
+			}
+			if (scr.acc > 0.05) scr.acc = 0;
+			if (done) {
+				scr.phase = 2;
+				scr.t = 0;
+				screamMesh.visible = false;
+			}
+		} else {
+			// everything lies flat behind the wave, then springs back
+			const k = scr.t / SHOCK_RECOVER;
+			if (k >= 1) {
+				scr.phase = 0;
+				shock.strength = 0;
+				shock.active = false;
+			} else {
+				const e = 1 - k;
+				shock.strength = scr.power * e * e * (3 - 2 * e);
+			}
+		}
+		shockWrite();
+	}
+
+	// ------------------------------------------------------------------ transformation swirl (1 draw call)
+	function buildSwirlGeometry() {
+		const per = (SWIRL_SEGS + 1) * 2;
+		const pos = new Float32Array(per * 2 * 3);
+		const aT = new Float32Array(per * 2);
+		const aSide = new Float32Array(per * 2);
+		const aDir = new Float32Array(per * 2);
+		const index = new Uint16Array(SWIRL_SEGS * 6 * 2);
+		let v = 0;
+		let ii = 0;
+		for (let rb = 0; rb < 2; rb++) {
+			const base = v;
+			for (let j = 0; j <= SWIRL_SEGS; j++) {
+				for (let k = 0; k < 2; k++) {
+					aT[v] = j / SWIRL_SEGS;
+					aSide[v] = k === 0 ? -1 : 1;
+					aDir[v] = rb === 0 ? 1 : -1;
+					v++;
+				}
+			}
+			for (let j = 0; j < SWIRL_SEGS; j++) {
+				const a = base + j * 2;
+				index[ii++] = a; index[ii++] = a + 1; index[ii++] = a + 2;
+				index[ii++] = a + 1; index[ii++] = a + 3; index[ii++] = a + 2;
+			}
+		}
+		const geo = new THREE.InstancedBufferGeometry();
+		geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+		geo.setAttribute("aT", new THREE.BufferAttribute(aT, 1));
+		geo.setAttribute("aSide", new THREE.BufferAttribute(aSide, 1));
+		geo.setAttribute("aDir", new THREE.BufferAttribute(aDir, 1));
+		geo.setIndex(new THREE.BufferAttribute(index, 1));
+		return geo;
+	}
+	const swData = new Float32Array(MAX_SWIRLS * SW_STRIDE);
+	const swBuffer = new THREE.InstancedInterleavedBuffer(swData, SW_STRIDE, 1);
+	swBuffer.setUsage(THREE.DynamicDrawUsage);
+	const swGeo = buildSwirlGeometry();
+	swGeo.setAttribute("aS", new THREE.InterleavedBufferAttribute(swBuffer, 4, 0));
+	swGeo.setAttribute("aS2", new THREE.InterleavedBufferAttribute(swBuffer, 4, 4));
+	swGeo.instanceCount = MAX_SWIRLS;
+	const swMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: SWIRL_VERT,
+		fragmentShader: SWIRL_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const swirl = new THREE.Mesh(swGeo, swMat);
+	swirl.name = "fx-swirl";
+	swirl.frustumCulled = false;
+	swirl.renderOrder = 5;
+	swirl.visible = false;
+	swirl.castShadow = false;
+	swirl.receiveShadow = false;
+	group.add(swirl);
+	let swCursor = 0;
+	let swDirty = false;
+	let swAliveUntil = -1;
+
+	// transformSwirl(x, y, z, seconds = 2.6, height = 1.9): (x, y, z) = the ground under the body.
+	// Two counter-rotating ribbons wind up and tighten, a column of sparkles climbs inside them, a soft
+	// bloom at 80 %, then glints rain down.
+	function transformSwirl(x, y, z, seconds = 2.6, height = 1.9) {
+		const secs = clampF(seconds, 2.6, 0.3, 12);
+		const hgt = clampF(height, 1.9, 0.3, 8);
+		const gy = num(y, groundAt(x, z));
+		noteY(gy);
+		const o = swCursor * SW_STRIDE;
+		swCursor = (swCursor + 1) % MAX_SWIRLS;
+		const rad = 0.42 + 0.26 * hgt;
+		swData[o] = x; swData[o + 1] = gy + 0.04; swData[o + 2] = z; swData[o + 3] = now;
+		swData[o + 4] = secs; swData[o + 5] = hgt; swData[o + 6] = Math.random(); swData[o + 7] = rad;
+		swDirty = true;
+		if (now + secs > swAliveUntil) swAliveUntil = now + secs;
+		swirl.visible = true;
+
+		const tb = secs * 0.8; // the bloom
+		const by = gy + 0.42;  // where the ball of light hangs
+		// pool of light on the ground
+		gdTrans(x, gy + 0.05, z, secs * 1.05, rad * 1.5, G_MIST, 0.55, 1.0, 0.62, 0.55, rad * 1.5, 0, 0, 0, 0, 0.85, 0);
+		xring(x, gy + 0.06, z, 0.7, 0.1, rad * 1.5, 0.08, 0.6, 1.0, 0.7, 0.7, R_CLEAN, 0, 1, 0.7, 0, 0, 0);
+		// column of sparkles: drawn in from the rim, climbing
+		for (let i = 0; i < 38; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = rad * rnd(0.3, 1.0);
+			const gold = Math.random() < 0.45;
+			const life = rnd(0.7, 1.3);
+			xs(x + Math.cos(a) * rr, gy + rnd(0.02, 0.3), z + Math.sin(a) * rr, -Math.cos(a) * rr * 0.7, rnd(0.6, 1.5) * hgt * 0.6, -Math.sin(a) * rr * 0.7,
+				life, rnd(0.02, 0.045), 0.012, 0.3, 1.1, gold ? 1.0 : 0.5, gold ? 0.9 : 1.0, gold ? 0.5 : 0.7, 0.8, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0,
+				NEVER, rnd(0.02, 0.07), rnd(3, 6), rnd(0.05, 0.72) * secs);
+		}
+		// soft motes breathing off the body while it lifts
+		for (let i = 0; i < 10; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = rad * rnd(0.1, 0.7);
+			xs(x + Math.cos(a) * rr, gy + rnd(0.1, 0.5), z + Math.sin(a) * rr, 0, rnd(0.15, 0.45), 0, rnd(0.9, 1.5), 0.08, rnd(0.2, 0.34),
+				0.1, 1.5, 0.5, 1.0, 0.65, 0.9, X_SOFT, 0, 0, 0.22, NEVER, 0.05, 1.5, rnd(0, 0.5) * secs);
+		}
+		// the bloom
+		xs(x, by, z, 0, 0, 0, 0.6, 0.25, 1.7, 0, 1, 0.75, 1.0, 0.8, 1.0, X_SOFT, 0, 0, 0.85, NEVER, 0, 0, tb - 0.06);
+		xs(x, by, z, 0, 0, 0, 0.45, 0.2, 1.25, 0, 1, 1.0, 0.97, 0.8, 0.9, X_STAR, 0.35, rnd(0, 1.5), 1.0, NEVER, 0, 0, tb - 0.03);
+		xs(x, by, z, 0, 0, 0, 0.9, 0.5, 2.6, 0, 1, 0.45, 1.0, 0.65, 1.0, X_SOFT, 0, 0, 0.3, NEVER, 0, 0, tb);
+		xring(x, gy + 0.07, z, 0.8, 0.15, rad * 2.6, 0.06, 1.0, 0.95, 0.7, 0.8, R_CLEAN, 0, 1, 0.8, 0, 0, tb);
+		xring(x, by, z, 0.55, 0.1, 1.1, 0.07, 0.7, 1.0, 0.8, 0.9, R_HALO, rnd(0, 6.28), 1, 0.7, 1, 0, tb);
+		// glints thrown out by the bloom, sinking back down onto the newborn
+		for (let i = 0; i < 26; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const el = rnd(0.1, 1.3);
+			const sp = rnd(0.5, 1.7);
+			const vx = Math.cos(a) * Math.cos(el) * sp;
+			const vz = Math.sin(a) * Math.cos(el) * sp;
+			const vy = Math.sin(el) * sp + 0.4;
+			const tl = timeToY(by, vy, -2.4, 1.6, gy + 0.05, -1, 2.2);
+			const gold = Math.random() < 0.6;
+			xs(x, by, z, vx, vy, vz, Math.min(tl + 0.25, secs * 0.2 + 1.1), rnd(0.018, 0.04), 0.01, -2.4, 1.6,
+				gold ? 1.0 : 0.6, gold ? 0.92 : 1.0, gold ? 0.55 : 0.75, 0.8, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0,
+				tl, 0.02, rnd(2, 5), tb + rnd(0, 0.12));
+		}
+	}
+
+	// ------------------------------------------------------------------ air: dream motes, fireflies, wind (1 draw call)
+	const airData = new Float32Array(AIR_COUNT * AIR_STRIDE);
+	for (let i = 0; i < AIR_COUNT; i++) {
+		const o = i * AIR_STRIDE;
+		airData[o] = Math.random(); airData[o + 1] = Math.random(); airData[o + 2] = Math.random();
+		airData[o + 5] = Math.random();
+		airData[o + 6] = Math.random();
+		if (i < AIR_DREAM) {
+			const big = Math.random() < 0.1;
+			airData[o + 3] = 0;
+			airData[o + 4] = big ? rnd(0.07, 0.12) : rnd(0.018, 0.045);
+			airData[o + 7] = big ? rnd(0.12, 0.22) : rnd(0.35, 0.8);
+		} else if (i < AIR_DREAM + AIR_FLIES) {
+			airData[o + 3] = 1;
+			airData[o + 4] = rnd(0.035, 0.06);
+			airData[o + 6] = (i - AIR_DREAM) / AIR_FLIES; // rank: the first n are out
+			airData[o + 7] = 1;
+		} else {
+			airData[o + 3] = 2;
+			airData[o + 4] = rnd(0.006, 0.012);
+			airData[o + 7] = rnd(0.25, 0.55);
+		}
+	}
+	const airBuffer = new THREE.InstancedInterleavedBuffer(airData, AIR_STRIDE, 1);
+	const airGeo = new THREE.InstancedBufferGeometry();
+	airGeo.setAttribute("position", new THREE.BufferAttribute(quad, 3));
+	airGeo.setIndex(quadIndex);
+	airGeo.setAttribute("aA", new THREE.InterleavedBufferAttribute(airBuffer, 4, 0));
+	airGeo.setAttribute("aB", new THREE.InterleavedBufferAttribute(airBuffer, 4, 4));
+	airGeo.instanceCount = AIR_COUNT;
+	const uDream = { value: new THREE.Vector4(0, 14, 0, 0) };
+	const uDreamCol = { value: new THREE.Vector3(0.81, 0.84, 1.0) };
+	const uFly = { value: new THREE.Vector4(0, 0, 0, 14) };
+	const uFlyY = { value: new THREE.Vector2(0, 0.6) };
+	const uWind = { value: new THREE.Vector4(1, 0, 0, 16) };
+	const airMat = new THREE.ShaderMaterial({
+		uniforms: { uTime, uDream, uDreamCol, uFly, uFlyY, uWind },
+		vertexShader: AIR_VERT,
+		fragmentShader: AIR_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const air = new THREE.Mesh(airGeo, airMat);
+	air.name = "fx-air";
+	air.frustumCulled = false;
+	air.renderOrder = 5;
+	air.visible = false;
+	air.castShadow = false;
+	air.receiveShadow = false;
+	group.add(air);
+	let dreamTarget = 0, dreamFade = 0, flyTarget = 0, flyFade = 0, windTarget = 0, windFade = 0, windStrength = 0;
+
+	function dreamMotes(on, radius = 14, colorHex = 0xcfd6ff) {
+		dreamTarget = on ? 1 : 0;
+		if (on) {
+			uDream.value.y = clampF(radius, 14, 3, 60);
+			hexRGB(colorHex, 0xcfd6ff);
+			uDreamCol.value.set(cR, cG, cB);
+			air.visible = true;
+		}
+	}
+	function fireflies(on, cx, cz, radius = 14, n = 40) {
+		flyTarget = on ? 1 : 0;
+		if (on) {
+			const x = num(cx, 0);
+			const z = num(cz, 0);
+			uFly.value.y = x;
+			uFly.value.z = z;
+			uFly.value.w = clampF(radius, 14, 1, 80);
+			uFlyY.value.set(groundAt(x, z), clampN(n, 40, 1, AIR_FLIES) / AIR_FLIES + 1e-4);
+			air.visible = true;
+		}
+	}
+	// windStreaks(on, dirX, dirZ, strength 0..1): thin streaks crossing the air around the camera
+	function windStreaks(on, dirX, dirZ, strength = 0.6) {
+		windTarget = on ? 1 : 0;
+		if (on) {
+			let dx = num(dirX, 1);
+			let dz = num(dirZ, 0);
+			const l = Math.sqrt(dx * dx + dz * dz);
+			if (l < 1e-4) { dx = 1; dz = 0; } else { dx /= l; dz /= l; }
+			windStrength = clampF(strength, 0.6, 0.05, 1.5);
+			uWind.value.x = dx;
+			uWind.value.y = dz;
+			uWind.value.w = 12 + 16 * windStrength;
+			air.visible = true;
+		}
+	}
+
+	// ------------------------------------------------------------------ birds (1 draw call)
+	function buildBirdGeometry() {
+		// two wings of two panels each; aWing = 0 at the body .. 1 at the tip
+		const P = [
+			0, 0, 0.3, 0, 0, -0.3,
+			0.5, 0, 0.2, 0.5, 0, -0.26, 1, 0, -0.12,
+			-0.5, 0, 0.2, -0.5, 0, -0.26, -1, 0, -0.12,
+		];
+		const W = [0, 0, 0.5, 0.5, 1, 0.5, 0.5, 1];
+		const I = [0, 1, 2, 1, 3, 2, 2, 3, 4, 0, 5, 1, 1, 5, 6, 5, 7, 6];
+		const geo = new THREE.InstancedBufferGeometry();
+		geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(P), 3));
+		geo.setAttribute("aWing", new THREE.BufferAttribute(new Float32Array(W), 1));
+		geo.setIndex(I);
+		return geo;
+	}
+	const bdData = new Float32Array(MAX_BIRDS * BD_STRIDE);
+	const bdBuffer = new THREE.InstancedInterleavedBuffer(bdData, BD_STRIDE, 1);
+	bdBuffer.setUsage(THREE.DynamicDrawUsage);
+	const bdGeo = buildBirdGeometry();
+	bdGeo.setAttribute("aA", new THREE.InterleavedBufferAttribute(bdBuffer, 4, 0));
+	bdGeo.setAttribute("aB", new THREE.InterleavedBufferAttribute(bdBuffer, 4, 4));
+	bdGeo.setAttribute("aC", new THREE.InterleavedBufferAttribute(bdBuffer, 4, 8));
+	bdGeo.instanceCount = MAX_BIRDS;
+	const bdMat = new THREE.ShaderMaterial({
+		uniforms: { uTime },
+		vertexShader: BIRD_VERT,
+		fragmentShader: BIRD_FRAG,
+		transparent: true,
+		depthWrite: false,
+		premultipliedAlpha: true,
+		blending: THREE.NormalBlending,
+		side: THREE.DoubleSide,
+	});
+	const birdMesh = new THREE.Mesh(bdGeo, bdMat);
+	birdMesh.name = "fx-birds";
+	birdMesh.frustumCulled = false;
+	birdMesh.renderOrder = 3;
+	birdMesh.visible = false;
+	birdMesh.castShadow = false;
+	birdMesh.receiveShadow = false;
+	group.add(birdMesh);
+	let bdCursor = 0;
+	let bdDirty = false;
+	let bdAliveUntil = -1;
+
+	// birds(x, y, z, n = 12, dirX = 0, dirZ = 0): a flock bursting up and away (toward dir, or scattering)
+	function birds(x, y, z, n = 12, dirX = 0, dirZ = 0) {
+		const cnt = clampN(n, 12, 1, MAX_BIRDS);
+		let dx = num(dirX, 0);
+		let dz = num(dirZ, 0);
+		const dl = Math.sqrt(dx * dx + dz * dz);
+		const aimed = dl > 1e-3;
+		if (aimed) { dx /= dl; dz /= dl; }
+		const a0 = Math.random() * Math.PI * 2;
+		for (let i = 0; i < cnt; i++) {
+			const o = bdCursor * BD_STRIDE;
+			bdCursor = (bdCursor + 1) % MAX_BIRDS;
+			let hx;
+			let hz;
+			if (aimed) {
+				const sprd = rnd(-0.55, 0.55);
+				const c = Math.cos(sprd);
+				const s = Math.sin(sprd);
+				hx = dx * c - dz * s;
+				hz = dx * s + dz * c;
+			} else {
+				const a = a0 + rnd(-1.1, 1.1);
+				hx = Math.cos(a);
+				hz = Math.sin(a);
+			}
+			const sp = rnd(3.2, 5.6);
+			const life = rnd(3.4, 4.3);
+			const t0 = now + rnd(0, 0.35);
+			bdData[o] = x + rnd(-1.6, 1.6); bdData[o + 1] = num(y, 2) + rnd(-0.5, 0.8); bdData[o + 2] = z + rnd(-1.6, 1.6); bdData[o + 3] = t0;
+			bdData[o + 4] = hx * sp; bdData[o + 5] = rnd(1.4, 3.0); bdData[o + 6] = hz * sp; bdData[o + 7] = life;
+			bdData[o + 8] = Math.random(); bdData[o + 9] = rnd(0.2, 0.34); bdData[o + 10] = rnd(15, 22); bdData[o + 11] = Math.random() * 0.6;
+			if (t0 + life > bdAliveUntil) bdAliveUntil = t0 + life;
+		}
+		bdDirty = true;
+		birdMesh.visible = true;
+	}
+
+	// ------------------------------------------------------------------ guns
+	function muzzleFlash(pos, dirX, dirZ, size = 1) {
+		const s = clampF(size, 1, 0.2, 4);
+		let dx = num(dirX, 0);
+		let dz = num(dirZ, 1);
+		const dl = Math.sqrt(dx * dx + dz * dz);
+		if (dl < 1e-4) { dx = 0; dz = 1; } else { dx /= dl; dz /= dl; }
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		spawn(x + dx * 0.1 * s, y, z + dz * 0.1 * s, 0, 0, 0, 0.07, 0.12 * s, 0.42 * s, 0, 0, 1.0, 0.86, 0.5, 0.8, FLASH, 0, 0, 1.0);
+		xs(x + dx * 0.16 * s, y, z + dz * 0.16 * s, 0, 0, 0, 0.08, 0.16 * s, 0.34 * s, 0, 1, 1.0, 0.93, 0.7, 0.9, X_STAR, 0.2, rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+		spawn(x, y, z, 0, 0, 0, 0.1, 0.5 * s, 1.1 * s, 0, 0, 1.0, 0.75, 0.4, 1.0, SOFT, 0, 0, 0.3);
+		for (let i = 0; i < 5; i++) {
+			const sp = rnd(7, 16) * s;
+			xs(x, y, z, dx * sp + rnd(-1.6, 1.6), rnd(-1.2, 1.6), dz * sp + rnd(-1.6, 1.6), rnd(0.06, 0.13), rnd(0.02, 0.035) * s, 0.008,
+				-3, 4, 1.0, 0.85, 0.45, 0.85, X_EMBER, 0.06, 0, 1.0, NEVER, 0, 0, 0);
+		}
+		xs(x + dx * 0.15, y + 0.02, z + dz * 0.15, dx * 0.8, 0.35, dz * 0.8, rnd(0.5, 0.8), 0.05 * s, 0.24 * s, 0.2, 2.4, 0.6, 0.6, 0.6, 0.0,
+			X_SOFT, 0, 0, 0.22, NEVER, 0, 0, 0.02);
+	}
+
+	function bulletImpact(pos, surface = "dirt") {
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		if (surface === "metal") {
+			spawn(x, y, z, 0, 0, 0, 0.08, 0.05, 0.3, 0, 0, 1.0, 0.92, 0.7, 0.8, FLASH, 0, 0, 1.0);
+			for (let i = 0; i < 9; i++) {
+				const a = Math.random() * Math.PI * 2;
+				const el = rnd(-0.2, 1.2);
+				const sp = rnd(2.5, 8);
+				xs(x, y, z, Math.cos(a) * Math.cos(el) * sp, Math.sin(el) * sp + 0.5, Math.sin(a) * Math.cos(el) * sp, rnd(0.18, 0.45),
+					rnd(0.012, 0.024), 0.006, -9.8, 1.0, 1.0, 0.82, 0.42, 0.85, X_EMBER, 0.09, 0, 1.0, NEVER, 0, 0, 0);
+			}
+			xs(x, y, z, 0, 0.2, 0, 0.35, 0.04, 0.16, 0.1, 3, 0.75, 0.75, 0.78, 0.0, X_SOFT, 0, 0, 0.25, NEVER, 0, 0, 0);
+			return;
+		}
+		if (surface === "leaves") {
+			const f = floorAt(x, z, hintY !== null ? hintY : y - 1.5);
+			for (let i = 0; i < 4; i++) {
+				const li = ((Math.random() * 6) | 0) * 3;
+				leafFlake(x, y, z, rnd(-1.6, 1.6), rnd(0.3, 2.2), rnd(-1.6, 1.6), f, LEAF_TONES[li], LEAF_TONES[li + 1], LEAF_TONES[li + 2], 0.8);
+			}
+			xs(x, y, z, 0, 0.2, 0, 0.4, 0.05, 0.2, 0.1, 3, 0.5, 0.62, 0.4, 0.0, X_SOFT, 0, 0, 0.22, NEVER, 0, 0, 0);
+			return;
+		}
+		// dirt / wood / concrete: a puff and chips, in the colour of the stuff
+		let r = 0.5, g = 0.4, b = 0.29, pale = 0.16, chips = 6, puff = 3;
+		if (surface === "wood") { r = 0.66; g = 0.5; b = 0.3; pale = 0.2; chips = 7; puff = 2; }
+		else if (surface === "concrete") { r = 0.66; g = 0.65; b = 0.63; pale = 0.14; chips = 5; puff = 4; }
+		for (let i = 0; i < puff; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.2, 0.9);
+			xs(x, y, z, Math.cos(a) * sp, rnd(0.3, 1.1), Math.sin(a) * sp, rnd(0.45, 0.85), 0.05, rnd(0.2, 0.34), 0.12, 3.0,
+				r + pale, g + pale, b + pale, 0.0, X_SOFT, 0, 0, rnd(0.28, 0.42), NEVER, 0, 0, 0);
+		}
+		const f0 = floorAt(x, z, hintY !== null ? Math.min(hintY, y) : y - 0.8);
+		for (let i = 0; i < chips; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.6, 2.6);
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(0.8, 3.2);
+			solveLand(x, y, z, vx, vy, vz, -9.8, 0.8, f0 + 0.006, true, 2);
+			const tone = Math.random() * 0.14;
+			xs(x, y, z, vx, vy, vz, landT + rnd(0.4, 0.9), rnd(0.008, 0.018), 0.007, -9.8, 0.8, r + tone, g + tone, b + tone, 0.0,
+				X_GRAIN, rnd(-16, 16), rnd(0, 6.28), 1.0, landT, 0, 0, 0);
+		}
+	}
+
+	// ------------------------------------------------------------------ potions
+	let trailT = -1;
+	// potionTrail(pos): call every frame on the flying flask
+	function potionTrail(pos) {
+		if (now - trailT < 0.011) return;
+		trailT = now;
+		const gold = Math.random() < 0.45;
+		xs(pos.x + rnd(-0.03, 0.03), pos.y + rnd(-0.03, 0.03), pos.z + rnd(-0.03, 0.03), rnd(-0.25, 0.25), rnd(-0.1, 0.35), rnd(-0.25, 0.25),
+			rnd(0.35, 0.7), rnd(0.022, 0.04), 0.008, -0.5, 2.2, gold ? 1.0 : 0.45, gold ? 0.88 : 1.0, gold ? 0.42 : 0.66, 0.8,
+			X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0, NEVER, 0.012, rnd(3, 6), 0);
+		if (Math.random() < 0.5) {
+			xs(pos.x, pos.y, pos.z, 0, 0.05, 0, rnd(0.3, 0.5), 0.07, 0.16, 0, 2, 0.45, 1.0, 0.65, 0.9, X_SOFT, 0, 0, 0.2, NEVER, 0, 0, 0);
+		}
+	}
+
+	// potionSplash(x, y, z, colorHex): y = the ground where the flask lands
+	function potionSplash(x, y, z, colorHex = 0x6dffa8) {
+		hexRGB(colorHex, 0x6dffa8);
+		const r = cR;
+		const g = cG;
+		const b = cB;
+		const gy = num(y, groundAt(x, z));
+		noteY(gy);
+		spawn(x, gy + 0.12, z, 0, 0, 0, 0.22, 0.14, 0.95, 0, 0, r, g, b, 0.7, FLASH, 0, 0, 1.0);
+		spawn(x, gy + 0.2, z, 0, 0, 0, 0.4, 0.5, 1.8, 0, 0, r, g, b, 1.0, SOFT, 0, 0, 0.3);
+		// glass
+		for (let i = 0; i < 10; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.8, 3.0);
+			const vx = Math.cos(a) * sp;
+			const vz = Math.sin(a) * sp;
+			const vy = rnd(1.0, 3.4);
+			const hx = rnd(0.012, 0.03);
+			const k = 0.2 + 0.012 / hx;
+			solveLand(x, gy + 0.08, z, vx, vy, vz, -9.8, k, gy + 0.004, true, 4);
+			const idx = MAX_CONFETTI + shardCursor;
+			shardCursor = (shardCursor + 1) % MAX_SHARDS;
+			flake(idx, x, gy + 0.08, z, vx, vy, vz, landT + FLAKE_HOP + rnd(1.2, 2.2), -9.8, k, landT, rnd(0.02, 0.06),
+				rnd(0, 6.28), rnd(-0.8, 0.8), rnd(5, 16) * (Math.random() < 0.5 ? -1 : 1), rnd(0, 6.28),
+				0.55 + r * 0.25, 0.8 + g * 0.15, 0.7 + b * 0.2, 0, hx, hx * rnd(0.6, 1.4), 0);
+		}
+		// liquid crown
+		const nc = 13;
+		for (let i = 0; i < nc; i++) {
+			const a = ((i + rnd(-0.3, 0.3)) / nc) * Math.PI * 2;
+			const ca = Math.cos(a);
+			const sa = Math.sin(a);
+			const out = rnd(0.7, 1.3);
+			const up = rnd(1.8, 2.9);
+			let tl = timeToY(gy + 0.02, up, -9.8, 0.5, gy, -1, 3);
+			xs(x + ca * 0.07, gy + 0.02, z + sa * 0.07, ca * out, up, sa * out, tl, rnd(0.022, 0.034), 0.014, -9.8, 0.5,
+				r + (1 - r) * 0.35, g, b + (1 - b) * 0.2, 0.55, X_SHEET, 0.4, 0, 0.85, NEVER, 0, 0, 0);
+			tl = timeToY(gy + 0.02, up * 1.15, -9.8, 0.4, gy, -1, 3);
+			const gold = i % 3 === 0;
+			xs(x + ca * 0.07, gy + 0.02, z + sa * 0.07, ca * out * 1.25, up * 1.15, sa * out * 1.25, tl, rnd(0.014, 0.024), 0.01, -9.8, 0.4,
+				gold ? 1.0 : r, gold ? 0.9 : g, gold ? 0.5 : b, 0.45, X_DROP, 0.03, 0, 0.95, NEVER, 0, 0, 0);
+		}
+		// low glowing mist that spreads to the splash radius and lingers
+		gdTrans(x, gy + 0.06, z, 2.6, 1.25, G_MIST, r, g, b, 0.75, 1.1, 0, 0, 0, 0, 0.85, 0);
+		for (let i = 0; i < 7; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.35, 1.0);
+			xs(x + Math.cos(a) * 0.1, gy + rnd(0.05, 0.18), z + Math.sin(a) * 0.1, Math.cos(a) * sp, rnd(0.02, 0.2), Math.sin(a) * sp,
+				rnd(1.0, 1.9), 0.12, rnd(0.34, 0.5), 0.04, 1.8, r, g, b, 0.75, X_SOFT, 0, 0, 0.2, NEVER, 0, 0, 0);
+		}
+		xring(x, gy + 0.07, z, 0.6, 0.08, 1.1, 0.1, r + (1 - r) * 0.3, g, b, 0.7, R_CLEAN, 0, 1, 0.85, 0, 0, 0);
+		xring(x, gy + 0.065, z, 0.5, 0.04, 0.4, 0.5, r + (1 - r) * 0.5, g, b + (1 - b) * 0.3, 0.5, R_FROTH, rnd(0, 6.28), 1, 0.7, 0, 0, 0);
+		for (let i = 0; i < 9; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = rnd(0.1, 0.9);
+			xs(x + Math.cos(a) * rr, gy + rnd(0.05, 0.2), z + Math.sin(a) * rr, 0, rnd(0.3, 0.9), 0, rnd(0.6, 1.2), rnd(0.02, 0.04), 0.01,
+				0.2, 1.4, 1.0, 0.92, 0.55, 0.8, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0, NEVER, 0.03, rnd(2, 5), rnd(0.05, 0.6));
+		}
+	}
+
+	// dissolve(x, y, z, height, colorHex, n): a body-shaped column of mist that drifts up and thins.
+	// (x, y, z) = its foot.
+	function dissolve(x, y, z, height = 1.8, colorHex = 0xbfd0ff, n = 40) {
+		const cnt = clampN(n, 40, 4, 120);
+		const hgt = clampF(height, 1.8, 0.2, 8);
+		hexRGB(colorHex, 0xbfd0ff);
+		const r = cR;
+		const g = cG;
+		const b = cB;
+		const gy = num(y, groundAt(x, z));
+		for (let i = 0; i < cnt; i++) {
+			const hf = Math.random();
+			const wide = 0.14 + 0.2 * Math.sin(Math.PI * Math.min(hf * 1.15, 1)); // broad at the shoulders
+			const a = Math.random() * Math.PI * 2;
+			const rr = Math.sqrt(Math.random()) * wide;
+			xs(x + Math.cos(a) * rr, gy + hf * hgt, z + Math.sin(a) * rr, Math.cos(a) * rnd(0.02, 0.2), rnd(0.2, 0.7), Math.sin(a) * rnd(0.02, 0.2),
+				rnd(1.2, 2.4), rnd(0.07, 0.12), rnd(0.24, 0.4), 0.22, 1.1, r, g, b, 0.7, X_SOFT, 0, 0, rnd(0.25, 0.45),
+				NEVER, rnd(0.04, 0.12), rnd(1.2, 2.6), (1 - hf) * 0.55 + rnd(0, 0.12));
+		}
+		const ns = Math.min(12, 4 + (cnt >> 3));
+		for (let i = 0; i < ns; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const rr = rnd(0.05, 0.3);
+			const sy = gy + rnd(0.3, 1) * hgt;
+			const tl = timeToY(sy, 0.2, -1.6, 1.4, gy + 0.03, -1, 3);
+			xs(x + Math.cos(a) * rr, sy, z + Math.sin(a) * rr, rnd(-0.2, 0.2), 0.2, rnd(-0.2, 0.2), Math.min(tl + 0.2, 2.6), rnd(0.018, 0.034), 0.008,
+				-1.6, 1.4, r + (1 - r) * 0.5, g + (1 - g) * 0.5, b + (1 - b) * 0.5, 0.8, X_STAR, rnd(-3, 3), rnd(0, 1.5), 1.0,
+				tl, 0.03, rnd(2, 5), rnd(0, 0.7));
+		}
+	}
+
+	// ------------------------------------------------------------------ helicopter
+	let washT = -1;
+	let washRingT = -1;
+	// rotorWash(x, groundY, z, strength): call every frame while the rotor is near the ground
+	function rotorWash(x, gy, z, strength = 1) {
+		const s = clampF(strength, 1, 0, 1.5);
+		if (s <= 0.02 || now - washT < 0.03) return;
+		washT = now;
+		const y = num(gy, groundAt(x, z));
+		noteY(y);
+		const n = s > 0.6 ? 4 : 3;
+		for (let i = 0; i < n; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const ca = Math.cos(a);
+			const sa = Math.sin(a);
+			const rr = rnd(1.2, 3.6);
+			const sp = rnd(5, 10) * (0.4 + 0.6 * s);
+			const tone = Math.random();
+			xs(x + ca * rr, y + rnd(0.05, 0.25), z + sa * rr, ca * sp, rnd(0.2, 1.5), sa * sp, rnd(0.6, 1.2), rnd(0.2, 0.34), rnd(0.8, 1.4),
+				0.25, 2.4, 0.7 + tone * 0.1, 0.64 + tone * 0.1, 0.54 + tone * 0.1, 0.0, X_SOFT, 0, 0, rnd(0.14, 0.26) * s, NEVER, 0, 0, 0);
+		}
+		if (Math.random() < 0.35) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(4, 9);
+			xs(x + Math.cos(a) * 2, y + 0.05, z + Math.sin(a) * 2, Math.cos(a) * sp, rnd(0.6, 2), Math.sin(a) * sp, rnd(0.5, 0.9), rnd(0.01, 0.018), 0.008,
+				-6, 1.2, 0.5, 0.45, 0.36, 0.0, X_GRAIN, rnd(-16, 16), rnd(0, 6.28), 1.0, NEVER, 0, 0, 0);
+		}
+		if (now - washRingT > 0.28) {
+			washRingT = now;
+			gdTrans(x, y + 0.05, z, 0.9, 8, G_DUST, 0.78, 0.73, 0.63, 0.3 * s, 8, 7, 1.6, 1.0, 0, 0.1, 0);
+		}
+	}
+
+	function crashSparks(pos, n = 30) {
+		const cnt = clampN(n, 30, 1, 120);
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		spawn(x, y, z, 0, 0, 0, 0.16, 0.3, 1.8, 0, 0, 1.0, 0.85, 0.5, 0.8, FLASH, 0, 0, 1.0);
+		spawn(x, y, z, 0, 0, 0, 0.3, 1.0, 3.5, 0, 0, 1.0, 0.7, 0.35, 1.0, SOFT, 0, 0, 0.35);
+		const f0 = floorAt(x, z, hintY !== null ? Math.min(hintY, y) : y - 1.5);
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const el = rnd(-0.3, 1.3);
+			const sp = rnd(2.5, 10);
+			const vx = Math.cos(a) * Math.cos(el) * sp;
+			const vz = Math.sin(a) * Math.cos(el) * sp;
+			const vy = Math.sin(el) * sp + 1;
+			const tl = timeToY(y, vy, -9.8, 0.7, f0 + 0.02, -1, 2.2);
+			const hot = Math.random() < 0.4;
+			xs(x, y, z, vx, vy, vz, Math.max(0.25, Math.min(tl + rnd(0.1, 0.5), 2.4)), rnd(0.014, 0.03), 0.008, -9.8, 0.7,
+				1.0, hot ? 0.93 : 0.72, hot ? 0.7 : 0.3, 0.85, X_EMBER, 0.07, 0, 1.0, tl, 0, 0, i * 0.003);
+		}
+		smoke(x, y, z, 0.8, 2.5);
+	}
+
+	// smoke(x, y, z, size, seconds): one dark puff column; call again (every ~0.5 s) to sustain it
+	function smoke(x, y, z, size = 1, seconds = 6) {
+		const s = clampF(size, 1, 0.1, 6);
+		const secs = clampF(seconds, 6, 0.5, 20);
+		for (let i = 0; i < 7; i++) {
+			const tone = rnd(0.07, 0.2);
+			xs(x + rnd(-0.15, 0.15) * s, y + rnd(0, 0.2) * s, z + rnd(-0.15, 0.15) * s, rnd(-0.25, 0.25), rnd(0.7, 1.4), rnd(-0.25, 0.25),
+				secs * rnd(0.6, 1.0), rnd(0.2, 0.32) * s, rnd(1.2, 1.9) * s, 0.55, 0.75, tone, tone, tone * 1.05, 0.0, X_SOFT, 0, 0,
+				rnd(0.4, 0.58), NEVER, 0.12 * s, rnd(0.6, 1.3), i * 0.11);
+		}
+		// a lick of glow at the root
+		xs(x, y + 0.05 * s, z, 0, 0.5, 0, 0.5, 0.2 * s, 0.5 * s, 0.2, 2, 1.0, 0.45, 0.12, 0.9, X_SOFT, 0, 0, 0.25, NEVER, 0, 0, 0);
+	}
+
+	// ------------------------------------------------------------------ life
+	// leaves(x, y, z, n, colorHex): a tumbling leaf burst (mixed greens when no colour is given)
+	function leaves(x, y, z, n = 20, colorHex) {
+		const cnt = clampN(n, 20, 1, 120);
+		const own = typeof colorHex === "number" && colorHex === colorHex;
+		if (own) hexRGB(colorHex, 0x3f7a2a);
+		const r = cR;
+		const g = cG;
+		const b = cB;
+		const f = floorAt(x, z, hintY !== null ? hintY : (y > 0.2 ? 0 : y - 2.5));
+		for (let i = 0; i < cnt; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const el = rnd(-0.2, 1.3);
+			const sp = rnd(0.8, 3.6);
+			const li = ((Math.random() * 6) | 0) * 3;
+			const sh = rnd(0.8, 1.15);
+			leafFlake(x + rnd(-0.25, 0.25), y + rnd(-0.2, 0.3), z + rnd(-0.25, 0.25), Math.cos(a) * Math.cos(el) * sp, Math.sin(el) * sp + 0.5,
+				Math.sin(a) * Math.cos(el) * sp, f, own ? r * sh : LEAF_TONES[li], own ? g * sh : LEAF_TONES[li + 1], own ? b * sh : LEAF_TONES[li + 2], 1);
+		}
+	}
+
+	function footDust(x, y, z, strength = 0.5, colorHex = 0x9c8c72) {
+		const s = clampF(strength, 0.5, 0, 2);
+		noteY(y);
+		if (s <= 0.01) return;
+		hexRGB(colorHex, 0x9c8c72);
+		const k = 0.5 + 0.5 * s;
+		const nm = 2 + Math.round(3 * Math.min(s, 1.5));
+		for (let i = 0; i < nm; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const sp = rnd(0.25, 0.8) * k;
+			const tone = rnd(-0.05, 0.08);
+			xs(x + Math.cos(a) * 0.04, y + 0.03, z + Math.sin(a) * 0.04, Math.cos(a) * sp, rnd(0.1, 0.45) * k, Math.sin(a) * sp,
+				rnd(0.45, 0.9), rnd(0.04, 0.06) * k, rnd(0.14, 0.24) * k, 0.1, 3.2, cR + tone, cG + tone, cB + tone, 0.0,
+				X_SOFT, 0, 0, rnd(0.2, 0.34), NEVER, 0, 0, 0);
+		}
+		if (s > 0.8) {
+			for (let i = 0; i < 3; i++) {
+				const a = Math.random() * Math.PI * 2;
+				const sp = rnd(0.4, 1.2);
+				const vx = Math.cos(a) * sp;
+				const vz = Math.sin(a) * sp;
+				const vy = rnd(0.7, 1.7);
+				solveLand(x, y + 0.02, z, vx, vy, vz, -9.8, 0.9, y + 0.006, true, 2);
+				xs(x, y + 0.02, z, vx, vy, vz, landT + rnd(0.3, 0.6), rnd(0.006, 0.011), 0.005, -9.8, 0.9, cR * 0.8, cG * 0.8, cB * 0.8, 0.0,
+					X_GRAIN, rnd(-16, 16), rnd(0, 6.28), 0.9, landT, 0, 0, 0);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------ boss / items
+	const globT = new Float64Array(MAX_GLOBS).fill(-1);
+	const globX = new Float32Array(MAX_GLOBS);
+	const globY = new Float32Array(MAX_GLOBS);
+	const globZ = new Float32Array(MAX_GLOBS);
+	const globGen = new Int32Array(MAX_GLOBS);
+	let globCursor = 0;
+	let globLive = 0;
+	// venomGlob(from, to, seconds) -> id: an arcing green glob that lands with a stingBurst
+	function venomGlob(from, to, seconds = 0.8) {
+		const T = clampF(seconds, 0.8, 0.08, 6);
+		const k = 0.05;
+		const gacc = -9.8;
+		const vt = gacc / k;
+		const e = (1 - Math.exp(-k * T)) / k;
+		const vx = (to.x - from.x) / e;
+		const vz = (to.z - from.z) / e;
+		const vy = vt + (to.y - from.y - vt * T) / e;
+		const s = globCursor;
+		globCursor = (globCursor + 1) % MAX_GLOBS;
+		if (globT[s] < 0) globLive++;
+		globGen[s]++;
+		globT[s] = now + T;
+		globX[s] = to.x; globY[s] = to.y; globZ[s] = to.z;
+		xs(from.x, from.y, from.z, vx, vy, vz, T, 0.1, 0.085, gacc, k, 0.42, 0.95, 0.2, 0.15, X_DROP, 0.02, 0, 1.0, NEVER, 0, 0, 0);
+		xs(from.x, from.y, from.z, vx, vy, vz, T, 0.26, 0.2, gacc, k, 0.4, 1.0, 0.25, 1.0, X_SOFT, 0, 0, 0.4, NEVER, 0, 0, 0);
+		for (let i = 1; i <= 6; i++) {
+			const d = i * 0.028;
+			if (d >= T) break;
+			xs(from.x, from.y, from.z, vx, vy, vz, T - d * 0.5, 0.06 - i * 0.006, 0.02, gacc, k, 0.36, 0.86, 0.18, 0.2, X_DROP, 0.03, 0, 0.85,
+				NEVER, 0.02, 9, d);
+		}
+		spawn(from.x, from.y, from.z, 0, 0, 0, 0.16, 0.08, 0.4, 0, 0, 0.6, 1.0, 0.35, 0.7, FLASH, 0, 0, 0.9);
+		return s + globGen[s] * MAX_GLOBS;
+	}
+
+	function crownSpark(pos) {
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		xs(x, y, z, 0, 0, 0, 0.32, 0.08, 0.42, 0, 1, 1.0, 0.9, 0.5, 0.9, X_STAR, 0.5, rnd(0, 1.5), 1.0, NEVER, 0, 0, 0);
+		for (let i = 0; i < 10; i++) {
+			const a = Math.random() * Math.PI * 2;
+			const el = rnd(-0.1, 1.3);
+			const sp = rnd(0.8, 3.0);
+			const pale = Math.random() < 0.35;
+			xs(x, y, z, Math.cos(a) * Math.cos(el) * sp, Math.sin(el) * sp + 0.5, Math.sin(a) * Math.cos(el) * sp, rnd(0.4, 0.85), rnd(0.02, 0.042), 0.01,
+				-4, 2.0, 1.0, pale ? 0.97 : 0.8, pale ? 0.8 : 0.28, 0.75, X_STAR, rnd(-4, 4), rnd(0, 1.5), 1.0, NEVER, 0, 0, i * 0.008);
+		}
+		xring(x, y, z, 0.4, 0.04, 0.5, 0.12, 1.0, 0.86, 0.36, 0.7, R_HALO, rnd(0, 6.28), 1, 0.8, 1, 0, 0);
+	}
+
+	function paperGlint(pos) {
+		const x = pos.x;
+		const y = pos.y;
+		const z = pos.z;
+		xs(x, y, z, 0, 0.04, 0, 0.9, 0.05, 0.2, 0, 1, 1.0, 0.97, 0.86, 0.8, X_STAR, 0.7, rnd(0, 1.5), 0.9, NEVER, 0, 0, 0);
+		for (let i = 0; i < 3; i++) {
+			xs(x + rnd(-0.12, 0.12), y + rnd(-0.05, 0.1), z + rnd(-0.12, 0.12), 0, rnd(0.05, 0.2), 0, rnd(0.6, 1.0), 0.02, 0.012,
+				0.05, 1.5, 1.0, 0.95, 0.8, 0.8, X_STAR, rnd(-2, 2), rnd(0, 1.5), 0.9, NEVER, 0.02, rnd(2, 4), 0.15 + i * 0.18);
+		}
+	}
+
+	// ------------------------------------------------------------------ housekeeping for the level 6-11 pools
+	function clearL2() {
+		fxEpoch++;
+		hintY = null;
+		for (let i = 0; i < MAX_LINES; i++) lnData[i * LN_STRIDE + 7] = 0;
+		lnDirty = true;
+		lnAliveUntil = -1;
+		tgEnd.fill(-1);
+		for (let i = 0; i < MAX_GROUND; i++) gdData[i * GD_STRIDE + 4] = 0;
+		gdDirty = true;
+		gdAliveUntil = -1;
+		gdLive = 0;
+		dzEnd.fill(-1);
+		srT0.fill(-1);
+		srLive = 0;
+		for (let i = 0; i < MAX_CARDS; i++) cdData[i * CD_STRIDE + 11] = 0;
+		cdDirty = true;
+		cdLive = 0;
+		bcOn.fill(0);
+		gtState.fill(0);
+		gtBursting = 0;
+		cfOn.fill(0);
+		tcOn.fill(0);
+		fireLive = 0;
+		scr.phase = 0;
+		screamMesh.visible = false;
+		shock.radius = 0;
+		shock.strength = 0;
+		shock.active = false;
+		shockWrite();
+		for (let i = 0; i < MAX_SWIRLS; i++) swData[i * SW_STRIDE + 4] = 0;
+		swDirty = true;
+		swAliveUntil = -1;
+		for (let i = 0; i < MAX_BIRDS; i++) bdData[i * BD_STRIDE + 7] = 0;
+		bdDirty = true;
+		bdAliveUntil = -1;
+		dreamTarget = dreamFade = flyTarget = flyFade = windTarget = windFade = 0;
+		uDream.value.x = 0;
+		uFly.value.x = 0;
+		uWind.value.z = 0;
+		air.visible = false;
+		globT.fill(-1);
+		globLive = 0;
+	}
+
+	function approach(v, target, step) {
+		return v < target ? Math.min(target, v + step) : Math.max(target, v - step);
+	}
+
+	function updateL2(dt) {
+		screamUpdate(dt);
+
+		// shock rings shed dust along their front; they retire when they reach their radius
+		if (srLive > 0) {
+			for (let s = 0; s < MAX_SHOCKRINGS; s++) {
+				if (srT0[s] < 0) continue;
+				const R = srSpeed[s] * (now - srT0[s]);
+				if (R >= srMax[s]) {
+					srT0[s] = -1;
+					srLive--;
+					continue;
+				}
+				srAcc[s] += dt;
+				if (srAcc[s] > 0.045) {
+					srAcc[s] = 0;
+					const n = R > 6 ? 4 : 3;
+					for (let i = 0; i < n; i++) {
+						const a = Math.random() * Math.PI * 2;
+						const ca = Math.cos(a);
+						const sa = Math.sin(a);
+						const px = srX[s] + ca * R;
+						const pz = srZ[s] + sa * R;
+						const tone = Math.random();
+						xs(px, floorAt(px, pz, srY[s]) + 0.08, pz, ca * srSpeed[s] * 0.35, rnd(0.5, 1.6), sa * srSpeed[s] * 0.35, rnd(0.5, 0.95),
+							rnd(0.12, 0.2), rnd(0.4, 0.7), 0.15, 2.8, 0.74 + tone * 0.1, 0.68 + tone * 0.1, 0.58 + tone * 0.1, 0.0,
+							X_SOFT, 0, 0, rnd(0.25, 0.4), NEVER, 0, 0, 0);
+					}
+				}
+			}
+		}
+
+		// venom globs landing
+		if (globLive > 0) {
+			for (let s = 0; s < MAX_GLOBS; s++) {
+				if (globT[s] < 0 || now < globT[s]) continue;
+				globT[s] = -1;
+				globLive--;
+				tmpPos.x = globX[s]; tmpPos.y = globY[s]; tmpPos.z = globZ[s];
+				stingBurst(tmpPos);
+			}
+		}
+
+		// guide rings that finished bursting
+		if (gtBursting > 0) {
+			for (let s = 0; s < MAX_GATES; s++) {
+				if (gtState[s] === 2 && now >= gtEnd[s]) {
+					gtState[s] = 0;
+					gtBursting--;
+					cardOff(CD_GATE0 + s);
+				}
+			}
+		}
+
+		// embers off the fires
+		if (fireLive > 0) {
+			for (let s = 0; s < MAX_CAMPFIRES; s++) {
+				if (!cfOn[s] || cfLevel[s] < 0.08) continue;
+				cfAcc[s] += dt * (2 + 7 * cfLevel[s]);
+				while (cfAcc[s] >= 1) {
+					cfAcc[s] -= 1;
+					const sz = cfSize[s];
+					xs(cfX[s] + rnd(-0.2, 0.2) * sz, cfY[s] + rnd(0.2, 0.7) * sz, cfZ[s] + rnd(-0.2, 0.2) * sz, rnd(-0.25, 0.25), rnd(0.8, 1.9), rnd(-0.25, 0.25),
+						rnd(0.9, 1.9), rnd(0.012, 0.022), 0.006, 0.7, 1.1, 1.0, rnd(0.5, 0.75), 0.15, 0.9, X_EMBER, 0.04, 0, 1.0,
+						NEVER, rnd(0.04, 0.12), rnd(2, 4.5), 0);
+				}
+			}
+			for (let s = 0; s < MAX_TORCHES; s++) {
+				if (!tcOn[s] || tcLevel[s] < 0.08) continue;
+				tcAcc[s] += dt * 1.6 * tcLevel[s];
+				while (tcAcc[s] >= 1) {
+					tcAcc[s] -= 1;
+					xs(tcX[s] + rnd(-0.04, 0.04), tcY[s] + rnd(0.2, 0.4), tcZ[s] + rnd(-0.04, 0.04), rnd(-0.15, 0.15), rnd(0.5, 1.1), rnd(-0.15, 0.15),
+						rnd(0.6, 1.2), rnd(0.008, 0.014), 0.005, 0.5, 1.2, 1.0, rnd(0.5, 0.7), 0.15, 0.9, X_EMBER, 0.04, 0, 1.0,
+						NEVER, rnd(0.03, 0.08), rnd(2, 4.5), 0);
+				}
+			}
+		}
+
+		// air: fade in / out
+		if (dreamFade !== dreamTarget) {
+			dreamFade = approach(dreamFade, dreamTarget, dt * 0.7);
+			uDream.value.x = dreamFade * dreamFade * (3 - 2 * dreamFade);
+		}
+		if (flyFade !== flyTarget) {
+			flyFade = approach(flyFade, flyTarget, dt * 0.6);
+			uFly.value.x = flyFade;
+		}
+		const wt = windTarget * windStrength;
+		if (windFade !== wt) {
+			windFade = approach(windFade, wt, dt * 2.5);
+			uWind.value.z = windFade;
+		}
+		const airOn = dreamFade > 0 || dreamTarget > 0 || flyFade > 0 || flyTarget > 0 || windFade > 0 || windTarget > 0;
+		if (air.visible !== airOn) air.visible = airOn;
+
+		// uploads + hiding idle pools
+		if (lnDirty) { lnBuffer.needsUpdate = true; lnDirty = false; }
+		if (lines.visible && now > lnAliveUntil) lines.visible = false;
+		if (gdDirty) { gdBuffer.needsUpdate = true; gdDirty = false; }
+		const gdOn = gdLive > 0 || now <= gdAliveUntil;
+		if (ground.visible !== gdOn) ground.visible = gdOn;
+		if (cdDirty) { cdBuffer.needsUpdate = true; cdDirty = false; }
+		const cdOn = cdLive > 0;
+		if (cards.visible !== cdOn) cards.visible = cdOn;
+		if (swDirty) { swBuffer.needsUpdate = true; swDirty = false; }
+		if (swirl.visible && now > swAliveUntil) swirl.visible = false;
+		if (bdDirty) { bdBuffer.needsUpdate = true; bdDirty = false; }
+		if (birdMesh.visible && now > bdAliveUntil) birdMesh.visible = false;
+	}
+
 	function clear(removeWater = false) {
 		clearExt();
+		clearL2();
 		for (let i = 0; i < MAX_PARTICLES; i++) pData[i * P_STRIDE + 7] = 0;
 		pDirty = true;
 		pAliveUntil = -1;
@@ -2737,6 +5184,7 @@ export function createFx(THREE) {
 		if (rings.visible && now > rAliveUntil) rings.visible = false;
 
 		updateExt(dt);
+		updateL2(dt);
 	}
 
 	function setSun(x, y, z) {
@@ -2782,5 +5230,41 @@ export function createFx(THREE) {
 		// extension extras
 		setGround,
 		setGlint,
+		// extensions (LEVELS2.md B4)
+		muzzleFlash,
+		tracer,
+		bulletImpact,
+		telegraph,
+		telegraphMove,
+		telegraphCancel,
+		dangerZone,
+		dangerCancel,
+		slam,
+		shockRing,
+		shockRadius,
+		screamWave,
+		shock,
+		potionTrail,
+		potionSplash,
+		transformSwirl,
+		dissolve,
+		beacon,
+		rotorWash,
+		crashSparks,
+		smoke,
+		windStreaks,
+		ringGate,
+		campfire,
+		torch,
+		fireflies,
+		lightShafts,
+		dreamMotes,
+		mistCards,
+		birds,
+		leaves,
+		footDust,
+		venomGlob,
+		crownSpark,
+		paperGlint,
 	};
 }

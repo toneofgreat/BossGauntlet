@@ -35,7 +35,7 @@ export function createUI() {
 
   // ---------- level select ----------
   let levelCb = null, lockedCb = null, ready = false, menuOpen = true;
-  const prog = { unlocked: 1, beaten: [false, false, false, false, false] };
+  const prog = { unlocked: 1, beaten: el.lvl.map(() => false) };
   function paintMenu(unlockN) {
     for (let i = 0; i < el.lvl.length; i++) {
       const b = el.lvl[i], n = i + 1;
@@ -66,11 +66,11 @@ export function createUI() {
     for (const b of el.lvl) b.disabled = false;
     el.startTip.textContent = tipText();
   }
-  // p: { unlocked: highest playable level, beaten: [bool x5] }
+  // p: { unlocked: highest playable level, beaten: [bool per level] }
   // o: { unlock: n (play the unlock animation on circle n), fade: bool, onUnlock(n) (the moment the padlock pops) }
   function showMenu(p, o) {
     prog.unlocked = p.unlocked;
-    for (let i = 0; i < 5; i++) prog.beaten[i] = !!p.beaten[i];
+    for (let i = 0; i < prog.beaten.length; i++) prog.beaten[i] = !!p.beaten[i];
     const un = (o && o.unlock) || 0;
     menuOpen = true;
     paintMenu(un);

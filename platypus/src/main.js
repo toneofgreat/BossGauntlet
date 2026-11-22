@@ -8,6 +8,9 @@ import { createFx } from "./fx.js";
 import { createUI } from "./ui.js";
 import { createCinema } from "./cinema.js";
 import { createProgress, LEVEL_COUNT } from "./progress.js";
+import { extendUI } from "./hud.js";
+import { createServices } from "./services.js";
+import { createMusic } from "./music.js";
 
 const LOADERS = [
   () => import("./levels/level1.js"),
@@ -15,13 +18,19 @@ const LOADERS = [
   () => import("./levels/level3.js"),
   () => import("./levels/level4.js"),
   () => import("./levels/level5.js"),
+  () => import("./levels/level6.js"),
+  () => import("./levels/level7.js"),
+  () => import("./levels/level8.js"),
+  () => import("./levels/level9.js"),
+  () => import("./levels/level10.js"),
+  () => import("./levels/level11.js"),
 ];
 
 const TAU = Math.PI * 2;
 const wrap = (a) => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-const ui = createUI();
+const ui = extendUI(createUI());
 const progress = createProgress();
 const canvas = document.getElementById("scene");
 const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
@@ -108,6 +117,7 @@ function boot() {
   scene.add(fx.group);
   fx.setSun(SUN_DIR.x, SUN_DIR.y, SUN_DIR.z);
   const audio = createAudio();
+  const music = createMusic(audio);
 
   // ---- environment (background, fog, light colours): set per world, blendable for time-of-day ----
   const ENV_DEFAULT = { background: 0xffffff, fog: [0xffffff, 11, 23.5], hemi: [0xffffff, 0xd6daf0, 1.55], sun: [0xfffaf2, 1.9], sunDir: [-0.52, 0.72, -0.46], far: 60, dark: false };
@@ -237,8 +247,8 @@ function boot() {
   let mode = "menu"; // "menu" | "loading" | "level" | "leaving"
   let running = false; // world simulated + rendered
   let active = null, activeN = 0;
-  const levels = [null, null, null, null, null];
-  const mods = [null, null, null, null, null];
+  const levels = new Array(LEVEL_COUNT).fill(null);
+  const mods = new Array(LEVEL_COUNT).fill(null);
   const sharedPool = Object.create(null);
   let muted = false;
   let sinceEnter = 0;
@@ -353,6 +363,9 @@ function boot() {
     complete() { leave(true); },
     // leave without beating it
     quit() { leave(false); },
+    // camera-relative bearing of a world point for ui.setPing: 0 = ahead of the camera, + = to the right, PI = behind
+    bearing(x, z) { return wrap(cam.yaw - Math.atan2(x - player.x, z - player.z)); },
+    music,
     input: {
       // is this action's key / button down right now ("jump", "interact", "primary", "secondary", "tailSlap", "hold", "trick1".."trick4")
       held: (name) => !!held[name],
@@ -365,8 +378,15 @@ function boot() {
   // ---- input ----
   const keys = Object.create(null);
   const held = Object.create(null); // action name -> bool (for ctx.input.held)
+  // pointer facts for the services (aiming): cursor position, when it last moved, a finger drag from the potion button
+  const io = { mouseX: 0, mouseY: 0, mouseT: -10, mouseDown: false, dragOn: false, dragX: 0, dragY: 0 };
+  // ---- services for levels 6-11: health, checkpoints, vehicle, abilities, gear, army (LEVELS2.md Part A) ----
+  const svc = createServices({ THREE, scene, camera, ctx, player, platypus, cam, ui, cinema, audio, music, time, io, held, setTimeScale, floorAt, after });
+  ctx.health = svc.health; ctx.checkpoint = svc.checkpoint; ctx.vehicle = svc.vehicle; ctx.abilities = svc.abilities; ctx.gear = svc.gear; ctx.army = svc.army;
+  // the cursor on the plane y = planeY -> out { x, y, z, ok } (ok false on touch / when it points at the sky)
+  ctx.input.aim = (out, planeY) => svc.abilities.mouseGround(out, planeY === undefined ? player.y : planeY);
   const inp = { sx: 0, sy: 0, jumpT: 0, jumpHeld: false, skipHeld: false };
-  const KEY_ACTION = { KeyJ: "primary", KeyK: "secondary", KeyL: "tailSlap", KeyH: "hold", Digit1: "trick1", Digit2: "trick2", Digit3: "trick3", Digit4: "trick4",
+  const KEY_ACTION = { KeyJ: "primary", KeyK: "secondary", KeyL: "tailSlap", KeyH: "hold", KeyQ: "potion", KeyR: "scream", KeyF: "fire", Digit1: "trick1", Digit2: "trick2", Digit3: "trick3", Digit4: "trick4",
     Numpad1: "trick1", Numpad2: "trick2", Numpad3: "trick3", Numpad4: "trick4" };
   function gesture() { audio.resume(); }
   function canAct() { return running && mode === "level" && active && !cinema.playing; }
@@ -376,6 +396,7 @@ function boot() {
   function act(name) {
     if (!canAct()) return false;
     if (name.charCodeAt(0) === 116 && name.charCodeAt(1) === 114 && !ui.tricksOn) return false; // "tr.." = trick keys only while a level shows them
+    if (svc.press(name)) return true; // an enabled ability slot used it (potion / scream / fire)
     return active.onAction ? active.onAction(name) === true : false;
   }
   function doJump() {
@@ -391,6 +412,7 @@ function boot() {
     keys[e.code] = true;
     gesture();
     if (e.code === "Enter") inp.skipHeld = true;
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyC") held.down = true;
     if (!running) return;
     const a = KEY_ACTION[e.code];
     if (a) { held[a] = true; act(a); }
@@ -402,7 +424,8 @@ function boot() {
   window.addEventListener("keyup", (e) => {
     keys[e.code] = false;
     const a = KEY_ACTION[e.code];
-    if (a) held[a] = false;
+    if (a) { held[a] = false; svc.release(a); }
+    else if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyC") held.down = false;
     else if (e.code === "Space") inp.jumpHeld = held.jump = false;
     else if (e.code === "Enter") inp.skipHeld = false;
     else if (e.code === "KeyE") held.interact = false;
@@ -415,6 +438,7 @@ function boot() {
     for (const k in keys) keys[k] = false;
     for (const k in held) held[k] = false;
     inp.sx = inp.sy = 0; inp.jumpHeld = false; inp.skipHeld = false;
+    io.mouseDown = io.dragOn = false; svc.abilities.cancel();
     mouseDrag = false; stickId = -1; lookId = -1;
     homeStick();
   }
@@ -446,8 +470,10 @@ function boot() {
     }
     if (!running) return;
     canvas.setPointerCapture(e.pointerId);
-    mouseDrag = true; lookX = e.clientX; lookY = e.clientY;
-    if (e.button === 0) { if (!tryPick(e)) act("primary"); }
+    // (with the gun out the left button aims and fires instead of orbiting; the right button still orbits)
+    mouseDrag = !(e.button === 0 && svc.abilities.shoot.on); lookX = e.clientX; lookY = e.clientY;
+    io.mouseX = e.clientX; io.mouseY = e.clientY;
+    if (e.button === 0) { io.mouseDown = held.primary = true; if (!tryPick(e)) act("primary"); }
     else if (e.button === 2) act("secondary");
   });
   function orbit(dx, dy, k) {
@@ -468,7 +494,7 @@ function boot() {
         lookX = e.clientX; lookY = e.clientY;
       }
     } else {
-      mouseX = e.clientX; mouseY = e.clientY; pickDirty = true;
+      mouseX = io.mouseX = e.clientX; mouseY = io.mouseY = e.clientY; pickDirty = true; io.mouseT = time.real;
       // a second mouse button pressed while one is held arrives as a pointermove (button 0 / 2), not a pointerdown
       if (running) {
         if (e.button === 0) act("primary");
@@ -484,21 +510,30 @@ function boot() {
     if (e.pointerId === stickId) { stickId = -1; inp.sx = inp.sy = 0; homeStick(); }
     if (e.pointerId === lookId) lookId = -1;
     if (e.pointerType !== "touch" && !e.buttons) mouseDrag = false;
+    if (e.pointerType !== "touch" && !(e.buttons & 1) && io.mouseDown) { io.mouseDown = held.primary = false; svc.release("primary"); }
   }
   window.addEventListener("pointerup", pointerEnd);
   window.addEventListener("pointercancel", pointerEnd);
   canvas.addEventListener("wheel", (e) => { e.preventDefault(); cam.wantDist = clamp(cam.wantDist + Math.sign(e.deltaY) * 0.4, cam.minDist, cam.maxDist); }, { passive: false });
 
   // on-screen buttons: fn on press; optional heldName keeps ctx.input.held(name) true while the finger is down
-  function bindButton(el, fn, heldName, always) {
+  // ability: true = a hold-and-release slot (potion / scream / fire): the release is reported to the services, and a finger
+  // dragged away from the button steers the potion aim (io.dragX / dragY)
+  function bindButton(el, fn, heldName, always, ability) {
+    let px = 0, py = 0, pid = -1;
     el.addEventListener("pointerdown", (e) => {
       e.preventDefault(); e.stopPropagation();
       gesture();
       el.classList.add("down");
       if (heldName) held[heldName] = true;
+      if (ability) { pid = e.pointerId; px = e.clientX; py = e.clientY; io.dragOn = true; io.dragX = io.dragY = 0; try { el.setPointerCapture(pid); } catch (err) { /* old browsers */ } }
       if (running || always) fn();
     });
-    const up = () => { el.classList.remove("down"); if (heldName) held[heldName] = false; if (heldName === "jump") inp.jumpHeld = false; if (heldName === "skip") inp.skipHeld = false; };
+    if (ability) el.addEventListener("pointermove", (e) => { if (e.pointerId === pid) { io.dragX = e.clientX - px; io.dragY = e.clientY - py; } });
+    const up = () => {
+      el.classList.remove("down"); if (heldName) held[heldName] = false; if (heldName === "jump") inp.jumpHeld = false; if (heldName === "skip") inp.skipHeld = false;
+      if (ability && pid >= 0) { pid = -1; svc.release(heldName); io.dragOn = false; }
+    };
     el.addEventListener("pointerup", up);
     el.addEventListener("pointerleave", up);
     el.addEventListener("pointercancel", up);
@@ -508,6 +543,10 @@ function boot() {
   bindButton(ui.el.btnZap, () => act("secondary"), "secondary");
   bindButton(ui.el.btnSlap, () => act("tailSlap"), "tailSlap");
   bindButton(ui.el.btnHold, () => act("hold"), "hold");
+  bindButton(ui.el.btnPotion, () => act("potion"), "potion", false, true);
+  bindButton(ui.el.btnScream, () => act("scream"), "scream", false, true);
+  bindButton(ui.el.btnFire, () => act("fire"), "fire", false, true);
+  bindButton(ui.el.btnDown, () => {}, "down");
   bindButton(ui.el.btnJump, () => { inp.jumpHeld = true; doJump(); }, "jump");
   bindButton(ui.el.action, doInteract, "interact");
   for (let i = 0; i < 4; i++) bindButton(ui.el.trk[i], () => act("trick" + (i + 1)), "trick" + (i + 1));
@@ -693,19 +732,24 @@ function boot() {
   }
 
   // ---- camera ----
-  const qT = new THREE.Quaternion(), vC = new THREE.Vector3();
+  const qT = new THREE.Quaternion(), vC = new THREE.Vector3(), camFocus = { x: 0, y: 0, z: 0 };
   function updateCamera(dt, rawDt) {
     if (cam.manualT > 0) cam.manualT -= dt;
-    else if (player.moving && lookId < 0 && !mouseDrag && !camCtl.taken) {
+    else if (player.moving && lookId < 0 && !mouseDrag && !camCtl.taken && !svc.vehicle.active) {
       // drift gently behind the walking platypus
       cam.yaw += Math.sin(wrap(player.yaw - cam.yaw)) * 0.75 * dt * Math.min(1, player.speed / 2);
     }
     const kx = Math.min(1, dt * 11), ky = Math.min(1, dt * 5);
-    cam.tx += (player.x - cam.tx) * kx;
-    cam.tz += (player.z - cam.tz) * kx;
-    // follow the ground, and only a third of a jump, so the leap reads against a steady frame
-    const gy = Math.max(floorAt(player.x, player.z), -0.3);
-    cam.ty += ((player.diving ? player.y : gy + Math.max(0, player.y - gy) * 0.35) + 0.38 - cam.ty) * ky;
+    if (svc.cameraFocus(camFocus, dt, cam.manualT > 0 || lookId >= 0 || mouseDrag || camCtl.taken)) {
+      // a vehicle has the controls (ctx.vehicle): the rig follows it instead of the platypus
+      cam.tx += (camFocus.x - cam.tx) * kx; cam.tz += (camFocus.z - cam.tz) * kx; cam.ty += (camFocus.y - cam.ty) * kx;
+    } else {
+      cam.tx += (player.x - cam.tx) * kx;
+      cam.tz += (player.z - cam.tz) * kx;
+      // follow the ground, and only a third of a jump, so the leap reads against a steady frame
+      const gy = Math.max(floorAt(player.x, player.z), -0.3);
+      cam.ty += ((player.diving ? player.y : gy + Math.max(0, player.y - gy) * 0.35) + 0.38 - cam.ty) * ky;
+    }
     cam.dist += (cam.wantDist - cam.dist) * Math.min(1, dt * 1.6);
     if (camCtl.taken) return;
     const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
@@ -762,7 +806,9 @@ function boot() {
       }
     } else slowT = 0;
 
+    svc.update(dt, raw);
     updatePlayer(dt);
+    music.update(raw);
     for (let i = 0; i < timers.length; i++) {
       const e = timers[i];
       e.t -= dt;
@@ -805,8 +851,10 @@ function boot() {
     pick.clear();
     speaker = null;
     releaseInput();
+    svc.reset();
     resetPlayer();
     platypus.group.visible = false;
+    music.stop(0.6);
     fx.clear(true);
     if (audio.stopAll) audio.stopAll(); else audio.stopAmbience();
     ui.resetHud();
@@ -816,7 +864,7 @@ function boot() {
     if (camera.fov !== baseFov) { camera.fov = baseFov; camera.updateProjectionMatrix(); }
     setWorld(null);
   }
-  // n: 1..5. Returns a promise that resolves true once the level is running (false if it was refused).
+  // n: 1..LEVEL_COUNT. Returns a promise that resolves true once the level is running (false if it was refused).
   function startLevel(n) {
     n |= 0;
     if (mode !== "menu" || n < 1 || n > LEVEL_COUNT || !progress.isUnlocked(n)) return Promise.resolve(false);
@@ -834,6 +882,7 @@ function boot() {
       cinema.reset();
       cinema.fade("black", 0);
       ui.setBlack(false, true);
+      svc.reset();
       resetPlayer();
       let L = levels[n - 1];
       if (!L) { L = levels[n - 1] = mod.createLevel(ctx); if (L.build) L.build(); }
@@ -881,6 +930,8 @@ function boot() {
       s.player = { x: player.x, y: player.y, z: player.z, yaw: player.yaw, grounded: player.grounded, inWater: player.inWater, speed: player.speed, enabled: player.enabled, swimming: player.swimming, diving: player.diving };
       s.cam = { yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist, taken: camCtl.taken };
       s.cinema = { playing: cinema.playing, faded: cinema.faded, eye: cinema.eye.openness };
+      s.svc = svc.state();
+      s.music = { state: music.state, intensity: music.intensity, bpm: music.bpm };
       s.timeScale = time.scale;
       s.fps = fps;
       s.pixelRatio = pr;
@@ -898,7 +949,7 @@ function boot() {
     quit() { leave(false); },
     tp(x, z, yaw) { player.teleport(x, z, yaw === undefined ? player.yaw : yaw); },
     look(yaw, pitch, dist) { cam.yaw = yaw; if (pitch !== undefined) cam.pitch = pitch; if (dist !== undefined) cam.wantDist = cam.dist = dist; cam.manualT = 1e9; },
-    ctx, player, cam, renderer, scene, camera, platypus, fx, audio, sun, hemi, ui, cinema, progress,
+    ctx, player, cam, renderer, scene, camera, platypus, fx, audio, sun, hemi, ui, cinema, progress, music, svc,
     get world() { return world; },
   };
   ctx.debug = dbg; // levels may hang their own handles here (level 1 adds game, cushions, wizard, human, dummies)

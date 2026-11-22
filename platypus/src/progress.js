@@ -1,12 +1,13 @@
 // progress.js - which levels are unlocked / beaten. Saved in localStorage; works (unsaved) without it.
 const KEY = "platypus.progress.v1";
-export const LEVEL_COUNT = 5;
+export const LEVEL_COUNT = 11;
 // Levels go live on platyfy one at a time as each is finished; everywhere else (local testing) all are open.
-const LIVE_RELEASED = 5;
+const LIVE_RELEASED = 6;
 const RELEASED = (typeof location !== "undefined" && /platyfy.com$/.test(location.hostname)) ? LIVE_RELEASED : LEVEL_COUNT;
 
 export function createProgress() {
-  const st = { unlocked: 1, beaten: [false, false, false, false, false] };
+  // (a save from the 5-level version has a 5-long `beaten`: the missing entries read as false)
+  const st = { unlocked: 1, beaten: new Array(LEVEL_COUNT).fill(false) };
   try {
     const raw = window.localStorage.getItem(KEY);
     const o = raw ? JSON.parse(raw) : null;
