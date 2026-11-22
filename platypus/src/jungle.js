@@ -463,6 +463,8 @@ export function createJungle(ctx) {
     return { c, cv, b };
   }
   for (let i = 0; i < giants.length; i++) { const g = giants[i]; solid(g.x, g.z, g.r, 8, true); }
+  // the fire pits: nobody walks through the flames (a low ring: no cover, no sight blocking)
+  for (const f of [P.fires[0], P.fires[1], P.fires[2], P.rivalFire]) colliders.push({ x: f.x, z: f.z, r: 0.7, on: true });
   for (let i = 0; i < mids.length; i++) colliders.push({ x: mids[i].x, z: mids[i].z, r: 0.26, on: true });
   for (let i = 0; i < rocks.length; i++) {
     const rk = rocks[i];
@@ -1547,7 +1549,14 @@ export function createJungle(ctx) {
     if (inList(FERNS, x, z)) { addCard(x, z, TILE.fern, rr(1.8, 2.4), rr(1.25, 1.6)); if (u < 0.5) addCard(x + rr(-0.5, 0.5), z + rr(-0.5, 0.5), TILE.broad, rr(1.5, 2), rr(1.5, 2)); continue; }
     const code = SURF_CODE[cellOf(x, z)];
     if (code === 3) { if (u < 0.8) addCard(x, z, t < 0.05 ? TILE.flowers : TILE.shortGrass, rr(0.9, 1.35), t < 0.05 ? rr(0.7, 1) : rr(0.34, 0.62)); continue; }
-    if (Math.hypot(x + 30, z - 42) < 7) { if (u < 0.85) addCard(x, z, t < 0.6 ? TILE.taro : TILE.broad, rr(2, 2.8), rr(1.7, 2.4)); continue; }
+    // the leaf grove (level 9): a ring of giant taro round an open floor, so the hanging leaves (radius 4.2) and the
+    // camera stay clear of the big cards
+    { const dg = Math.hypot(x + 30, z - 42);
+      if (dg < 5.6) { if (u < 0.45) addCard(x, z, TILE.shortGrass, rr(0.9, 1.2), rr(0.3, 0.5)); continue; }
+      if (dg < 8) { if (u < 0.85) addCard(x, z, t < 0.6 ? TILE.taro : TILE.broad, rr(2, 2.8), rr(1.7, 2.4)); continue; } }
+    // the foot of the vine wall and the bone yard (level 9): open ground to work in
+    if (Math.abs(x + 18) < 5 && z > 56 && z < 61.2) { if (u < 0.35) addCard(x, z, TILE.shortGrass, rr(0.9, 1.2), rr(0.3, 0.5)); continue; }
+    if (Math.hypot(x + 42, z - 22) < 5.2) { if (u < 0.3) addCard(x, z, TILE.shortGrass, rr(0.9, 1.2), rr(0.3, 0.5)); continue; }
     if (code === 5 || code === 4) { if (u < 0.08) addCard(x, z, code === 5 ? TILE.reeds : TILE.fern, rr(0.9, 1.3), rr(0.8, 1.3)); continue; }
     if (code === 1) continue;
     if (code === 2) { if (u < 0.5) addCard(x, z, t < 0.4 ? TILE.taro : t < 0.7 ? TILE.reeds : TILE.fern, rr(1.2, 1.8), rr(0.9, 1.5)); continue; }
@@ -1774,7 +1783,8 @@ export function createJungle(ctx) {
       for (let s = -1; s <= 1; s += 2) append(m, new THREE.BoxGeometry(2.2, 0.05, 1.0), TM(M, xf(0, 1.95, s * 0.42, s * 0.55, 0, 0)), (p) => mixc(leaf, dry, hash2(p.x * 3, p.z * 3)));
       for (let k = 0; k < 3; k++) {
         append(m, new THREE.CylinderGeometry(0.26, 0.2, 0.3, 8), TM(M, xf(-0.6 + k * 0.6, 1.04, 0.1 * (k - 1))), mulc(tan, 0.85 + 0.1 * k));
-        if (k < 2) append(m, new THREE.SphereGeometry(0.2, 6, 4), TM(M, xf(-0.6 + k * 0.6, 1.2, 0.1 * (k - 1), 0, 0, 0, 1, 0.6, 1)), k ? C(0x6b2d7a) : C(0xb3352b));
+        // nearly empty: a last handful in the bottom of two baskets (level 9: "the food store is almost empty")
+        if (k < 2) append(m, new THREE.SphereGeometry(0.11, 6, 4), TM(M, xf(-0.6 + k * 0.6 + 0.05, 1.16, 0.1 * (k - 1) - 0.04, 0, 0, 0, 1, 0.5, 1)), k ? C(0x6b2d7a) : C(0xb3352b));
       }
     }
     { // your sleeping hollow

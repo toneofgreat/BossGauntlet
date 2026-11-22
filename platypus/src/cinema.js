@@ -126,9 +126,11 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
 
   // ---------------- captions ----------------
   let capT = 0, capWho = null;
+  // while a line is up, the action prompt (which sits at the same height) moves above it (index.html: body.cap-on)
+  function capOn(v) { if (typeof document !== "undefined" && document.body) document.body.classList.toggle("cap-on", v); }
   // subtitle / narration line at the bottom. o: { who: "Wizard Wobble" (speaker label), narr: true (italic narration) }
   function caption(text, seconds, o) {
-    if (!text) { capEl.classList.remove("on"); capT = 0; return; }
+    if (!text) { capEl.classList.remove("on"); capOn(false); capT = 0; return; }
     const who = (o && o.who) || null;
     capEl.textContent = "";
     if (who) { const w = document.createElement("span"); w.className = "who"; w.textContent = who; capEl.appendChild(w); }
@@ -136,6 +138,7 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     capWho = who;
     capEl.classList.toggle("narr", !!(o && o.narr));
     capEl.classList.add("on");
+    capOn(true);
     capT = seconds || 2 + text.length * 0.06;
   }
 
@@ -504,7 +507,7 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
       const q = Math.round(cardOp * 50) / 50;
       if (q !== cardShown) { cardShown = q; cardEl.style.opacity = q; }
     }
-    if (capT > 0) { capT -= dt; if (capT <= 0) capEl.classList.remove("on"); }
+    if (capT > 0) { capT -= dt; if (capT <= 0) { capEl.classList.remove("on"); capOn(false); } }
     if (ey.on && ey.mode !== 0) stepEye(dt);
 
     if (seq.on) {

@@ -322,7 +322,17 @@ export function createLevel(ctx) {
     A("jungleAmbience", true, time === "night" ? "night" : time === "dawn" ? "dawn" : "day");
     sndT = 0;
   }
+  // The camp is the heaviest scene of the level (the crowd + five full platypus models + you): the named members
+  // cast no shadows in level 9 (the triangle budget; the crowd never does). exit() puts them back.
+  function tribeShadows(on) {
+    for (const k in MB) {
+      const m = MB[k], g = m && m.body && m.body.group;
+      if (!g) continue;
+      g.traverse((o) => { if (o.isMesh) { if (o.userData.l9Shadow === undefined) o.userData.l9Shadow = o.castShadow; o.castShadow = on ? o.userData.l9Shadow : false; } });
+    }
+  }
   function toJungle(time) {
+    tribeShadows(false);
     jungle.reset();
     jungle.curtain.open();
     ctx.setWorld(jungle);
@@ -1498,6 +1508,8 @@ export function createLevel(ctx) {
     if (step === "craft") return;
     step = "craft";
     crab.on = false; crab.g.visible = false;
+    if (crab.zone !== undefined) { FX("dangerCancel", crab.zone); crab.zone = undefined; }
+    berry.state = 3; tribe.food.clear(); platypus.setCarry(false); player.carrying = false;   // the berry stays behind in the sand
     setGoal(null);
     ui.setPing(null);
     dropMark("moss");
@@ -1875,15 +1887,17 @@ export function createLevel(ctx) {
   function onStrike(kind, result, count) {
     if (kind === "pulse") {
       // the ones drinking in the creek all go down to a single pulse
-      if (count > 0 && step === "rival") {
-        let n = 0;
+      // (checked whatever the combat module counted: a drinker that has just looked up is still standing in the creek)
+      let n = 0;
+      if (step === "rival") {
         for (let i = 0; i < drinkers.length; i++) {
           const e = drinkers[i];
           if (e.alive && dist2(player.x, player.z, e.x, e.z) < 11 && jungle.waterAt(e.x, e.z) > -1e6) { e.knockOut({ x: player.x, z: player.z }); n++; }
         }
         if (n > 1) ui.call("ALL OF THEM!", "one pulse", "perfect");
-        wakeDrinkers();
-      } else if (count === 0) ui.hint("Nothing in the water to hit.", 1.6);
+        if (n > 0 || count > 0) wakeDrinkers();
+      }
+      if (count === 0 && n === 0) ui.hint("Nothing in the water to hit.", 1.6);
       return;
     }
     if (result === "finish" || result === "takedown") cinema.shake(0.01, 0.15);
@@ -1959,6 +1973,7 @@ export function createLevel(ctx) {
 
   function enter() {
     hardStop();
+    tribe.maxFull = 3;              // the camp scenes sit at the triangle budget: three full models, the rest stand-ins
     ctx.colliders.push(benchCol);
     for (const k in MB) { const key = k; MB[k].onEvent = (type, data) => onMember(key, type, data); }
     combat.onEvent = onCombat;
@@ -2073,6 +2088,8 @@ export function createLevel(ctx) {
     hardStop();
     for (const k in MB) MB[k].onEvent = null;
     combat.onEvent = null;
+    tribeShadows(true);
+    tribe.maxFull = 4;
     combat.allyDamage = 12; combat.allyRate = 1.2;
     tribe.enemies = null;
     friend.onEvent = null;
@@ -2121,7 +2138,7 @@ export function createLevel(ctx) {
         step, met: st.met, food: st.food, rivals: combat ? combat.count("rival") : 0, bundles: st.bundles,
         leaf: st.leaf, vine: st.vine, bone: st.bone, pulls: st.pulls, armor: st.armor, hp: ctx.health.on ? ctx.health.hp : null,
         helm: st.helm, down: st.rivalsDown, carrying, chief: chiefOut ? (chiefBeaten ? "beaten" : "out") : (chiefBeaten ? "beaten" : "in"),
-        hunters: ctx.army.count, checkpoint: ctx.checkpoint.id, lair: inLair, beats: st.beats, craftPhase, nightPhase,
+        hunters: ctx.army.count, checkpoint: ctx.checkpoint.id, lair: inLair, beats: st.beats, craftPhase, nightPhase, sweep: craftPhase === 1 ? sweepFrac() : -1, zone: [zoneLo(), zoneHi()], actKey, meetBusy, nibHidden: nibG.hidden, nibOn: nibG.on, serving, crab: crab.state, needMoss, berry: berry.state,
       };
     },
     skipTo, win,

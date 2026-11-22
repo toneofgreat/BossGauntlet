@@ -197,7 +197,8 @@ export function extendUI(ui) {
   let chargeLast = -1, chargeLabel = null, chargeMinLast = -1;
   // frac 0..1 (null hides); min = the fraction from which a release counts (a tick on the bar)
   function setCharge(frac, label, min) {
-    if (frac === null || frac === undefined) { if (chargeLast !== -1) { charge.className = ""; chargeLast = -1; } return; }
+    if (frac === null || frac === undefined) { if (chargeLast !== -1) { charge.className = ""; chargeLast = -1; document.body.classList.remove("charge-on"); } return; }
+    if (chargeLast === -1) document.body.classList.add("charge-on");     // (index.html: the hint toast moves above the bar)
     const f = q(frac, 60);
     if (label !== undefined && label !== chargeLabel) { chargeLabel = label; chargeLab.textContent = label || ""; }
     if (min !== undefined && min !== chargeMinLast) { chargeMinLast = min; chargeMin.style.left = (min * 100).toFixed(1) + "%"; }

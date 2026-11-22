@@ -256,6 +256,7 @@ body.touch #stick.active { opacity: 1; }
 #action.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 #action .k { min-width: 26px; height: 26px; padding: 0 7px; display: grid; place-items: center; border-radius: 8px; background: var(--ink); color: #fff; font-size: 13px; }
 #action.down { transform: translate(-50%, 0) scale(.94); }
+body:not(.touch).cap-on #action { bottom: calc(12.5vh + 112px); }
 body.touch #action { left: auto; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 160px); transform: translate(0, 8px); font-size: 16px; padding: 10px 20px 10px 10px; }
 body.touch #action.on { transform: none; }
 body.touch #action.down { transform: scale(.94); }
@@ -392,6 +393,8 @@ body.dark #foe .name { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
 #flight.low .tape .mk { background: #ff5a4a; box-shadow: 0 0 8px #ff5a4a; }
 #charge { position: absolute; left: 50%; bottom: max(140px, 21vh); width: min(60vw, 280px); margin-left: calc(min(60vw, 280px) / -2); opacity: 0; transition: opacity .2s; text-align: center; pointer-events: none; }
 #charge.on { opacity: 1; }
+body.charge-on #toast { bottom: calc(max(140px, 21vh) + 50px); }
+body.touch.charge-on #toast { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 290px); }
 #charge .lab { display: block; font-size: 11px; font-weight: 800; letter-spacing: .3em; text-indent: .3em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.8); margin-bottom: 5px; }
 #charge .bar { position: relative; height: 12px; border-radius: 999px; background: rgba(20,10,30,.6); border: 2px solid #fff; overflow: hidden; }
 #charge .fill { height: 100%; background: linear-gradient(90deg, #b06cff, #ff5fd0); transform-origin: left center; transform: scaleX(0); }

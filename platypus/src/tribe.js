@@ -300,7 +300,8 @@ export function createTribe(ctx) {
   const foodIM = FOOD_KINDS.map((k) => makeInst(GEO[k], FOOD_N, "tribeFood-" + k));
   const FOOD_SCALE = [1.25, 1.3, 1.25, 1.2];
   function foodShow() {
-    for (let k = 0; k < 4; k++) { let any = false; for (let i = 0; i < FOOD_N; i++) if (fKind[i] === k) any = true; foodIM[k].visible = any; }
+    // only as many instances as the highest slot in use: the unused ones are zero-scaled but would still be drawn
+    for (let k = 0; k < 4; k++) { let hi = -1; for (let i = 0; i < FOOD_N; i++) if (fKind[i] === k) hi = i; foodIM[k].visible = hi >= 0; foodIM[k].count = hi + 1; }
   }
   function foodWrite(i) {
     const k = fKind[i];
@@ -364,6 +365,9 @@ export function createTribe(ctx) {
   // ================================================================ MATERIALS + the pieces on the bench
   // each kind is ONE InstancedMesh: slots 0..11 are the pickups, the rest are the pieces laid on the frame
   const BENCH_NEED = { leaf: 4, vine: 2, bone: 2 };
+  // instance layout per kind: the bench pieces first (MAT_OFF slots), then the MAT_N loose materials. Only as many
+  // instances as are in use are drawn (count), so the empty slots cost nothing.
+  const MAT_OFF = [4, 2, 2];
   const matIM = [makeInst(GEO.leaf, MAT_N + 4, "tribeLeaves"), makeInst(GEO.vine, MAT_N + 2, "tribeVines"), makeInst(GEO.bone, MAT_N + 2, "tribeBones")];
   const mKind = new Int8Array(MAT_N).fill(-1), mX = new Float32Array(MAT_N), mY = new Float32Array(MAT_N), mZ = new Float32Array(MAT_N);
   const mH = new Float32Array(MAT_N), mFall = new Float32Array(MAT_N), mPh = new Float32Array(MAT_N), mPop = new Float32Array(MAT_N);
@@ -371,14 +375,16 @@ export function createTribe(ctx) {
   const BEACON_COL = [0x9dff8a, 0xd8ff7a, 0xfff0c8];
   function matShow() {
     for (let k = 0; k < 3; k++) {
-      let any = bench.group.visible && (bench.have[MAT_KINDS[k]] > 0) && !benchHidden;
-      for (let i = 0; i < MAT_N; i++) if (mKind[i] === k) any = true;
-      matIM[k].visible = any;
+      const onBench = bench.group.visible && (bench.have[MAT_KINDS[k]] > 0) && !benchHidden;
+      let hi = -1;
+      for (let i = 0; i < MAT_N; i++) if (mKind[i] === k) hi = i;
+      matIM[k].visible = onBench || hi >= 0;
+      matIM[k].count = hi >= 0 ? MAT_OFF[k] + hi + 1 : onBench ? MAT_OFF[k] : 0;
     }
   }
   function matWrite(i) {
     const k = mKind[i];
-    for (let q = 0; q < 3; q++) if (q !== k) { matIM[q].setMatrixAt(i, ZERO); matIM[q].instanceMatrix.needsUpdate = true; }
+    for (let q = 0; q < 3; q++) if (q !== k) { matIM[q].setMatrixAt(MAT_OFF[q] + i, ZERO); matIM[q].instanceMatrix.needsUpdate = true; }
     if (k < 0) return;
     const bob = Math.sin(clock * 1.7 + mPh[i]) * 0.035;
     const hang = mH[i] > 0.05;
@@ -386,7 +392,7 @@ export function createTribe(ctx) {
     const y = mY[i] + mH[i] + (hang ? 0 : 0.16 + bob);
     const yaw = hang ? mPh[i] + Math.sin(clock * 0.9 + mPh[i]) * 0.3 : clock * 0.7 + mPh[i];
     const pitch = k === 0 ? (hang ? -1.25 + Math.sin(clock * 1.3 + mPh[i]) * 0.12 : 0.25) : mFall[i] > 0 ? clock * 5 : 0.12;
-    writeInst(matIM[k], i, mX[i], y, mZ[i], yaw, pitch, 0, 1 + mPop[i] * 0.5);
+    writeInst(matIM[k], MAT_OFF[k] + i, mX[i], y, mZ[i], yaw, pitch, 0, 1 + mPop[i] * 0.5);
   }
   const materials = {
     count: MAT_N,
@@ -475,7 +481,7 @@ export function createTribe(ctx) {
   const LEAF_X = [-0.3, -0.1, 0.1, 0.3];
   function benchPiece(k, j, lx, ly, lz, yaw, pitch, roll, sc) {
     const c = Math.cos(benchYaw), s = Math.sin(benchYaw);
-    writeInst(matIM[k], MAT_N + j, benchX + lx * c + lz * s, benchY + ly, benchZ - lx * s + lz * c, benchYaw + yaw, pitch, roll, sc);
+    writeInst(matIM[k], j, benchX + lx * c + lz * s, benchY + ly, benchZ - lx * s + lz * c, benchYaw + yaw, pitch, roll, sc);
   }
   function benchWrite() {
     const tight = clamp(bench.stage / 3 + cinch, -0.2, 1.3);
@@ -1583,25 +1589,31 @@ const sd = j % 2 ? -1 : 1;
   // at most FOUR full models: the nearest wanted ones to the camera get them, the rest become crowd stand-ins
   const camV = new THREE.Vector3();
   const standOn = new Uint8Array(STAND_INS);
+  const dropMask = new Uint8Array(32);
+  let maxFull = 4;
   function refreshShown() {
     const cam = ctx.camera;
     if (cam && cam.position) camV.copy(cam.position); else camV.set(P.x, P.y, P.z);
     let n = 0;
     for (let i = 0; i < memberList.length; i++) if (memberList[i]._want()) n++;
-    // the one to drop is the farthest; a model already shown is kept unless clearly farther (no flicker)
-    let drop = -1;
-    if (n > 4) {
-      let worst = -1;
+    // the farthest are dropped (tribe.maxFull, default 4); a model already shown is kept unless clearly farther (no flicker)
+    const cap = maxFull;
+    const drops = dropMask; drops.fill(0);
+    for (let k = n; k > cap; k--) {
+      let worst = -1, drop = -1;
       for (let i = 0; i < memberList.length; i++) {
         const m = memberList[i];
-        if (!m._want()) continue;
+        if (!m._want() || drops[i]) continue;
         const d = Math.hypot(m.x - camV.x, m.z - camV.z) + (m.shown ? 0 : 2.5);
         if (d > worst) { worst = d; drop = i; }
       }
+      if (drop >= 0) drops[drop] = 1;
     }
     for (let i = 0; i < memberList.length; i++) {
       const m = memberList[i];
-      const show = m._want() && i !== drop;
+      // far away (another part of the map) a member is drawn by its cheap crowd stand-in, not the full model
+      const far = m._want() && Math.hypot(m.x - camV.x, m.z - camV.z) > (m.shown ? 40 : 36);
+      const show = m._want() && !drops[i] && !far;
       if (show !== m.shown) m._setShown(show);
       const stand = m._want() && !show;
       if (!stand && standOn[i]) { standOn[i] = 0; if (crowd) crowd.hide(VILLAGE_MAX + i); }
@@ -1894,6 +1906,9 @@ const sd = j % 2 ? -1 : 1;
   }
 
   const tribe = {
+    // how many members may be full models at once (the rest are crowd stand-ins)
+    get maxFull() { return maxFull; },
+    set maxFull(v) { maxFull = Math.max(1, v | 0); },
     group, members, village, food, materials, bench,
     list: memberList,
     enemies: null, // optional: what a member in "fight" looks through when it has no target (combat.enemies)
