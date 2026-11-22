@@ -821,7 +821,7 @@ export function createLevel(ctx) {
     if (coughing) return;
     coughing = true; coughT = 0;
     step = "landing";
-    craft.rpmLimit = 0.8;
+    craft.rpmLimit = 0.83; // below the 0.85 it takes to climb, but a long, flat glide: the clearing is reachable from the rings' height
     A("warnBeep", true);
     cinema.shake(0.02, 0.4);
     M("play", "stealth", { intensity: 0.8, at: "now" });
@@ -991,7 +991,7 @@ export function createLevel(ctx) {
     if (coughing) {
       coughT += dt;
       // it sags further over the clearing (or if you dawdle): you cannot stay up
-      const lim = coughT > 45 ? 0.5 : (z > 1140 || coughT > 16) ? 0.7 : 0.8;
+      const lim = coughT > 45 ? 0.5 : (z > 1140 || coughT > 16) ? 0.7 : 0.83;
       if (craft.rpmLimit !== lim) { craft.rpmLimit = lim; cinema.shake(0.015, 0.3); }
       if (craft.grounded && craft.rpm < 0.85) endFlight(true, flight.inLanding(craft.x, craft.z));
       else if (z > flight.length - 12 || coughT > 70) { if (craft.crash) craft.crash("ground"); else endFlight(false); }

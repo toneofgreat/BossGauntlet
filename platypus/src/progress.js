@@ -2,7 +2,7 @@
 const KEY = "platypus.progress.v1";
 export const LEVEL_COUNT = 11;
 // Levels go live on platyfy one at a time as each is finished; everywhere else (local testing) all are open.
-const LIVE_RELEASED = 6;
+const LIVE_RELEASED = 7;
 const RELEASED = (typeof location !== "undefined" && /platyfy.com$/.test(location.hostname)) ? LIVE_RELEASED : LEVEL_COUNT;
 
 export function createProgress() {
