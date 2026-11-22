@@ -2176,10 +2176,11 @@ export function createCombat(ctx) {
         if (dx * dx + dz * dz < 16 && dx * Math.sin(e.yaw) + dz * Math.cos(e.yaw) > 0.3) e.carryRear = true;
       }
     }
+    let top = 0;
     for (let i = 0; i < H_MAX; i++) {
       const e = slots[i];
       if (!e) continue;
-      used++;
+      used++; top = i + 1;
       if (e.still) continue;
       drawHuman(e, dt);
       any = true;
@@ -2192,6 +2193,8 @@ export function createCombat(ctx) {
     for (let k = 0; k < segList.length; k++) {
       const s = segList[k];
       if (s.mesh.visible !== vis) s.mesh.visible = vis;
+      // only draw up to the highest slot in use (the empty slots are zero matrices, but still cost their triangles)
+      if (s.mesh.count !== top * s.per) s.mesh.count = top * s.per;
       if (any) { s.mesh.instanceMatrix.needsUpdate = true; s.aFx.needsUpdate = true; }
     }
   }

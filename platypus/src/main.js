@@ -759,8 +759,34 @@ function boot() {
     if (world) {
       const b = world.camBounds;
       if (b) { cx = clamp(cx, b.minX, b.maxX); cz = clamp(cz, b.minZ, b.maxZ); if (b.maxY !== undefined && cy > b.maxY) cy = b.maxY; }
-      const floor = floorAt(cx, cz) + 0.3;
-      if (cy < floor) cy = floor;
+      // a world may list tall blockers (tree trunks, standing stones): the camera comes in in front of them
+      // instead of filming the bark; cam.dist then eases back out by itself
+      const B = world.camBlockers;
+      if (B && B.length) {
+        const dx = cx - cam.tx, dz = cz - cam.tz, L2 = dx * dx + dz * dz;
+        let tMin = 1;
+        if (L2 > 1e-4) {
+          for (let i = 0; i < B.length; i++) {
+            const o = B[i];
+            if (o.col && !o.col.on) continue;
+            const ox = o.x - cam.tx, oz = o.z - cam.tz, r = o.r + 0.25;
+            const k = (ox * dx + oz * dz) / L2;
+            if (k <= 0 || k >= tMin + r / Math.sqrt(L2)) continue;
+            const px = ox - dx * k, pz = oz - dz * k, h2 = r * r - (px * px + pz * pz);
+            if (h2 <= 0) continue;
+            if (ox * ox + oz * oz < r * r) continue;             // standing against it: leave the camera be
+            const t = k - Math.sqrt(h2 / L2);
+            if (t > 0 && t < tMin) tMin = t;
+          }
+        }
+        if (tMin < 1) {
+          const keep = Math.max(0.9 / cam.dist, tMin - 0.05);
+          cam.dist = Math.max(0.9, cam.dist * keep);
+          cx = cam.tx + dx * keep; cz = cam.tz + dz * keep; cy = cam.ty + (cy - cam.ty) * keep;
+          const floor = floorAt(cx, cz) + 0.3;
+          if (cy < floor) cy = floor;
+        }
+      }
     }
     camera.position.set(cx, cy, cz);
     camera.lookAt(cam.tx, cam.ty + 0.22, cam.tz);

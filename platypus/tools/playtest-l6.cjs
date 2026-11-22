@@ -434,7 +434,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const vis = await page.waitForFunction(() => document.getElementById("victory").classList.contains("on"), { timeout: 10000 }).then(() => true, () => false);
     if (!vis) fallback("no level complete card");
     await sleep(1200); await shot("complete-card");
-    await page.click("#again");
+    for (let i = 0; i < 12; i++) { try { await page.click("#again"); } catch (_) {} await sleep(600); if ((await page.evaluate(() => window.__platy.state().mode)) !== "level") break; }   // Continue is disabled for a moment after the card shows (7ec3610)
   }
 
   const backToMenu = async (label) => {
@@ -490,7 +490,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       if (bad) fallback("skipTo('nonsense') returned true");
       await page.evaluate(() => window.__platy.win());
       await sleep(1200); await shot("win-on-title");
-      await page.click("#again");
+      for (let i = 0; i < 12; i++) { try { await page.click("#again"); } catch (_) {} await sleep(600); if ((await page.evaluate(() => window.__platy.state().mode)) !== "level") break; }   // Continue is disabled for a moment after the card shows (7ec3610)
       await backToMenu("after win() on the title");
       // skipTo chain
       await enterLevel("skip chain");
@@ -518,7 +518,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await page.evaluate(() => window.__platy.skipTo("fight"));
       await sleep(3000); await shot("reentry-fight");
       await page.evaluate(() => window.__platy.win());
-      await sleep(800); await page.click("#again");
+      await sleep(800); for (let i = 0; i < 12; i++) { try { await page.click("#again"); } catch (_) {} await sleep(600); if ((await page.evaluate(() => window.__platy.state().mode)) !== "level") break; }   // Continue is disabled for a moment after the card shows (7ec3610)
       await backToMenu("after win()");
       log("quit, re-entry, win() ok");
       // phone portrait + landscape
@@ -540,7 +540,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await shot("phone-landscape-" + b);
       }
       await page.evaluate(() => window.__platy.win());
-      await sleep(800); await page.tap("#again");
+      await sleep(800); for (let i = 0; i < 12; i++) { try { await page.tap("#again"); } catch (_) {} await sleep(600); if ((await page.evaluate(() => window.__platy.state().mode)) !== "level") break; }
       await backToMenu("after the phone run");
       await page.evaluate(() => { document.body.classList.remove("touch"); window.__platy.resetProgress(); });
       log("phone shots ok");

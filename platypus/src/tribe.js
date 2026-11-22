@@ -293,6 +293,17 @@ export function createTribe(ctx) {
     }
     return crowd;
   }
+  // the member stand-ins get their own small crowd: in the shared one they sat in the top slots, so the whole village
+  // (36 x 364 triangles of empty slots) was drawn whenever a single member was a stand-in, even with no village out
+  let standCrowd = null;
+  function getStandCrowd() {
+    if (!standCrowd) {
+      standCrowd = typeof PLATY.createPlatypusCrowd === "function" ? PLATY.createPlatypusCrowd(THREE, STAND_INS, { castShadow: false }) : makeNullCrowd(THREE, STAND_INS);
+      group.add(standCrowd.group);
+      for (let i = 0; i < STAND_INS; i++) standCrowd.hide(i);
+    }
+    return standCrowd;
+  }
 
   // ================================================================ FOOD
   const fKind = new Int8Array(FOOD_N).fill(-1), fX = new Float32Array(FOOD_N), fY = new Float32Array(FOOD_N), fZ = new Float32Array(FOOD_N), fYaw = new Float32Array(FOOD_N);
@@ -1616,14 +1627,14 @@ const sd = j % 2 ? -1 : 1;
       const show = m._want() && !drops[i] && !far;
       if (show !== m.shown) m._setShown(show);
       const stand = m._want() && !show;
-      if (!stand && standOn[i]) { standOn[i] = 0; if (crowd) crowd.hide(VILLAGE_MAX + i); }
+      if (!stand && standOn[i]) { standOn[i] = 0; if (standCrowd) standCrowd.hide(i); }
     }
   }
   function updateStandIns() {
     for (let i = 0; i < memberList.length; i++) {
       const m = memberList[i];
       if (!m._want() || m.shown) continue;
-      const c = getCrowd(), slot = VILLAGE_MAX + i;
+      const c = getStandCrowd(), slot = i;
       c.set(slot, m.x, m.y, m.z, m.yaw, m.def.standScale, m.def.fur);
       const a = m._standAnim();
       if (standOn[i] !== 1 || m._standName !== a) { m._standName = a; c.anim(slot, a, i * 0.37); c.paint(slot, m.def.paint || null); c.fade(slot, 1); }
@@ -1891,10 +1902,11 @@ const sd = j % 2 ? -1 : 1;
     updateMaterials(dt);
     updateBench(dt);
     if (crowd) { crowd.update(dt, clock); crowd.commit(); }
+    if (standCrowd) { standCrowd.update(dt, clock); standCrowd.commit(); }
   }
   function reset() {
     for (let i = 0; i < memberList.length; i++) memberList[i].reset();
-    for (let i = 0; i < STAND_INS; i++) { standOn[i] = 0; if (crowd) crowd.hide(VILLAGE_MAX + i); }
+    for (let i = 0; i < STAND_INS; i++) { standOn[i] = 0; if (standCrowd) standCrowd.hide(i); }
     village.clear();
     village.fire = village.burrows = village.threat = null;
     food.clear();
@@ -1915,7 +1927,7 @@ const sd = j % 2 ? -1 : 1;
     LOOKS: TRIBE_LOOKS,
     setWorld, update, reset,
     // the full models and the crowd, built now (behind the title card) rather than at the first visible = true
-    warm() { for (let i = 0; i < memberList.length; i++) memberList[i].body; getCrowd(); },
+    warm() { for (let i = 0; i < memberList.length; i++) memberList[i].body; getCrowd(); getStandCrowd(); },
   };
   return tribe;
 }

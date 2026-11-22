@@ -888,6 +888,11 @@ export function createPotions(ctx) {
       _p.sub(_ax);
       vfx("potionTrail", _p);
     }
+    // draw only up to the highest slot in use: the empty ones are zero matrices but still cost their triangles
+    let top = 0;
+    for (let i = 0; i < MAX_PICKUPS; i++) if (pk[i].on || pk[i].pop >= 0) top = i + 1;
+    for (let i = 0; i < MAX_FLYING; i++) if (fly[i].on) top = MAX_PICKUPS + i + 1;
+    flasks.count = Math.max(1, top);
     flasks.instanceMatrix.needsUpdate = true;
     flasksDirty = false;
     if (!flasks.visible) flasks.visible = true;

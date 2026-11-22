@@ -453,9 +453,11 @@ export function createJungle(ctx) {
   // ---- colliders, sight blockers, cover ----
   const colliders = [], cover = [], coverPoints = [];
   const BL = [];       // sight blockers { x, z, r, on }
+  const camBlockers = [];   // tall things (giant trunks, the stone circle) the follow camera must not sit behind: { x, z, r, col }
   function solid(x, z, r, h, blocks) {
     const c = { x, z, r, on: true };
     colliders.push(c);
+    if (h >= 2.5) camBlockers.push({ x, z, r, col: c });
     const cv = h > 0.5 ? { x, z, r, h } : null;
     if (cv) cover.push(cv);
     const b = blocks ? { x, z, r: r * 0.8, on: true } : null;
@@ -2131,7 +2133,7 @@ export function createJungle(ctx) {
   const world = {
     name: "jungle", group, swim: true, maxStep: 0.5, time: "day",
     heightAt, waterAt, depthAt, surfaceAt, sight, hidden, lit, shadeAt,
-    colliders, cover, coverPoints, confine,
+    colliders, cover, coverPoints, confine, camBlockers,
     camBounds: { minX: -65, maxX: 65, minZ: -55, maxZ: 96, maxY: 38 },
     env: ENV.day, ENV, LOOK,
     P, routes, arena, wreck, curtain, fires, rivalFire, rivalTotem,

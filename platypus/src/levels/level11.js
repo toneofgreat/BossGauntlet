@@ -27,6 +27,7 @@ const WAVES = [null, { soldiers: 8, officers: 0, cap: 6, music: 0.6 }, { soldier
 const WAVE_STEP = [null, "battle", "wave2", "wave3"], WAVE_CP = [null, "field", "wave2", "wave3"];
 const KING_STEP = ["king", "king2", "king3"], KING_CP = ["king0", "king1", "king2"];
 const ARMY_AT = { battle: 11, wave2: 13, wave3: 16, king: 20, king2: 22, king3: 24 }; // what skipTo gives you (a fair playthrough)
+const ALLY_HP = 90;           // the army takes three bolts, not two: it should grow through the battle, not melt
 const CD = { sting: 0.45, slap: 0.8, pulse: 2.5 };
 const BOSS_DMG = { sting: 8, slap: 12, finisher: 12, shot: 6 };
 const COUNTER = {
@@ -232,8 +233,19 @@ export function createLevel(ctx) {
     FX("setGround", dream.heightAt, null);
     place = "void";
   }
+  // The jungle scenes sit at the triangle budget (the army + the named members + you): there the named members
+  // cast no shadows and at most three are full models (as in levels 9 and 10). exit() puts them back.
+  function tribeLite(on) {
+    tribe.maxFull = on ? 3 : 4;
+    for (const k in tribe.members) {
+      const m = tribe.members[k], g = m && m.body && m.body.group;
+      if (!g) continue;
+      g.traverse((o) => { if (o.isMesh) { if (o.userData.l11Shadow === undefined) o.userData.l11Shadow = o.castShadow; o.castShadow = on ? false : o.userData.l11Shadow; } });
+    }
+  }
   function toJungle(time) {
     leaveWorld(jungle);
+    tribeLite(true);
     jungle.reset();
     jungle.group.add(combat.group, potions.group, boss.group, tribe.group);
     combat.setWorld(jungle); potions.setWorld(jungle); boss.setWorld(jungle); tribe.setWorld(jungle);
@@ -272,16 +284,27 @@ export function createLevel(ctx) {
   function addRok(x, z) {
     mem.rok.visible = true;
     mem.rok.place(x, z, PI);
-    return combat.addAlly(x, z, { hero: mem.rok });
+    return combat.addAlly(x, z, { hero: mem.rok, hp: ALLY_HP * 1.5 });
   }
   // a fresh army of n (Rok included) in rings round a point; the ten born in the tribe wear its white paint
   function makeArmy(n, x, z) {
     const paint = tribe.LOOKS && tribe.LOOKS.war ? tribe.LOOKS.war.paint : null;
     for (let i = 0; i < n - 1 && i < 39; i++) {
       const r = 1.1 + 0.6 * Math.floor(i / 7), a = (i % 7) / 7 * TAU + Math.floor(i / 7) * 0.45;
-      combat.addAlly(x + Math.sin(a) * r, z + Math.cos(a) * r, { look: i * 3 + 1, paint: i < 10 ? paint : null });
+      combat.addAlly(x + Math.sin(a) * r, z + Math.cos(a) * r, { look: i * 3 + 1, paint: i < 10 ? paint : null, hp: ALLY_HP });
     }
     addRok(x + 0.4, z - 1.6);
+  }
+  // the tribe never lets the line get too thin: between waves (and before the King) the ones who stayed at the camp
+  // come running, up to a floor. Without this one bad wave left two fighters for every retry after it.
+  function topUpArmy(floor, x, z) {
+    const need = Math.min(40, floor) - combat.allies.length;
+    if (need <= 0) return 0;
+    for (let i = 0; i < need; i++) {
+      const a = (i / Math.max(1, need)) * TAU, r = 1.6 + 0.5 * (i % 3);
+      combat.addAlly(x + Math.sin(a) * r, z + Math.cos(a) * r, { look: 60 + i * 3, hp: ALLY_HP });
+    }
+    return need;
   }
   // after a restart: the same ones back (combat.reset() remembered where they stood), up to the saved count
   function restoreArmy() {
@@ -345,7 +368,7 @@ export function createLevel(ctx) {
   function onThrow(from, to, seconds, apex, target) { potions.throw(from, to, seconds, apex, target); }
   function onTransform(body, x, z) {
     if (combat.allies.length >= 40) return null;
-    const ally = combat.addAlly(x, z, { newborn: true });
+    const ally = combat.addAlly(x, z, { newborn: true, hp: ALLY_HP });
     M("stinger", "armyUp");
     A("armyUp", combat.allies.length);
     if (!potionTaught) {
@@ -580,6 +603,7 @@ export function createLevel(ctx) {
   function fieldSpot() { return { x: J.barricade.x, z: J.barricade.z + 0.7, yaw: PI }; }
   function setupField(armyN) {
     tribe.village.hide();
+    tribe.maxFull = 1;               // the army + the soldiers + the King fill the budget: only Rok is a full model
     jungle.setZone("camp", false); jungle.setZone("arena", false); jungle.setZone("rival", false);
     A("tribeDrums", false);
     lineAtBarricade();
@@ -603,8 +627,10 @@ export function createLevel(ctx) {
         player.walkTo(s.x, s.z, { speed: 1, face: PI });
         A("tribeCheer", 0.5);
       } },
-      { shot: { pos: [c.pos.x, c.pos.y, c.pos.z], look: [c.look.x, c.look.y, c.look.z], fov: F(46),
-        to: { pos: [c.pos.x - 0.6, c.pos.y - 0.6, c.pos.z - 1.6] }, dur: 6 }, hold: false },
+      // from the field side, low: the tribe pours over the bank toward the camera (J.camField looks the other way, at
+      // the empty field)
+      { shot: { pos: [s.x + 3.2, gy(s.x, s.z) + 4.6, s.z - 6.2], look: [s.x - 1.2, gy(s.x, s.z) + 0.3, s.z + 3.2], fov: F(48),
+        to: { pos: [s.x + 2.6, gy(s.x, s.z) + 3.9, s.z - 5.2] }, dur: 6 }, hold: false },
       { fade: "clear", dur: 0.6 },
       { caption: "The whole tribe runs for the riverbank.", dur: 3, narr: true },
       { call: () => A("thunder", 0.35) },
@@ -624,6 +650,7 @@ export function createLevel(ctx) {
     kitOn(3, 30);
     setupField(ARMY_AT[key]);
     potionTaught = n > 1;
+    tribe.maxFull = 1;
     cinema.fade("clear", 0.9);
     beginBattle(n);
   }
@@ -636,6 +663,8 @@ export function createLevel(ctx) {
     M("duck", 0, 0.3);
     M("play", "combat", { intensity: WAVES[n].music });
     const s = fieldSpot();
+    if (n > 1 && ab.potion.count < 3) ab.potion.add(Math.min(2, 3 - ab.potion.count));
+    if (n > 1 && topUpArmy(ARMY_AT[WAVE_STEP[n]] - 3, s.x, s.z + 2.2)) later(3.4, () => ui.hint("More of the tribe run to the line!", 3));
     ctx.checkpoint.set(WAVE_CP[n], { x: s.x, z: s.z, yaw: s.yaw, label: n === 1 ? "The riverbank" : "Wave " + n, restore: restoreBattle });
     snapshot();
     applyAssist();
@@ -662,7 +691,7 @@ export function createLevel(ctx) {
     potions.reset();
     restoreArmy();
     combat.order("attack");
-    refill(save.potions, save.ammo);
+    refill(Math.max(save.potions, 2), Math.max(save.ammo, 15));
     firstBody = false;
     step = WAVE_STEP[n];
     applyAssist();
@@ -768,8 +797,10 @@ export function createLevel(ctx) {
       later(3.2, () => beginBattle(n + 1));
       return;
     }
-    // the storm breaks
+    // the storm breaks; Tika's flasks left at the barricade go into your pack
     removeFleeing();
+    if (potions.count > 0) { ab.potion.add(potions.count); potions.clear(); }
+    combat.bodyTTL = 0.5;            // the fallen sink away while the banner is up (the march is at the triangle budget)
     ui.objectiveDone();
     jungle.setTime("dawn", 12);
     A("rain", 0);
@@ -782,8 +813,19 @@ export function createLevel(ctx) {
 
   // ---- the ground shakes: the old king ----
   function kingSpot() { return { x: J.arena.x - 2.6, z: J.arena.z + 2.6, yaw: 1.62 }; }
+  // the King casts no shadow while he sits on the throne far off (the march sits at the triangle budget with the
+  // whole army behind you); he gets it back when the fight starts
+  // In the fight ("fight" mode) the King and you cast shadows from the furred body only: the leather and the armor
+  // add little to the silhouette and the shadow pass was what pushed the fight over the triangle budget.
+  function kingShadow(on) {
+    const g = boss.body ? boss.body.group : boss.group;
+    const lite = (o) => /Leather/.test(o.name);
+    g.traverse((o) => { if (o.isMesh) { if (o.userData.l11Shadow === undefined) o.userData.l11Shadow = o.castShadow; o.castShadow = on ? o.userData.l11Shadow && !lite(o) : false; } });
+    platypus.group.traverse((o) => { if (o.isMesh && lite(o)) { if (o.userData.l11Shadow === undefined) o.userData.l11Shadow = o.castShadow; o.castShadow = on === "restore" || !on ? o.userData.l11Shadow : false; } });
+  }
   function showKing() {
     jungle.setZone("arena", null);
+    kingShadow(false);
     boss.group.visible = true;
     bossShown = true;
     const k = kingSpot();
@@ -803,6 +845,7 @@ export function createLevel(ctx) {
   }
   function beginMarch() {
     step = "march";
+    combat.bodyTTL = 1.5;
     wave = 0;
     clearGoal();
     showKing();
@@ -830,7 +873,7 @@ export function createLevel(ctx) {
   // =====================================================================================================
   // PART 3 - the Platypus King
   // =====================================================================================================
-  function kingStart() { return { x: J.arenaIn.x - 3.2, z: J.arenaIn.z - 0.4, yaw: -1.5 }; }
+  function kingStart() { return { x: J.arenaIn.x - 3.2, z: J.arenaIn.z + 1.4, yaw: -1.55 }; }   // north of the east stone, a clear view of the throne
   function setKingCheckpoint(n) {
     const s = kingStart();
     ctx.checkpoint.set(KING_CP[n], { x: s.x, z: s.z, yaw: s.yaw, label: n === 0 ? "The stone circle" : "The King: phase " + (n + 1), restore: restoreKing });
@@ -841,17 +884,18 @@ export function createLevel(ctx) {
     step = "king";
     player.enabled = false;
     player.stop();
+    { const k = kingStart(); topUpArmy(ARMY_AT.king - 4, k.x + 4, k.z); }
     setKingCheckpoint(0);
     const g = gen, c = J.camArena, kb = boss.body ? boss.body.group : boss.group, s = kingStart();
     const roar = () => { if (!boss.started) { boss.start(); cinema.shake(0.06, 1.0); } };
     cinema.play([
       { call: () => { combat.order("hold", HOLD); player.walkTo(s.x, s.z, { speed: 0.6, face: s.yaw }); } },
       { shot: { pos: [c.pos.x, c.pos.y, c.pos.z], look: kb, lookY: 0.9, fov: F(44),
-        to: { pos: [c.pos.x + 2, c.pos.y - 4.5, c.pos.z + 6] }, dur: 4.2, ease: "inOut" }, hold: false },
+        to: { pos: [c.pos.x + 5, c.pos.y - 4.5, c.pos.z + 3] }, dur: 4.2, ease: "inOut" }, hold: false },   // past the south stone, not through it
       { wait: 0.8 },
       { caption: "On the fallen idol, as on a throne: the Platypus King.", dur: 3.4, narr: true },
-      { shot: { pos: [s.x + 1.2, gy(s.x, s.z) + 0.45, s.z - 1.4], look: kb, lookY: 1.25, fov: F(36),
-        to: { pos: [s.x + 0.9, gy(s.x, s.z) + 0.4, s.z - 1.1] }, dur: 3.6 }, hold: false },
+      { shot: { pos: [s.x + 1.2, gy(s.x, s.z) + 0.45, s.z + 0.9], look: kb, lookY: 1.25, fov: F(36),
+        to: { pos: [s.x + 0.9, gy(s.x, s.z) + 0.4, s.z + 0.7] }, dur: 3.6 }, hold: false },
       { wait: 0.9 },
       { call: roar },
       { wait: 2.3 },
@@ -865,6 +909,7 @@ export function createLevel(ctx) {
     kitOn(n === 0 ? 3 : 4, 30);
     lineAtBarricade();
     tribe.village.hide();
+    tribe.maxFull = 1;
     jungle.setZone("camp", false); jungle.setZone("rival", false);
     showKing();
     const s = kingStart();
@@ -880,6 +925,8 @@ export function createLevel(ctx) {
   }
   function beginKing(n) {
     step = KING_STEP[n];
+    kingShadow(true);
+    combat.bodyTTL = Infinity;
     bossOn = true; bossShown = true; finalOn = false;
     boss.group.visible = true;
     boss.onEvent = onBoss;
@@ -911,7 +958,7 @@ export function createLevel(ctx) {
     combat.reset();
     potions.reset();
     restoreArmy();
-    refill(save.potions, save.ammo);
+    refill(Math.max(save.potions, 2), Math.max(save.ammo, 15));
     boss.setPhase(n);
     syncPillars();
     M("duck", 0, 0.2);
@@ -1044,8 +1091,8 @@ export function createLevel(ctx) {
     const sy = Math.sin(boss.yaw), cy = Math.cos(boss.yaw), h = gy(boss.x, boss.z);
     cinema.play([
       // low, from his side: he rears to his full height
-      { shot: { pos: [boss.x + cy * 5.2 + sy * 1.5, h + 0.5, boss.z - sy * 5.2 + cy * 1.5], look: kb, lookY: 1.6, fov: F(40),
-        to: { pos: [boss.x + cy * 4.4 + sy * 2.2, h + 0.7, boss.z - sy * 4.4 + cy * 2.2] }, dur: 5 }, hold: false },
+      { shot: { pos: [boss.x + cy * 6.6 + sy * 1.5, h + 0.6, boss.z - sy * 6.6 + cy * 1.5], look: kb, lookY: 1.6, fov: F(42),
+        to: { pos: [boss.x + cy * 5.9 + sy * 2.2, h + 0.8, boss.z - sy * 5.9 + cy * 2.2] }, dur: 5 }, hold: false },
       { until: () => fCrown, max: 7 },
       // the crown
       { shot: { pos: [boss.x - sy * 3.4 + cy * 2.2, h + 0.4, boss.z - cy * 3.4 - sy * 2.2], look: boss.crown.group, lookY: 0.05, fov: F(26), dur: 0, hand: 0.25 }, hold: false },
@@ -1071,6 +1118,12 @@ export function createLevel(ctx) {
   // everything of the fight put away; the bottle and the paper lie by his paw
   function calmAfter() {
     bossOn = false; finalOn = false;
+    kingShadow(true); kingShadow(false);   // he lies still: no shadow for him (yours stays fur-only until the trail)
+    platypus.group.traverse((o) => { if (o.isMesh && /Leather/.test(o.name)) o.castShadow = false; });
+    // most of the army goes back to the camp with the wounded (the farewell is at the triangle budget otherwise)
+    if (combat.allies.length > 12) combat.setAllies(12);
+    ctx.army.show(false);
+    tribe.maxFull = 1;               // the others are back at the barricade: only Rok, beside you, is a full model
     ctx.setTimeScale(1, 0.3);
     ui.boss.hide();
     ctx.health.shield = true;
@@ -1149,10 +1202,11 @@ export function createLevel(ctx) {
     player.enabled = false; player.stop();
     const dx = player.x - L.x, dz = player.z - L.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d, y = L.y || gy(L.x, L.z);
     player.face = Math.atan2(-ux, -uz); player.lock = 0.6;
+    L.setGlow(0.3);   // dim first, so the glass and the heart read; then it wakes (a brighter glow burns to white)
     cinema.play([
-      { shot: { pos: [L.x + ux * 0.62 + uz * 0.12, y + 0.26, L.z + uz * 0.62 - ux * 0.12], look: [L.x, y + 0.13, L.z], fov: F(30),
-        to: { pos: [L.x + ux * 0.5 + uz * 0.05, y + 0.22, L.z + uz * 0.5 - ux * 0.05] }, dur: 5.2, ease: "out" }, hold: false },
-      { call: () => { L.setGlow(1.2); A("livingPotion"); } },
+      { shot: { pos: [L.x + ux * 0.86 + uz * 0.16, y + 0.3, L.z + uz * 0.86 - ux * 0.16], look: [L.x, y + 0.14, L.z], fov: F(30),
+        to: { pos: [L.x + ux * 0.72 + uz * 0.07, y + 0.26, L.z + uz * 0.72 - ux * 0.07] }, dur: 5.2, ease: "out" }, hold: false },
+      { call: () => { L.setGlow(0.7); A("livingPotion"); } },
       { wait: 1.2 },
       { caption: "LIVING POTION.", dur: 3.4 },
       { shot: { pos: [player.x + uz * 1.5 + ux * 1.1, y + 0.55, player.z - ux * 1.5 + uz * 1.1], look: platypus.group, lookY: 0.22, fov: F(34), dur: 0 } },
@@ -1184,6 +1238,10 @@ export function createLevel(ctx) {
     player.enabled = false; player.stop();
     p.setReadable(0); readV = readTo = 0;
     boss.paperShot(pc);
+    // high enough to hold the whole sheet in frame (the module's 0.45 m fills the frame with paper and nothing else)
+    // and from the side the words face (the module's offset films the sheet upside down)
+    pc.pos.x = pc.look.x + (pc.look.x - pc.pos.x) * 1.6; pc.pos.z = pc.look.z + (pc.look.z - pc.pos.z) * 1.6;
+    pc.pos.y = pc.look.y + 0.78;
     const y = p.y || gy(p.x, p.z);
     cinema.play([
       { call: () => A("paperUnfold") },
@@ -1212,9 +1270,10 @@ export function createLevel(ctx) {
     return { dx, dz };
   }
   function placeFarewell() {
+    tribe.maxFull = 3;               // Burra, Rok and Nib say goodbye as themselves (Moss stands back, a stand-in)
     const s = farewellSpots(), px = player.x, pz = player.z, yaw = Math.atan2(-s.dx, -s.dz);
     const at = (r, a) => ({ x: px + (s.dx * Math.cos(a) - s.dz * Math.sin(a)) * r, z: pz + (s.dz * Math.cos(a) + s.dx * Math.sin(a)) * r });
-    const b = at(2.6, 0), r = at(3.3, 0.55), m = at(3.3, -0.55), n = at(2.0, 0.95);
+    const b = at(2.6, 0), r = at(3.3, 0.55), m = at(4.4, -0.6), n = at(2.0, 0.95);
     member(mem.burra, b.x, b.z, yaw, "sit", { at: b, lookAt: platypus.group });
     mem.rok.do("guard", { at: r, yaw });
     mem.rok.place(r.x, r.z, yaw);
@@ -1256,6 +1315,8 @@ export function createLevel(ctx) {
   // =====================================================================================================
   function beginTrail() {
     step = "trail";
+    tribe.maxFull = 1;               // they stay behind: only the nearest is a full model
+    kingShadow(false);
     trailStage = 0;
     if (paperPick) { paperPick.remove(); paperPick = null; }
     player.enabled = true;
@@ -1307,7 +1368,7 @@ export function createLevel(ctx) {
     const bx = player.x + fx0 * 0.85 + rx * 0.55, bz = player.z + fz0 * 0.85 + rz * 0.55;
     ctx.gear.remove("back");
     potions.living.place(bx, undefined, bz);
-    potions.living.setGlow(1.3);
+    potions.living.setGlow(0.8);
     combat.spawn("soldier", bx + fx0 * 1.5 + rx * 1.3, bz + fz0 * 1.5 + rz * 1.3, { passive: true, post: true, yaw: Math.atan2(-fx0 - rx, -fz0 - rz) });
     cinema.letterbox(true);
     cinema.shot({ pos: [player.x - fx0 * 1.0 - rx * 0.5, h + 0.24, player.z - fz0 * 1.0 - rz * 0.5], look: [bx, gy(bx, bz) + 0.1, bz], fov: F(38),
@@ -1628,6 +1689,9 @@ export function createLevel(ctx) {
 
   function exit() {
     hardStop();
+    tribeLite(false);
+    kingShadow("restore");
+    { const g = boss.body ? boss.body.group : boss.group; g.traverse((o) => { if (o.isMesh && o.userData.l11Shadow !== undefined) o.castShadow = o.userData.l11Shadow; }); }
     cinema.eye.clear();
     cinema.tint(null);
     A("stopAll");

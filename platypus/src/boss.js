@@ -269,6 +269,8 @@ const CAPE_FRAG_COLOR = [
 // The paper. Two textures drawn once on the same parchment in the same ink: what the platypus sees
 // (confident, meaningless loops and hooks) and what the player may read for a moment.
 // ---------------------------------------------------------------------------------------------
+// the paper rests this high over the ground: above the stone circle's paving (0.035 over the terrain), never under it
+const PAPER_LIFT = 0.045;
 const PAPER_LINES = ["NEVER", "APPROACH", "THE FARLANDS"];
 function drawPaper(readable) {
   if (typeof document === "undefined") return null;
@@ -1373,7 +1375,7 @@ export function createBoss(ctx) {
     cam: { pos: new THREE.Vector3(), look: new THREE.Vector3() },
     place(x, z) {
       pfT = -1;
-      paper.x = +x || 0; paper.z = +z || 0; paper.y = groundAt(paper.x, paper.z) + 0.012;
+      paper.x = +x || 0; paper.z = +z || 0; paper.y = groundAt(paper.x, paper.z) + PAPER_LIFT;
       paperGroup.position.set(paper.x, paper.y, paper.z);
       paperGroup.rotation.set(0, pfYaw, 0);
       paperGroup.visible = true;
@@ -1381,7 +1383,7 @@ export function createBoss(ctx) {
       paperShot(paper.cam);
     },
     flutterDown(x, z) {
-      pfX = +x || 0; pfZ = +z || 0; pfGround = groundAt(pfX, pfZ) + 0.012; pfY0 = pfGround + 1.7;
+      pfX = +x || 0; pfZ = +z || 0; pfGround = groundAt(pfX, pfZ) + PAPER_LIFT; pfY0 = pfGround + 1.7;
       pfYaw = boss.yaw + 0.6;
       pfT = 0; paper.resting = false;
       paperGroup.visible = true;
