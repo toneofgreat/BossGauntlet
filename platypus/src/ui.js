@@ -27,7 +27,7 @@ export function createUI() {
   const restart = (node, cls) => { node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); };
 
   let touch = false;
-  let againCb = null;
+  let againCb = null, againAt = 0; // clicks on Continue are ignored for a moment after the card appears (spammed attacks must not dismiss it)
 
   // ---------- timeline (intro and other delayed UI things) ----------
   const timeline = [];
@@ -58,7 +58,7 @@ export function createUI() {
       if (levelCb) levelCb(n);
     });
   }
-  el.again.addEventListener("click", () => { if (againCb) { const cb = againCb; againCb = null; cb(); } });
+  el.again.addEventListener("click", () => { if (performance.now() < againAt) return; if (againCb) { const cb = againCb; againCb = null; cb(); } });
 
   function tipText() { return touch ? "tap a circle" : "click a circle"; }
   function setReady() {
@@ -497,6 +497,9 @@ export function createUI() {
     el.vicSub.textContent = o.sub === undefined ? "The Cushion Fields are safe again." : o.sub;
     el.again.textContent = o.button || "Continue";
     againCb = cb;
+    againAt = performance.now() + 1500;
+    el.again.style.opacity = "0.35"; setTimeout(() => { el.again.style.opacity = ""; }, 1500);
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     clearSpeech();
     el.hud.classList.remove("on");
     el.victory.classList.add("on");
