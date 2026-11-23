@@ -1449,7 +1449,7 @@ export function createLevel(ctx) {
   }
   function left(list) { let n = 0; for (let i = 0; i < list.length; i++) if (dream.pillars.standing(list[i])) n++; return n; }
   function screamOn(minCharge, cooldown) {
-    ab.scream.enable({ chargeTime: 1.2, minCharge, cooldown });
+    ab.scream.enable({ chargeTime: 1.2, minCharge, cooldown: Math.min(cooldown, 2), tap: true }); // owner: one click screams at full power
     ab.scream.onStart = onScreamStart;
     ab.scream.onCharge = onScreamCharge;
     ab.scream.onRelease = onScream;
@@ -1465,7 +1465,7 @@ export function createLevel(ctx) {
     const P = dream.P;
     if (which === "a") {
       screamOn(0.25, 3);
-      ui.hint(keyHint("Hold R to breathe in. Let go to scream.", "Hold the Scream button to breathe in. Let go to scream."), 6);
+      ui.hint(keyHint("Press R to scream!", "Tap the Scream button to scream!"), 6);
     } else if (which === "b") {
       screamOn(0.6, 3);          // the tick on the bar moves to 0.6: a small breath no longer carries
     } else if (which === "c") {
@@ -1482,9 +1482,9 @@ export function createLevel(ctx) {
   }
   function lessonObjective() {
     const Q = dream.pillars;
-    if (lesson === "a") objective("a" + left(Q.near), keyHint("Hold R, then let go", "Hold Scream, then let go"), "near pillars " + (3 - left(Q.near)) + " / 3");
-    else if (lesson === "b") objective("b" + left(Q.mid), "Break the middle ring", (5 - left(Q.mid)) + " / 5 · hold past the mark");
-    else if (lesson === "c") objective("c" + Q.left, "All of them", (12 - Q.left) + " / 12 · from the rise, a full breath");
+    if (lesson === "a") objective("a" + left(Q.near), keyHint("Press R to scream", "Tap Scream"), "near pillars " + (3 - left(Q.near)) + " / 3");
+    else if (lesson === "b") objective("b" + left(Q.mid), "Break the middle ring", (5 - left(Q.mid)) + " / 5");
+    else if (lesson === "c") objective("c" + Q.left, "All of them", (12 - Q.left) + " / 12 · scream from the rise");
     else if (lesson === "d") objective("d" + combat.alive, "Drop them all with one breath", (8 - combat.alive) + " / 8");
   }
   function onScreamStart() { if (platypus.screamCharge) platypus.screamCharge(0.02); }
@@ -1538,8 +1538,7 @@ export function createLevel(ctx) {
       lesson = "";
       wizSay([{ t: "Yes! Bigger breath, bigger voice.", g: "cheer" }, { t: "Come up here.", g: "point" }], () => beginLesson("c"));
     } else if (lesson === "c" && !wizBusy()) {
-      if (p < 0.93) wizSay([{ t: "More! Hold it until the bar glows." }]);
-      else if (!nearP(P.rise, 5)) wizSay([{ t: "Come up here, beside me. Then again.", g: "point" }]);
+      if (!nearP(P.rise, 5)) wizSay([{ t: "Come up here, beside me. Then again.", g: "point" }]);
     } else if (lesson === "a" && !wizBusy()) wizSay([{ t: "Closer to the glass. Then again." }]);
     lessonObjective();
   }

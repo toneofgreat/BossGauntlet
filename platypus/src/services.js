@@ -514,7 +514,7 @@ export function createServices(e) {
       scream.on = true; scream.cooldownLeft = 0;
       if (!keep) { scream.charging = false; scream.charge = 0; ui.setCharge(null); ui.setArmed("scream", false); }
       sOpt.chargeTime = o.chargeTime || 1.2; sOpt.minCharge = o.minCharge === undefined ? 0.25 : o.minCharge;
-      sOpt.cooldown = o.cooldown === undefined ? 6 : o.cooldown; sOpt.label = o.label || "SCREAM";
+      sOpt.cooldown = o.cooldown === undefined ? 6 : o.cooldown; sOpt.label = o.label || "SCREAM"; sOpt.tap = !!o.tap;
       refreshAbil(); ui.setCooldown("scream", 0);
     },
     disable() { screamDrop(); scream.on = false; refreshAbil(); },
@@ -532,6 +532,13 @@ export function createServices(e) {
     if (!scream.on) return false;
     if (scream.charging || !player.enabled || vehicle.active) return true;
     if (scream.cooldownLeft > 0) { ui.hint("Catch your breath...", 1.0); return true; }
+    if (sOpt.tap) { // one click = a full scream (no hold needed)
+      if (health.dead) return true;
+      scream.charge = 1; scream.cooldownLeft = sOpt.cooldown; scream.fired++;
+      if (scream.onRelease) scream.onRelease(1);
+      scream.charge = 0;
+      return true;
+    }
     scream.charging = true; scream.charge = 0;
     ui.setArmed("scream", true);
     if (scream.onStart) scream.onStart();
