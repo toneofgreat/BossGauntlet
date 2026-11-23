@@ -858,7 +858,8 @@ uniform float uLairAmp;`);
     // Redraws the dot matrix (only here). Up to 10 characters; the dots shrink to fit long texts.
     setText(text) {
       const str = String(text === undefined || text === null ? "" : text).toUpperCase().slice(0, 10);
-      timer.text = str;
+      if (str === timer.text && timer.drawn) return;
+      timer.text = str; timer.drawn = true;
       const n = str.length, textCols = Math.max(0, n * 6 - 1);
       const cols = Math.min(TW, Math.max(40, textCols + 4)), rows = Math.min(TH, Math.max(9, Math.round(cols / 4)));
       timerData.fill(0);

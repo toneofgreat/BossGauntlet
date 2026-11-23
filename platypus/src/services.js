@@ -171,7 +171,7 @@ export function createServices(e) {
     set(hp) { if (!health.on) return; health.hp = clamp(hp, 0, health.max); paintHealth(); },
     // straight to the death + restart, whatever the mercy time says (caught by a guard, fell into the lava, crashed)
     kill(src) {
-      if (!health.on || health.dead || checkpoint.respawning) return false;
+      if (!health.on || health.dead || checkpoint.respawning || cinema.playing) return false;
       health.hp = 0; paintHealth(); die(src || null);
       return true;
     },
@@ -234,7 +234,14 @@ export function createServices(e) {
       rsT -= raw;
       if (rsT > 0) return;
       rsStage = 2;
-      cinema.fade("black", (rsOpt && rsOpt.fade) || 0.22, () => { if (rsStage === 2) { rsStage = 3; rsT = 0.12; } });
+      // stage 2 runs on its own clock: a fade callback could be dropped by any other fade call
+      rsT = (rsOpt && rsOpt.fade) || 0.22;
+      cinema.fade("black", rsT);
+    } else if (rsStage === 2) {
+      rsT -= raw;
+      if (rsT > 0) return;
+      cinema.fade("black", 0); // whatever else touched the fade, the cut is hidden
+      rsStage = 3; rsT = 0.12;
     } else if (rsStage === 3) {
       rsT -= raw;
       if (rsT > 0) return;
@@ -496,18 +503,31 @@ export function createServices(e) {
     onCharge: null, // (frac 0..1) every frame while charging
     onRelease: null, // (power 0..1) THE SCREAM: play platypus.scream, audio.scream, fx.screamWave, combat.blast here
     onFizzle: null, // () let go too early (below minCharge): a squeak
+    onCancel: null, // () a breath was dropped without a scream (a cutscene, the player locked, disable()): undo the inhale pose / sound
+    fired: 0, fizzled: 0, // counters (debug seam)
     // o: { chargeTime: 1.2 (seconds to full), minCharge: 0.25, cooldown: 6 (seconds at full power; scales 50..100 % with power), label: "SCREAM" }
     enable(o) {
       o = o || {};
-      scream.on = true; scream.charging = false; scream.charge = 0; scream.cooldownLeft = 0;
+      // a breath held across a re-enable (a lesson moving on while the key is down) is kept: dropping it here
+      // left the bar and the armed button frozen, and the release then did nothing
+      const keep = scream.on && scream.charging;
+      scream.on = true; scream.cooldownLeft = 0;
+      if (!keep) { scream.charging = false; scream.charge = 0; ui.setCharge(null); ui.setArmed("scream", false); }
       sOpt.chargeTime = o.chargeTime || 1.2; sOpt.minCharge = o.minCharge === undefined ? 0.25 : o.minCharge;
       sOpt.cooldown = o.cooldown === undefined ? 6 : o.cooldown; sOpt.label = o.label || "SCREAM";
       refreshAbil(); ui.setCooldown("scream", 0);
     },
-    disable() { scream.on = false; scream.charging = false; ui.setCharge(null); ui.setArmed("scream", false); refreshAbil(); },
+    disable() { screamDrop(); scream.on = false; refreshAbil(); },
     // fire it now at this power without input (the uncontrolled scream of level 8). Works even while disabled.
     force(power) { scream.charging = false; ui.setCharge(null); if (scream.onRelease) scream.onRelease(power === undefined ? 1 : power); },
   };
+  // drop a breath in progress without a scream, and tell the level (else its inhale pose and drone stay on)
+  function screamDrop() {
+    if (!scream.charging) return;
+    scream.charging = false; scream.charge = 0;
+    ui.setCharge(null); ui.setArmed("scream", false);
+    if (scream.onCancel) scream.onCancel();
+  }
   function screamPress() {
     if (!scream.on) return false;
     if (scream.charging || !player.enabled || vehicle.active) return true;
@@ -523,8 +543,9 @@ export function createServices(e) {
     ui.setCharge(null); ui.setArmed("scream", false);
     if (scream.charge >= sOpt.minCharge && player.enabled && !health.dead) {
       scream.cooldownLeft = sOpt.cooldown * (0.5 + 0.5 * scream.charge);
+      scream.fired++;
       if (scream.onRelease) scream.onRelease(scream.charge);
-    } else if (scream.onFizzle) scream.onFizzle();
+    } else { scream.fizzled++; if (scream.onFizzle) scream.onFizzle(); }
     scream.charge = 0;
   }
 
@@ -597,7 +618,7 @@ export function createServices(e) {
     buttons(a) { lastAbil = a || {}; refreshAbil(); },
     cancel() {
       if (potion.aiming) { potion.aiming = false; hideArc(); ui.setArmed("potion", false); }
-      if (scream.charging) { scream.charging = false; scream.charge = 0; ui.setCharge(null); ui.setArmed("scream", false); }
+      screamDrop();
       fireRelease();
     },
   };
@@ -645,7 +666,7 @@ export function createServices(e) {
     if (scream.on) {
       if (scream.cooldownLeft > 0) { scream.cooldownLeft = Math.max(0, scream.cooldownLeft - dt); ui.setCooldown("scream", scream.cooldownLeft / Math.max(0.01, sOpt.cooldown)); }
       if (scream.charging) {
-        if (!player.enabled || cinema.playing) { scream.charging = false; scream.charge = 0; ui.setCharge(null); ui.setArmed("scream", false); }
+        if (!player.enabled || cinema.playing) screamDrop();
         else {
           scream.charge = Math.min(1, scream.charge + dt / sOpt.chargeTime);
           ui.setCharge(scream.charge, sOpt.label, sOpt.minCharge);
@@ -665,7 +686,7 @@ export function createServices(e) {
   function reset() {
     abilities.cancel();
     potion.on = scream.on = shoot.on = false;
-    potion.onThrow = potion.onEmpty = null; scream.onStart = scream.onCharge = scream.onRelease = scream.onFizzle = null; shoot.onFire = shoot.onEmpty = null;
+    potion.onThrow = potion.onEmpty = null; scream.onStart = scream.onCharge = scream.onRelease = scream.onFizzle = scream.onCancel = null; scream.charging = false; scream.charge = 0; shoot.onFire = shoot.onEmpty = null;
     potion.cooldownLeft = scream.cooldownLeft = 0; pPendingT = -1; fireT = 0;
     abilities.targets = null; lastAbil = {};
     hideArc();
@@ -683,7 +704,7 @@ export function createServices(e) {
       checkpoint: { id: checkpoint.id, deaths: checkpoint.deaths, tries: checkpoint.tries, respawning: checkpoint.respawning },
       vehicle: vehicle.active ? { x: vehicle.active.x, y: vehicle.active.y, z: vehicle.active.z, yaw: vehicle.active.yaw } : null,
       abilities: { potion: potion.on ? { count: potion.count, aiming: potion.aiming, cd: potion.cooldownLeft } : null,
-        scream: scream.on ? { charging: scream.charging, charge: scream.charge, cd: scream.cooldownLeft } : null,
+        scream: scream.on ? { charging: scream.charging, charge: scream.charge, cd: scream.cooldownLeft, min: sOpt.minCharge, fired: scream.fired, fizzled: scream.fizzled } : null,
         shoot: shoot.on ? { ammo: shoot.ammo === Infinity ? -1 : shoot.ammo, firing: shoot.firing } : null },
       gear: { body: gear.worn.body, head: gear.worn.head, eyes: gear.worn.eyes, back: gear.worn.back, weapon: gear.worn.weapon, armor: gear.armor },
       army: { count: army.count, lost: army.lost },

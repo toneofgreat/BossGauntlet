@@ -195,10 +195,11 @@ function buildVisitorGeometry(THREE) {
   return g;
 }
 
-function makeVisitorMaterial(THREE, uTime) {
+function makeVisitorMaterial(THREE, uTime, uLamp) {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uCwTime = uTime;
+    sh.uniforms.uCwLamp = uLamp;
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", `#include <common>
 attribute vec4 aPart;
@@ -310,9 +311,9 @@ function createVisitors(ctx, staff) {
   const THREE = ctx.THREE;
   const group = new THREE.Group();
   group.name = "visitors";
-  const uTime = { value: 0 };
+  const uTime = { value: 0 }, uLamp = { value: 0 };
   const geo = buildVisitorGeometry(THREE);
-  const mesh = new THREE.InstancedMesh(geo, makeVisitorMaterial(THREE, uTime), V_MAX);
+  const mesh = new THREE.InstancedMesh(geo, makeVisitorMaterial(THREE, uTime, uLamp), V_MAX);
   mesh.frustumCulled = false; mesh.visible = false;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   const colA = new Float32Array(V_MAX * 4), colB = new Float32Array(V_MAX * 4);
@@ -727,6 +728,7 @@ function createVisitors(ctx, staff) {
 
   function update(dt, time) {
     uTime.value = time;
+    { const w = ctx.world; uLamp.value = w && w.lampU ? w.lampU.value : 0; }
     if (Number.isFinite(lane.y)) floorY = lane.y;
     else {
       const w = ctx.world;

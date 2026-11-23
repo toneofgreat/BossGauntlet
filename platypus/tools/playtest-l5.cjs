@@ -273,8 +273,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       if (s.step !== "day" || s.joys[0]) break;
       let r = await walk((x) => x.P.fallSteps, { stop: 0.8, timeout: 45000 });
       if (k === 0) { await sleep(300); await shot("slide-at-steps"); }
-      r = await walk((x) => x.P.fallTop, { stop: 0.5, timeout: 25000, noDetour: true, until: (x) => /Slide/.test(x.actionLabel),
-        each: async (x) => { if (x.player.grounded && x.player.y < x.P.fallTop.y - 0.5 && Math.random() < 0.3) await page.keyboard.press("Space"); } });
+      // the way up, as a player takes it: the four steps run south along the spur, then across onto it and back north
+      // (every rise is under the 0.45 m step height, so no jumping is needed)
+      const STAIR = [[-8.25, -7.35], [-8.4, -7.95], [-8.45, -8.6], [-8.5, -9.2], [-9.4, -9.05], [-9.45, -8.1]];
+      r = "ok";
+      for (const [wx, wz] of STAIR) {
+        r = await walk(() => ({ x: wx, z: wz }), { stop: 0.45, timeout: 8000, noDetour: true });
+        if (r !== "ok") break;
+      }
+      r = await walk((x) => x.P.fallTop, { stop: 0.5, timeout: 10000, noDetour: true, until: (x) => /Slide/.test(x.actionLabel) });
       s = await st();
       if (!/Slide/.test(s.actionLabel)) {
         fallback("slide " + (k + 1) + ": could not climb to the top of the fall (" + r + ") at " + s.player.x.toFixed(1) + "," + s.player.y.toFixed(1) + "," + s.player.z.toFixed(1) + " top y " + s.P.fallTop.y.toFixed(2));

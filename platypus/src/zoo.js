@@ -445,7 +445,9 @@ const FS_GLOW = /* glsl */ `
 			vec2 zdv = zWorld.xz - vec2( 12.2, -2.0 );
 			float zdl = length( zdv ) + 0.001;
 			float zsw = pow( max( dot( zdv / zdl, zAlarm.xy ), 0.0 ), 5.0 );
-			outgoingLight += zalb * vec3( 1.0, 0.07, 0.04 ) * zAlarm.z * ( 0.2 + zAlarm.w * 0.25 + zsw * 1.5 / ( 1.0 + zdl * 0.06 ) );
+			// a pulsing red wash that falls off from the beacon (dark troughs between pulses) + the turning beam
+			float zpu = zAlarm.w * zAlarm.w;
+			outgoingLight += zalb * vec3( 1.0, 0.07, 0.04 ) * zAlarm.z * ( ( 0.04 + zpu * 0.3 ) / ( 1.0 + zdl * 0.05 ) + zsw * 1.7 / ( 1.0 + zdl * 0.06 ) );
 		}
 	}
 `;
@@ -763,7 +765,7 @@ const ENV = {
   noon: { background: 0xb5d9f2, fog: [0xbfdcf0, 24, 85], hemi: [0xdcefff, 0x8a7f5c, 1.35], sun: [0xfff3da, 2.3], sunDir: [-0.4, 0.82, 0.36], far: 90, dark: false },
   evening: { background: 0xffc48a, fog: [0xf5bd8c, 16, 70], hemi: [0xffd9b0, 0x6a5a4a, 1.0], sun: [0xffa35a, 2.2], sunDir: [-0.78, 0.3, 0.4], far: 90, dark: false },
   night: { background: 0x0a1226, fog: [0x0c1529, 12, 60], hemi: [0x34497a, 0x10141f, 0.6], sun: [0x8fb0ff, 0.6], sunDir: [-0.32, 0.74, 0.5], far: 90, dark: true },
-  alarm: { background: 0x12080f, fog: [0x1a0a12, 10, 55], hemi: [0x5a3446, 0x1a0c10, 0.62], sun: [0xff7a66, 0.5], sunDir: [-0.32, 0.74, 0.5], far: 90, dark: true },
+  alarm: { background: 0x0e060c, fog: [0x150810, 10, 55], hemi: [0x4a2c40, 0x140a0e, 0.5], sun: [0xff7a66, 0.42], sunDir: [-0.32, 0.74, 0.5], far: 90, dark: true },
 };
 const SKY = {
   morning: { zen: 0x6fa3cf, hor: 0xf0dfc8, cloud: 0xfff2e2, disc: 0xffe6c0, rim: 0x4a5a45, cloudAmt: 0.5, night: 0, lamp: 0.12, alarm: 0, caus: 0.7, light: 0.85 },
@@ -2547,6 +2549,7 @@ export function createZoo(ctx) {
     camBounds: { minX: -12.3, maxX: 12.3, minZ: -9.4, maxZ: 9.55, maxY: 6 },
     walkway: { x0: -12, x1: 12, z0: 10.8, z1: 14.2, y: HALL_Y },
     glass, fish, poster, riddle, door, setTime,
+    lampU: U.zLamp, // the lamp level 0..1 (other modules light their own materials in the hall with it)
     hoop: HOOP, ring: RING,
     fall: { x: FALL.x, z: FALL.z, top: FALL.top, footX: P.fallFoot.x, footZ: P.fallFoot.z },
     stream: STREAM.map((s) => ({ x: s[0], z: s[1] })),

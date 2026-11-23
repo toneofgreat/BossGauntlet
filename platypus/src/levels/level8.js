@@ -338,7 +338,7 @@ export function createLevel(ctx) {
     memory = n; memT = 0;
     step = "memory" + n;
     // a memory: seen through half-open, warm, soft eyes; the world a little muffled
-    cinema.eye.set(0.85, 1.5, 1.15);
+    cinema.eye.set(0.85, 0, 1); // no canvas CSS filter during play: a full-screen pass every frame is too dear on weak GPUs (the warm tint + lids carry the look)
     cinema.tint("warm", 0.5);
     MU("play", "flashback", { intensity: n === 1 ? 0 : n === 2 ? 0.3 : 0.5, at: "now" });
     A("zooAmbience", true, n === 3 ? "night" : "day");

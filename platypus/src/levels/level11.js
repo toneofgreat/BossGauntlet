@@ -182,7 +182,7 @@ export function createLevel(ctx) {
     ab.cancel();
     ab.potion.disable(); ab.scream.disable(); ab.shoot.disable();
     ab.potion.onThrow = ab.potion.onEmpty = null;
-    ab.scream.onStart = ab.scream.onCharge = ab.scream.onRelease = ab.scream.onFizzle = null;
+    ab.scream.onStart = ab.scream.onCharge = ab.scream.onRelease = ab.scream.onFizzle = ab.scream.onCancel = null;
     ab.shoot.onFire = ab.shoot.onEmpty = null;
     ab.targets = null;
     ab.buttons({});
@@ -1145,8 +1145,7 @@ export function createLevel(ctx) {
     const L = potions.living;
     objective("drop", "What did he drop?", "look at the bottle");
     setGoal(L.x, gy(L.x, L.z), L.z, 0xffb0b4);
-    if (ctx.pick && L.pick) bottlePick = ctx.pick.add(L.pick, { onClick: () => clickLook("drop"), maxDist: 30 });
-    if (ctx.pick && boss.paper.pick) paperPick = ctx.pick.add(boss.paper.pick, { onClick: () => clickLook("paper"), maxDist: 30 });
+    if (ctx.pick && L.pick) bottlePick = ctx.pick.add(L.pick, { onClick: () => clickLook("drop"), maxDist: 30, active: () => !cinema.playing && step === "drop" && nearP(potions.living, 4) });
   }
   // the state of the circle once he is down, for the skip points after the fight
   function startAfter(name) {
@@ -1225,6 +1224,7 @@ export function createLevel(ctx) {
     ui.showHud(true);
     const p = boss.paper;
     objective("paper", "He dropped a paper, too", "look at it");
+    if (ctx.pick && p.pick && !paperPick) paperPick = ctx.pick.add(p.pick, { onClick: () => clickLook("paper"), maxDist: 30, active: () => !cinema.playing && step === "paper" && nearP(boss.paper, 4) });
     setGoal(p.x, gy(p.x, p.z), p.z, 0xfff2dc);
   }
   function blowPaper() {
@@ -1454,6 +1454,7 @@ export function createLevel(ctx) {
     ab.scream.onCharge = onScreamCharge;
     ab.scream.onRelease = onScream;
     ab.scream.onFizzle = onFizzle;
+    ab.scream.onCancel = onScreamCancel;
   }
   function beginLesson(which) {
     step = "lesson";
@@ -1488,6 +1489,8 @@ export function createLevel(ctx) {
   }
   function onScreamStart() { if (platypus.screamCharge) platypus.screamCharge(0.02); }
   function onScreamCharge(f) { if (platypus.screamCharge) platypus.screamCharge(f); A("screamCharge", f); }
+  // a breath dropped without a scream (a cutscene began, the scream was switched off): no squeak, no words
+  function onScreamCancel() { if (platypus.screamCharge) platypus.screamCharge(0); A("screamCharge", 0); }
   function onFizzle() {
     if (platypus.screamCharge) platypus.screamCharge(0);
     A("screamCharge", 0);

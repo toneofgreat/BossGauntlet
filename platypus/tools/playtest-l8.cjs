@@ -362,10 +362,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await waitFor((x) => x.step === "done", 10000, "the level card");
     const vis = await page.waitForFunction(() => document.getElementById("victory").classList.contains("on"), { timeout: 10000 }).then(() => true, () => false);
     if (!vis) fallback("no level complete card");
-    await sleep(1200); await shot("complete-card");
-    await page.click("#again");
+    await sleep(1800); await shot("complete-card"); // Continue ignores clicks for 1.5 s after the card appears
+    await clickAgain();
   }
 
+  // Continue ignores clicks for 1.5 s after the card appears: keep clicking until the level is left
+  async function clickAgain(tap) {
+    for (let i = 0; i < 12; i++) {
+      try { if (tap) await page.tap("#again"); else await page.click("#again"); } catch (_) {}
+      await sleep(700);
+      const q = await st();
+      if (!q || q.mode !== "level") return;
+    }
+  }
   const backToMenu = async (label) => {
     const s = await waitFor((x) => x.mode === "menu", 30000, "main screen " + label);
     if (s.running) throw new Error("the level is still running behind the main screen");
@@ -417,8 +426,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await sleep(800);
       if (await page.evaluate(() => window.__platy.skipTo("nonsense"))) fallback("skipTo('nonsense') returned true");
       await page.evaluate(() => window.__platy.win());
-      await sleep(1200); await shot("win-on-title");
-      await page.click("#again");
+      await sleep(1800); await shot("win-on-title");
+      await clickAgain();
       await backToMenu("after win() on the title");
       await enterLevel("skip chain");
       for (const b of ["memory1", "memory2", "memory3", "wake", "taken", "carried", "scream", "glade", "trail", "meet", "follow", "reveal", "memory2", "trail", "intro", "glade"]) {
@@ -435,7 +444,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       s = await enterLevel("re-entry");
       if (s.screamed || s.timeScale !== 1 || s.jungle || s.camp) throw new Error("re-entry is not clean: " + JSON.stringify({ sc: s.screamed, ts: s.timeScale, j: s.jungle, c: s.camp }));
       await page.evaluate(() => window.__platy.win());
-      await sleep(800); await page.click("#again");
+      await sleep(800); await clickAgain();
       await backToMenu("after win()");
       log("quit, re-entry, win() ok");
       // phone portrait + landscape
@@ -457,7 +466,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await shot("phone-landscape-" + b);
       }
       await page.evaluate(() => window.__platy.win());
-      await sleep(800); await page.tap("#again");
+      await sleep(800); await clickAgain(true);
       await backToMenu("after the phone run");
       await page.evaluate(() => { document.body.classList.remove("touch"); window.__platy.resetProgress(); });
       log("phone shots ok");

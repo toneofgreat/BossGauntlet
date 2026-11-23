@@ -1316,7 +1316,7 @@ export function createLevel(ctx) {
   function posterReady() {
     if (step !== "poster") return;
     q.phase = "ready";
-    q.pick = ctx.pick.add(zoo.riddle.object, { onClick: clickRiddle, maxDist: 40 });
+    q.pick = ctx.pick.add(zoo.riddle.object, { onClick: clickRiddle, maxDist: 40, active: () => step === "poster" && q.phase === "ready" && riddleNear() });
     // a toast, not a caption: the caption line sits exactly where the Continue prompt appears
     // (on touch the prompt is at the side and the toast would cover it, so there it is the caption)
     later(0.8, () => {
@@ -1330,6 +1330,9 @@ export function createLevel(ctx) {
       prompt("Continue", finish);
     });
   }
+  const _rv = new THREE.Vector3();
+  // on touch the poster only takes the tap when the tap would act and the player is near it (else the thumb walks)
+  function riddleNear() { zoo.riddle.object.getWorldPosition(_rv); return Math.hypot(player.x - _rv.x, player.z - _rv.z) < 14; }
   function clickRiddle() {
     if (step !== "poster" || q.phase !== "ready") return;
     q.phase = "falling";

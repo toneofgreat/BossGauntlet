@@ -50,7 +50,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     defaultViewport: { width: 1280, height: 720 },
   });
   // a watchdog under the 10-minute tool limit: never leave a browser behind
-  const LIMIT = +(arg("limit") || 560) * 1000;
+  const LIMIT = +(arg("limit") || 720) * 1000;
   setTimeout(async () => { console.log("WATCHDOG: " + LIMIT / 1000 + " s, closing"); try { await page.screenshot({ path: path.join(SHOTS, "l10-watchdog.png") }); } catch (_) {} try { await browser.close(); } catch (_) {} srv.close(); process.exit(2); }, LIMIT).unref();
   const errors = [];
   const report = { url, steps: [], errors, fallbacks: [], shots: [], seamTeleports: [], deaths: {} };

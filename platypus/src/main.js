@@ -291,7 +291,8 @@ function boot() {
   const ndc = new THREE.Vector2();
   const hits = [];
   let hoverPick = null, pickDirty = false, mouseX = 0, mouseY = 0;
-  function pickAt(cx, cy) {
+  // touch: skip handles whose active() says the click would do nothing (so the touch can start the stick)
+  function pickAt(cx, cy, touch) {
     if (!picks.length || !running) return null;
     ndc.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
@@ -299,6 +300,7 @@ function boot() {
     for (let i = 0; i < picks.length; i++) {
       const p = picks[i];
       if (!p.enabled || !p.object.visible) continue;
+      if (touch && p.active && !p.active()) continue;
       hits.length = 0;
       raycaster.intersectObject(p.object, true, hits);
       if (hits.length && hits[0].distance < bd && hits[0].distance <= p.maxDist) { bd = hits[0].distance; best = p; }
@@ -315,10 +317,11 @@ function boot() {
   }
   const pick = {
     // object: any Object3D (its meshes are ray-tested, so prefer one simple proxy mesh).
-    // o: { onClick(handle), onHover(bool), maxDist: metres from the camera (default 60) }
+    // o: { onClick(handle), onHover(bool), maxDist: metres from the camera (default 60),
+    //   active(): optional; on touch the handle is ignored while it returns false (the touch moves the stick instead) }
     // returns a handle: { object, enabled, remove() }
     add(object, o) {
-      const h = { object, enabled: true, onClick: (o && o.onClick) || null, onHover: (o && o.onHover) || null, maxDist: (o && o.maxDist) || 60,
+      const h = { object, enabled: true, onClick: (o && o.onClick) || null, onHover: (o && o.onHover) || null, maxDist: (o && o.maxDist) || 60, active: (o && o.active) || null,
         remove() { const i = picks.indexOf(h); if (i >= 0) picks.splice(i, 1); if (hoverPick === h) setHover(null); } };
       picks.push(h);
       return h;
@@ -449,7 +452,7 @@ function boot() {
   });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   function tryPick(e) {
-    const p = pickAt(e.clientX, e.clientY);
+    const p = pickAt(e.clientX, e.clientY, e.pointerType === "touch");
     if (!p) return false;
     if (p.onClick) p.onClick(p);
     return true;
@@ -515,6 +518,23 @@ function boot() {
   window.addEventListener("pointerup", pointerEnd);
   window.addEventListener("pointercancel", pointerEnd);
   canvas.addEventListener("wheel", (e) => { e.preventDefault(); cam.wantDist = clamp(cam.wantDist + Math.sign(e.deltaY) * 0.4, cam.minDist, cam.maxDist); }, { passive: false });
+  // No zoom from a double-click or a double-tap, anywhere (the owner: "double click zooms you in"). The deliberate
+  // mouse wheel on the canvas above still moves the camera; nothing else does:
+  //  - dblclick: nothing in the game uses it; cancel it (a browser may zoom / select / go full screen on it)
+  //  - Safari's pinch and smart zoom arrive as gesture* events; Chrome's trackpad pinch as a ctrl+wheel (over the HUD
+  //    too, where the canvas handler does not see it); iOS ignores user-scalable=no, so a quick second tap on the
+  //    page is cancelled (not on buttons or fields: their own taps must still click)
+  document.addEventListener("dblclick", (e) => { e.preventDefault(); }, { capture: true, passive: false });
+  for (const g of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(g, (e) => e.preventDefault(), { passive: false });
+  window.addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { capture: true, passive: false });
+  let lastTapT = 0;
+  document.addEventListener("touchend", (e) => {
+    const t = e.timeStamp, tgt = e.target;
+    const field = tgt && tgt.closest && tgt.closest("button, a, input, textarea, select, label, [contenteditable]");
+    if (!field && t - lastTapT < 350 && e.cancelable) e.preventDefault();
+    lastTapT = t;
+  }, { passive: false });
+  document.addEventListener("touchmove", (e) => { if (e.touches.length > 1 && e.cancelable) e.preventDefault(); }, { passive: false });
 
   // on-screen buttons: fn on press; optional heldName keeps ctx.input.held(name) true while the finger is down
   // ability: true = a hold-and-release slot (potion / scream / fire): the release is reported to the services, and a finger
@@ -530,7 +550,8 @@ function boot() {
       if (running || always) fn();
     });
     if (ability) el.addEventListener("pointermove", (e) => { if (e.pointerId === pid) { io.dragX = e.clientX - px; io.dragY = e.clientY - py; } });
-    const up = () => {
+    const up = (e) => {
+      if (ability && pid >= 0 && e && e.pointerId !== pid) return; // another finger: not the one holding this button
       el.classList.remove("down"); if (heldName) held[heldName] = false; if (heldName === "jump") inp.jumpHeld = false; if (heldName === "skip") inp.skipHeld = false;
       if (ability && pid >= 0) { pid = -1; svc.release(heldName); io.dragOn = false; }
     };
@@ -929,8 +950,14 @@ function boot() {
     mode = "leaving";
     const n = activeN;
     const un = beaten ? progress.beat(n) : 0;
+    // Nothing else may own the fade from here: stop the respawn and any cutscene, then finish on a real-time
+    // timer (a fade callback is replaced by any later fade call, which would strand the game in "leaving").
+    const wasBlack = cinema.faded >= 1, d = wasBlack ? 0.05 : 0.7;
+    svc.checkpoint.clear();
+    cinema.reset();
     player.enabled = false;
-    cinema.fade("black", cinema.faded >= 1 ? 0.05 : 0.7, () => {
+    cinema.fade("black", wasBlack ? 0 : d);
+    ui.after(d + 0.02, () => {
       try { if (active && active.exit) active.exit(); } catch (e) { console.error(e); }
       ui.setBlack(true, true);
       teardown();

@@ -149,8 +149,8 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     const base = upper ? 150 : 50, dir = upper ? -1 : 1, c = upper ? 46 : 30;
     const cy = base + dir * c * 1.3333;
     let d = upper
-      ? "M-5,-5 H105 V150 H100 C78," + cy + " 22," + cy + " 0,150 H-5 Z"
-      : "M-5,205 H105 V50 H100 C78," + cy + " 22," + cy + " 0,50 H-5 Z";
+      ? "M-15,-30 H115 V150 H100 C78," + cy + " 22," + cy + " 0,150 H-15 Z"
+      : "M-15,230 H115 V50 H100 C78," + cy + " 22," + cy + " 0,50 H-15 Z";
     // soft fur / lash fringe: tapered tufts along the lid edge, pointing into the opening
     let lash = "";
     let seed = upper ? 7 : 91;
@@ -173,14 +173,22 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     // layers was recomputed by the compositor on every frame of a blink and cost ~10 fps on the target GPU.
     const fid = upper ? "lidBlurU" : "lidBlurL";
     return '<svg class="' + (upper ? "up" : "lo") + '" viewBox="0 0 100 200" preserveAspectRatio="none">' +
-      '<defs><filter id="' + fid + '" filterUnits="userSpaceOnUse" x="-10" y="-10" width="120" height="220"><feGaussianBlur stdDeviation="0.42 1"/></filter></defs>' +
+      '<defs><filter id="' + fid + '" filterUnits="userSpaceOnUse" x="-20" y="-40" width="140" height="280"><feGaussianBlur stdDeviation="0.55 1.6"/></filter></defs>' +
       '<g filter="url(#' + fid + ')">' +
       '<path d="' + d + '" style="fill:var(--lid-deep)"/>' +
-      '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity=".3" stroke-width="' + (upper ? 34 : 22) + '" transform="translate(0,' + (dir * (upper ? 15 : 10)) + ')"/>' +
-      '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity=".45" stroke-width="' + (upper ? 22 : 14) + '" transform="translate(0,' + (dir * (upper ? 9.5 : 6.5)) + ')"/>' +
-      '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity=".7" stroke-width="' + (upper ? 11 : 7) + '" transform="translate(0,' + (dir * (upper ? 4.5 : 3)) + ')"/>' +
-      '<path d="' + rim + '" fill="none" style="stroke:var(--lid-edge)" stroke-width="' + (upper ? 3.2 : 2.2) + '" stroke-opacity=".8" transform="translate(0,' + (dir * 1.2) + ')"/>' +
+      rimLayers(rim, upper, dir) +
       '<path d="' + lash + '" style="fill:var(--lid-lash)"/></g></svg>';
+  }
+  // the warm translucent band near the lid edge: many thin overlapping strokes whose opacity falls off
+  // smoothly away from the edge (a few wide strokes read as a flat brown ring with a hard outer line)
+  function rimLayers(rim, upper, dir) {
+    let out = "";
+    const N = 9, reach = upper ? 26 : 17;
+    for (let i = N - 1; i >= 0; i--) {
+      const f = (i + 0.5) / N, op = 0.16 * Math.pow(1 - f, 1.6) + 0.03;
+      out += '<path d="' + rim + '" fill="none" style="stroke:var(--lid-mid)" stroke-opacity="' + op.toFixed(3) + '" stroke-width="' + (reach * (1 - f) * 2 + 2).toFixed(1) + '" transform="translate(0,' + (dir * (reach * (1 - f) + 1)).toFixed(2) + ')"/>';
+    }
+    return out + '<path d="' + rim + '" fill="none" style="stroke:var(--lid-edge)" stroke-width="' + (upper ? 2.4 : 1.7) + '" stroke-opacity=".55" transform="translate(0,' + dir + ')"/>';
   }
   // each lid = the curved SVG edge (scaled to flatten the arch as it closes) + a plain block behind it
   eyeEl.innerHTML = '<div class="vig"></div><div class="blk u"></div><div class="blk l"></div>' + lidSvg(true) + lidSvg(false);
