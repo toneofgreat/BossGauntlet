@@ -1504,10 +1504,11 @@ export function createAudio() {
         keep(fabricRustle(dest, t + rnd(0.005, 0.02), rnd(0.1, 0.16), rnd(4200, 6200), 0.8, 0.05 * v, 4));
       } else if (surface === "rock") {
         // padded paw on stone: tight, dry, a tiny claw tick
-        keep(thump(dest, t, rnd(170, 200), 96, 0.04, 0.004, 0.26 * v, 0.024));
+        keep(thump(dest, t, rnd(170, 200), 96, 0.04, 0.004, 0.4 * v, 0.026));
+        keep(thump(dest, t, rnd(90, 110), 60, 0.05, 0.006, 0.18 * v, 0.03)); // body weight under the pad
         keep(burst(dest, t, {
           buf: pinkBuf, type: "bandpass", q: 1.1, f0: rnd(1500, 2100), f1: 900, sweep: 0.03,
-          attack: 0.003, peak: 0.3 * v, tc: 0.014,
+          attack: 0.003, peak: 0.42 * v, tc: 0.016,
         }));
         if (Math.random() < 0.6) {
           keep(burst(dest, t + rnd(0.008, 0.02), {
@@ -3429,7 +3430,7 @@ export function createAudio() {
 
   // ---- steps (new surfaces) -------------------------------------------------------
 
-  const EXT_STEP = { dirt: 1, leaves: 1, mud: 1, metal: 1, canvas: 1, concrete: 1, cushion: 1 };
+  const EXT_STEP = { dirt: 1, leaves: 1, mud: 1, metal: 1, canvas: 1, concrete: 1, cushion: 1, basalt: 1, ash: 1, lava: 1 };
 
   function stepExt(surface, strength = 0.6, pan = 0) {
     if (surface === "cushion") { cushionStep(clamp(num(strength, 0.6), 0.05, 1.3) * 0.6, pan); return; }
@@ -3482,14 +3483,31 @@ export function createAudio() {
           attack: 0.005, peak: 0.2 * v, tc: 0.03,
         }));
         keep(fabricRustle(dest, t + 0.005, rnd(0.08, 0.13), rnd(2200, 3200), 1.1, 0.05 * v, 3));
+      } else if (surface === "basalt") {
+        // volcanic rock: a hard, dark knock and loose clinker crunching and skittering under the paw
+        keep(thump(dest, t, rnd(140, 170), 80, 0.045, 0.003, 0.34 * v, 0.026));
+        keep(burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 1.3, f0: rnd(1300, 1800), f1: 800, sweep: 0.03, attack: 0.002, peak: 0.3 * v, tc: 0.014 }));
+        keep(rattle(dest, t + 0.008, rnd(0.08, 0.14), rnd(2600, 3600), 1.6, 0.07 * v, 0.45));
+        if (Math.random() < 0.35) keep(tick(dest, t + rnd(0.05, 0.12), rnd(2200, 3200), 0.05 * v, 0.01)); // a pebble rolls off
+      } else if (surface === "ash") {
+        // ash and cinders: a muffled pat that sinks a little, a soft gritty hiss
+        keep(thump(dest, t, rnd(80, 98), 46, 0.08, 0.01, 0.3 * v, 0.045));
+        keep(burst(dest, t, { buf: pinkBuf, type: "lowpass", q: 0.5, f0: rnd(1100, 1500), f1: 300, sweep: 0.08, attack: 0.01, peak: 0.3 * v, tc: 0.035 }));
+        keep(crackle(dest, t + 0.01, rnd(0.1, 0.16), 3000, 0.045 * v, 0.3, false));
+      } else if (surface === "lava") {
+        // cooled crust over heat: a crisp crack, a sizzle, a little steam
+        keep(thump(dest, t, rnd(150, 180), 90, 0.04, 0.003, 0.26 * v, 0.024));
+        keep(crackle(dest, t, rnd(0.12, 0.2), 3600, 0.08 * v, 0.5, false));
+        keep(burst(dest, t + 0.02, { buf: whiteBuf, type: "highpass", f0: 4200, attack: 0.02, peak: 0.07 * v, tc: 0.12 }));
       } else {
         // concrete: tight, dry, bright slap with a pinch of grit
-        keep(thump(dest, t, rnd(180, 215), 112, 0.035, 0.003, 0.24 * v, 0.02));
+        keep(thump(dest, t, rnd(180, 215), 112, 0.035, 0.003, 0.36 * v, 0.022));
+        keep(thump(dest, t, rnd(95, 115), 62, 0.05, 0.005, 0.16 * v, 0.03));
         keep(burst(dest, t, {
           buf: pinkBuf, type: "bandpass", q: 1.2, f0: rnd(2000, 2700), f1: 1200, sweep: 0.025,
-          attack: 0.002, peak: 0.3 * v, tc: 0.011,
+          attack: 0.002, peak: 0.4 * v, tc: 0.012,
         }));
-        keep(crackle(dest, t + 0.01, 0.06, 4200, 0.02 * v, 0.2, false));
+        keep(crackle(dest, t + 0.01, 0.06, 4200, 0.03 * v, 0.2, false));
         if (Math.random() < 0.5) keep(tick(dest, t + rnd(0.008, 0.02), rnd(3400, 4600), 0.04 * v));
       }
     });
@@ -7217,10 +7235,10 @@ export function createAudio() {
   function cricketNight(level) { setLoop("crickets", level, buildCrickets, 1.5); return bedHandle("crickets"); }
   function buildForest(L, t) {
     loopOut(L, wBus, wVerb, 0.3);
-    const air = bed(L, t, pinkBuf, "bandpass", 500, 0.5, 0.05, null, 0.6);
-    lfo(L, t, 0.07, 0.025, air.g.gain);
-    const leaves = bed(L, t, whiteBuf, "bandpass", 2400, 0.8, 0.008, null, 1);
-    lfo(L, t, 0.19, 0.006, leaves.g.gain);
+    const air = bed(L, t, pinkBuf, "bandpass", 500, 0.5, 0.1, null, 0.6);
+    lfo(L, t, 0.07, 0.045, air.g.gain);
+    const leaves = bed(L, t, whiteBuf, "bandpass", 2400, 0.8, 0.018, null, 1);
+    lfo(L, t, 0.19, 0.012, leaves.g.gain);
     every(L, 1600, (now) => {
       const r = Math.random();
       if (r < 0.18) creak(L.gain, now + 0.2, rnd(160, 260), rnd(0.6, 1.2), 0.03);                                   // a branch creaks
@@ -7278,7 +7296,16 @@ export function createAudio() {
   }
   function buildPaws(L, t) {
     loopOut(L, wBus, wVerb, 0.1);
-    every(L, 120, (now) => { if (Math.random() < 0.8) burst(L.gain, now + rnd(0, 0.1), { buf: pinkBuf, type: "bandpass", q: 1.2, f0: rnd(500, 900), attack: 0.002, peak: rnd(0.05, 0.12), tc: 0.025 }); });
+    const pant = bed(L, t, pinkBuf, "bandpass", 1400, 1.2, 0.0, null, 1); // a pack panting under the paws
+    lfo(L, t, 3.1, 0.03, pant.g.gain);
+    every(L, 120, (now) => {
+      if (Math.random() < 0.8) {
+        const tt = now + rnd(0, 0.1);
+        burst(L.gain, tt, { buf: pinkBuf, type: "bandpass", q: 1.2, f0: rnd(500, 900), attack: 0.002, peak: rnd(0.12, 0.24), tc: 0.025 });
+        thump(L.gain, tt, rnd(80, 100), 50, 0.05, 0.004, rnd(0.08, 0.16), 0.03);
+        if (Math.random() < 0.3) crackle(L.gain, tt + 0.01, 0.08, 3000, 0.04, 0.3, false); // litter kicked up
+      }
+    });
   }
   function pawRun(level) { setLoop("paws", level, buildPaws, 0.3); return bedHandle("paws"); }
 
@@ -7362,9 +7389,10 @@ export function createAudio() {
     const dest = wOut(rnd(-0.3, 0.3), 0.1);
     one(dest, (t, keep) => {
       const f = rnd(300, 500);
-      keep(tone(dest, t, "sawtooth", f, f * 1.6, 0.25, 0.03, 0.02, 0.04));
-      keep(tone(dest, t + 0.28, "sawtooth", f * 1.6, f * 1.2, 0.15, 0.025, 0.02, 0.03));
-      keep(burst(dest, t + 0.45, { buf: whiteBuf, type: "bandpass", q: 3, f0: 3000, attack: 0.001, peak: 0.08, tc: 0.01 }));
+      keep(tone(dest, t, "sawtooth", f, f * 1.6, 0.25, 0.06, 0.02, 0.04));
+      keep(tone(dest, t + 0.28, "sawtooth", f * 1.6, f * 1.2, 0.15, 0.05, 0.02, 0.03));
+      keep(burst(dest, t + 0.45, { buf: whiteBuf, type: "bandpass", q: 3, f0: 3000, attack: 0.001, peak: 0.16, tc: 0.012 }));
+      keep(thump(dest, t + 0.45, 260, 180, 0.03, 0.001, 0.12, 0.02, "triangle")); // the joint locking
     });
   }
   function robotLaser() {
@@ -7379,7 +7407,7 @@ export function createAudio() {
   function robotBeep(i = 0) {
     if (!ready() || !gate("robotBeep", 0.05)) return;
     const dest = wOut(rnd(-0.3, 0.3), 0.08);
-    one(dest, (t, keep) => { const f = [1320, 1760, 990, 2093][(i | 0) & 3]; keep(tone(dest, t, "square", f, f, 0.08, 0.04, 0.003, 0.01)); keep(tone(dest, t + 0.1, "square", f * 1.5, f * 1.5, 0.06, 0.03, 0.003, 0.01)); });
+    one(dest, (t, keep) => { const f = [1320, 1760, 990, 2093][(i | 0) & 3]; keep(tone(dest, t, "square", f, f, 0.08, 0.07, 0.003, 0.01)); keep(tone(dest, t + 0.1, "square", f * 1.5, f * 1.5, 0.06, 0.055, 0.003, 0.01)); });
   }
   function rocketBurst() {
     if (!ready() || !gate("rocketBurst", 0.15)) return;
@@ -7406,7 +7434,12 @@ export function createAudio() {
     if (!ready() || !gate("saw", 0.4)) return;
     const dest = wOut(rnd(-0.2, 0.2), 0.1);
     one(dest, (t, keep) => {
-      for (let i = 0; i < 4; i++) keep(whoosh(dest, t + i * 0.26, 1500, 3400, 2200, 0.1, 0.12, 0.12, 4, whiteBuf));
+      for (let i = 0; i < 4; i++) {
+        const tt = t + i * 0.26, push = (i & 1) === 0; // push strokes bite harder and lower than pull strokes
+        keep(whoosh(dest, tt, push ? 1300 : 1700, push ? 3000 : 3800, 2200, 0.1, 0.12, push ? 0.3 : 0.22, 3, whiteBuf));
+        keep(rattle(dest, tt + 0.02, 0.18, push ? 2400 : 3000, 2.5, 0.07, 0.7)); // the teeth catching
+      }
+      keep(burst(dest, t + 1.05, { buf: pinkBuf, type: "bandpass", q: 1, f0: 900, attack: 0.003, peak: 0.12, tc: 0.05 })); // sawdust patters down
     });
   }
   function placeLog() {
@@ -7454,7 +7487,7 @@ export function createAudio() {
   function clockTick() {
     if (!ready() || !gate("clockTick", 0.2)) return;
     const dest = wOut(0, 0.3);
-    one(dest, (t, keep) => { keep(burst(dest, t, { buf: whiteBuf, type: "bandpass", q: 6, f0: 3500, attack: 0.0005, peak: 0.2, tc: 0.008 })); keep(thump(dest, t, 900, 700, 0.01, 0.0005, 0.1, 0.01, "triangle")); });
+    one(dest, (t, keep) => { keep(burst(dest, t, { buf: whiteBuf, type: "bandpass", q: 4, f0: 3200, attack: 0.0005, peak: 0.5, tc: 0.012 })); keep(thump(dest, t, 900, 700, 0.015, 0.0005, 0.3, 0.014, "triangle")); keep(knock(dest, t + 0.003, 420, 0.12, 0.02)); /* a wooden case under the tick */ });
   }
 
   return {

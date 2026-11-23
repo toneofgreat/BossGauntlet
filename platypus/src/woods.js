@@ -325,6 +325,7 @@ export function createWoods(ctx) {
   const tm = new THREE.Matrix4(), tq = new THREE.Quaternion(), tv = new THREE.Vector3(), ts = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
   const wolves = {
     list: W, onKO: null, onHowl: null,
+    ease: 0, // 0..1 (the level sets it after restarts): the crouch / red line lasts longer, the pack rests longer between lunges
     get alive() { let n = 0; for (const w of W) if (w.alive) n++; return n; },
     get mesh() { return wolfMesh; },
     // spawn n wolves around `at` ({ x, z } or an array of points); returns the first wolf
@@ -402,7 +403,7 @@ export function createWoods(ctx) {
     tokenT -= dt;
     let aliveN = 0;
     for (const w of W) if (w.alive) aliveN++;
-    let any = false;
+    let any = false, runK = 0;
     for (const w of W) {
       if (!w.active) continue;
       any = true;
@@ -426,7 +427,7 @@ export function createWoods(ctx) {
           if (speed < 0.5) w.yaw += angDiff(Math.atan2(dx, dz), w.yaw) * Math.min(1, dt * 4);
           if (w.t <= 0 && !token && tokenT <= 0 && d < 9) {
             if (w.alpha && !w.howled && w.hp < w.max * 0.75) { w.howled = true; wolves.howl(w); break; }
-            token = w; w.state = "crouch"; w.t = 0.7 * (w.alpha ? 1.3 : 1); w.crouch = 0;
+            token = w; w.state = "crouch"; w.t = 0.7 * (w.alpha ? 1.3 : 1) * (1 + wolves.ease * 0.6); w.crouch = 0;
             const yaw = Math.atan2(dx, dz), len = w.alpha ? 11 : 6;
             w.lunge = { yaw, len, x: w.x, z: w.z };
             w.zone = vfx("dangerZone", { shape: "line", x: w.x, z: w.z, yaw, len, width: w.alpha ? 1.8 : 1.3, seconds: w.t, colorHex: 0xff3a2a });
@@ -443,7 +444,7 @@ export function createWoods(ctx) {
           const sp = w.alpha ? 13 : 11;
           w.vx = Math.sin(w.lunge.yaw) * sp; w.vz = Math.cos(w.lunge.yaw) * sp; speed = sp;
           if (!w.hitDone && d < 0.95 * w.scale + 0.3 && p.y - TG.heightAt(p.x, p.z) < 0.6) { w.hitDone = true; hurtPlayer(w); }
-          if (w.t <= 0) { w.state = "recover"; w.t = 0.6; if (token === w) { token = null; tokenT = 0.5; } }
+          if (w.t <= 0) { w.state = "recover"; w.t = 0.6; if (token === w) { token = null; tokenT = 0.5 + wolves.ease * 0.9; } }
           break;
         }
         case "recover": w.vx *= 0.85; w.vz *= 0.85; speed = Math.hypot(w.vx, w.vz); if (w.t <= 0) { w.state = "circle"; w.t = rr(1, 2.4); } break;
@@ -468,6 +469,7 @@ export function createWoods(ctx) {
       w.x = clamp(w.x, MINX, MAXX); w.z = clamp(w.z, MINZ, MAXZ);
       w.y = TG.heightAt(w.x, w.z);
       const sp = Math.hypot(w.vx, w.vz);
+      if (sp > 3.5 && d < 18) runK = Math.max(runK, sp > 9 ? 0.9 : 0.55); // a running pack is heard before it is seen
       w.stride += (clamp(sp / 6, 0, 1) - w.stride) * Math.min(1, dt * 6);
       w.ph += dt * (2 + sp * 2.1);
       w.wag = Math.sin(clock * (w.state === "circle" ? 2 : 6) + w.i) * (w.state === "ko" ? 0.1 : 0.25);
@@ -476,9 +478,10 @@ export function createWoods(ctx) {
       iAnim.setXYZW(w.i, w.ph, w.stride, w.crouch, clock * 2.4 + w.i);
       iPose.setXYZW(w.i, w.head, w.wag, w.cower, w.jaw);
     }
+    if (runK !== pawLv) { pawLv = runK; sfx("pawRun", runK); } // only on a change: the bed glides between levels
     if (any || dirtyW) { wolfMesh.instanceMatrix.needsUpdate = true; iAnim.needsUpdate = true; iPose.needsUpdate = true; dirtyW = any; }
   }
-  let dirtyW = false;
+  let dirtyW = false, pawLv = 0;
 
   // ------------------------------------------------------------------------------------------ the world
   const pt = (x, z, yaw) => ({ x, y: rawH(x, z), z, yaw: yaw || 0 });

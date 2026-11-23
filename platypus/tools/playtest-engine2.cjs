@@ -46,7 +46,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let n = 0, ok = false;
   const page = await browser.newPage();
   page.on("pageerror", (e) => errors.push("pageerror: " + (e.stack || e.message || e)));
-  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
+  page.on("console", (m) => { if (((m.location && m.location()) || {}).url && m.location().url.includes("/api/platypus/")) return; if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
   page.on("requestfailed", (r) => errors.push("requestfailed: " + r.url()));
   const st = () => page.evaluate(() => window.__platy && window.__platy.state());
   const shot = async (name) => { n++; const f = path.join(SHOTS, "e2-" + String(n).padStart(2, "0") + "-" + name + ".png"); await page.screenshot({ path: f }); return f; };

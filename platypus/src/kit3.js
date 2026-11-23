@@ -167,17 +167,35 @@ export function glowRockMaterial(THREE, U, o) {
   o = o || {};
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: o.roughness === undefined ? 0.92 : o.roughness, metalness: 0, flatShading: !!o.flat });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = U.uTime; sh.uniforms.uGlow = U.uGlow; sh.uniforms.uGlowCol = U.uGlowCol;
-    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute float aGlow;\nvarying float vGlow;\nvarying vec3 vWP;")
-      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvGlow = aGlow;\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;");
-    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform float uTime, uGlow;\nuniform vec3 uGlowCol;\nvarying float vGlow;\nvarying vec3 vWP;\n" + GLSL_NOISE)
+    sh.uniforms.uTime = U.uTime; sh.uniforms.uGlow = U.uGlow; sh.uniforms.uGlowCol = U.uGlowCol; sh.uniforms.tRockN = { value: noiseTexture(THREE) };
+    // world position / normal (through the instance matrix too) for a triplanar stone detail: grain, strata and
+    // dark hairline cracks, so big flat-shaded slabs read as rock instead of plastic
+    sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute float aGlow;\nvarying float vGlow;\nvarying vec3 vWP;\nvarying vec3 vWN;")
+      .replace("#include <fog_vertex>", `#include <fog_vertex>
+        vGlow = aGlow;
+        vec4 k3p = vec4(transformed, 1.0); vec3 k3nn = objectNormal;
+        #ifdef USE_INSTANCING
+          k3p = instanceMatrix * k3p; k3nn = mat3(instanceMatrix) * k3nn;
+        #endif
+        vWP = (modelMatrix * k3p).xyz; vWN = normalize(mat3(modelMatrix) * k3nn);`);
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform float uTime, uGlow;\nuniform vec3 uGlowCol;\nuniform sampler2D tRockN;\nvarying float vGlow;\nvarying vec3 vWP;\nvarying vec3 vWN;\n" + GLSL_NOISE)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        { vec3 bw = pow(abs(normalize(vWN)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
+          vec4 tx = texture2D(tRockN, vWP.zy * 0.21), ty = texture2D(tRockN, vWP.xz * 0.17), tz = texture2D(tRockN, vWP.xy * 0.21 + 0.37);
+          vec4 t = tx * bw.x + ty * bw.y + tz * bw.z;
+          float strata = 0.5 + 0.5 * sin(vWP.y * 9.0 + t.g * 6.0);
+          float grain = t.r * 0.75 + t.g * 0.25;
+          float crack = 1.0 - smoothstep(0.015, 0.07, t.b);
+          diffuseColor.rgb *= (0.62 + 0.7 * grain) * mix(1.0, 0.86 + 0.14 * strata, 1.0 - bw.y);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.25, 1.12, 1.0), smoothstep(0.55, 0.8, t.g) * bw.y * 0.6);
+          diffuseColor.rgb *= 1.0 - crack * 0.32; }`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         { float fl = k3n(vWP.xz * 0.35 + vec2(0.0, -uTime * 0.6)) * 0.6 + 0.6;
           float g = vGlow * uGlow * fl;
           totalEmissiveRadiance += uGlowCol * g * g * 2.2;
           diffuseColor.rgb *= 1.0 - min(g, 1.0) * 0.7; }`);
   };
-  m.customProgramCacheKey = () => "k3glowrock" + (o.flat ? 1 : 0);
+  m.customProgramCacheKey = () => "k3glowrock2" + (o.flat ? 1 : 0);
   return m;
 }
 

@@ -679,9 +679,9 @@ export function createVolcano(ctx) {
     },
     reset() { world.resetArena(); runes.reset(); cage.reset(); cageWalk.sink(); quakeT = 0; },
     update, onEnter, onLeave,
-    onFootstep(wx, wz, strength, foot, wet, pan) { sfx("step", surfaceAt(wx, wz) === "dirt" ? "dirt" : "concrete", strength, pan); if (strength > 0.7 && foot < 2) vfx("footDust", wx, heightAt(wx, wz) + 0.02, wz, strength * 0.4, 0x4a423e); },
+    onFootstep(wx, wz, strength, foot, wet, pan) { { const su = surfaceAt(wx, wz); sfx("step", su === "dirt" ? "ash" : su === "lava" ? "lava" : "basalt", strength, pan); } if (strength > 0.7 && foot < 2) vfx("footDust", wx, heightAt(wx, wz) + 0.02, wz, strength * 0.4, 0x4a423e); },
     onJump(x, z, floorY) { vfx("footDust", x, floorY + 0.03, z, 0.4, 0x4a423e); },
-    onLand(x, z, floorY, impact) { sfx("step", "concrete", 0.7 + impact * 0.5, 0); vfx("footDust", x, floorY + 0.03, z, 0.3 + impact * 0.6, 0x4a423e); },
+    onLand(x, z, floorY, impact) { { const su = surfaceAt(x, z); sfx("step", su === "dirt" ? "ash" : su === "lava" ? "lava" : "basalt", 0.7 + impact * 0.5, 0); } vfx("footDust", x, floorY + 0.03, z, 0.3 + impact * 0.6, 0x4a423e); },
     stats() { return { scene, lavaY, ringK, bombs: bombs.active }; },
   };
   let active = false;

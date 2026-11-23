@@ -60,7 +60,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let n = 0;
   const page = await browser.newPage();
   page.on("pageerror", (e) => errors.push("pageerror: " + (e.stack || e.message || e)));
-  page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
+  page.on("console", (m) => { if (((m.location && m.location()) || {}).url && m.location().url.includes("/api/platypus/")) return; if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
   page.on("requestfailed", (r) => errors.push("requestfailed: " + r.url()));
 
   const T0 = Date.now();

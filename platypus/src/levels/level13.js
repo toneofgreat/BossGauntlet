@@ -610,6 +610,7 @@ function createHouse(ctx, jungle) {
       built[id] = 1; by[id] = who || 1; anim[id] = 0.001; uB.value[id] = 0.02; uG.value[id] = 0;
       sfxH(p.kind === "stone" ? "placeStone" : p.kind === "leaf" || p.kind === "moss" ? "thatchRustle" : "placeLog");
       sfxH("hammer", p.kind === "stone" ? "stone" : "wood");
+      if (p.kind !== "stone" && p.kind !== "leaf" && p.kind !== "moss" && (id % 3) === 0) sfxH("sawWood"); // every third timber gets cut to fit
       if (house.count(stage) >= HOUSE_STAGES[stage].n) {
         const was = stage;
         if (stage === 5) { done = true; ghostsOn = false; showGhosts(); if (house.onStage) house.onStage(was); if (house.onDone) house.onDone(); }
@@ -673,8 +674,11 @@ export function createLevel(ctx) {
   function setGoal(x, y, z, hex) { if (goal && goal.set) { goal.set(x, y, z); return; } goal = FX("beacon", x, y, z, hex === undefined ? 0xffe08a : hex) || null; }
   function clearGoal() { if (goal && goal.remove) goal.remove(); goal = null; }
   function setAct(label, key) { if (label !== actName) { actName = label; ui.setAction(label, key); } }
-  function objective(key, text, keys) { if (key !== objKey) { objKey = key; ui.setObjective(text, keys || ""); } }
-  function setHints(a, b) { hints = a ? [a, b || a] : null; hintT = 0; hintLv = 0; }
+  // on a touch screen there is no E / Space / R key: "Sleep (E)" reads "Sleep" (the on-screen button with that name)
+  const KEYS_RE = / ?\((?:E|Space|R|Q|J|L|hold R)\)/g;
+  const forTouch = (s) => (ctx.touch && typeof s === "string" ? s.replace(KEYS_RE, "").replace(/\bSpace\b/g, "Jump") : s);
+  function objective(key, text, keys) { if (key !== objKey) { objKey = key; ui.setObjective(text, forTouch(keys || "")); } }
+  function setHints(a, b) { a = forTouch(a); b = forTouch(b); hints = a ? [a, b || a] : null; hintT = 0; hintLv = 0; }
   function progressed() { hintT = 0; hintLv = 0; }
   function tickHints(dt) {
     if (!hints || !player.enabled || cinema.playing) return;
@@ -926,7 +930,9 @@ export function createLevel(ctx) {
     cinema.fade("clear", 0.6);
     beginAmbush();
   }
-  function spawnAmbush() { woods.wolves.reset(); kos = 0; woods.wolves.spawn(3, W.ambush); }
+  // after a few restarts at the same fight the wolves telegraph longer and rest longer (LEVELS2.md A2: levels ease off)
+  function wolfEase() { const t = ctx.checkpoint.tries || 0; woods.wolves.ease = t >= 6 ? 1 : t >= 3 ? 0.5 : 0; }
+  function spawnAmbush() { woods.wolves.reset(); wolfEase(); kos = 0; woods.wolves.spawn(3, W.ambush); }
   function beginAmbush() {
     step = "ambush";
     clearGoal();
@@ -963,7 +969,7 @@ export function createLevel(ctx) {
     beginDen(false);
   }
   function denSetup() {
-    woods.wolves.reset(); woods.vines.reset();
+    woods.wolves.reset(); woods.vines.reset(); wolfEase();
     kos = 0; wave = 0; vinesCut = 0; alphaOut = false;
     friend.visible = true;
     friend.place(W.pipTree.x, W.pipTree.z, W.pipTree.yaw);
@@ -1395,7 +1401,7 @@ export function createLevel(ctx) {
         later(1.0, () => { objective("scream", "Stand in the centre and SCREAM", keyHint("hold R, let go", "hold Scream, let go")); setGoal(0, gy(0, G.centre.z), G.centre.z, 0xc8a0ff); setHints("Stand on the round stone in the middle, then hold R and let go.", "The middle of the court: the glowing ring. Scream there!"); });
       }
     } else if (step === "close") {
-      if (!closeTurned[s.i]) { closeTurned[s.i] = true; let n = 0; for (const t of closeTurned) if (t) n++; grove.lines(s.i, 0); grove.portal.dim(1 - n * 0.2); A("stoneTurn"); objective("close" + n, "Close the portal: turn the stones back " + n + "/4", "Tail Slap (L) or E"); if (n >= 4) { closeReady = true; ui.objectiveDone(); later(0.8, () => { objective("slap", "Tail Slap the rock to close it", "L"); setGoal(G.rock.x, gy(G.rock.x, G.rock.z), G.rock.z - 1.6, 0xc8a0ff); }); } }
+      if (!closeTurned[s.i]) { closeTurned[s.i] = true; let n = 0; for (const t of closeTurned) if (t) n++; grove.lines(s.i, 0); grove.portal.dim(1 - n * 0.2); A("stoneTurn"); objective("close" + n, "Close the portal: turn the stones back " + n + "/4", keyHint("Tail Slap (L) or E", "Slap or tap a stone")); if (n >= 4) { closeReady = true; ui.objectiveDone(); later(0.8, () => { objective("slap", "Tail Slap the rock to close it", keyHint("L", "Slap")); setGoal(G.rock.x, gy(G.rock.x, G.rock.z), G.rock.z - 1.6, 0xc8a0ff); }); } }
     }
   }
   function updatePuzzle(dt) {
@@ -1686,7 +1692,7 @@ export function createLevel(ctx) {
       if (powerT <= 0) {
         const list = POWERS[seg], kind = list[(Math.random() * list.length) | 0], b = babies.list[(Math.random() * 3) | 0];
         power = { kind, b, t: 0, phase: 0, zone: -1, x: 0, z: 0, sw: Math.random() < 0.5 ? 1 : -1 };
-        if (!told[kind]) { told[kind] = true; ui.hint({ laser: "LASER EYES! Jump (Space) over the red beam!", rocket: "ROCKET HOP! Get out of the red circle!", magnet: "MAGNET! Keep running forward, hard!", blink: "BLINK! It's in front of you: run round it!" }[kind], 3); }
+        if (!told[kind]) { told[kind] = true; ui.hint(forTouch({ laser: "LASER EYES! Jump (Space) over the red beam!", rocket: "ROCKET HOP! Get out of the red circle!", magnet: "MAGNET! Keep running forward, hard!", blink: "BLINK! It's in front of you: run round it!" }[kind]), 3); }
         A("robotServo");
       }
       return;
@@ -1898,7 +1904,7 @@ export function createLevel(ctx) {
     helpers.length = 0;
     HELPERS.forEach((k, i) => helpers.push({ k, m: mem[k], st: "idle", t: 1.5 + i * 1.7, kind: null, id: -1 }));
     tribe.maxFull = 1;
-    ctx.checkpoint.set("build" + (s + 1), { x: S.x - 1.5, z: S.z + 4.2, yaw: PI, silent: s === 0, label: "The house: " + HOUSE_STAGES[s].label, restore: () => { carrying = null; for (const k in house.carry) house.carry[k].visible = false; } });
+    ctx.checkpoint.set("build" + (s + 1), { x: S.x - 1.5, z: S.z + 4.2, yaw: PI, silent: s === 0, label: "The house: " + HOUSE_STAGES[s].label, restore: () => { dropCarry(); } });
     M("play", "build", { at: "now", intensity: 0.35 + s * 0.12 });
     bed("morningBirds", s < 4 ? 0.6 : 0.2);
     player.enabled = true; ui.showHud(true);
@@ -1915,14 +1921,18 @@ export function createLevel(ctx) {
     objective("b" + s + "-" + house.count(s), stageText(s), carrying ? "carry it to a glowing ghost · Place (E)" : "pick up at the pile (E)");
     ui.setQuests(HOUSE_STAGES.map((d, i) => ({ id: "s" + i, text: i < s ? d.label + " ✓" : i === s ? stageText(i) : d.label, done: i < s, current: i === s })), "The house");
   }
-  function pileNear() { for (const k of wantKinds()) { const p = house.PILES[k]; if (dist2(player.x, player.z, p.x, p.z) < 1.8) return k; } return null; }
+  // generous reach: a pile is picked up from 2.5 m and a piece placed from 3.2 m (over a half-built wall, with the
+  // others crowding the site), so nobody has to squeeze through the door to the exact spot
+  const PLACE_R = 3.2, PLACE_R_SOFT = 3.6;
+  function pileNear() { let b = null, bd = 2.5; for (const k of wantKinds()) { const p = house.PILES[k], d = dist2(player.x, player.z, p.x, p.z); if (d < bd) { bd = d; b = k; } } return b; }
+  function dropCarry() { carrying = null; for (const k in house.carry) house.carry[k].visible = false; platypus.setCarry(false); player.carrying = false; }
   function updateBuild(dt) {
     house.update(dt);
     if (speedT > 0) { speedT -= dt; if (speedT <= 0) walkSpeed(); }
     updateHelpers(dt);
     if (cinema.playing || house.done) return;
     if (carrying) {
-      const p = house.nearestOpen(player.x, player.z, carrying, carrying === "moss" || carrying === "lantern" ? 3.2 : 2.4);
+      const p = house.nearestOpen(player.x, player.z, carrying, carrying === "moss" || carrying === "lantern" ? PLACE_R_SOFT : PLACE_R);
       setAct(p ? "Place" : null);
       const t = house.nearestOpen(player.x, player.z, carrying);
       if (t) setGoal(t.x, gy(t.x, t.z), t.z, 0x9fe8ff); else { carrying = null; for (const k in house.carry) house.carry[k].visible = false; platypus.setCarry(false); player.carrying = false; }
@@ -1957,7 +1967,7 @@ export function createLevel(ctx) {
       objKey = ""; buildObjective();
       return;
     }
-    const p = house.nearestOpen(player.x, player.z, carrying, carrying === "moss" || carrying === "lantern" ? 3.2 : 2.4);
+    const p = house.nearestOpen(player.x, player.z, carrying, carrying === "moss" || carrying === "lantern" ? PLACE_R_SOFT : PLACE_R);
     if (!p) return;
     house.carry[carrying].visible = false; carrying = null;
     platypus.setCarry(false); player.carrying = false;
@@ -1996,7 +2006,7 @@ export function createLevel(ctx) {
     if (house.done) return;
     const s = house.stage;
     step = "build" + (s + 1);
-    ctx.checkpoint.set("build" + (s + 1), { x: player.x, z: player.z, yaw: player.yaw, label: "The house: " + HOUSE_STAGES[s].label, restore: () => { carrying = null; for (const k in house.carry) house.carry[k].visible = false; } });
+    ctx.checkpoint.set("build" + (s + 1), { x: player.x, z: player.z, yaw: player.yaw, label: "The house: " + HOUSE_STAGES[s].label, restore: () => { dropCarry(); } });
     if (HOUSE_STAGES[s].time !== HOUSE_STAGES[was].time) jungle.setTime(HOUSE_STAGES[s].time, 6);
     M("setIntensity", 0.35 + s * 0.12, 3);
     const calls = ["", "[Now the floor planks!]", "[Logs for the walls! Two rings!]", "[Roof poles, and a door frame!]", "[Leaf bundles, bottom to top!]", "[Mud for the cracks, moss beds, and the lantern!]"];

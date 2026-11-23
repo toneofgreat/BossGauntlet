@@ -19,7 +19,7 @@ import { createJungle } from "../jungle.js";
 import { createTribe } from "../tribe.js";
 import { createFriend } from "../friend.js";
 import { createPotions } from "../potions.js";
-import { skyDome, GLSL_NOISE } from "../kit3.js";
+import { skyDome, GLSL_NOISE, lumpify, noise3 } from "../kit3.js";
 
 export const meta = { n: 12, title: "THE VOLCANO" };
 
@@ -110,8 +110,11 @@ export function createLevel(ctx) {
   }
   function clearGoal() { if (goal && goal.remove) goal.remove(); goal = null; }
   function setAct(label) { if (label !== actName) { actName = label; ui.setAction(label); } }
-  function objective(key, text, keys) { if (key !== objKey) { objKey = key; ui.setObjective(text, keys || ""); } }
-  function setHints(a, b) { hints = a ? [a, b || a] : null; hintT = 0; hintLv = 0; }
+  // on a touch screen there is no E / Space / R key: "Sleep (E)" reads "Sleep" (the on-screen button with that name)
+  const KEYS_RE = / ?\((?:E|Space|R|Q|J|L|hold R)\)/g;
+  const forTouch = (s) => (ctx.touch && typeof s === "string" ? s.replace(KEYS_RE, "").replace(/\bSpace\b/g, "Jump") : s);
+  function objective(key, text, keys) { if (key !== objKey) { objKey = key; ui.setObjective(text, forTouch(keys || "")); } }
+  function setHints(a, b) { a = forTouch(a); b = forTouch(b); hints = a ? [a, b || a] : null; hintT = 0; hintLv = 0; }
   function progressed() { hintT = 0; hintLv = 0; }
   function tickHints(dt) {
     if (!hints || !player.enabled || cinema.playing) return;
@@ -221,18 +224,67 @@ export function createLevel(ctx) {
     group.add(sea);
     // puffs that stream past (instanced; the "speed" you feel)
     const PUFF = 26;
-    const puffMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xc89a86, transparent: true, opacity: 0.85, depthWrite: false });
-    const puffs = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), puffMat, PUFF);
+    // soft cumulus: lit from the sun side, shadowed underneath, edges feathered to nothing (no hard facets)
+    const puffMat = new THREE.ShaderMaterial({
+      uniforms: { uWarm: U.uWarm }, transparent: true, depthWrite: false, fog: false,
+      vertexShader: `varying vec3 vN; varying vec3 vV; varying float vY;
+        void main(){ vec4 p = vec4(position, 1.0); vec3 n = normal;
+          #ifdef USE_INSTANCING
+            p = instanceMatrix * p; n = mat3(instanceMatrix) * n;
+          #endif
+          vec4 w = modelMatrix * p; vN = normalize(mat3(modelMatrix) * n); vV = normalize(cameraPosition - w.xyz); vY = position.y;
+          gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: `uniform float uWarm; varying vec3 vN; varying vec3 vV; varying float vY;
+        void main(){ vec3 n = normalize(vN);
+          float sun = clamp(dot(n, normalize(vec3(0.0, 0.55, 1.0))) * 0.5 + 0.5, 0.0, 1.0);
+          float under = smoothstep(-0.6, 0.4, vY);
+          vec3 lit = mix(vec3(0.86, 0.9, 1.0), vec3(1.0, 0.9, 0.78), uWarm);
+          vec3 shade = mix(vec3(0.52, 0.56, 0.7), vec3(0.72, 0.56, 0.6), uWarm);
+          vec3 col = mix(shade, lit, sun * (0.45 + 0.55 * under));
+          float rim = pow(1.0 - abs(dot(n, normalize(vV))), 2.0);
+          col += rim * 0.18 * lit;
+          float a = 0.85 * smoothstep(0.0, 0.55, abs(dot(n, normalize(vV))));
+          gl_FragColor = vec4(col, a);
+          #include <colorspace_fragment>
+        }`,
+    });
+    const puffGeo = lumpify(THREE, new THREE.IcosahedronGeometry(1, 3), 0.22, 1.6, 5);
+    { const pp = puffGeo.attributes.position, nn = puffGeo.attributes.normal, v = new THREE.Vector3(); for (let i = 0; i < pp.count; i++) { v.fromBufferAttribute(pp, i).normalize(); nn.setXYZ(i, v.x, v.y, v.z); } }
+    const puffs = new THREE.InstancedMesh(puffGeo, puffMat, PUFF);
     puffs.name = "skyPuffs"; puffs.frustumCulled = false; puffs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     const PX = new Float32Array(PUFF), PY = new Float32Array(PUFF), PZ = new Float32Array(PUFF), PS = new Float32Array(PUFF);
     for (let i = 0; i < PUFF; i++) { PX[i] = rnd(-90, 90); if (Math.abs(PX[i]) < 12) PX[i] += Math.sign(PX[i] || 1) * 14; PY[i] = rnd(2, 30); PZ[i] = rnd(-300, 300); PS[i] = rnd(5, 16); }
     group.add(puffs);
     // the volcano (far) and the jungle (far)
-    const coneMat = new THREE.MeshLambertMaterial({ color: 0x2a2220, emissive: 0x2a0a02, fog: false });
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(160, 190, 28, 1, true), coneMat);
+    const coneMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true, emissive: 0x2a0a02, fog: false });
+    // a real strato-volcano silhouette: concave flanks, a notched crater rim, gullies running down, ash on the
+    // shoulders and a lava-lit lip (one lathe, ~2.5k triangles)
+    const coneGeo = (() => {
+      const prof = [];
+      for (let i = 0; i <= 14; i++) { const t = i / 14; prof.push(new THREE.Vector2(15 + 145 * Math.pow(1 - t, 2.1), -95 + 187 * t)); }
+      prof.push(new THREE.Vector2(11, 82));
+      const g = new THREE.LatheGeometry(prof, 72);
+      const P = g.attributes.position, col = new Float32Array(P.count * 3);
+      for (let i = 0; i < P.count; i++) {
+        const x = P.getX(i), y = P.getY(i), z = P.getZ(i), a = Math.atan2(x, z), h = (y + 95) / 187;
+        const gully = Math.pow(Math.abs(Math.sin(a * 11 + noise3(x * 0.02, y * 0.02, z * 0.02) * 3)), 0.6);
+        const k = 1 + (gully - 0.6) * 0.07 * (1 - h * 0.6) + noise3(x * 0.03, y * 0.03, z * 0.03) * 0.06;
+        const notch = h > 0.95 ? 1 - 0.12 * Math.max(0, Math.sin(a * 3 + 1)) : 1;
+        P.setXYZ(i, x * k, y * notch, z * k);
+        const ash = Math.max(0, Math.min(1, (h - 0.45) * 2.2)) * (0.6 + 0.4 * gully);
+        let r = 0.16 + 0.05 * gully, gg = 0.13 + 0.04 * gully, b = 0.12 + 0.035 * gully;
+        r += ash * 0.22; gg += ash * 0.21; b += ash * 0.2;
+        if (h > 0.93) { const lip = (h - 0.93) / 0.07; r += lip * 0.5; gg += lip * 0.16; }
+        col[i * 3] = r; col[i * 3 + 1] = gg; col[i * 3 + 2] = b;
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      g.computeVertexNormals();
+      return g;
+    })();
+    const cone = new THREE.Mesh(coneGeo, coneMat);
     cone.name = "farVolcano";
     const glow = new THREE.Mesh(new THREE.SphereGeometry(28, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff6a20, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    glow.position.y = 96; glow.scale.set(1, 0.4, 1);
+    glow.position.y = 98; glow.scale.set(0.55, 0.3, 0.55);
     cone.add(glow);
     group.add(cone);
     const jungleG = new THREE.Group(); jungleG.name = "farJungle";

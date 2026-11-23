@@ -260,6 +260,7 @@ function createMock(names) {
     await page.setRequestInterception(true);
     page.on("request", async (req) => {
       const u = req.url();
+      if (u.startsWith("data:") || u.startsWith("blob:")) return req.continue(); // inline images (the eye lids) never leave the page
       try {
         if (u.startsWith(BASE)) {
           // offline suites: an empty config (no request may leave the page); online suites: the mocked relay

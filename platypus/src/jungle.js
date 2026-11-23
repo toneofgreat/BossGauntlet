@@ -974,9 +974,12 @@ export function createJungle(ctx) {
       "  float n3 = jvn( vW.zx * 2.6 - fl.yx * 1.1 + 3.1 );",
       "  vec3 N = normalize( vec3( ( n1 - 0.5 ) * 0.5 + ( n2 - 0.5 ) * 0.28, 1.0, ( n3 - 0.5 ) * 0.5 + ( n2 - 0.5 ) * 0.2 ) );",
       "  vec3 V = normalize( cameraPosition - vW );",
-      "  float fres = 0.05 + 0.9 * pow( 1.0 - max( dot( N, V ), 0.0 ), 3.0 );",
+      "  float fres = 0.04 + 0.76 * pow( 1.0 - max( dot( N, V ), 0.0 ), 4.0 );",
       "  vec3 base = mix( uShallow, uDeep, smoothstep( 0.0, 1.2, depth ) ) * jLight;",
-      "  vec3 col = mix( base, jSky, fres );",
+      // low reflections pick up the dark tree line on the banks, only steep ones see the sky (no milky sheet)
+      "  vec3 Rv = reflect( -V, N );",
+      "  vec3 refl = mix( vec3( 0.06, 0.1, 0.06 ) * jLight + jSky * 0.22, jSky * 0.95, smoothstep( 0.04, 0.45, Rv.y ) );",
+      "  vec3 col = mix( base, refl, fres );",
       "  float spec = pow( max( dot( reflect( -jSunDir, N ), V ), 0.0 ), 120.0 );",
       "  col += jSunCol * spec * 0.9;",
       "  float foamN = jvn( vW.xz * 4.5 - fl * 2.4 ) * 0.6 + n2 * 0.4;",
@@ -1791,8 +1794,17 @@ export function createJungle(ctx) {
     }
     { // your sleeping hollow
       const b = P.bed;
-      append(m, new THREE.TorusGeometry(0.62, 0.2, 5, 12), xf(b.x, b.y + 0.08, b.z, Math.PI / 2, 0, 0, 1, 1, 0.6), (p) => mixc(leaf, dry, hash2(p.x * 9, p.z * 9)));
-      append(m, new THREE.CylinderGeometry(0.58, 0.6, 0.08, 10), xf(b.x, b.y + 0.04, b.z), C(0x5d6b34));
+      // a woven nest: a lumpy rim of packed leaves, twigs laid round it, a soft moss and fern lining
+      const rim = new THREE.TorusGeometry(0.62, 0.2, 8, 32), rp = rim.attributes.position;
+      for (let i = 0; i < rp.count; i++) { const x = rp.getX(i), y = rp.getY(i), z = rp.getZ(i), k = 1 + 0.035 * Math.sin(Math.atan2(y, x) * 9) + 0.03 * (hash2(x * 31, y * 31) - 0.5); rp.setXYZ(i, x * k, y * k, z * (0.92 + 0.12 * hash2(y * 17, x * 13))); }
+      rim.computeVertexNormals();
+      append(m, rim, xf(b.x, b.y + 0.08, b.z, Math.PI / 2, 0, 0, 1, 1, 0.6), (p) => mulc(mixc(leaf, dry, hash2(p.x * 9, p.z * 9)), 0.75 + 0.35 * hash2(p.x * 23, p.z * 19)));
+      for (let k = 0; k < 14; k++) {
+        const a = (k / 14) * Math.PI * 2 + hash2(k, 3) * 0.4, r = 0.6 + 0.12 * hash2(k, 7);
+        append(m, new THREE.CylinderGeometry(0.014, 0.02, 0.62 + 0.25 * hash2(k, 5), 3), xf(b.x + Math.sin(a) * r, b.y + 0.12 + 0.07 * hash2(k, 9), b.z + Math.cos(a) * r, Math.PI / 2 + (hash2(k, 11) - 0.5) * 0.5, a + Math.PI / 2, 0), mulc(wood, 0.8 + 0.4 * hash2(k, 13)));
+      }
+      append(m, new THREE.CylinderGeometry(0.58, 0.6, 0.08, 18), xf(b.x, b.y + 0.04, b.z), (p) => mixc(C(0x55642e), C(0x7a8a44), hash2(p.x * 13, p.z * 13)));
+      for (let k = 0; k < 7; k++) { const a = k * 0.9 + 0.3, r = 0.2 + 0.25 * hash2(k, 21); append(m, new THREE.SphereGeometry(0.13 + 0.05 * hash2(k, 23), 6, 4), xf(b.x + Math.sin(a) * r, b.y + 0.08, b.z + Math.cos(a) * r, 0, a, 0, 1, 0.32, 1.2), mixc(C(0x5f7a34), C(0x8b9a52), hash2(k, 25))); }
     }
     append(m, new THREE.CylinderGeometry(0.46, 0.48, 0.04, 10), xf(P.seat.x, P.seat.y + 0.02, P.seat.z), tan);
     { // a drying rack by the bank
@@ -1902,7 +1914,7 @@ export function createJungle(ctx) {
   const ENV = {
     day: { background: 0xa9c9b4, fog: [0xa9c9b4, 16, 62], hemi: [0xdff0e0, 0x3a4a2a, 1.25], sun: [0xfff0d0, 2.0], sunDir: [0.35, 0.85, -0.38], far: 95, dark: false },
     dusk: { background: 0xc98f62, fog: [0xc98f62, 14, 58], hemi: [0xf0b890, 0x2c3324, 0.95], sun: [0xff9d4a, 1.7], sunDir: [-0.75, 0.32, -0.3], far: 95, dark: false },
-    night: { background: 0x0d1a2c, fog: [0x0d1a2c, 9, 46], hemi: [0x4a6a9a, 0x0b1210, 0.6], sun: [0x9ab8ff, 0.6], sunDir: [0.3, 0.8, 0.4], far: 95, dark: true },
+    night: { background: 0x0d1a2c, fog: [0x0d1a2c, 9, 46], hemi: [0x5476a8, 0x0e1612, 0.78], sun: [0xa6c2ff, 0.85], sunDir: [0.3, 0.8, 0.4], far: 95, dark: true },
     dawn: { background: 0xe7b9b0, fog: [0xe7b9b0, 12, 56], hemi: [0xf3cfc8, 0x33402e, 1.0], sun: [0xffc0a0, 1.4], sunDir: [0.8, 0.3, 0.25], far: 95, dark: false },
     mist: { background: 0xdfe8e2, fog: [0xdfe8e2, 8, 26], hemi: [0xeaf2ec, 0x56604e, 1.25], sun: [0xffffff, 0.6], sunDir: [0.2, 0.9, -0.2], far: 95, dark: false },
     storm: { background: 0x39454a, fog: [0x39454a, 9, 44], hemi: [0x7d8c92, 0x1c221e, 0.8], sun: [0xaab6c4, 0.5], sunDir: [-0.3, 0.8, 0.3], far: 95, dark: true },
@@ -1911,7 +1923,7 @@ export function createJungle(ctx) {
   const LOOK = {
     day: { top: 0x5fa3d6, tree: 0x2c4a2a, shaft: 0xfff2c0, mist: 0xdfe9e4, sky: 0xa8cbd8, shaftK: 0.55, mistOp: 0.12, light: 1, dapple: 1, stars: 0, flies: 0, butter: 1, rain: 0, wind: 1, litOpen: 0.8, litShade: 0.3, fireK: 0.2 },
     dusk: { top: 0x5a5f9a, tree: 0x2a2a22, shaft: 0xffb46a, mist: 0xe0b090, sky: 0xd8a070, shaftK: 0.7, mistOp: 0.16, light: 0.75, dapple: 0.7, stars: 0.15, flies: 0.3, butter: 0.3, rain: 0, wind: 0.8, litOpen: 0.6, litShade: 0.25, fireK: 0.7 },
-    night: { top: 0x0a1428, tree: 0x050a0e, shaft: 0x9ab8ff, mist: 0x51688c, sky: 0x1c2f52, shaftK: 0.22, mistOp: 0.16, light: 0.22, dapple: 0.45, stars: 1, flies: 1, butter: 0, rain: 0, wind: 0.6, litOpen: 0.28, litShade: 0.1, fireK: 1 },
+    night: { top: 0x0a1428, tree: 0x050a0e, shaft: 0x9ab8ff, mist: 0x51688c, sky: 0x1c2f52, shaftK: 0.22, mistOp: 0.16, light: 0.27, dapple: 0.45, stars: 1, flies: 1, butter: 0, rain: 0, wind: 0.6, litOpen: 0.28, litShade: 0.1, fireK: 1 },
     dawn: { top: 0x8fb0d8, tree: 0x3a3a34, shaft: 0xffc9b0, mist: 0xf3d2cc, sky: 0xf0c0b8, shaftK: 0.6, mistOp: 0.34, light: 0.8, dapple: 0.6, stars: 0.05, flies: 0, butter: 0.5, rain: 0, wind: 0.7, litOpen: 0.6, litShade: 0.25, fireK: 0.5 },
     mist: { top: 0xe6eeea, tree: 0xb8c6bc, shaft: 0xffffff, mist: 0xf2f6f3, sky: 0xdfe8e2, shaftK: 0.18, mistOp: 0.4, light: 0.85, dapple: 0.15, stars: 0, flies: 0, butter: 0.3, rain: 0, wind: 0.5, litOpen: 0.55, litShade: 0.4, fireK: 0.3 },
     storm: { top: 0x20282c, tree: 0x12181a, shaft: 0x8090a0, mist: 0x59666c, sky: 0x4a565c, shaftK: 0, mistOp: 0.2, light: 0.4, dapple: 0, stars: 0, flies: 0, butter: 0, rain: 1, wind: 2.2, litOpen: 0.35, litShade: 0.15, fireK: 0.8 },

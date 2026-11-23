@@ -172,7 +172,7 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     // The blur is baked into the SVG (a filter inside it, rastered once): a CSS blur on these two huge
     // layers was recomputed by the compositor on every frame of a blink and cost ~10 fps on the target GPU.
     const fid = upper ? "lidBlurU" : "lidBlurL";
-    return '<svg class="' + (upper ? "up" : "lo") + '" viewBox="0 0 100 200" preserveAspectRatio="none">' +
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1536" viewBox="0 0 100 200" preserveAspectRatio="none">' +
       '<defs><filter id="' + fid + '" filterUnits="userSpaceOnUse" x="-20" y="-40" width="140" height="280"><feGaussianBlur stdDeviation="0.55 1.6"/></filter></defs>' +
       '<g filter="url(#' + fid + ')">' +
       '<path d="' + d + '" style="fill:var(--lid-deep)"/>' +
@@ -191,7 +191,10 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     return out + '<path d="' + rim + '" fill="none" style="stroke:var(--lid-edge)" stroke-width="' + (upper ? 2.4 : 1.7) + '" stroke-opacity=".55" transform="translate(0,' + dir + ')"/>';
   }
   // each lid = the curved SVG edge (scaled to flatten the arch as it closes) + a plain block behind it
-  eyeEl.innerHTML = '<div class="vig"></div><div class="blk u"></div><div class="blk l"></div>' + lidSvg(true) + lidSvg(false);
+  // The lids are <img>s of the SVG (rastered once per tint): an inline SVG with a blur filter inside was re-rastered on
+  // every frame its scaleY changed, which halved the frame rate of every eye-opening (level 5's alarm: 35 fps).
+  const LID_SVG = [lidSvg(true), lidSvg(false)];
+  eyeEl.innerHTML = '<div class="vig"></div><div class="blk u"></div><div class="blk l"></div><img class="lid up" alt="" draggable="false"><img class="lid lo" alt="" draggable="false">';
   const lidU = eyeEl.querySelector(".up"), lidL = eyeEl.querySelector(".lo"), vigEl = eyeEl.querySelector(".vig");
   const blkU = eyeEl.querySelector(".blk.u"), blkL = eyeEl.querySelector(".blk.l");
   const LID = {
@@ -220,12 +223,15 @@ export function createCinema(THREE, { camera, canvas, rig, audio, setTimeScale, 
     }
     return k[k.length - 1];
   }
+  let lidTintShown = null;
   function setLidTint(name) {
     const c = LID[name] || LID.day;
     eyeEl.style.setProperty("--lid-deep", c[0]);
     eyeEl.style.setProperty("--lid-mid", c[1]);
     eyeEl.style.setProperty("--lid-edge", c[2]);
     eyeEl.style.setProperty("--lid-lash", c[3]);
+    const paint = (s) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s.split("var(--lid-deep)").join(c[0]).split("var(--lid-mid)").join(c[1]).split("var(--lid-edge)").join(c[2]).split("var(--lid-lash)").join(c[3]));
+    if (lidTintShown !== c) { lidTintShown = c; lidU.src = paint(LID_SVG[0]); lidL.src = paint(LID_SVG[1]); }
     ey.tint = LID[name] ? name : "day";
   }
   setLidTint("day");

@@ -850,6 +850,17 @@ function boot() {
   }
 
   // ---- loop ----
+  // a child must always know what to do next: standing still for a while with the controls on (no talk, no cutscene)
+  // makes the objective card bounce, every 12 s, until the player moves again
+  let idleT = 0, idleX = 0, idleZ = 0;
+  function idleNudge(raw) {
+    const obj = ui.el.objective;
+    if (!obj || mode !== "level" || !player.enabled || cinema.playing || ui.speaking() || !obj.classList.contains("on") || obj.classList.contains("done")) { idleT = 0; return; }
+    const dx = player.x - idleX, dz = player.z - idleZ;
+    if (dx * dx + dz * dz > 0.25 || io.mouseDown) { idleX = player.x; idleZ = player.z; idleT = 0; return; }
+    idleT += raw;
+    if (idleT > 12) { idleT = 0; obj.classList.remove("nudge"); void obj.offsetWidth; obj.classList.add("nudge"); }
+  }
   function frame(now) {
     requestAnimationFrame(frame);
     let raw = (now - last) / 1000;
@@ -889,6 +900,7 @@ function boot() {
       if (e.t <= 0) { timers.splice(i, 1); i--; if (e.gen === timerGen) e.fn(); }
     }
     if (active && mode !== "menu") active.update(dt, time.now);
+    idleNudge(raw);
     if (world && world.update) world.update(dt, time.now, player.x, player.z);
     fx.update(dt, time.now);
     updateCamera(dt, raw);

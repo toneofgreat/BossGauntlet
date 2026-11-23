@@ -775,7 +775,7 @@ const WAVES = {
   anvil: [0, 0, 0, 1, 0, 0, 0.75, 0, 0, 0, 0.55, 0, 0, 0.4, 0, 0, 0.22],
 };
 const OUT_TRIM = 0.9; // into the bus compressor
-const POST = 0.6;     // after it: a DynamicsCompressorNode adds ~+6 dB of automatic make-up gain; take it back so the
+const POST = 0.52;    // after it: a DynamicsCompressorNode adds ~+6 dB of automatic make-up gain; take it back so the
                       // soft clip only rounds drum peaks and never grinds on sustained chords
 const DUCK_MAX = 8;   // seconds a duck(1) may hold the playing score silent before it is released automatically
 const CEIL = 0.33;    // soft clip ceiling: just under -9 dBFS
