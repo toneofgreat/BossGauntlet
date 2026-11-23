@@ -2037,6 +2037,7 @@ export function createAudio() {
   }
 
   function snore(on) {
+    if (typeof on === "string") { snoreWho(on); return; }  // levels 12-13: one snore of a named sleeper
     setLoop("snore", on ? 1 : 0, buildSnore, 0.5);
   }
 
@@ -7006,6 +7007,456 @@ export function createAudio() {
   }
 
 
+  // =========================================================================== extensions 3 (levels 12-13, LEVELS3.md B2)
+  // All procedural, through the world bus (wOut / loops on wBus). Positional sounds take world (x, z): they are panned
+  // and attenuated against the ear set by setEar(x, z, yaw) (the level / world calls it with the player each frame;
+  // without it the ear sits at the origin). Every `level` bed returns { stop() } (and level 0 stops it too).
+  let earX = 0, earZ = 0, earYaw = 0;
+  function setEar(x, z, yaw) { earX = num(x, 0); earZ = num(z, 0); earYaw = num(yaw, 0); }
+  function at(x, z, range) {
+    if (typeof x !== "number" || typeof z !== "number") return { pan: 0, g: 1 };
+    const dx = x - earX, dz = z - earZ, d = Math.hypot(dx, dz);
+    // the listener faces +z rotated by yaw; right is (cos yaw, -sin yaw)
+    const side = d > 0.01 ? (dx * Math.cos(earYaw) - dz * Math.sin(earYaw)) / d : 0;
+    const r = range || 30;
+    return { pan: clamp(side * 0.8, -0.9, 0.9), g: clamp(1 / (1 + (d / r) * (d / r) * 3), 0.04, 1), d };
+  }
+  const bedHandle = (name) => ({ stop() { setLoop(name, 0, null, 0.8); } });
+  const vary = (k) => k * rnd(0.94, 1.06);
+
+  // ---- the volcano ----------------------------------------------------------------
+  function lavaBubble(x, z) {
+    if (!ready() || !gate("lavaBubble", 0.06)) return;
+    const p = at(x, z, 18);
+    const dest = wOut(p.pan, 0.12, p.g);
+    one(dest, (t, keep) => {
+      const f = rnd(60, 140);
+      keep(thump(dest, t, f, f * rnd(1.6, 2.4), rnd(0.08, 0.15), 0.02, 0.3, rnd(0.06, 0.12)));
+      keep(burst(dest, t + rnd(0.08, 0.14), { buf: pinkBuf, type: "bandpass", q: 1.4, f0: rnd(500, 1000), attack: 0.003, peak: 0.12, tc: 0.025 }));
+      if (Math.random() < 0.5) keep(crackle(dest, t + 0.1, 0.4, 4000, 0.05, 0.2, false));
+    });
+  }
+  function buildLavaBed(L, t) {
+    loopOut(L, wBus, wVerb, 0.18);
+    L.scale = 0.9;
+    const roar = bed(L, t, pinkBuf, "lowpass", 140, 0.7, 0.45, null, 0.45);
+    lfo(L, t, 0.11, 40, roar.f.frequency);
+    lfo(L, t, 0.17, 0.12, roar.g.gain);
+    const sub = osc("sine", 36, t, t + 1e6); const subG = mkGain(0.1); sub.connect(subG); subG.connect(L.gain); L.nodes.push(sub);
+    lfo(L, t, 0.23, 0.05, subG.gain);
+    const hiss = bed(L, t, whiteBuf, "highpass", 3800, 0.5, 0.012, null, 1);
+    lfo(L, t, 0.31, 0.006, hiss.g.gain);
+    const cr = bed(L, t, whiteBuf, "bandpass", 2600, 0.8, 0.0, null, 1.1);
+    let next = t + 0.1;
+    every(L, 350, (now) => {
+      if (next < now) next = now + 0.03;
+      while (next < now + 0.8) {
+        // crackle: a stony fizz in short bursts
+        cr.g.gain.setValueAtTime(0, next);
+        cr.g.gain.linearRampToValueAtTime(rnd(0.01, 0.04), next + 0.01);
+        cr.g.gain.setTargetAtTime(0, next + 0.02, rnd(0.02, 0.08));
+        if (Math.random() < 0.35) { const f = rnd(60, 150); thump(L.gain, next, f, f * 2, 0.12, 0.02, rnd(0.08, 0.18), 0.08); }
+        next += rnd(0.08, 0.5);
+      }
+    });
+  }
+  function lavaAmbience(level) { setLoop("lavaBed", level, buildLavaBed, 1.2); return bedHandle("lavaBed"); }
+  function eruption(x, z, size = 1) {
+    if (!ready() || !gate("eruption", 0.12)) return;
+    const s = clamp(num(size, 1), 0.1, 1.6);
+    const p = at(x, z, 80);
+    const dest = wOut(p.pan * 0.6, 0.4, clamp(0.35 + 0.65 * p.g, 0, 1));
+    one(dest, (t, keep) => {
+      keep(thump(dest, t, 70, 24, 0.6, 0.008, 0.6 * Math.min(1, s), 0.5));
+      keep(rumble(dest, t, 1.4 + s, 300, 0.5 * s, 5, 0.5));
+      keep(burst(dest, t, { buf: pinkBuf, type: "lowpass", f0: 1800, f1: 200, sweep: 0.5, attack: 0.004, peak: 0.35 * s, tc: 0.25 }));
+      keep(rattle(dest, t + 0.3, 1.0 + s * 0.6, 2400, 1.2, 0.12 * s, 0.25));
+      keep(crackle(dest, t + 0.05, 1.2, 3000, 0.08 * s, 0.3, false));
+    });
+  }
+  function steamVent(x, z) {
+    if (!ready() || !gate("steamVent", 0.3)) return;
+    const p = at(x, z, 16);
+    const dest = wOut(p.pan, 0.1, p.g);
+    one(dest, (t, keep) => {
+      keep(whoosh(dest, t, 1800, 4200, 2600, 0.08, 1.1, 0.16, 0.6, whiteBuf));
+      keep(whoosh(dest, t, 400, 900, 500, 0.1, 0.9, 0.12, 0.5, pinkBuf));
+    });
+  }
+  function rockCrack() {
+    if (!ready() || !gate("rockCrack", 0.05)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.2);
+    one(dest, (t, keep) => {
+      keep(burst(dest, t, { buf: whiteBuf, type: "bandpass", q: 0.9, f0: 2400, f1: 900, sweep: 0.05, attack: 0.001, peak: 0.35, tc: 0.03 }));
+      keep(thump(dest, t, 180, 60, 0.08, 0.002, 0.3, 0.06));
+      keep(rattle(dest, t + 0.03, 0.35, 3200, 1.5, 0.12, 0.35));
+    });
+  }
+  function buildGrind(L, t) {
+    loopOut(L, wBus, wVerb, 0.25);
+    const g = bed(L, t, pinkBuf, "lowpass", 220, 0.9, 0.5, null, 0.35);
+    lfo(L, t, 0.7, 60, g.f.frequency); lfo(L, t, 1.3, 0.2, g.g.gain);
+    const s = bed(L, t, pinkBuf, "bandpass", 700, 2.5, 0.06, null, 0.5);
+    lfo(L, t, 2.1, 200, s.f.frequency);
+  }
+  let grindT = null;
+  function rockGrind(level) {
+    const l = clamp(num(level, 0.6), 0, 1);
+    setLoop("grind", l, buildGrind, 0.4);
+    // a grind is always a moment: it fades on its own after ~2 s unless renewed
+    if (grindT) clearTimeout(grindT);
+    if (l > 0) grindT = setTimeout(() => { grindT = null; setLoop("grind", 0, buildGrind, 1.2); }, 1800);
+    return bedHandle("grind");
+  }
+  function magmorRoar(size = 1) {
+    if (!ready() || !gate("magmorRoar", 0.25)) return;
+    const s = clamp(num(size, 1), 0.1, 1.5);
+    const dest = wOut(0, 0.45, 0.9);
+    one(dest, (t, keep) => {
+      const dur = 0.8 + s * 1.4;
+      // a mountain's throat: low formant growl + boiling rumble + stone grit
+      keep(vox(dest, t, 55, 38, dur, 0.28 * s, [300, 700], 6, 0.06));
+      keep(vox(dest, t + 0.05, 82, 50, dur * 0.9, 0.16 * s, [420, 950], 4.5, 0.05));
+      keep(rumble(dest, t, dur + 0.4, 260, 0.6 * s, 6, 0.4));
+      keep(rattle(dest, t + 0.1, dur, 1800, 1.1, 0.08 * s, 0.3));
+      keep(thump(dest, t, 50, 30, 0.8, 0.02, 0.4 * s, 0.4));
+    });
+  }
+  function magmorStep() {
+    if (!ready() || !gate("magmorStep", 0.2)) return;
+    const dest = wOut(rnd(-0.1, 0.1), 0.35);
+    one(dest, (t, keep) => {
+      keep(thump(dest, t, 62, 26, 0.35, 0.004, 0.55, 0.3));
+      keep(burst(dest, t, { buf: pinkBuf, type: "lowpass", f0: 900, f1: 120, sweep: 0.3, attack: 0.003, peak: 0.3, tc: 0.18 }));
+      keep(burst(dest, t + 0.05, { buf: pinkBuf, type: "bandpass", q: 0.8, f0: 600, attack: 0.01, peak: 0.12, tc: 0.4 })); // the lava slapping back
+    });
+  }
+  const PENTA6 = [0, 2, 4, 7, 9, 12];
+  function spellChime(i = 0) {
+    if (!ready()) return;
+    const dest = wOut(clamp((num(i, 0) - 2) * 0.25, -0.6, 0.6), 0.5);
+    const f = 523.25 * Math.pow(2, PENTA6[clamp(i | 0, 0, 5)] / 12);
+    one(dest, (t, keep) => {
+      keep(bell(dest, t, f, 0.16, 1.1));
+      keep(bell(dest, t + 0.01, f * 2, 0.05, 0.6));
+      keep(tone(dest, t, "sine", f / 2, f / 2, 1.6, 0.05, 0.3, 0.5)); // the stone hums under it
+    });
+  }
+  function dreamWake() {
+    if (!ready()) return;
+    const dest = wOut(0, 0.7);
+    one(dest, (t, keep) => {
+      // a white rush up, a bright chord, a breath
+      keep(whoosh(dest, t, 300, 5000, 3000, 0.7, 0.8, 0.12, 0.5, whiteBuf));
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, k) => keep(bell(dest, t + 0.6 + k * 0.05, f, 0.08, 1.4)));
+      keep(pad(dest, t + 0.5, [261.6, 392, 523.3], 1.6, 0.06, 0.2, 0.6, 2200));
+    });
+  }
+  function windGust(level = 0.6) { gust(level, rnd(-0.7, 0.7)); }
+  function windWhoosh(pan = 0) {
+    if (!ready() || !gate("windWhoosh", 0.08)) return;
+    const dest = wOut(clamp(num(pan, 0), -1, 1), 0.2);
+    one(dest, (t, keep) => {
+      keep(whoosh(dest, t, 500, 2600, 900, 0.18, 0.5, 0.2, 1.2, pinkBuf));
+      keep(whoosh(dest, t + 0.04, 1500, 5200, 2000, 0.15, 0.35, 0.05, 2, whiteBuf));
+    });
+  }
+  function buildRush(L, t) {
+    loopOut(L, wBus, wVerb, 0.1);
+    const a = bed(L, t, pinkBuf, "bandpass", 600, 0.6, 0.3, null, 1);
+    const b = bed(L, t, whiteBuf, "highpass", 3000, 0.5, 0.03, null, 1);
+    lfo(L, t, 0.4, 150, a.f.frequency); lfo(L, t, 0.27, 0.08, a.g.gain); lfo(L, t, 0.5, 0.01, b.g.gain);
+    L.set = (lv, tt) => { a.f.frequency.setTargetAtTime(400 + lv * 900, tt, 0.4); };
+  }
+  function flightRush(level) { setLoop("rush", level, buildRush, 0.8); return bedHandle("rush"); }
+
+  // ---- the camp --------------------------------------------------------------------
+  function campFire(level) { const r = fire(level); return r || bedHandle("fire"); }
+  function eatCrunch() {
+    if (!ready() || !gate("eatCrunch", 0.08)) return;
+    const dest = wOut(rnd(-0.15, 0.15), 0.05);
+    one(dest, (t, keep) => {
+      for (let i = 0; i < 3; i++) {
+        const tt = t + i * rnd(0.13, 0.19);
+        keep(burst(dest, tt, { buf: whiteBuf, type: "bandpass", q: 1.4, f0: rnd(1800, 3200), attack: 0.002, peak: rnd(0.12, 0.2), tc: 0.03 }));
+        keep(rattle(dest, tt + 0.01, 0.08, 4200, 2, 0.06, 0.5));
+        keep(thump(dest, tt, 160, 90, 0.05, 0.002, 0.08, 0.03));
+      }
+    });
+  }
+  function splashSmall() { splash(0.25); }
+  function firefly() {
+    if (!ready() || !gate("firefly", 0.05)) return;
+    const dest = wOut(rnd(-0.5, 0.5), 0.4);
+    one(dest, (t, keep) => {
+      const f = rnd(1800, 2600);
+      keep(bell(dest, t, f, 0.05, 0.25));
+      keep(bell(dest, t + 0.07, f * 1.5, 0.03, 0.2));
+    });
+  }
+  function owl() {
+    if (!ready() || !gate("owl", 1)) return;
+    const dest = wOut(rnd(-0.8, 0.8), 0.6, 0.6);
+    one(dest, (t, keep) => {
+      // hoo... hoo-hoo
+      const f = rnd(330, 370);
+      keep(vox(dest, t, f * 1.05, f * 0.94, 0.45, 0.12, [380, 800], 0, 0));
+      keep(vox(dest, t + 0.7, f * 1.02, f * 0.92, 0.22, 0.1, [380, 800], 0, 0));
+      keep(vox(dest, t + 0.98, f * 1.0, f * 0.9, 0.42, 0.11, [380, 800], 0, 0));
+    });
+  }
+  function buildCrickets(L, t) {
+    loopOut(L, wBus, wVerb, 0.2);
+    const carriers = [4300, 4700, 5100];
+    for (let k = 0; k < 3; k++) {
+      const o = osc("sine", carriers[k], t, t + 1e6), g = mkGain(0), am = osc("square", 28 + k * 3, t, t + 1e6), amG = mkGain(0.012);
+      am.connect(amG); amG.connect(g.gain); o.connect(g); g.connect(L.gain); L.nodes.push(o, am);
+      lfo(L, t, 0.5 + k * 0.13, 0.008, g.gain);
+    }
+  }
+  function cricketNight(level) { setLoop("crickets", level, buildCrickets, 1.5); return bedHandle("crickets"); }
+  function buildForest(L, t) {
+    loopOut(L, wBus, wVerb, 0.3);
+    const air = bed(L, t, pinkBuf, "bandpass", 500, 0.5, 0.05, null, 0.6);
+    lfo(L, t, 0.07, 0.025, air.g.gain);
+    const leaves = bed(L, t, whiteBuf, "bandpass", 2400, 0.8, 0.008, null, 1);
+    lfo(L, t, 0.19, 0.006, leaves.g.gain);
+    every(L, 1600, (now) => {
+      const r = Math.random();
+      if (r < 0.18) creak(L.gain, now + 0.2, rnd(160, 260), rnd(0.6, 1.2), 0.03);                                   // a branch creaks
+      else if (r < 0.3) crackle(L.gain, now + 0.1, 0.25, 2500, 0.03, 0.3, false);                                    // twigs
+      else if (r < 0.36) { const f = rnd(1300, 1700); chirp(L.gain, now + 0.1, f, f * 0.8, 0.15, 0.02); }             // a night bird
+    });
+  }
+  function forestNight(level) { setLoop("forestNight", level, buildForest, 1.5); return bedHandle("forestNight"); }
+
+  // ---- wolves ----------------------------------------------------------------------
+  function wolfHowl(x, z, n = 1) {
+    if (!ready() || !gate("wolfHowl", 0.4)) return;
+    const p = at(x, z, 60);
+    const dest = wOut(p.pan, 0.7, clamp(0.25 + p.g, 0, 1));
+    const count = clamp(num(n, 1) | 0, 1, 4);
+    one(dest, (t, keep) => {
+      for (let i = 0; i < count; i++) {
+        const tt = t + i * rnd(0.5, 1.1), f = rnd(380, 470) * (i ? rnd(0.85, 1.15) : 1);
+        // rises, holds with a wavering vibrato, sags
+        const g = mkGain(0);
+        const dur = rnd(2.2, 3.2);
+        g.gain.setValueAtTime(0, tt); g.gain.linearRampToValueAtTime(0.11, tt + 0.5); g.gain.setValueAtTime(0.11, tt + dur * 0.7); g.gain.linearRampToValueAtTime(0, tt + dur);
+        const o = osc("sawtooth", f * 0.75, tt, tt + dur + 0.05);
+        o.frequency.linearRampToValueAtTime(f, tt + 0.6); o.frequency.setValueAtTime(f, tt + dur * 0.65); o.frequency.exponentialRampToValueAtTime(f * 0.7, tt + dur);
+        const v = osc("sine", 5.2, tt, tt + dur + 0.05), vg = mkGain(f * 0.012); v.connect(vg); vg.connect(o.frequency);
+        const fa = filt("bandpass", 700, 4), fb = filt("bandpass", 1150, 6), lp = filt("lowpass", 2200, 0.5);
+        o.connect(lp); lp.connect(fa); lp.connect(fb); fa.connect(g); fb.connect(g); g.connect(dest);
+        keep(tt + dur + 0.1);
+      }
+    });
+  }
+  function wolfGrowl() {
+    if (!ready() || !gate("wolfGrowl", 0.3)) return;
+    const dest = wOut(rnd(-0.4, 0.4), 0.15);
+    one(dest, (t, keep) => {
+      keep(vox(dest, t, 95, 80, 1.1, 0.16, [400, 900], 22, 0.15));
+      keep(rumble(dest, t, 1.1, 500, 0.14, 8, 0.8));
+    });
+  }
+  function wolfBark() {
+    if (!ready() || !gate("wolfBark", 0.12)) return;
+    const dest = wOut(rnd(-0.4, 0.4), 0.2);
+    one(dest, (t, keep) => {
+      keep(vox(dest, t, 420, 260, 0.14, 0.2, [700, 1400], 0, 0));
+      keep(burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 1, f0: 900, attack: 0.003, peak: 0.16, tc: 0.04 }));
+    });
+  }
+  function wolfYelp() {
+    if (!ready() || !gate("wolfYelp", 0.1)) return;
+    const dest = wOut(rnd(-0.4, 0.4), 0.25);
+    one(dest, (t, keep) => {
+      keep(vox(dest, t, 700, 1100, 0.12, 0.16, [900, 2000], 0, 0));
+      keep(vox(dest, t + 0.16, 900, 600, 0.22, 0.12, [900, 1800], 9, 0.04));
+    });
+  }
+  function buildPaws(L, t) {
+    loopOut(L, wBus, wVerb, 0.1);
+    every(L, 120, (now) => { if (Math.random() < 0.8) burst(L.gain, now + rnd(0, 0.1), { buf: pinkBuf, type: "bandpass", q: 1.2, f0: rnd(500, 900), attack: 0.002, peak: rnd(0.05, 0.12), tc: 0.025 }); });
+  }
+  function pawRun(level) { setLoop("paws", level, buildPaws, 0.3); return bedHandle("paws"); }
+
+  // ---- the Far Lands -----------------------------------------------------------------
+  function stoneTurn() {
+    if (!ready() || !gate("stoneTurn", 0.15)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.3);
+    one(dest, (t, keep) => {
+      keep(rumble(dest, t, 0.55, 420, 0.3, 4, 0.7));
+      keep(creak(dest, t, 120, 0.5, 0.06));
+      keep(thump(dest, t + 0.5, 110, 50, 0.12, 0.003, 0.35, 0.1)); // the clunk into place
+    });
+  }
+  const runeHums = {};
+  function runeHum(i = 0, on = true) {
+    const k = "rune" + (i | 0);
+    if (!on) { setLoop(k, 0, null, 1); return; }
+    setLoop(k, 0.5, (L, t) => {
+      loopOut(L, wBus, wVerb, 0.5);
+      const f = 130.8 * Math.pow(2, PENTA6[clamp(i | 0, 0, 5)] / 12);
+      for (const m of [1, 2, 3.01]) { const o = osc("sine", f * m, t, t + 1e6), g = mkGain(0.05 / m); o.connect(g); g.connect(L.gain); L.nodes.push(o); lfo(L, t, 0.3 + m * 0.1, 0.02 / m, g.gain); }
+    }, 1);
+    void runeHums;
+    return bedHandle(k);
+  }
+  function buildPortal(L, t) {
+    loopOut(L, wBus, wVerb, 0.5);
+    const d = bed(L, t, pinkBuf, "lowpass", 160, 0.7, 0.3, null, 0.5);
+    lfo(L, t, 0.5, 40, d.f.frequency);
+    const sw = bed(L, t, pinkBuf, "bandpass", 700, 3, 0.07, null, 0.8);
+    lfo(L, t, 0.33, 400, sw.f.frequency);
+    for (const f of [110, 164.8, 220.4]) { const o = osc("sine", f, t, t + 1e6), g = mkGain(0.035); o.connect(g); g.connect(L.gain); L.nodes.push(o); lfo(L, t, 0.13 + f * 0.0007, 0.02, g.gain); }
+    const sh = bed(L, t, whiteBuf, "highpass", 6000, 0.5, 0.01, null, 1);
+    lfo(L, t, 6, 0.006, sh.g.gain);
+  }
+  function portalHum(level) { setLoop("portal", level, buildPortal, 1.2); return bedHandle("portal"); }
+  function portalOpen() {
+    if (!ready()) return;
+    const dest = wOut(0, 0.8);
+    one(dest, (t, keep) => {
+      keep(rumble(dest, t, 1.6, 300, 0.5, 4, 0.5));
+      keep(burst(dest, t + 1.2, { buf: whiteBuf, type: "lowpass", f0: 400, f1: 9000, sweep: 0.5, attack: 0.4, peak: 0.25, tc: 0.4 }));
+      [220, 277.2, 329.6, 440, 554.4].forEach((f, k) => keep(bell(dest, t + 1.3 + k * 0.06, f * 2, 0.07, 1.6)));
+      keep(thump(dest, t + 1.3, 80, 30, 0.6, 0.01, 0.5, 0.4));
+    });
+  }
+  function portalKnock() {
+    if (!ready()) return;
+    const dest = wOut(0, 0.6);
+    one(dest, (t, keep) => {
+      keep(burst(dest, t, { buf: whiteBuf, type: "lowpass", f0: 12000, f1: 300, sweep: 0.4, attack: 0.002, peak: 0.45, tc: 0.15 }));
+      keep(thump(dest, t, 90, 28, 0.4, 0.002, 0.6, 0.25));
+      keep(whoosh(dest, t + 0.05, 2000, 400, 200, 0.05, 0.6, 0.18, 0.8, pinkBuf));
+      keep(tone(dest, t + 0.3, "sine", 2200, 2100, 1.6, 0.025, 0.1, 0.6)); // ears ringing
+    });
+  }
+
+  // ---- babies & robots ------------------------------------------------------------------
+  function babyChirp(i = 0) {
+    if (!ready() || !gate("babyChirp" + (i | 0), 0.08)) return;
+    const dest = wOut(rnd(-0.3, 0.3), 0.12);
+    const k = [1, 1.12, 1.26][clamp(i | 0, 0, 2)] * rnd(0.97, 1.03);
+    one(dest, (t, keep) => {
+      keep(chirp(dest, t, 1700 * k, 2500 * k, 0.07, 0.1));
+      keep(chirp(dest, t + 0.1, 2100 * k, 1600 * k, 0.09, 0.08));
+      // one in eight: a tiny electronic click under the chirp (the illusion leaking)
+      if (Math.random() < 0.125) keep(burst(dest, t + 0.02, { buf: whiteBuf, type: "highpass", f0: 7000, attack: 0.0005, peak: 0.05, tc: 0.004 }));
+    });
+  }
+  function babyCry(i = 0) {
+    if (!ready() || !gate("babyCry" + (i | 0), 0.4)) return;
+    const dest = wOut(rnd(-0.3, 0.3), 0.15);
+    const k = [1, 1.1, 1.22][clamp(i | 0, 0, 2)];
+    one(dest, (t, keep) => {
+      keep(vox(dest, t, 900 * k, 1200 * k, 0.35, 0.09, [1100, 2600], 8, 0.04));
+      keep(vox(dest, t + 0.45, 1100 * k, 800 * k, 0.5, 0.08, [1100, 2400], 8, 0.05));
+    });
+  }
+  function robotServo() {
+    if (!ready() || !gate("robotServo", 0.1)) return;
+    const dest = wOut(rnd(-0.3, 0.3), 0.1);
+    one(dest, (t, keep) => {
+      const f = rnd(300, 500);
+      keep(tone(dest, t, "sawtooth", f, f * 1.6, 0.25, 0.03, 0.02, 0.04));
+      keep(tone(dest, t + 0.28, "sawtooth", f * 1.6, f * 1.2, 0.15, 0.025, 0.02, 0.03));
+      keep(burst(dest, t + 0.45, { buf: whiteBuf, type: "bandpass", q: 3, f0: 3000, attack: 0.001, peak: 0.08, tc: 0.01 }));
+    });
+  }
+  function robotLaser() {
+    if (!ready() || !gate("robotLaser", 0.08)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.2);
+    one(dest, (t, keep) => {
+      keep(tone(dest, t, "square", 1800, 600, 0.5, 0.05, 0.01, 0.1));
+      keep(tone(dest, t, "sawtooth", 905, 302, 0.5, 0.04, 0.01, 0.1));
+      keep(burst(dest, t, { buf: whiteBuf, type: "bandpass", q: 2, f0: 5000, attack: 0.002, peak: 0.06, tc: 0.3 }));
+    });
+  }
+  function robotBeep(i = 0) {
+    if (!ready() || !gate("robotBeep", 0.05)) return;
+    const dest = wOut(rnd(-0.3, 0.3), 0.08);
+    one(dest, (t, keep) => { const f = [1320, 1760, 990, 2093][(i | 0) & 3]; keep(tone(dest, t, "square", f, f, 0.08, 0.04, 0.003, 0.01)); keep(tone(dest, t + 0.1, "square", f * 1.5, f * 1.5, 0.06, 0.03, 0.003, 0.01)); });
+  }
+  function rocketBurst() {
+    if (!ready() || !gate("rocketBurst", 0.15)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.3);
+    one(dest, (t, keep) => {
+      keep(burst(dest, t, { buf: pinkBuf, type: "lowpass", f0: 600, f1: 3000, sweep: 0.3, attack: 0.02, peak: 0.3, tc: 0.35 }));
+      keep(rumble(dest, t, 0.9, 500, 0.25, 5, 0.9));
+      keep(tone(dest, t, "sawtooth", 120, 260, 0.8, 0.05, 0.05, 0.2));
+    });
+  }
+
+  // ---- the house -------------------------------------------------------------------
+  function hammer(material = "wood") {
+    if (!ready() || !gate("hammer", 0.06)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.15);
+    const stone = material === "stone";
+    one(dest, (t, keep) => {
+      keep(thump(dest, t, stone ? 240 : 170, stone ? 120 : 80, 0.05, 0.001, 0.4, stone ? 0.04 : 0.07, "triangle"));
+      keep(burst(dest, t, { buf: whiteBuf, type: "bandpass", q: stone ? 3 : 1.5, f0: stone ? 3200 : 1400, attack: 0.001, peak: 0.25, tc: stone ? 0.03 : 0.05 }));
+      if (stone) keep(bell(dest, t, 1900, 0.03, 0.15));
+    });
+  }
+  function sawWood() {
+    if (!ready() || !gate("saw", 0.4)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.1);
+    one(dest, (t, keep) => {
+      for (let i = 0; i < 4; i++) keep(whoosh(dest, t + i * 0.26, 1500, 3400, 2200, 0.1, 0.12, 0.12, 4, whiteBuf));
+    });
+  }
+  function placeLog() {
+    if (!ready() || !gate("placeLog", 0.1)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.2);
+    one(dest, (t, keep) => {
+      keep(thump(dest, t, 120, 55, 0.12, 0.003, 0.5, 0.12));
+      keep(thump(dest, t + 0.09, 140, 70, 0.08, 0.003, 0.2, 0.08));
+      keep(burst(dest, t, { buf: pinkBuf, type: "bandpass", q: 1.2, f0: 700, attack: 0.002, peak: 0.15, tc: 0.06 }));
+    });
+  }
+  function placeStone() {
+    if (!ready() || !gate("placeStone", 0.1)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.2);
+    one(dest, (t, keep) => {
+      keep(thump(dest, t, 150, 70, 0.08, 0.002, 0.45, 0.07));
+      keep(rattle(dest, t + 0.02, 0.25, 2600, 1.5, 0.1, 0.4));
+    });
+  }
+  function thatchRustle() {
+    if (!ready() || !gate("thatch", 0.1)) return;
+    const dest = wOut(rnd(-0.2, 0.2), 0.12);
+    one(dest, (t, keep) => { keep(fabricRustle(dest, t, 0.5, 2800, 0.8, 0.12, 5)); keep(fabricRustle(dest, t + 0.1, 0.4, 1500, 0.8, 0.08, 3)); });
+  }
+  function snoreWho(who) {
+    if (!ready() || !gate("snore_" + who, 1.2)) return;
+    const dest = wOut(rnd(-0.3, 0.3), 0.15, 0.8);
+    const k = who === "pip" ? 1.5 : who === "baby" ? 2.2 : who === "burra" ? 0.75 : 1;
+    one(dest, (t, keep) => {
+      keep(rumble(dest, t, 1.1, 300 * k, 0.12, 3, 0.6 * k));
+      keep(vox(dest, t + 0.2, 90 * k, 70 * k, 0.8, 0.05, [500, 1100], 30, 0.2));
+      keep(whoosh(dest, t + 1.3, 1200 * k, 2200 * k, 900 * k, 0.4, 0.5, 0.04, 1, whiteBuf)); // the breath out, a little whistle
+    });
+  }
+  function buildBirds(L, t) {
+    loopOut(L, wBus, wVerb, 0.35);
+    every(L, 700, (now) => {
+      if (Math.random() < 0.55) {
+        const tt = now + rnd(0, 0.5), f = rnd(2400, 3600), n = 2 + ((Math.random() * 4) | 0);
+        for (let i = 0; i < n; i++) chirp(L.gain, tt + i * rnd(0.08, 0.14), f * rnd(0.9, 1.15), f * rnd(0.7, 1.3), rnd(0.05, 0.1), rnd(0.02, 0.04));
+      }
+    });
+  }
+  function morningBirds(level) { setLoop("morningBirds", level, buildBirds, 1.5); return bedHandle("morningBirds"); }
+  function clockTick() {
+    if (!ready() || !gate("clockTick", 0.2)) return;
+    const dest = wOut(0, 0.3);
+    one(dest, (t, keep) => { keep(burst(dest, t, { buf: whiteBuf, type: "bandpass", q: 6, f0: 3500, attack: 0.0005, peak: 0.2, tc: 0.008 })); keep(thump(dest, t, 900, 700, 0.01, 0.0005, 0.1, 0.01, "triangle")); });
+  }
+
   return {
     resume,
     setListenerMuted,
@@ -7053,6 +7504,12 @@ export function createAudio() {
     bossRoar, bossStep, bossWindup, bossSwipe, bossSlam, bossCharge, bossHitWall, bossHurt, bossPhase, kingFall, crownClatter,
     paperRustle, paperUnfold, armorClank, leverPull, gateOpen, fenceRattle, truckEngine,
     muffle,
+    // extensions 3 (levels 12-13, LEVELS3.md B2)
+    setEar, lavaBubble, lavaAmbience, eruption, steamVent, rockCrack, rockGrind, magmorRoar, magmorStep, spellChime, dreamWake,
+    windGust, windWhoosh, flightRush, campFire, eatCrunch, splashSmall, firefly, owl, cricketNight, forestNight,
+    wolfHowl, wolfGrowl, wolfBark, wolfYelp, pawRun, stoneTurn, runeHum, portalHum, portalOpen, portalKnock,
+    babyChirp, babyCry, robotServo, robotLaser, robotBeep, rocketBurst, hammer, sawWood, placeLog, placeStone, thatchRustle,
+    morningBirds, clockTick,
     // the hook for src/music.js (LEVELS2.md B1): a gain that feeds the master compressor -> limiter -> soft clip -> mute chain
     // directly (NOT through the heartDrop duck), plus the reverb send and the noise buffers. null until resume() has built the graph.
     musicBus() {

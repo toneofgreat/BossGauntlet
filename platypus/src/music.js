@@ -535,6 +535,211 @@ function flightForm(root, scale, prog, lead, lyd) {
   };
 }
 
+// ============================================================================================ levels 12-13 (LEVELS3.md B1)
+// Eight more states. Same layering rules: L0 always sounds, the others fade in with intensity.
+const MAGMOR = "1 . b2 . | b5 . 4 b3 | 1 . . . | - - - -";
+const HOME = "1 5 6 5 | 3 . 2 3 | 1 . . . | - - - -";
+Object.assign(DEFS, {
+  // ------------------------------------------------------------------ VOLCANO: D phrygian, 88 (the approach)
+  volcano: {
+    layers: 5, swing: 0,
+    forms: [{
+      root: 62, scale: "phryg",
+      prog: "1 | 1 | b2M | 1 | 1 | 1 | 7m | 1 | 4 | 4 | b2M | 1 | 6 | b2M | 7m | 1",
+      tracks: [
+        { type: "mel", inst: "sub", L: 0, g: 0.27, o: -2, long: 1, len: 1, lines: "1 . . . | . . . . | . . . . | . . . ." },
+        { type: "pad", inst: "pad", L: 0, g: 0.08, o: -1, voices: "low", fill: 0, fat: 1, atk: 2, rel: 0.6, lp: 700, lpI: [600, 1300], cho: 0.6, verb: 0.6, vel: 0.7 },
+        { type: "drum", inst: "heart", L: 1, g: 0.42, duck: 0.15, pat: ["x-------x-------", "x-------x-------", "x-------x-------", "x-------x---x---"] },
+        { type: "drum", inst: "taiko", L: 1, g: 0.22, f: 52, room: 0.4, verb: 0.35, pat: [R4, "--------------a-", R4, "a---------a-a-a-"] },
+        { type: "bass", inst: "bass", L: 2, g: 0.26, o: -2, sc: 1, len: 0.8, pat: ["r . r . - r 8 r", "r . r . - 8 r a", "r . r . - r 8 r", "r . 8 r . r 5 a"] },
+        { type: "drum", inst: "shaker", L: 2, g: 0.05, pan: 0.3, pat: "o-x-o-x-o-x-o-xo" },
+        { type: "mel", inst: "flute", L: 3, g: 0.1, o: 0, vib: 1, pan: -0.15, verb: 0.55, dly: 0.25, len: 1,
+          lines: "1 . . . | b2 . 1 . | 7, . . . | 1 . . . | 5 . . 4 | 3 . b2 . | 1 . . . | - - - - | " +
+            "4 . . 5 | 6 . 5 4 | 3 . b2 . | 1 . . . | 6 . 5 . | 4 . 3 b2 | 1 . 7, . | 1 . . ." },
+        { type: "pad", inst: "choir", L: 4, g: 0.15, o: 0, voices: 3, formant: 1, verb: 0.7, cho: 0.5, atk: 1.4, rel: 0.5, vel: 0.7, fill: 0 },
+        { type: "drum", inst: "anvil", L: 4, g: 0.05, pan: 0.35, verb: 0.4, pat: ["--------x-------", R4, "--------x-------", "--------x---x---"] },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ INFERNO: D phrygian -> E phrygian, 168 (MAGMOR)
+  inferno: {
+    layers: 5, swing: 0, hot: true,
+    lift: (d, rel) => (d.phase >= 2 && rel >= 16 ? 2 : 0),
+    forms: [{
+      root: 62, scale: "phryg",
+      prog: "1 | b2M | 1 | b5M,4 | 1 | b2M | 6 | 7m | 4 | b2M | 4 | b5M | 1 | b2M | 7m,b2M | 1",
+      tracks: [
+        { type: "drum", inst: "kick", L: 0, g: 0.52, duck: 0.45, ph: [0], pat: ["x-------x-------", "x-------x--x----", "x-------x-------", "x-----x-x--x-x--"] },
+        { type: "drum", inst: "kick", L: 0, g: 0.5, duck: 0.45, ph: [1, 2], pat: ["x---x---x---x---", "x---x---x--xx---", "x---x---x---x---", "x-x-x---x-xxx-x-"] },
+        { type: "drum", inst: "snare", L: 0, g: 0.3, room: 0.35, ph: [0], pat: ["--------x-------", "--------x-------", "--------x-------", "--------x--x-xxx"] },
+        { type: "drum", inst: "snare", L: 0, g: 0.3, room: 0.3, ph: [1, 2], pat: ["----x-------x---", "----x-------x---", "----x-------x---", "----x---x-x-xxxx"] },
+        { type: "drum", inst: "taiko", L: 0, g: 0.42, f: 64, room: 0.4, pan: -0.15, pat: ["a--a--a-----a---", "a--a--a---b-b---", "a--a--a-----a---", "a-a-a-b-b-b-cccc"] },
+        { type: "drum", inst: "anvil", L: 0, g: 0.08, pan: 0.3, verb: 0.3, pat: ["----x-------x---", "----x-----x-x---"] },
+        { type: "drum", inst: "crash", L: 0, g: 0.14, verb: 0.3, pat: ["X", "", "", "", "", "", "", ""] },
+        { type: "drum", inst: "hat", L: 3, g: 0.055, pan: 0.3, ph: [1], pat: "x-x-x-x-x-x-x-x-" },
+        { type: "drum", inst: "hat", L: 3, g: 0.06, pan: 0.3, ph: [2], pat: "xxxxxxxxxxxxxxxx" },
+        // MAGMOR's motif is the bass: distorted low brass on top of it
+        { type: "mel", inst: "bass", L: 1, g: 0.31, o: -2, sc: 1, len: 0.85,
+          lines: "1 1 - 1 b2 . 1 . | b5 . 4 . b3 . 1 . | 1 1 - 1 b2 . 1 . | b5 b5 4 4 b3 b3 b2 b2 | " +
+            "1 1 - 1 b2 . 1 . | b5 . 4 . b3 . 1 . | 6, 6, - 6, 7, . 6, . | 7, 7, 7, 7, 1 1 b2 b2 | " +
+            "4 4 - 4 5 . 4 . | b2 b2 - b2 b3 . b2 . | 4 4 - 4 5 . 4 . | b5 b5 b5 b5 4 4 b3 b3 | " +
+            "1 1 - 1 b2 . 1 . | b5 . 4 . b3 . 1 . | 7, 7, - 7, b2 . b2 . | 1 - 1 1 1 - - -" },
+        { type: "mel", inst: "brass", L: 1, g: 0.21, o: -1, fat: 1, dark: 1, verb: 0.35, len: 0.92, pan: -0.1,
+          lines: "1 . b2 . | b5 . 4 b3 | 1 . . . | - - - - | 1 . b2 . | b5 . 4 b3 | 6, . 7, . | 1 . . - | " +
+            "4 . 5 . | b2 . b3 . | 4 . 5 . | b5 . 4 b3 | 1 . b2 . | b5 . 4 b3 | 7, . b2 . | 1 . . -" },
+        { type: "pad", inst: "pad", L: 2, g: 0.08, o: -1, voices: 3, fat: 1, lp: 1400, lpI: [1100, 2600], cho: 0.4, verb: 0.4 },
+        { type: "pad", inst: "brass", L: 2, g: 0.12, o: 0, voices: 2, pan: 0.2, verb: 0.3, stab: 2.2, ph: [1, 2],
+          rhythm: sec(["x-----x---x-----", "x--x--x-----x-x-"], ["x-----x---x-----", "x--x--x-----x-x-"], ["X-------x-----x-", "X-----x---x-----"], ["x-----x---x-----", "x--x--x---X-----"]) },
+        { type: "pad", inst: "choir", L: 3, g: 0.22, o: 0, ctr: 5, voices: 2, formant: 1, verb: 0.6, cho: 0.5, atk: 0.25, rel: 0.12, fill: 0 },
+        { type: "arp", inst: "spic", L: 4, g: 0.1, o: 0, pan: -0.25, verb: 0.2, room: 0.2, lp: 3400, vel: 0.8, ph: [1, 2],
+          pat: ["0 0 1 0 2 0 1 0 0 0 1 0 2 0 3 2", "0 0 2 0 1 0 2 0 3 0 2 0 1 0 2 1"] },
+        // phase 3: the platypus theme stands up against the mountain
+        { type: "mel", inst: "lead", L: 4, g: 0.14, o: 1, dbl: -12, verb: 0.4, dly: 0.22, len: 0.96, ph: [2],
+          lines: "1 3 5 . | 6 5 3 2 | 1 . 3 4 | 5 . . . | 1 3 5 1' | 6 5 3 2 | 1 . 3 2 | 1 . . . | 6 . 5 6 | 7 . 6 4 | 4 . 5 6 | 6 . 7 . | 1' . 5 . | 6 5 3 2 | 1 . 3 2 | 1 . . ." },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ WIND: D lydian, 120 (the duet on the wind)
+  wind: {
+    layers: 5, swing: 0,
+    forms: [{
+      root: 62, scale: "lydian",
+      prog: "1 | 2/1 | 1 | 2/1 | 6 | 2 | 5 | 2 | 1 | 2/1 | 37 | 6 | 4 | 2 | 5,2 | 1",
+      tracks: [
+        { type: "pad", inst: "pad", L: 0, g: 0.11, o: 0, ctr: 7, voices: 3, fill: 0, fat: 1, atk: 0.8, rel: 0.3, lp: 2000, lpI: [1500, 3600], cho: 0.8, verb: 0.55, vel: 0.7 },
+        { type: "pad", inst: "glass", L: 0, g: 0.05, o: 1, voices: "top", atk: 1, rel: 0.4, verb: 0.7, pan: 0.3, vel: 0.7 },
+        { type: "arp", inst: "pluck", L: 1, g: 0.085, o: 1, bright: 1, dec: 0.08, pan: -0.3, dly: 0.42, verb: 0.3, vel: 0.75, len: 0.8,
+          pat: ["0 1 2 3 2 1 2 3 0 1 2 3 2 1 3 2", "0 1 2 3 2 1 2 3 0' 3 2 1 2 3 2 1"] },
+        { type: "drum", inst: "kick", L: 2, g: 0.42, duck: 0.4, pat: ["x-------x-------", "x-------x-x-----", "x-------x-------", "x-------x-x---x-"] },
+        { type: "drum", inst: "clap", L: 2, g: 0.16, room: 0.4, pat: ["----x-------x---", "----x-------x---", "----x-------x---", "----x-------x-xx"] },
+        { type: "drum", inst: "shaker", L: 2, g: 0.05, pan: -0.25, pat: "o-x-o-x-o-x-o-x-" },
+        { type: "bass", inst: "bass", L: 2, g: 0.24, o: -2, sc: 1, soft: 1, len: 0.9, pat: ["r . . . - r 5 .", "r . . . - 5 r a", "r . . . - r 5 .", "r . . 5 . 8 . a"] },
+        { type: "mel", inst: "flute", L: 3, g: 0.12, o: 1, vib: 1, verb: 0.5, dly: 0.3, len: 1,
+          lines: "5 . 3 . | 4 . 2 . | 3 . 1 . | 2 . . . | 6, . 1 3 | 2 . . . | 7, . 2 5 | 4 . . . | " +
+            "5 . 6 7 | 1' . 7 . | 6 . 5 . | 3 . . . | 4 . 6 1' | 7 . 6 . | 5 . 4 2 | 1 . . ." },
+        { type: "pad", inst: "strings", L: 4, g: 0.07, o: 1, ctr: 5, voices: "top", fill: 0, fat: 1, verb: 0.5, cho: 0.6, pan: 0.3, lp: 4200 },
+        { type: "mel", inst: "cello", L: 4, g: 0.1, o: -1, verb: 0.5, pan: -0.2, len: 1,
+          lines: "1 . . . | 2 . . . | 3 . . . | 2 . . . | 6, . . . | 2 . . . | 5, . . . | 2 . . . | 1 . . . | 2 . . . | 3 . . . | 6, . . . | 4, . . . | 2 . . . | 5, . 2 . | 1 . . ." },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ WOODS: D minor, 92 (the dark woods at night)
+  woods: {
+    layers: 5, swing: 0, calm: true,
+    forms: [{
+      root: 62, scale: "minor",
+      prog: "1 | 1 | 6 | 6 | 4 | 4 | 5s | 5M | 1 | 1 | b2M | b2M | 4 | 6 | 5s | 5M",
+      tracks: [
+        { type: "pad", inst: "strings", L: 0, g: 0.075, o: -1, voices: "low", fill: 0, fat: 1, atk: 1.6, rel: 0.7, lp: 900, lpI: [700, 1500], cho: 0.5, verb: 0.6, vel: 0.7 },
+        { type: "mel", inst: "sub", L: 0, g: 0.18, o: -2, long: 1, len: 1, lines: "1 . . . | . . . . | 6, . . . | . . . . | 4, . . . | . . . . | 5, . . . | . . . ." },
+        { type: "drum", inst: "tick", L: 1, g: 0.06, pan: 0.35, room: 0.3, pat: ["x-----x---x-----", "x-----x-----x---", "x-----x---x-----", "x---x---x---x-x-"] },
+        { type: "drum", inst: "rim", L: 1, g: 0.05, pan: -0.35, room: 0.4, pat: ["--------x-------", "------------x---", "--------x-------", "----x-------x---"] },
+        { type: "mel", inst: "flute", L: 1, g: 0.075, o: 1, vib: 1, verb: 0.75, dly: 0.35, len: 1, when: (fb) => fb % 2 === 1,
+          lines: "- - - - | 5 . 3 . | - - - - | 5 . 3 . | - - - - | 4 . 2 . | - - - - | 5 . #7, . | - - - - | 5 . 3 . | - - - - | b2 . 1 . | - - - - | 3 . 1 . | - - - - | 2 . #7, ." },
+        { type: "arp", inst: "pizz", L: 2, g: 0.1, o: 0, pan: 0.2, verb: 0.4, room: 0.3, vel: 0.75,
+          pat: ["0 - 1 - 2 - 1 -", "0 - 2 - 1 - 0 -", "0 - 1 - 2 - 1 -", "0 1 2 - 1 - 0 -"] },
+        { type: "pad", inst: "strings", L: 3, g: 0.07, o: 0, ctr: 5, voices: 2, swell: 1, fat: 1, lp: 2200, verb: 0.6, cho: 0.5, when: (fb) => fb % 2 === 1 },
+        { type: "mel", inst: "cello", L: 3, g: 0.11, o: -1, verb: 0.55, pan: -0.15, len: 1,
+          lines: "1 . . . | 2 . b3 . | 3 . . . | . . 2 . | 1 . . . | 6, . . . | 5, . . . | #7, . . . | 1 . . . | 2 . b3 . | b2 . . . | . . 1 . | 6, . . . | 3 . . . | 2 . . . | #7, . . ." },
+        { type: "drum", inst: "taiko", L: 4, g: 0.3, f: 50, room: 0.4, verb: 0.3, pat: ["x---------x-----", "x-------x-------", "x---------x-----", "x-------x---x-x-"] },
+        { type: "drum", inst: "heart", L: 4, g: 0.26, duck: 0.15, pat: "x-------x-------" },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ FARLANDS: F# lydian over D, 70, too much reverb (the illusion)
+  farlands: {
+    layers: 5, swing: 0.1, calm: true,
+    forms: [{
+      root: 66, scale: "lydian",
+      prog: "19 | 2/1 | 19 | 37 | 19 | 2/1 | 67 | 2 | 5 | 67 | 37 | 2 | 19 | 2/1 | 37 | 19",
+      tracks: [
+        { type: "mel", inst: "sub", L: 0, g: 0.22, o: -1, long: 1, len: 1, lines: "b6,, . . . | . . . . | . . . . | . . . ." },
+        { type: "pad", inst: "pad", L: 0, g: 0.1, o: 0, fill: 0, fat: 1, atk: 1, rel: 0.5, lp: 1500, lpI: [1100, 2600], cho: 0.9, verb: 0.9, vel: 0.7 },
+        { type: "pad", inst: "glass", L: 1, g: 0.06, o: 1, voices: "top", atk: 1.2, rel: 0.6, verb: 0.95, pan: 0.3, vel: 0.7 },
+        { type: "bass", inst: "bass", L: 1, g: 0.22, o: -2, sc: 1, soft: 1, len: 0.92, pat: ["r . . . - r 5 .", "r . . . - 5 r a", "r . . . - r 5 .", "r . . 5 . 8 . a"] },
+        { type: "arp", inst: "pluck", L: 2, g: 0.075, o: 0, ctr: 5, dec: 0.22, pan: -0.3, dly: 0.5, verb: 0.8, vel: 0.7, pat: ["0 2 1 2 3 2 1 2", "0 2 1 3 2 3 1 2"] },
+        { type: "mel", inst: "celesta", L: 3, g: 0.12, o: 1, pan: 0.2, verb: 0.9, dly: 0.45, vel: 0.75,
+          lines: "1 3 5 . | - - 6 5 | 3 . 2 . | - - - - | 1 3 5 . | 6 5 3 2 | 1 . 2 3 | 2 . . . | 6 . 5 3 | 5 . 3 2 | 3 . 2 1 | 2 . . 5, | 1 3 5 . | 6 5 3 2 | 1 . 2 3 | 5 . . ." },
+        { type: "drum", inst: "rim", L: 4, g: 0.08, pan: 0.2, verb: 0.7, pat: ["----x-------x---", "----x-------x---", "----x-------x---", "----x--x----x-x-"] },
+        { type: "drum", inst: "riser", L: 4, g: 0.05, verb: 0.9, when: (fb, cyc, I) => I > 0.85 && fb % 8 === 7, pat: ["x"] },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ LULLABY: D major, 60 (bedtime)
+  lullaby: {
+    layers: 4, swing: 0, calm: true, wow: 1,
+    forms: [{
+      root: 62, scale: "major",
+      prog: "1 | 4 | 6 | 5s,5 | 1 | 4 | 4,5 | 1 | 4 | 1/3 | 27 | 5 | 1 | 6 | 4,5 | 1",
+      tracks: [
+        { type: "mel", inst: "box", L: 0, g: 0.19, o: 1, dec: 0.45, wow: 1, verb: 0.55, dly: 0.12, pan: 0.1,
+          lines: "1 5 6 5 | 3 . 2 3 | 1 . . . | - - 5, . | 1 5 6 5 | 3 . 2 3 | 1 . . . | - - - - | " +
+            "5 3' 2' 1' | 6 5 3 . | 4 6 5 3 | 2 . . . | 1 5 6 5 | 3 . 2 3 | 2 . 7, 2 | 1 . . ." },
+        { type: "arp", inst: "box", L: 0, g: 0.07, o: 0, dec: 0.26, wow: 1, verb: 0.45, pan: -0.2, vel: 0.55, pat: ["0 2 1 2 0 2 1 2"] },
+        { type: "pad", inst: "pad", L: 1, g: 0.08, o: 0, fill: 0, fat: 1, wow: 1, atk: 1.2, rel: 0.4, lp: 1000, cho: 0.7, verb: 0.6, vel: 0.7 },
+        { type: "mel", inst: "cello", L: 2, g: 0.1, o: -1, verb: 0.5, pan: 0.2, len: 1,
+          lines: "1 . . . | 4, . . . | 6, . . . | 5, . . . | 1 . . . | 4, . . . | 4, . 5, . | 1 . . . | 4, . . . | 3, . . . | 2 . . . | 5, . . . | 1 . . . | 6, . . . | 4, . 5, . | 1 . . ." },
+        { type: "mel", inst: "glock", L: 3, g: 0.06, o: 2, dec: 0.5, wow: 1, verb: 0.7, pan: -0.25, vel: 0.6,
+          lines: "- - - - | 5 . . . | - - - - | 2 . . . | - - - - | 6 . . . | - - - - | 1' . . . | - - - - | 5 . . . | - - - - | 7 . . . | - - - - | 3 . . . | - - - - | 1 . . ." },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ BUILD: D major, 104 (building the house)
+  build: {
+    layers: 4, swing: 0.12, calm: true,
+    forms: [{
+      root: 62, scale: "major",
+      prog: "1 | 4 | 5 | 1 | 6 | 4 | 2 | 5 | 1 | 4 | 5 | 6 | 4 | 5 | 4,5 | 1",
+      tracks: [
+        { type: "arp", inst: "logdrum", L: 0, g: 0.14, o: 1, pan: -0.15, room: 0.3, verb: 0.2, vel: 0.8,
+          pat: ["0 . 1 2 . 1 2 0'", "0 . 2 1 . 2 0' 2", "0 . 1 2 . 1 2 0'", "0' 2 1 0 2 1 0 ."] },
+        { type: "drum", inst: "anvil", L: 0, g: 0.045, pan: 0.25, room: 0.4, pat: "x---------------" },
+        { type: "bass", inst: "bass", L: 1, g: 0.27, o: -2, sc: 1, soft: 1, len: 0.7, pat: ["r . r . 5 . r .", "r . r . 5 . 8 a", "r . r . 5 . r .", "r . 5 . 8 . 5 a"] },
+        { type: "drum", inst: "kick", L: 2, g: 0.36, soft: 1, duck: 0.2, pat: ["x-------x-------", "x-------x---x---", "x-------x-------", "x-------x-x-x---"] },
+        { type: "drum", inst: "rim", L: 2, g: 0.11, pan: 0.25, room: 0.2, pat: ["----x-------x---", "----x-------x-x-", "----x-------x---", "----x--x----x-xx"] },
+        { type: "drum", inst: "shaker", L: 2, g: 0.06, pan: -0.25, pat: "o-x-o-x-o-x-o-x-" },
+        { type: "drum", inst: "conga", L: 2, g: 0.12, pan: 0.15, pat: ["------a---b-a---", "------a---b---b-"] },
+        { type: "mel", inst: "flute", L: 3, g: 0.1, o: 1, verb: 0.35, dly: 0.2, len: 0.85,
+          lines: "1 5 6 5 | 3 . 2 3 | 1 . . . | - - - - | 6 . 5 . | 4 3 2 . | 2 3 4 . | 5 . . . | " +
+            "1 5 6 5 | 3 . 2 3 | 5 . 6 7 | 1' . . . | 6 5 4 . | 5 4 3 . | 2 . 3 2 | 1 . . ." },
+      ],
+    }],
+  },
+
+  // ------------------------------------------------------------------ CHASE: D minor, 150 (the robot babies)
+  chase: {
+    layers: 5, swing: 0, hot: true,
+    forms: [{
+      root: 62, scale: "minor",
+      prog: "1 | 1 | 6 | 7 | 1 | 1 | 4 | 5s,5M | 6 | 7 | 1 | 1 | 6 | 7 | 4 | 5M",
+      tracks: [
+        { type: "arp", inst: "pluck", L: 0, g: 0.09, o: 1, bright: 1, dec: 0.06, pan: -0.25, dly: 0.3, verb: 0.2, vel: 0.8, len: 0.6,
+          pat: ["0 1 2 0' 2 1 0 1 2 0' 2 1 0 1 2 1", "0 2 1 0' 1 2 0 2 1 0' 1 2 0 2 1 2"] },
+        { type: "drum", inst: "kick", L: 1, g: 0.55, duck: 0.5, pat: ["x---x---x---x---", "x---x---x---x-x-", "x---x---x---x---", "x---x---x-x-xxxx"] },
+        { type: "drum", inst: "clap", L: 1, g: 0.14, room: 0.3, pat: ["----x-------x---", "----x-------x---", "----x-------x---", "----x---x-x-x-xx"] },
+        { type: "drum", inst: "hat", L: 1, g: 0.05, pan: 0.3, pat: "x-xxx-xxx-xxx-xx" },
+        { type: "bass", inst: "bass", L: 2, g: 0.3, o: -2, sc: 1, len: 0.7, pat: ["r r - r r - r 8", "r r - r 8 - r a", "r r - r r - r 8", "r 8 r 8 r 5 r a"] },
+        // Pip's theme on a toy piano that glitches (an octave flip in the middle of a phrase)
+        { type: "mel", inst: "glock", L: 3, g: 0.11, o: 1, dec: 0.25, verb: 0.3, dly: 0.18, pan: 0.15,
+          lines: "5 3' 2' 1' | 6 5 3 . | 4 6 5 3 | 2 . 2' 2 | 5 3' 2' 1' | 6 5 3' 3 | 4 6 5 3 | 2 . . . | " +
+            "5 3' 2' 1' | 6 5 3 . | 4 4' 6 5 | 3 . 3' . | 5 3' 2' 1' | 6 6' 5 3 | 4 6 5 2 | 1 . 1' 1" },
+        { type: "mel", inst: "box", L: 3, g: 0.07, o: 2, dec: 0.2, pan: -0.3, vel: 0.6, when: (fb) => fb % 4 === 3,
+          lines: "- - - - - - 5 5 | - - - - 3' 3' 3' . | - - - - - - 2 2 | - - 1' 1' 1' 1' 1' ." },
+        { type: "pad", inst: "pad", L: 4, g: 0.07, o: 0, voices: 3, fat: 1, lp: 2400, cho: 0.5, verb: 0.3, stab: 0.3,
+          rhythm: ["x--x--x---x--x--", "x--x--x---x-x-x-"] },
+        { type: "drum", inst: "riser", L: 4, g: 0.06, verb: 0.4, when: (fb) => fb % 4 === 3, pat: ["x"] },
+      ],
+    }],
+  },
+});
+Object.assign(MUSIC_STATES, { volcano: { bpm: 88 }, inferno: { bpm: 168 }, wind: { bpm: 120 }, woods: { bpm: 92 }, farlands: { bpm: 70 }, lullaby: { bpm: 60 }, build: { bpm: 104 }, chase: { bpm: 150 } });
+
 for (const name in DEFS) {
   DEFS[name].bpm = MUSIC_STATES[name].bpm;
   DEFS[name].forms.forEach(compileForm);
@@ -546,7 +751,8 @@ const layerLevel = (n, k, I) => {
   return x * x * (3 - 2 * x);
 };
 
-const STINGER_LEN = { victory: 3.3, defeat: 1.15, checkpoint: 1.0, discover: 1.9, danger: 1.3, transform: 2.5, phase: 2.2, gear: 1.5, armyUp: 1.5 };
+const STINGER_LEN = { victory: 3.3, defeat: 1.15, checkpoint: 1.0, discover: 1.9, danger: 1.3, transform: 2.5, phase: 2.2, gear: 1.5, armyUp: 1.5,
+  eruption: 2.0, illusion: 1.9, babies: 1.3, glitch: 1.1 };
 const MAXV = 24;      // sounding note sources incl. a deck's own loop (+ 4 permanent LFOs = the 28 voice budget)
 const LIM_FILL = 20;  // pads, arps, hats and the second layer of a drum give way first (calm states) ...
 const LIM_FILL_HOT = 19; // ... earlier where the kit is big (combat, boss, flight)
@@ -587,6 +793,15 @@ export function createMusic(audio) {
   let wallT0 = 0, lastBeat = -1, peakI = 0, peakT = -1e9;
   let duckV = 0, duckFrom = 0, duckT0 = 0, duckT1 = 0;
   const lastSting = {};
+  // setDetune (the Far Lands illusion): a global offset in cents on every new note, glided; the farlands state adds
+  // its own slow 8..15 cent drift on top
+  let detA = 0, detB = 0, detT0 = 0, detT1 = 0;
+  function detuneNow() {
+    const now = ac ? ac.currentTime : 0;
+    let v = now >= detT1 ? detB : detA + (detB - detA) * ((now - detT0) / Math.max(1e-3, detT1 - detT0));
+    if (cur && cur.name === "farlands") v += 11.5 + 3.5 * Math.sin(now * 0.21);
+    return v;
+  }
   const vs = []; // [start, stop] of every scheduled source
 
   // ------------------------------------------------------------------------------------------ graph
@@ -698,7 +913,8 @@ export function createMusic(audio) {
     const o = ac.createOscillator();
     if (type in WAVES) o.setPeriodicWave(wave(type)); else o.type = type;
     o.frequency.value = f;
-    if (det) o.detune.value = det;
+    const dc = det || 0, dt2 = detuneNow();
+    if (dc || dt2) o.detune.value = dc + dt2;
     o.start(t0); o.stop(t1);
     vs.push(t0, t1);
     return o;
@@ -1422,6 +1638,32 @@ export function createMusic(audio) {
         tk(0.3, 0.26); tk(0.6, 0.26); tk(0.9, 0.36, "b");
         break;
       }
+      case "eruption": { // a sub boom, a b2 brass crush, debris rattle
+        impact(d, t, 0.5); tk(0, 0.45); tk(0.18, 0.3, "b");
+        B(R - 24, 0.02, 1.4, 0.22, { fat: 2, dark: 1 }); B(R - 23, 0.02, 1.4, 0.12, { fat: 2, dark: 1 }); B(R - 18, 0.25, 1.2, 0.08, {});
+        DRUM.crash(null, d, t + 0.02, 0.16); DRUM.anvil(null, d, t + 0.3, 0.08);
+        roll(d, t + 0.4, 0.9, 0.12, true);
+        break;
+      }
+      case "illusion": { // a tape stop (everything sags and slows) and a reverse swell into silence
+        for (let i = 0; i < 9; i++) INST.box(d, t + i * (0.05 + i * 0.012), f(R + 12 - i * 1.7), 0.2, 0.09 * (1 - i / 11), { dec: 0.12 });
+        chord("glass", d, t, [R - 12, R - 5, R + 4], 0.7, 0.05, { atk: 0.02, rel: 0.2 });
+        riser(d, t + 0.75, 1.0, 0.09);
+        INST.bell(d, t + 1.75, f(R + 24), 1, 0.05, {});
+        break;
+      }
+      case "babies": { // three tiny chirps, then a warm chord
+        [19, 24, 28].forEach((n, i) => { INST.celesta(d, t + i * 0.16, f(R + n), 1, 0.08, { dec: 0.2 }); INST.box(d, t + i * 0.16 + 0.04, f(R + n + 12), 0.2, 0.04, { dec: 0.12 }); });
+        chord("pad", d, t + 0.5, [R, R + 4, R + 7, R + 11], 0.8, 0.06, { atk: 0.2, rel: 0.4 });
+        bell(R + 24, 0.55, 0.05);
+        break;
+      }
+      case "glitch": { // the same chirps, stuttered, bitten, a semitone wrong
+        for (let i = 0; i < 6; i++) INST.box(d, t + i * 0.07, f(R + 19 + (i % 2 ? 1 : 0) - (i > 3 ? 13 : 0)), 0.05, 0.08, { dec: 0.03 });
+        INST.bass(d, t + 0.45, f(R - 23), 0.5, 0.22, {}); DRUM.snare(null, d, t + 0.45, 0.2); impact(d, t + 0.45, 0.25);
+        INST.glock(d, t + 0.46, f(R + 13), 0.5, 0.06, { dec: 0.3 });
+        break;
+      }
       default: return 0;
     }
     return STINGER_LEN[name];
@@ -1483,6 +1725,23 @@ export function createMusic(audio) {
           INST.brass(d, t + n.t, mtof(n.n + 12), n.d * 0.92, 0.07 * g, { dark: 1 });
           DRUM.taiko(null, d, t + n.t, 0.22 * g, "a", { f: 62 });
         });
+        return len - beat * 4;
+      }
+      case "magmor": { // low brass + anvil: the mountain speaks
+        const len = line(MAGMOR, SC.phryg, K.root - 24, beat, (n) => {
+          INST.brass(d, t + n.t, mtof(n.n), n.d * 0.92, 0.2 * g, { fat: 2, dark: 1 });
+          INST.brass(d, t + n.t, mtof(n.n + 12), n.d * 0.92, 0.06 * g, { dark: 1 });
+          DRUM.anvil(null, d, t + n.t, 0.06 * g);
+          DRUM.taiko(null, d, t + n.t, 0.2 * g, "a", { f: 56 });
+        });
+        return len - beat * 4;
+      }
+      case "home": { // the house theme, warm: cello + music box + a soft chord
+        const len = line(HOME, K.minor ? SC.minor : SC.major, K.root, beat, (n) => {
+          INST.box(d, t + n.t, mtof(n.n + 12), n.d, 0.13 * g, { wow: 1 });
+          INST.cello(d, t + n.t, mtof(n.n - 12), n.d * 0.95, 0.08 * g, {});
+        });
+        chord("pad", d, t, [K.root - 12, K.root - 5, K.root + 4], len - beat * 4, 0.04 * g, { atk: 0.4, rel: 0.5 });
         return len - beat * 4;
       }
       default: return 0;
@@ -1570,7 +1829,7 @@ export function createMusic(audio) {
       if (!bus) return;
       sync(ac.currentTime);
       for (const d of [cur, nxt]) {
-        if (!d || d.name !== "boss") continue;
+        if (!d || (d.name !== "boss" && d.name !== "inferno")) continue;
         if (d === nxt || !d.started) { d.phase = n; continue; }
         d.phasePending = n;
         // the fill: from the next 16th up to the bar line where the orchestration changes
@@ -1603,6 +1862,14 @@ export function createMusic(audio) {
       bedDuck(t, len, name === "defeat" ? 0.25 : 0.708);
       return t - now + len;
     },
+
+    // the Far Lands: every new note detuned by `cents` (glided over `seconds`); 0 restores
+    setDetune(cents, seconds) {
+      const now = ac ? ac.currentTime : 0;
+      detA = detuneNow() - (cur && cur.name === "farlands" ? 11.5 + 3.5 * Math.sin(now * 0.21) : 0); detB = clamp(+cents || 0, -100, 100);
+      detT0 = now; detT1 = now + Math.max(0, +seconds || 0);
+    },
+    get detune() { return detB; },
 
     duck(amount, seconds) {
       const a = clamp(+amount || 0, 0, 1), s = Math.max(0.01, +seconds || 0);

@@ -66,6 +66,19 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d13; fon
 .lvl.gold .lv { opacity: .75; font-weight: 700; }
 .lvl.gold .n { font-weight: 300; }
 .lvl.gold::after { border-color: rgba(255,220,120,.4); }
+/* levels 12-13 (STORY3.md): 12 lava orange with a slow ember shimmer, 13 deep purple with a faint star twinkle */
+.lvl.lava { --ring: #ffb27a; --hi: rgba(255,140,60,.97); --lo: rgba(176,46,8,.9); --glow: rgba(255,106,26,.42); --glow2: rgba(255,120,40,.72); }
+.lvl.lava::after { border-color: rgba(255,140,70,.4); animation: ember 4.2s ease-in-out infinite; }
+@keyframes ember { 0%,100% { border-color: rgba(255,120,40,.3); box-shadow: 0 0 6px rgba(255,90,20,.15); }
+  35% { border-color: rgba(255,190,90,.6); box-shadow: 0 0 14px rgba(255,120,30,.4); } 60% { border-color: rgba(255,90,30,.35); box-shadow: 0 0 8px rgba(255,80,20,.2); } }
+.lvl.violet { --ring: #c6a8ff; --hi: rgba(160,110,255,.96); --lo: rgba(70,30,160,.9); --glow: rgba(139,77,255,.42); --glow2: rgba(150,100,255,.72); }
+.lvl.violet::after { border-color: rgba(190,160,255,.34); }
+.lvl.violet::before { content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(1.4px 1.4px at 28% 30%, #fff, transparent 70%), radial-gradient(1.2px 1.2px at 70% 26%, #fff, transparent 70%),
+    radial-gradient(1px 1px at 62% 72%, #fff, transparent 70%), radial-gradient(1.3px 1.3px at 34% 68%, #fff, transparent 70%);
+  animation: twinkle 3.1s ease-in-out infinite; }
+@keyframes twinkle { 0%,100% { opacity: .25; } 45% { opacity: .9; } 70% { opacity: .4; } }
+.lvl.locked::before { animation: none; opacity: 0; }
 .lvl .lock, .lvl .tick { position: absolute; left: 50%; display: grid; place-items: center; border-radius: 50%; pointer-events: none; }
 .lvl .lock { bottom: -11px; width: 24px; height: 24px; margin-left: -12px; background: #10131c; border: 1px solid rgba(255,255,255,.4); opacity: 0; transform: scale(.4); }
 .lvl .lock svg { width: 12px; height: 12px; }
@@ -92,10 +105,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d13; fon
 @keyframes startin { from { opacity: 0; } to { opacity: 1; } }
 @keyframes breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,.22), 0 0 46px var(--glow), inset 0 0 22px rgba(255,255,255,.06); }
   50% { box-shadow: 0 0 0 9px rgba(255,255,255,0), 0 0 70px var(--glow2), inset 0 0 22px rgba(255,255,255,.1); } }
-/* one row of eleven when it fits; otherwise 6 + 5; phones in portrait 4 + 4 + 3 */
-@media (max-width: 1239px) { #levels { max-width: 640px; gap: 30px 22px; } }
-@media (max-width: 700px) { .lvl { width: 72px; height: 72px; } .lvl .n { font-size: 27px; } .lvl .lv { font-size: 7.5px; } #levels { gap: 30px 20px; max-width: 372px; } }
-@media (max-height: 430px) { .lvl { width: 62px; height: 62px; } .lvl .n { font-size: 23px; } .lvl .lv { font-size: 7px; } #levels { max-width: 520px; gap: 24px 16px; } .wordmark { top: 6vh; } .tip { bottom: 5vh; } }
+/* thirteen circles: one row when it fits (>= 1280 wide; they shrink to fit, min 56 px), 7 + 6 on tablets and landscape
+   phones, 5 + 4 + 4 on a portrait phone (the .brk elements are row breaks, only shown where their layout needs them) */
+.brk { display: none; flex-basis: 100%; height: 0; }
+@media (min-width: 1280px) { #levels { flex-wrap: nowrap; gap: 0 clamp(10px, 1.2vw, 20px); width: auto; max-width: 98vw; }
+  .lvl { width: clamp(56px, calc((100vw - 48px - 12 * clamp(10px, 1.2vw, 20px)) / 13), 84px); height: auto; aspect-ratio: 1; } }
+@media (max-width: 1279px) { #levels { max-width: 760px; gap: 30px 20px; } .brk.b7 { display: block; } .lvl { width: 78px; height: 78px; } }
+@media (max-width: 700px) { .lvl { width: 62px; height: 62px; } .lvl .n { font-size: 24px; } .lvl .lv { font-size: 7px; } #levels { gap: 28px 11px; max-width: 380px; padding: 0 2px; }
+  .brk.b7 { display: none; } .brk.b5, .brk.b9 { display: block; } }
+@media (max-height: 430px) { .lvl { width: 56px; height: 56px; } .lvl .n { font-size: 21px; } .lvl .lv { font-size: 6.5px; } #levels { max-width: 600px; gap: 22px 14px; }
+  .brk.b5, .brk.b9 { display: none; } .brk.b7 { display: block; } .wordmark { top: 6vh; } .tip { bottom: 5vh; } }
+@media (max-height: 430px) and (min-width: 1280px) { .brk.b7 { display: none; } }
 .tip { position: absolute; bottom: 11vh; left: 0; right: 0; text-align: center; color: rgba(255,255,255,.34); font-size: 12px; letter-spacing: .16em; }
 
 #black, #white { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
@@ -486,6 +506,127 @@ body.touch #charge { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 236px
   #bubble .txt { font-size: 15px; } #objective { font-size: 13px; padding: 6px 12px 6px 9px; } #toast { bottom: 30vh; } #beat.on ~ #toast { bottom: 64px; font-size: 13px; padding: 6px 12px; }
   #hud:has(#beat.on) #call { top: 34vh; } #hud:has(#beat.on) #call .t { font-size: 32px; } #hud:has(#beat.on) #call .s { font-size: 12px; }
 }
+/* ---------- level 4 hard mode: 8 tricks, scattered fixed buttons (LEVELS3.md A7) ---------- */
+.trk.l4 { background: linear-gradient(180deg, #ff6fa8, #d6276e); } .trk.l5 { background: linear-gradient(180deg, #3fd6d0, #11908c); }
+.trk.l6 { background: linear-gradient(180deg, #ffd84d, #d69a05); color: #3a2600; } .trk.l7 { background: linear-gradient(180deg, #b08cff, #6a3ee0); }
+.trk.l6 .k { color: #7a5200; }
+.note.l4 { background: #e2337c; } .note.l5 { background: #16a7a2; } .note.l6 { background: #e0a810; color: #3a2600; } .note.l7 { background: #7a4cf0; }
+#tricks.scatter { position: absolute; inset: 0; display: none; max-width: none; pointer-events: none; }
+#tricks.scatter.on { display: block; }
+#tricks.scatter .trk { position: absolute; min-width: 0; width: 64px; height: 64px; padding: 28px 2px 0; border-radius: 18px; text-align: center;
+  font-size: 10.5px; white-space: normal; line-height: 1.05; pointer-events: auto; margin: -32px 0 0 -32px; }
+#tricks.scatter .trk .k { left: 50%; top: 6px; margin: 0 0 0 -10px; width: 20px; height: 20px; font-size: 12px; }
+#tricks.scatter .trk.down, #tricks.scatter .trk:active { transform: scale(.9); }
+#tricks.scatter .trk.want { box-shadow: 0 0 0 5px rgba(255,214,77,.9), 0 0 26px rgba(255,214,77,.75); }
+
+/* ---------- run timer (top centre) ---------- */
+#runClock { display: none; flex-direction: column; align-items: center; font-family: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  color: rgba(35,33,43,.86); text-shadow: 0 1px 0 rgba(255,255,255,.75); line-height: 1.05; margin-bottom: -4px; }
+#runClock.on { display: flex; }
+#runClock .t { font-size: 15px; font-weight: 700; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+#runClock .pb { font-size: 10.5px; font-weight: 600; opacity: .55; }
+#runClock .pb:empty { display: none; }
+body.dark #runClock { color: rgba(255,255,255,.9); text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+
+/* ---------- the run result (end card, or a card on the main screen) ---------- */
+.runres { margin: -10px 0 22px; display: grid; gap: 4px; justify-items: center; color: var(--soft); font-size: 15px; }
+.runres:empty { display: none; }
+.runres .tm { font-family: ui-monospace, Consolas, Menlo, monospace; font-size: 20px; font-weight: 700; color: var(--ink); letter-spacing: .04em; }
+.runres .pb { color: #c98a10; font-weight: 800; letter-spacing: .12em; font-size: 13px; animation: pop .6s; }
+.runres .wr { font-weight: 600; }
+.runres .prac { font-size: 12px; opacity: .8; }
+.runres .hardun { color: #e0441f; font-weight: 800; letter-spacing: .1em; }
+.runres .spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(100,100,130,.3); border-top-color: var(--violet); animation: spin .8s linear infinite; vertical-align: -1px; }
+.runres .lnk { font-family: var(--font); font-size: 13px; font-weight: 700; color: var(--violet); background: none; border: 0; cursor: pointer; padding: 8px 12px; text-decoration: underline; min-height: 40px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#runCard { position: absolute; left: 50%; bottom: calc(11vh + 30px); transform: translate(-50%, 10px); z-index: 2; min-width: 250px; max-width: 92vw; padding: 14px 26px 8px;
+  border-radius: 18px; background: rgba(255,255,255,.96); box-shadow: 0 10px 40px rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .5s, transform .5s; text-align: center; }
+#runCard.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+#runCard .runres { margin: 0; }
+#runCard .ttl { font-size: 11px; font-weight: 700; letter-spacing: .3em; color: var(--violet); margin-bottom: 4px; }
+#runCard .x { position: absolute; top: 2px; right: 2px; width: 40px; height: 40px; border: 0; background: none; font-size: 18px; color: #8a879a; cursor: pointer; }
+@media (max-height: 430px) { #runCard { bottom: 8px; padding: 8px 20px 4px; } }
+
+/* ---------- main screen: NAME and TROPHY buttons ---------- */
+.mbtn { position: absolute; z-index: 3; top: max(12px, env(safe-area-inset-top)); min-height: 48px; min-width: 48px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.07); color: rgba(255,255,255,.88);
+  font-family: var(--font); font-size: 14px; font-weight: 600; letter-spacing: .02em; cursor: pointer; transition: background .2s, border-color .2s, transform .15s, opacity .3s; max-width: 46vw; }
+.mbtn:hover, .mbtn:focus-visible { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); outline: none; }
+.mbtn:active { transform: scale(.96); }
+.mbtn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbtn .ico { font-size: 17px; line-height: 1; }
+#nameBtn { left: max(12px, env(safe-area-inset-left)); }
+#trophyBtn { right: max(12px, env(safe-area-inset-right)); top: calc(max(12px, env(safe-area-inset-top)) + 42px); }
+#nameBtn.empty .nm { opacity: .7; font-style: italic; }
+@media (max-width: 520px) { #trophyBtn .lab { display: none; } .mbtn { padding: 0 13px; } }
+@media (max-height: 430px) { #trophyBtn { top: max(10px, env(safe-area-inset-top)); right: 170px; } }
+#start.go .mbtn, #start.go #runCard { opacity: 0; pointer-events: none; }
+.lvl .flame { position: absolute; top: -9px; left: -5px; font-size: 17px; font-style: normal; pointer-events: none; filter: drop-shadow(0 0 4px rgba(255,90,20,.8)); display: none; }
+.lvl.hardOn .flame { display: block; animation: flick 1.6s ease-in-out infinite; }
+@keyframes flick { 50% { transform: scale(1.15) rotate(-6deg); } }
+#l4pick { position: fixed; z-index: 35; display: none; gap: 10px; transform: translate(-50%, 0); }
+#l4pick.on { display: flex; }
+#l4pick button { min-width: 104px; min-height: 48px; border-radius: 999px; border: 2px solid #fff; font-family: var(--font); font-size: 15px; font-weight: 800; letter-spacing: .06em;
+  color: #fff; cursor: pointer; box-shadow: 0 8px 26px rgba(0,0,0,.45); animation: pickin .35s cubic-bezier(.2,1.4,.4,1) both; }
+#l4pick .nrm { background: linear-gradient(180deg, #60aaff, #1f63d0); }
+#l4pick .hrd { background: linear-gradient(180deg, #ff8a3a, #d6301a); animation-delay: .06s; }
+#l4pick button:focus-visible { outline: 3px solid #ffe27a; outline-offset: 2px; }
+#l4pick .k { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; background: rgba(255,255,255,.9); color: #333; font-size: 11px; margin-right: 6px; vertical-align: 1px; }
+@keyframes pickin { from { opacity: 0; transform: translateY(8px) scale(.9); } }
+
+/* ---------- modal cards: the name dialog and the leaderboards ---------- */
+.modal { position: fixed; inset: 0; z-index: 70; display: none; place-items: center; background: rgba(6,8,14,.62); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); padding: 16px; }
+.modal.on { display: grid; animation: startin .25s ease both; }
+.mcard { position: relative; width: min(420px, 100%); background: #fff; color: var(--ink); border-radius: 22px; padding: 22px 22px 18px; box-shadow: 0 24px 80px rgba(0,0,0,.5); }
+.mcard h2 { margin: 0 0 4px; font-size: 13px; font-weight: 800; letter-spacing: .32em; color: var(--violet); }
+.mcard p.sub { margin: 0 0 14px; color: var(--soft); font-size: 14px; }
+.nrow { display: flex; gap: 8px; }
+#nameIn { flex: 1; min-width: 0; height: 50px; border-radius: 14px; border: 2px solid #d9d6e6; padding: 0 14px; font-family: var(--font); font-size: 18px; font-weight: 600; color: var(--ink);
+  outline: none; -webkit-user-select: text; user-select: text; touch-action: manipulation; background: #faf9fe; }
+#nameIn:focus { border-color: var(--violet); background: #fff; }
+#nameIn.bad { border-color: #ee4266; }
+#nameDice { width: 50px; height: 50px; border-radius: 14px; border: 2px solid #d9d6e6; background: #faf9fe; font-size: 22px; cursor: pointer; touch-action: manipulation; }
+#nameDice:hover { border-color: var(--violet); }
+#nameHint { min-height: 20px; margin: 8px 2px 14px; font-size: 13.5px; font-weight: 600; color: var(--soft); }
+#nameHint.bad { color: #d6305a; } #nameHint.good { color: #23944f; }
+.mbtns { display: flex; gap: 10px; justify-content: flex-end; }
+.mbtns button, .bbtn { min-height: 46px; padding: 0 20px; border-radius: 999px; border: 0; font-family: var(--font); font-size: 15px; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.mbtns .pri { background: var(--ink); color: #fff; } .mbtns .pri:hover { background: #3a3650; } .mbtns .pri[disabled] { opacity: .4; cursor: default; }
+.mbtns .sec, .bbtn { background: #eeecf5; color: var(--ink); } .mbtns .sec:hover, .bbtn:hover { background: #e2dff0; }
+.mcard button:focus-visible { outline: 3px solid rgba(106,79,208,.45); outline-offset: 2px; }
+
+#boards .mcard { width: min(560px, 100%); max-height: min(92vh, 760px); display: flex; flex-direction: column; padding: 18px 0 14px; }
+#boards .hd { padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+#boards .close { width: 44px; height: 44px; border-radius: 50%; border: 0; background: #eeecf5; font-size: 18px; cursor: pointer; color: var(--ink); }
+.btabs { display: flex; gap: 6px; overflow-x: auto; padding: 12px 20px 10px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; touch-action: pan-x; flex: none; }
+.btab { flex: none; min-width: 44px; height: 44px; border-radius: 12px; border: 2px solid transparent; background: var(--tc, #888); color: #fff; font-family: var(--font); font-weight: 800; font-size: 15px;
+  cursor: pointer; opacity: .55; transition: opacity .15s, transform .15s; padding: 0 8px; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.btab.dk { color: #222; text-shadow: none; }
+.btab:hover { opacity: .85; } .btab.on { opacity: 1; border-color: var(--ink); transform: translateY(-2px); }
+.btab:focus-visible { outline: 3px solid rgba(106,79,208,.45); outline-offset: 2px; }
+.bbody { flex: 1; min-height: 140px; overflow-y: auto; padding: 4px 20px 0; touch-action: pan-y; }
+.btitle { font-size: 15px; font-weight: 700; margin: 2px 0 8px; }
+.btable { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.btable th { text-align: left; font-size: 10.5px; letter-spacing: .2em; color: var(--soft); font-weight: 700; padding: 4px 6px; border-bottom: 1px solid #eeecf5; }
+.btable td { padding: 6px 6px; border-bottom: 1px solid #f3f1f8; }
+.btable td.r, .btable th.r { text-align: right; font-family: ui-monospace, Consolas, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.btable td.nm { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btable tr.me td { background: #f1ecff; font-weight: 700; }
+.btable tr.pin td { border-top: 2px dashed #d9d3f0; }
+.rk { display: inline-grid; place-items: center; min-width: 26px; height: 26px; border-radius: 50%; font-size: 12.5px; font-weight: 800; color: var(--soft); }
+.rk.g1 { background: linear-gradient(180deg, #ffe27a, #d9a21a); color: #3a2600; } .rk.g2 { background: linear-gradient(180deg, #eef1f6, #aab3c2); color: #2a2f3a; }
+.rk.g3 { background: linear-gradient(180deg, #f2b98a, #b5703a); color: #2e1606; }
+.hardb { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: #e0441f; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .08em; vertical-align: 1px; }
+.sk td span { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, #f0eef7, #e3e0ef, #f0eef7); background-size: 200% 100%; animation: shimmer 1.1s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.bnote { text-align: center; padding: 18px 10px 12px; color: var(--soft); font-size: 15px; }
+.bnote b { display: block; color: var(--ink); font-size: 18px; margin: 8px 0 4px; }
+.bnote svg { width: 104px; height: 64px; }
+.bnote .bbtn { margin-top: 12px; }
+.bfoot { flex: none; padding: 10px 20px 0; display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; border-top: 1px solid #eeecf5; margin-top: 8px; font-size: 14px; }
+.bfoot .mine { font-weight: 700; }
+.bfoot label { display: inline-flex; align-items: center; gap: 6px; color: var(--soft); font-size: 13px; cursor: pointer; min-height: 40px; }
+.bfoot input { width: 18px; height: 18px; accent-color: var(--violet); }
 </style>
 </head>
 <body>
@@ -538,14 +679,19 @@ body.touch #charge { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 236px
     <button class="lvl" id="levelBtn" data-n="1" disabled aria-label="Level 1"><span class="lv">LEVEL</span><span class="n">1</span><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
     <button class="lvl blue" id="lvl2" data-n="2" disabled aria-label="Level 2"><span class="lv">LEVEL</span><span class="n">2</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
     <button class="lvl blue" id="lvl3" data-n="3" disabled aria-label="Level 3"><span class="lv">LEVEL</span><span class="n">3</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
-    <button class="lvl blue" id="lvl4" data-n="4" disabled aria-label="Level 4"><span class="lv">LEVEL</span><span class="n">4</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
+    <button class="lvl blue" id="lvl4" data-n="4" disabled aria-label="Level 4"><i class="flame" aria-hidden="true">&#128293;</i><span class="lv">LEVEL</span><span class="n">4</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
     <button class="lvl white" id="lvl5" data-n="5" disabled aria-label="Level 5"><span class="lv">LEVEL</span><span class="n">5</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
+    <i class="brk b5"></i>
     <button class="lvl green" id="lvl6" data-n="6" disabled aria-label="Level 6"><span class="lv">LEVEL</span><span class="n">6</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
     <button class="lvl green" id="lvl7" data-n="7" disabled aria-label="Level 7"><span class="lv">LEVEL</span><span class="n">7</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
+    <i class="brk b7"></i>
     <button class="lvl green" id="lvl8" data-n="8" disabled aria-label="Level 8"><span class="lv">LEVEL</span><span class="n">8</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
     <button class="lvl red" id="lvl9" data-n="9" disabled aria-label="Level 9"><span class="lv">LEVEL</span><span class="n">9</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
+    <i class="brk b9"></i>
     <button class="lvl red" id="lvl10" data-n="10" disabled aria-label="Level 10"><span class="lv">LEVEL</span><span class="n">10</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
     <button class="lvl gold" id="lvl11" data-n="11" disabled aria-label="Level 11"><span class="lv">LEVEL</span><span class="n">11</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
+    <button class="lvl lava" id="lvl12" data-n="12" disabled aria-label="Level 12"><span class="lv">LEVEL</span><span class="n">12</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
+    <button class="lvl violet" id="lvl13" data-n="13" disabled aria-label="Level 13"><span class="lv">LEVEL</span><span class="n">13</span><i class="lock"><svg viewBox="0 0 16 16"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="7" width="10" height="7.5" rx="1.8" fill="#fff"/></svg></i><i class="tick"><svg viewBox="0 0 12 12"><path d="M2 6.4 4.8 9 10 3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i></button>
   </div>
   <div class="tip" id="startTip">loading</div>
 </div>

@@ -75,7 +75,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     {
       const m = await page.evaluate(() => Array.from(document.querySelectorAll(".lvl")).map((b) => ({ n: b.dataset.n, locked: b.classList.contains("locked"), bg: getComputedStyle(b).backgroundImage.slice(0, 80) })));
       log("menu: " + m.map((b) => b.n + (b.locked ? " locked" : " open")).join(", "));
-      if (m.length !== 11 || m[0].locked || !m.slice(1).every((b) => b.locked)) throw new Error("fresh menu must show 11 circles with only level 1 open");
+      if (m.length !== 13 || m[0].locked || !m.slice(1).every((b) => b.locked)) throw new Error("fresh menu must show 13 circles with only level 1 open");
       // a locked circle only shakes
       await page.click("#lvl3");
       await sleep(250); await shot("menu-locked-shake");

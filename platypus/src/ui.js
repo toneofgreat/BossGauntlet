@@ -289,23 +289,61 @@ export function createUI() {
   }
 
   // ---------- tricks ----------
-  for (let i = 0; i < 4; i++) {
+  // 8 slots: 1-4 are every show's tricks; 5-8 only appear in Level 4 hard mode
+  const TRICK_SLOTS = 8;
+  for (let i = 0; i < TRICK_SLOTS; i++) {
     const b = document.createElement("button");
     b.className = "trk l" + i;
     b.innerHTML = '<span class="k">' + (i + 1) + "</span><span></span>";
     el.tricks.appendChild(b);
     el.trk.push(b);
   }
-  let tricksOn = false;
-  // list: up to 4 of { label, enabled? } (index = trick slot = key 1..4; a null entry hides that slot), or null to hide all
-  function setTricks(list) {
+  let tricksOn = false, scatter = false;
+  // Level 4 hard mode: the buttons sit at these fixed fractions of the safe area and never move during the show
+  const SCATTER = [[0.12, 0.30], [0.88, 0.30], [0.22, 0.55], [0.78, 0.55], [0.35, 0.22], [0.65, 0.22], [0.08, 0.72], [0.92, 0.72]];
+  const BTN = 64, half = BTN / 2;
+  const overlaps = (x, y, r) => r && r.width > 0 && x + half + 6 > r.left && x - half - 6 < r.right && y + half + 6 > r.top && y - half - 6 < r.bottom;
+  function layoutScatter() {
+    if (!scatter) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const top = touch ? 64 : 96, bottom = vh - 12;
+    const lane = el.beat.classList.contains("on") ? el.beat.getBoundingClientRect() : null;
+    const coin = el.coins.classList.contains("on") ? el.coins.getBoundingClientRect() : null;
+    const obj = el.objective.classList.contains("on") ? el.objective.getBoundingClientRect() : null;
+    // the centre 30 % (the pool show) stays clear
+    const mid = { left: vw * 0.35, right: vw * 0.65, top: vh * 0.35, bottom: vh * 0.65, width: 1 };
+    const placed = [];
+    const clash = (x, y) => { for (const p of placed) if (Math.abs(p.x - x) < BTN + 8 && Math.abs(p.y - y) < BTN + 8) return true; return false; };
+    for (let i = 0; i < TRICK_SLOTS; i++) {
+      const b = el.trk[i];
+      let x = Math.max(half + 8, Math.min(vw - half - 8, SCATTER[i][0] * vw));
+      let y = Math.max(top + half, Math.min(bottom - half, top + SCATTER[i][1] * (bottom - top)));
+      // nudge up (then sideways) until it clears the lane, the coin counter, the objective and the centre
+      for (let k = 0; k < 40 && (overlaps(x, y, lane) || overlaps(x, y, coin) || overlaps(x, y, obj) || overlaps(x, y, mid) || clash(x, y)); k++) {
+        if (y - 12 > top + half) y -= 12; else x += x < vw / 2 ? 14 : -14;
+      }
+      placed.push({ x, y });
+      b.style.left = Math.round(x) + "px"; b.style.top = Math.round(y) + "px";
+    }
+  }
+  window.addEventListener("resize", () => { if (scatter) layoutScatter(); });
+  // list: up to 8 of { label, enabled? } (index = trick slot = key 1..8; a null entry hides that slot), or null to hide all
+  // o: { layout: "scatter" } spreads the buttons over the screen at fixed places (Level 4 hard mode)
+  function setTricks(list, o) {
     tricksOn = !!list;
+    const sc = !!(list && o && o.layout === "scatter");
+    if (sc !== scatter) {
+      scatter = sc;
+      el.tricks.classList.toggle("scatter", sc);
+      if (!sc) for (let i = 0; i < TRICK_SLOTS; i++) { el.trk[i].style.left = ""; el.trk[i].style.top = ""; }
+    }
     el.tricks.classList.toggle("on", tricksOn);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < TRICK_SLOTS; i++) {
       const t = list && list[i], b = el.trk[i];
       b.className = "trk l" + i + (t ? " on" + (t.enabled === false ? " off" : "") : "");
       if (t) b.lastChild.textContent = t.label;
     }
+    if (sc) { layoutScatter(); at(0.05, layoutScatter); }
   }
   // st: { enabled?, want? } ("want" = glowing: the trick being asked for)
   function setTrickState(i, st) {
@@ -630,10 +668,347 @@ export function createUI() {
     say, advance, clearSpeech, setBubbleAnchor, speaking() { return sp.active; },
     setCoins, addCoins, get coins() { return coins; },
     setFriendship, setExcitement, setQuests, setQuest, setAction,
-    setTricks, setTrickState, flashTrick, setCombo, call, floatText, beat,
+    setTricks, setTrickState, flashTrick, setCombo, call, floatText, beat, layoutTricks: layoutScatter,
     showComplete, showVictory, hideVictory,
     get touch() { return touch; },
     get tricksOn() { return tricksOn; },
     get actionOn() { return actionLabel !== null; },
   };
+}
+
+// =====================================================================================================
+// extendMenu: the main-screen NAME and TROPHY buttons, the name dialog, the leaderboards panel, the Level 4
+// NORMAL / HARD choice, the run clock in the HUD and the run result (LEVELS3.md A2, A3, A5, A7).
+// deps: { progress, online, checkName, nameHint, randomName, formatMs, click() }
+// =====================================================================================================
+const TAB_COLOR = ["#9aa0ad", "#3c8cff", "#3c8cff", "#3c8cff", "#eef1f8", "#2fb466", "#2fb466", "#2fb466", "#e2463c", "#e2463c", "#e8b23a", "#ff6a1a", "#8b4dff"];
+const TAB_DARK = [false, false, false, false, true, false, false, false, false, false, true, false, false];
+const PLATY_SVG = '<svg viewBox="0 0 104 64" aria-hidden="true"><ellipse cx="52" cy="58" rx="34" ry="4" fill="#ece9f5"/>' +
+  '<path d="M20 40c0-12 12-20 30-20s30 6 30 16-10 16-30 16H34c-8 0-14-4-14-12z" fill="#8a6446"/>' +
+  '<path d="M78 34c6-2 14-1 20 3 2 2 0 5-3 5-6 0-12-1-17-3z" fill="#3a3540"/><circle cx="72" cy="30" r="2.2" fill="#1d1b22"/>' +
+  '<path d="M22 42c-8 2-14 6-16 10 6 1 14-1 20-5z" fill="#6e4e36"/><path d="M36 52l-2 6M60 52l2 6" stroke="#5a3f2c" stroke-width="4" stroke-linecap="round"/></svg>';
+
+export function extendMenu(ui, deps) {
+  const { progress, online, checkName, nameHint, randomName, formatMs } = deps;
+  const click = () => { try { if (deps.click) deps.click(); } catch (e) { /* ignore */ } };
+  const $ = (id) => document.getElementById(id);
+  const start = $("start");
+  const mk = (parent, tag, attrs, html) => {
+    const d = document.createElement(tag);
+    if (attrs) for (const k in attrs) { if (k === "cls") d.className = attrs[k]; else d.setAttribute(k, attrs[k]); }
+    if (html !== undefined) d.innerHTML = html;
+    if (parent) parent.appendChild(d);
+    return d;
+  };
+  const ENT = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ENT[c]);
+
+  // ---------- settings (per device) ----------
+  const SET_KEY = "platypus.settings.v1";
+  const settings = { showTimer: true };
+  try { const o = JSON.parse(window.localStorage.getItem(SET_KEY) || "null"); if (o && o.showTimer === false) settings.showTimer = false; } catch (e) { /* ignore */ }
+  function saveSettings() { try { window.localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ } }
+
+  // ---------- main-screen buttons ----------
+  const nameBtn = mk(start, "button", { id: "nameBtn", cls: "mbtn", type: "button", "aria-label": "Your name" }, '<span class="ico" aria-hidden="true">&#9998;</span><span class="nm"></span>');
+  const trophyBtn = mk(start, "button", { id: "trophyBtn", cls: "mbtn", type: "button", "aria-label": "Leaderboards" }, '<span class="ico" aria-hidden="true">&#127942;</span><span class="lab">Leaderboards</span>');
+  const nameBtnTxt = nameBtn.querySelector(".nm");
+  function refresh() {
+    const n = online.name;
+    nameBtnTxt.textContent = n || "Pick a name";
+    nameBtn.classList.toggle("empty", !n);
+    const l4 = ui.el.lvl[3];
+    if (l4) l4.classList.toggle("hardOn", !!progress.l4hardUnlocked);
+  }
+  nameBtn.addEventListener("click", (e) => { e.stopPropagation(); click(); openNameDialog(); });
+  trophyBtn.addEventListener("click", (e) => { e.stopPropagation(); click(); openBoards(); });
+  const showMenu0 = ui.showMenu;
+  ui.showMenu = (p, o) => { showMenu0(p, o); refresh(); closePick(); };
+
+  // ---------- the name dialog ----------
+  const nameDlg = mk(document.body, "div", { id: "nameDlg", cls: "modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "nameTtl" },
+    '<div class="mcard"><h2 id="nameTtl">YOUR NAME</h2><p class="sub" id="nameSub">This is how you show up on the leaderboards.</p>' +
+    '<div class="nrow"><input id="nameIn" type="text" maxlength="16" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done" aria-describedby="nameHint" placeholder="Your name">' +
+    '<button id="nameDice" type="button" aria-label="Random name">&#127922;</button></div>' +
+    '<div id="nameHint" aria-live="polite">3 to 16 letters</div>' +
+    '<div class="mbtns"><button class="sec" id="nameCancel" type="button">Cancel</button><button class="pri" id="nameSave" type="button">Save</button></div></div>');
+  const nameIn = $("nameIn"), nameHintEl = $("nameHint"), nameSave = $("nameSave"), nameSub = $("nameSub");
+  let nameCb = null, nameBusy = false, nameFocusBack = null;
+  function hintName(text, kind) {
+    nameHintEl.textContent = text;
+    nameHintEl.className = kind || "";
+    nameIn.classList.toggle("bad", kind === "bad");
+  }
+  function liveCheck() {
+    const v = nameIn.value;
+    if (!v.trim()) { hintName("3 to 16 letters", ""); nameSave.disabled = true; return null; }
+    const c = checkName(v);
+    if (c.ok) { hintName("Looks good!", "good"); nameSave.disabled = false; return c; }
+    hintName(nameHint(c.reason), c.reason === "short" ? "" : "bad");
+    nameSave.disabled = true;
+    return null;
+  }
+  // o: { message (a line in the hint, red), onDone(name | null) }
+  function openNameDialog(o) {
+    nameCb = (o && o.onDone) || null;
+    nameFocusBack = document.activeElement;
+    nameSub.textContent = online.enabled ? "This is how you show up on the leaderboards. You can change it any time." : "Saved on this device. You can change it any time.";
+    nameIn.value = online.name || "";
+    nameBusy = false;
+    nameDlg.classList.add("on");
+    liveCheck();
+    if (o && o.message) hintName(o.message, "bad");
+    setTimeout(() => { try { nameIn.focus(); nameIn.select(); } catch (e) { /* ignore */ } }, 30);
+  }
+  function closeName(res) {
+    if (!nameDlg.classList.contains("on")) return;
+    nameDlg.classList.remove("on");
+    nameBusy = false;
+    refresh();
+    const cb = nameCb; nameCb = null;
+    try { if (nameFocusBack && nameFocusBack.focus) nameFocusBack.focus(); } catch (e) { /* ignore */ }
+    if (cb) cb(res || null);
+  }
+  async function saveName() {
+    if (nameBusy) return;
+    const c = liveCheck();
+    if (!c) return;
+    click();
+    if (!online.enabled) { online.setLocalName(c.name); closeName(c.name); return; }
+    nameBusy = true; nameSave.disabled = true;
+    hintName("Checking...", "");
+    const r = await online.claimName(c.name);
+    nameBusy = false;
+    if (!nameDlg.classList.contains("on")) return;
+    if (r.ok) { hintName("Saved!", "good"); setTimeout(() => closeName(r.name), 350); return; }
+    nameSave.disabled = false;
+    if (r.reason === "taken") hintName("Someone already has that name - try another", "bad");
+    else if (r.reason === "rude") hintName("Let's pick a kinder name", "bad");
+    else if (r.reason === "slow") hintName("Wait a few seconds, then try again", "bad");
+    else if (r.reason === "network" || r.reason === "offline") { hintName("Saved on this device - we'll try again later", "good"); setTimeout(() => closeName(c.name), 1600); }
+    else hintName("3 to 16 letters", "bad");
+  }
+  nameIn.addEventListener("input", liveCheck);
+  nameIn.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") { e.preventDefault(); saveName(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeName(null); }
+  });
+  nameIn.addEventListener("keyup", (e) => e.stopPropagation());
+  $("nameDice").addEventListener("click", () => { click(); nameIn.value = randomName(); liveCheck(); nameIn.focus(); });
+  nameSave.addEventListener("click", saveName);
+  $("nameCancel").addEventListener("click", () => { click(); closeName(null); });
+  nameDlg.addEventListener("pointerdown", (e) => { if (e.target === nameDlg) closeName(null); });
+
+  // ---------- the leaderboards ----------
+  const boards = mk(document.body, "div", { id: "boards", cls: "modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "boardsTtl" },
+    '<div class="mcard"><div class="hd"><h2 id="boardsTtl">LEADERBOARDS</h2><button class="close" type="button" aria-label="Close">&#10005;</button></div>' +
+    '<div class="btabs" role="tablist"></div><div class="bbody" role="tabpanel"></div>' +
+    '<div class="bfoot"><span class="mine"></span><label><input type="checkbox" class="showT"> Show timer in levels</label></div></div>');
+  const tabsEl = boards.querySelector(".btabs"), body = boards.querySelector(".bbody"), mine = boards.querySelector(".bfoot .mine"), showT = boards.querySelector(".showT");
+  const tabs = [];
+  for (let n = 1; n <= 13; n++) {
+    const b = mk(tabsEl, "button", { cls: "btab" + (TAB_DARK[n - 1] ? " dk" : ""), type: "button", role: "tab", "aria-label": n === 4 ? "Level 4 coins" : "Level " + n }, n === 4 ? "&#129689;4" : String(n));
+    b.style.setProperty("--tc", TAB_COLOR[n - 1]);
+    b.dataset.n = n;
+    b.addEventListener("click", () => { click(); showTab(n); });
+    tabs.push(b);
+  }
+  tabsEl.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault(); e.stopPropagation();
+    const n = Math.max(1, Math.min(13, curTab + (e.key === "ArrowRight" ? 1 : -1)));
+    showTab(n); tabs[n - 1].focus();
+  });
+  boards.querySelector(".close").addEventListener("click", () => { click(); closeBoards(); });
+  boards.addEventListener("pointerdown", (e) => { if (e.target === boards) closeBoards(); });
+  showT.addEventListener("change", () => { settings.showTimer = !!showT.checked; saveSettings(); });
+
+  const cache = Object.create(null);
+  let curTab = 1, loadGen = 0, boardsFocusBack = null;
+  function myBest(n) {
+    if (n === 4) {
+      const a = progress.l4bestCoins, h = progress.l4bestHardCoins;
+      if (!a && !h) return "Your best: no show yet";
+      return "Your best: " + Math.max(a, h) + " coins" + (h > a ? " (hard)" : "");
+    }
+    const b = progress.best(n);
+    return b ? "Your best: " + formatMs(b) : "Your best: not finished yet";
+  }
+  function skeleton() {
+    let h = '<table class="btable"><tbody>';
+    for (let i = 0; i < 8; i++) h += '<tr class="sk"><td style="width:42px"><span></span></td><td><span style="width:' + (50 + ((i * 37) % 40)) + '%"></span></td><td style="width:90px"><span></span></td></tr>';
+    return h + "</tbody></table>";
+  }
+  function rankDisc(r) { return '<span class="rk' + (r <= 3 ? " g" + r : "") + '">' + r + "</span>"; }
+  function renderRows(n, d) {
+    const coinsTab = n === 4;
+    const myName = (online.name || "").toLowerCase();
+    if (!d.rows.length) return '<div class="bnote">' + PLATY_SVG + "<b>" + (coinsTab ? "No shows yet" : "No times yet") + "</b>Be the first!</div>";
+    let h = '<table class="btable"><thead><tr><th>#</th><th>NAME</th><th class="r">' + (coinsTab ? "COINS" : "TIME") + "</th></tr></thead><tbody>";
+    let meShown = false;
+    for (const r of d.rows) {
+      const isMe = !!myName && r.name.toLowerCase() === myName;
+      if (isMe) meShown = true;
+      h += "<tr" + (isMe ? ' class="me"' : "") + "><td>" + rankDisc(r.rank) + '</td><td class="nm">' + esc(r.name) + (isMe ? " (you)" : "") + '</td><td class="r">' +
+        (coinsTab ? r.coins + (r.hard ? '<span class="hardb">HARD</span>' : "") : formatMs(r.ms)) + "</td></tr>";
+    }
+    if (d.me && !meShown) {
+      h += '<tr class="me pin"><td>' + rankDisc(d.me.rank) + '</td><td class="nm">You</td><td class="r">' +
+        (coinsTab ? d.me.coins + (d.me.hard ? '<span class="hardb">HARD</span>' : "") : formatMs(d.me.ms)) + "</td></tr>";
+    }
+    return h + "</tbody></table>";
+  }
+  async function showTab(n) {
+    curTab = n;
+    for (const t of tabs) { const on = +t.dataset.n === n; t.classList.toggle("on", on); t.setAttribute("aria-selected", on ? "true" : "false"); }
+    try { tabs[n - 1].scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) { /* ignore */ }
+    mine.textContent = myBest(n);
+    const title = '<div class="btitle">' + (n === 4 ? "Level 4: most coins in one show" : "Level " + n + ": fastest times") + "</div>";
+    if (!online.enabled) {
+      body.innerHTML = title + '<div class="bnote off">' + PLATY_SVG + "<b>Leaderboards coming soon</b>Your own best is saved below.</div>";
+      return;
+    }
+    const c = cache[n];
+    if (c && performance.now() - c.t < 60000) { body.innerHTML = title + renderRows(n, c.d); return; }
+    const g = ++loadGen;
+    body.innerHTML = title + skeleton();
+    const d = n === 4 ? await online.topCoins() : await online.topTimes(n);
+    if (g !== loadGen || !boards.classList.contains("on")) return;
+    if (!d.ok) {
+      body.innerHTML = title + '<div class="bnote err">' + PLATY_SVG + "<b>Couldn&#39;t load - try again</b>Check the internet connection.<br><button class=\"bbtn retry\" type=\"button\">Try again</button></div>";
+      const rb = body.querySelector(".retry");
+      if (rb) rb.addEventListener("click", () => { click(); showTab(n); });
+      return;
+    }
+    cache[n] = { t: performance.now(), d };
+    body.innerHTML = title + renderRows(n, d);
+  }
+  function openBoards(n) {
+    boardsFocusBack = document.activeElement;
+    showT.checked = settings.showTimer;
+    boards.classList.add("on");
+    showTab(n >= 1 && n <= 13 ? n : curTab || 1);
+    setTimeout(() => { try { tabs[curTab - 1].focus(); } catch (e) { /* ignore */ } }, 30);
+  }
+  function closeBoards() {
+    if (!boards.classList.contains("on")) return;
+    boards.classList.remove("on");
+    loadGen++;
+    try { if (boardsFocusBack && boardsFocusBack.focus) boardsFocusBack.focus(); } catch (e) { /* ignore */ }
+  }
+  function invalidate(n) { if (n) delete cache[n]; else for (const k in cache) delete cache[k]; }
+
+  // ---------- Level 4: NORMAL or HARD ----------
+  const pick = mk(document.body, "div", { id: "l4pick", role: "group", "aria-label": "Level 4 mode" },
+    '<button class="nrm" type="button"><span class="k">1</span>NORMAL</button><button class="hrd" type="button"><span class="k">2</span>HARD &#128293;</button>');
+  let pickCb = null;
+  function closePick() { pick.classList.remove("on"); pickCb = null; }
+  function choosePick(hard) { const cb = pickCb; closePick(); if (cb) { click(); cb(hard); } }
+  pick.firstChild.addEventListener("click", (e) => { e.stopPropagation(); choosePick(false); });
+  pick.lastChild.addEventListener("click", (e) => { e.stopPropagation(); choosePick(true); });
+  // cb(hard: bool) once a mode is picked (never called when it is closed instead)
+  function chooseL4(cb) {
+    const r = ui.el.lvl[3].getBoundingClientRect();
+    pickCb = cb;
+    pick.classList.add("on");
+    const w = pick.offsetWidth || 220;
+    const x = Math.max(w / 2 + 8, Math.min(window.innerWidth - w / 2 - 8, r.left + r.width / 2));
+    let y = r.bottom + 18;
+    if (y + 56 > window.innerHeight) y = r.top - 66;
+    pick.style.left = x + "px"; pick.style.top = y + "px";
+    setTimeout(() => { try { pick.firstChild.focus(); } catch (e) { /* ignore */ } }, 30);
+  }
+  window.addEventListener("keydown", (e) => {
+    if (pick.classList.contains("on")) {
+      if (e.code === "Digit1" || e.code === "Numpad1") { e.preventDefault(); e.stopPropagation(); choosePick(false); }
+      else if (e.code === "Digit2" || e.code === "Numpad2") { e.preventDefault(); e.stopPropagation(); choosePick(true); }
+      else if (e.key === "Escape") { e.preventDefault(); closePick(); }
+    } else if (e.key === "Escape") {
+      if (boards.classList.contains("on")) closeBoards();
+      else if (nameDlg.classList.contains("on")) closeName(null);
+    }
+  }, true);
+  window.addEventListener("pointerdown", (e) => { if (pick.classList.contains("on") && !pick.contains(e.target) && e.target !== ui.el.lvl[3]) closePick(); }, true);
+
+  // ---------- the run clock (HUD, top centre); zero allocations per frame ----------
+  const clock = mk(null, "div", { id: "runClock", "aria-hidden": "true" }, '<span class="t"><span class="m">0</span>:<span>0</span><span>0</span>.<span>0</span><span>0</span></span><span class="pb"></span>');
+  const topmid = $("topmid");
+  if (topmid) topmid.insertBefore(clock, topmid.firstChild);
+  const cm = clock.querySelector(".m"), cd = clock.querySelectorAll(".t > span:not(.m)"), cpb = clock.querySelector(".pb");
+  const DIG = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  const shown = [-1, -1, -1, -1];
+  let shownMin = -1, clockOn = false;
+  function setRunClock(ms) {
+    if (!clockOn) return;
+    ms = ms > 0 ? ms : 0;
+    const m = Math.floor(ms / 60000), s = Math.floor(ms / 1000) % 60, c = Math.floor(ms / 10) % 100;
+    if (m !== shownMin) { shownMin = m; cm.textContent = String(m); }
+    const d0 = (s / 10) | 0, d1 = s % 10, d2 = (c / 10) | 0, d3 = c % 10;
+    if (d0 !== shown[0]) { shown[0] = d0; cd[0].textContent = DIG[d0]; }
+    if (d1 !== shown[1]) { shown[1] = d1; cd[1].textContent = DIG[d1]; }
+    if (d2 !== shown[2]) { shown[2] = d2; cd[2].textContent = DIG[d2]; }
+    if (d3 !== shown[3]) { shown[3] = d3; cd[3].textContent = DIG[d3]; }
+  }
+  // on: bool; pbMs: personal best (0 = none)
+  function showRunClock(on, pbMs) {
+    on = !!on && settings.showTimer;
+    if (on) cpb.textContent = pbMs > 0 ? "PB " + formatMs(pbMs) : "";
+    if (on !== clockOn) { clockOn = on; clock.classList.toggle("on", on); }
+  }
+
+  // ---------- the run result: on the end card (when the level shows one) and on the main screen ----------
+  const vicRun = mk(null, "div", { cls: "runres", id: "vicRun" });
+  const vicSub = $("vicSub");
+  if (vicSub && vicSub.parentNode) vicSub.parentNode.insertBefore(vicRun, vicSub.nextSibling);
+  const runCard = mk(start, "div", { id: "runCard", role: "status" }, '<button class="x" type="button" aria-label="Close">&#10005;</button><div class="ttl"></div><div class="runres"></div>');
+  const runCardTtl = runCard.querySelector(".ttl"), runCardRes = runCard.querySelector(".runres");
+  runCard.querySelector(".x").addEventListener("click", (e) => { e.stopPropagation(); click(); showRunCard(false); });
+  let result = null, cardT = 0;
+  function resultHtml(r) {
+    let h = "";
+    if (r.l4) h += '<div class="tm">' + r.coins + " COINS" + (r.hard ? ' <span class="hardb">HARD</span>' : "") + "</div>";
+    else h += '<div class="tm">TIME ' + formatMs(r.ms) + "</div>";
+    if (r.practice) h += '<div class="prac">(practice - not saved)</div>';
+    else {
+      if (r.pb) h += '<div class="pb">NEW BEST!</div>';
+      if (r.rank === undefined) h += '<div class="wr"><span class="spin"></span></div>';
+      else if (r.rank) h += '<div class="wr">#' + r.rank + " in the world</div>";
+    }
+    if (r.hardUnlocked) h += '<div class="hardun">HARD MODE UNLOCKED &#128293;</div>';
+    if (online.enabled && !r.practice) h += '<button class="lnk" type="button">See leaderboard</button>';
+    return h;
+  }
+  function paintResult() {
+    const h = result ? resultHtml(result) : "";
+    vicRun.innerHTML = h;
+    runCardRes.innerHTML = h;
+    const links = [vicRun.querySelector(".lnk"), runCardRes.querySelector(".lnk")];
+    for (const b of links) if (b) b.addEventListener("click", (e) => { e.stopPropagation(); click(); openBoards(result ? result.level : 1); });
+  }
+  // r: { level, ms, pb, practice, rank (undefined = waiting, 0 = none), l4, coins, hard, hardUnlocked } or null
+  function setRunResult(r) { result = r; paintResult(); }
+  function patchRunResult(p) { if (!result) return; for (const k in p) result[k] = p[k]; paintResult(); }
+  function showRunCard(on, secs) {
+    if (on && result) {
+      runCardTtl.textContent = "LEVEL " + result.level + (result.l4 && result.hard ? " HARD" : "");
+      runCard.classList.add("on");
+      cardT = secs || 10;
+    } else { runCard.classList.remove("on"); cardT = 0; }
+  }
+  const update0 = ui.update;
+  ui.update = (dt) => {
+    update0(dt);
+    if (cardT > 0) { cardT -= dt; if (cardT <= 0) runCard.classList.remove("on"); }
+  };
+
+  refresh();
+  Object.assign(ui, {
+    openNameDialog, closeNameDialog: () => closeName(null), openBoards, closeBoards, invalidateBoards: invalidate, chooseL4, closePick,
+    setRunClock, showRunClock, setRunResult, patchRunResult, showRunCard, refreshMenu: refresh, settings,
+  });
+  Object.defineProperty(ui, "nameOpen", { get: () => nameDlg.classList.contains("on") });
+  Object.defineProperty(ui, "boardsOpen", { get: () => boards.classList.contains("on") });
+  Object.defineProperty(ui, "pickOpen", { get: () => pick.classList.contains("on") });
+  return ui;
 }

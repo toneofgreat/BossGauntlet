@@ -2,6 +2,11 @@
 // Backstage tunnel -> entrance -> three rhythm acts (warm-up, water, duet) -> the flaming hoop -> bows ->
 // carried home to the habitat at night. The show cannot be failed: every beat ends by itself.
 //
+// HARD MODE (LEVELS3.md A7; unlocked after 5 wins, ctx.levelOpts.hard): the song runs at 1.25x tempo and the lane at
+// the bottom is ~2.7x faster (0.8 s of lead), there are 8 trick buttons spread over the screen at fixed places, the
+// charts carry >= 1.6x the notes (extra lanes interleaved, generated from the normal charts), hits pay coins (x3,
+// perfect x4, combo multiplier up to x5) and misses cost excitement 1.5x faster. Normal mode is unchanged.
+//
 // Rhythm: notes are judged on the AUDIO clock (audio.showMusic.time()); if that clock stalls (no audio, a
 // suspended context) the level carries on with its own real-time clock so the show always finishes.
 import { createStage } from "../stage.js";
@@ -13,7 +18,9 @@ import { createProps } from "../props.js";
 export const meta = { n: 4, title: "THE SHOW" };
 
 const STEPS = ["backstage", "entrance", "act1", "act2", "act3", "finale", "bows", "home", "done"];
-const BPM = 112, BEAT = 60 / BPM, LEAD = 4;
+const BPM = 112, HARD_BPM = BPM * 1.25;
+// (set per visit in enter(): normal 112 bpm / 4 beats of lead, hard 140 bpm / 0.8 s of lead)
+let BEAT = 60 / BPM, LEAD = 4;
 const WIN_PERFECT = 0.11, WIN_GOOD = 0.24, WIN = 0.30;
 const WATER_Y = -0.05;
 
@@ -31,6 +38,22 @@ const WATER = [
 ];
 const TR_LAND = LAND.map((s) => ({ label: s.label }));
 const TR_WATER = WATER.map((s) => ({ label: s.label }));
+// hard mode: four more tricks in slots 5-8 (keys 5-8)
+const LAND_H = LAND.concat([
+  { name: "wave", label: "Wave", call: "WAVE" },
+  { name: "tailStand", label: "Tail stand", call: "TAIL STAND" },
+  { name: "tailSplash", label: "Splash", call: "SPLASH" },
+  { name: "backflip", label: "Flip", call: "FLIP" },
+]);
+const WATER_H = WATER.concat([
+  { name: "wave", label: "Wave", call: "WAVE" },
+  { name: "tailStand", label: "Tail stand", call: "TAIL STAND" },
+  { name: "spin", label: "Spin", call: "SPIN" },
+  { name: "backflip", label: "Flip", call: "FLIP" },
+]);
+const TR_LAND_H = LAND_H.map((t) => ({ label: t.label }));
+const TR_WATER_H = WATER_H.map((t) => ({ label: t.label }));
+const SCATTER = { layout: "scatter" };
 const TR_FINALE = [{ label: "Spin", enabled: false }, { label: "Backflip", enabled: false }, { label: "Roll", enabled: false }, { label: "JUMP!" }];
 
 // charts: [beat, lane] relative to the act's first bar
@@ -64,6 +87,56 @@ const LEN3 = DUET.length * 8 + 0.6;
 const NOTE_COUNT = CHART1.length + CHART2.length + CHART3.length;
 const MAX_SCORE = NOTE_COUNT * 3;
 
+// ---- hard charts: generated (deterministically) from the normal ones. Extra notes go in lanes 5-8 on free half-beats
+// at least half a beat (0.21 s at 140 bpm) from any other note; act 2 keeps two clear beats after each ring leap and
+// the side swap clear; the duet keeps call-and-response (each phrase grows from 4 to 7 notes, Pip still goes first).
+function seeded(seed) { let x = seed >>> 0; return () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; }; }
+function hardChart(chart, act, seed) {
+  const out = chart.map((c) => c.slice());
+  const rnd = seeded(seed);
+  const want = Math.ceil(chart.length * 1.7);
+  let last = 0;
+  for (const c of chart) if (c[0] > last) last = c[0];
+  const near = (b) => { for (const c of out) if (Math.abs(c[0] - b) < 0.5 - 1e-6) return true; return false; };
+  const blocked = (b) => {
+    if (act !== 2) return false;
+    if (b > SWAP_AT - 1.5 && b < SWAP_END + 0.5) return true;
+    for (const c of out) if (c[1] === 3 && b > c[0] - 1.01 && b <= c[0] + 2.01) return true;
+    return false;
+  };
+  // whole beats first, then half beats, each group in a seeded order
+  const groups = [[], []];
+  for (let b = 0.5; b < last; b += 0.5) groups[b % 1 ? 1 : 0].push(b);
+  for (const g of groups) {
+    for (let i = g.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; const t = g[i]; g[i] = g[j]; g[j] = t; }
+    for (const b of g) {
+      if (out.length >= want) break;
+      if (near(b) || blocked(b)) continue;
+      out.push([b, 4 + ((rnd() * 4) | 0)]);
+    }
+  }
+  out.sort((a, b) => a[0] - b[0]);
+  return out;
+}
+const CHART1H = hardChart(CHART1, 1, 4101);
+const CHART2H = hardChart(CHART2, 2, 4202);
+const CHART3H = [];
+{
+  const rnd = seeded(4303);
+  for (let p = 0; p < DUET.length; p++) {
+    const at = DUET[p].at, free = [];
+    for (let b = 0; b < 4; b += 0.5) { let ok = true; for (const a of at) if (Math.abs(a - b) < 0.5 - 1e-6) ok = false; if (ok) free.push(b); }
+    while (free.length > 3) free.splice((rnd() * free.length) | 0, 1);
+    const ph = [];
+    for (let i = 0; i < 4; i++) ph.push([p * 8 + 4 + at[i], DUET[p].lanes[i], p]);
+    for (const b of free) ph.push([p * 8 + 4 + b, 4 + ((rnd() * 4) | 0), p]);
+    ph.sort((a, b) => a[0] - b[0]);
+    for (const n of ph) CHART3H.push(n);
+  }
+}
+const NOTE_COUNT_H = CHART1H.length + CHART2H.length + CHART3H.length;
+const MAX_SCORE_H = NOTE_COUNT_H * 3;
+
 const RING_DUR = 1.0, RING_START = 0.18, RING_MID = 0.6; // the hoop is crossed at the water leap's apex (0.6 s)
 const SLOT_IN = 1.3, SLOT_OUT = 3.9, POOL_LINE = 3;
 // the finale leap: a straight ballistic line from the tower's edge through the flaming hoop into the pool
@@ -86,6 +159,8 @@ export function createLevel(ctx) {
   let stage = null, zoo = null, friend = null, crowd = null, props = null, audience = null, keeper = null, SP = null, ZP = null;
 
   let step = "boot", gen = 0, finished = false;
+  // hard mode (this visit); hitCoins = coins paid by hits (hard only)
+  let hard = false, hitCoins = 0;
   // score
   let score = 0, combo = 0, bestCombo = 0, hits = 0, perfects = 0, misses = 0, stars = 0;
   let exc = 0.3, excShown = -1, coins = 0, owed = 0, got = 0, bonus = 0;
@@ -189,6 +264,10 @@ export function createLevel(ctx) {
 
   function enter() {
     gen++;
+    hard = !!(ctx.levelOpts && ctx.levelOpts.hard);
+    BEAT = 60 / (hard ? HARD_BPM : BPM);
+    LEAD = hard ? 0.8 / BEAT : 4;
+    hitCoins = 0;
     resetState();
     stage.reset();
     friend.reset(); crowd.reset(); props.reset();
@@ -202,7 +281,7 @@ export function createLevel(ctx) {
     home.switched = true; // force toStage() to do its work
     toStage();
     stage.setCue("preshow", 0);
-    stage.screen.setText("PLATYPUS", "TRICKS");
+    stage.screen.setText("PLATYPUS", hard ? "HARD MODE" : "TRICKS");
     musicOn = false; songT = 0; songLast = -1; songStall = 0; songFallback = false;
     step = "backstage";
     stageBackstage();
@@ -259,7 +338,7 @@ export function createLevel(ctx) {
   // =================================================================================== small services
   function startMusic() {
     if (musicOn) return;
-    audio.showMusic.start(BPM);
+    audio.showMusic.start(hard ? HARD_BPM : BPM);
     audio.showMusic.setIntensity(exc);
     musicOn = true; songT = 0; songLast = -1; songStall = 0; songFallback = false;
   }
@@ -327,7 +406,7 @@ export function createLevel(ctx) {
     fx.confetti(confR, dirR, n, 0);
   }
   function reward(i) {
-    const n = i === 0 ? 12 : i === 1 ? 20 : 30;
+    const n = (i === 0 ? 12 : i === 1 ? 20 : 30) * (hard ? 3 : 1);
     props.coins.rain(player.x, player.z, 3, n, 1);
     owed += n;
     audience.wave();
@@ -511,7 +590,7 @@ export function createLevel(ctx) {
     if (n === 1) {
       stage.setCue("show", 1.5);
       stage.screen.setText("ACT 1", "WARM-UP");
-      ui.setTricks(TR_LAND);
+      if (hard) ui.setTricks(TR_LAND_H, SCATTER); else ui.setTricks(TR_LAND);
       if (instant) putBoth(c.x, c.z, 0, f.x, f.z, 0);
       ui.call("ACT 1", "Warm-up");
       actCamera(1, instant);
@@ -519,7 +598,7 @@ export function createLevel(ctx) {
     } else if (n === 2) {
       stage.setCue("water", 1.5);
       stage.screen.setText("ACT 2", "WATER");
-      ui.setTricks(TR_WATER);
+      if (hard) ui.setTricks(TR_WATER_H, SCATTER); else ui.setTricks(TR_WATER);
       ui.setObjective("Into the pool!");
       pSide = -1; pOut = false; fSide = 1; fOut = false;
       ui.call("ACT 2", "Water tricks");
@@ -529,7 +608,7 @@ export function createLevel(ctx) {
     } else {
       stage.setCue("duet", 1.5);
       stage.screen.setText("ACT 3", "DUET");
-      ui.setTricks(TR_LAND);
+      if (hard) ui.setTricks(TR_LAND_H, SCATTER); else ui.setTricks(TR_LAND);
       ui.setObjective("Back on stage!");
       duetPX = instant || player.x < 0 ? -1.5 : 1.5;
       ui.call("ACT 3", "Duet: copy Pip");
@@ -540,11 +619,11 @@ export function createLevel(ctx) {
     }
   }
   function runAct(n) {
-    const chart = n === 1 ? CHART1 : n === 2 ? CHART2 : CHART3;
+    const chart = hard ? (n === 1 ? CHART1H : n === 2 ? CHART2H : CHART3H) : (n === 1 ? CHART1 : n === 2 ? CHART2 : CHART3);
     const duet = n === 3;
     const t0 = Math.ceil((songBeat() + LEAD + 0.5) / 4) * 4;
     act.n = n; act.t0 = t0; act.len = n === 1 ? LEN1 : n === 2 ? LEN2 : LEN3;
-    act.set = n === 2 ? WATER : LAND; act.duet = duet;
+    act.set = hard ? (n === 2 ? WATER_H : LAND_H) : (n === 2 ? WATER : LAND); act.duet = duet;
     act.first = 0; act.wantLane = -1; act.bar = -99; act.swapped = false; act.swapping = false; act.swapLeg = 0; act.said = false;
     act.notes.length = 0;
     for (let i = 0; i < chart.length; i++) {
@@ -555,7 +634,7 @@ export function createLevel(ctx) {
     trP.on = false; trF.on = false;
     player.lock = 0; player.face = null;
     act.live = true;
-    ui.setObjective(duet ? "Watch Pip, then copy the tricks" : "Hit each trick on the beat", ctx.touch ? "tap the tricks" : "1 2 3 4");
+    ui.setObjective(duet ? "Watch Pip, then copy the tricks" : "Hit each trick on the beat", ctx.touch ? "tap the tricks" : hard ? "keys 1 - 8" : "1 2 3 4");
     if (camT <= 0) actDrift(n);
   }
   function setWant(lane) {
@@ -678,14 +757,15 @@ export function createLevel(ctx) {
     phr.cnt++;
     if (rate > 0) phr.hit++;
     if (rate === 2) phr.perf++;
-    if (phr.cnt < 4) return;
-    if (phr.perf === 4) {
+    const plen = hard ? 7 : 4;
+    if (phr.cnt < plen) return;
+    if (phr.perf === plen) {
       audience.flashes(1);
       audio.crowd("cheer", 0.8, false);
       ui.call("PERFECT ECHO!", "", "perfect");
       addExc(0.03);
       friend.emote("happy");
-    } else if (phr.hit === 4) friend.emote("chirp");
+    } else if (phr.hit === plen) friend.emote("chirp");
   }
   function judgeHit(n, rate) {
     n.judged = true;
@@ -693,17 +773,23 @@ export function createLevel(ctx) {
     combo++; hits++;
     if (rate === 2) perfects++;
     if (combo > bestCombo) bestCombo = combo;
-    const mult = combo >= 16 ? 3 : combo >= 8 ? 2 : 1;
+    const mult = hard ? Math.min(5, 1 + Math.floor(combo / 8)) : combo >= 16 ? 3 : combo >= 8 ? 2 : 1;
     score += (rate === 2 ? 3 : 1) * mult;
+    if (hard) {
+      // hard mode pays for every trick: x3 a hit, x4 a perfect, times the combo multiplier (up to x5)
+      const v = (rate === 2 ? 4 : 3) * mult;
+      hitCoins += v;
+      coins = ui.addCoins(v);
+    }
     if (n.id >= 0) ui.beat.resolve(n.id, true);
     ui.flashTrick(n.lane, true);
     ui.setCombo(combo);
     if (rate === 2) ui.call(act.set[n.lane].call + "!", "PERFECT", "perfect");
     audio.showMusic.sting(rate === 2 ? "perfect" : "good");
     audio.trickWhoosh(n.lane);
-    if (combo === 8 || combo === 16) {
-      audio.comboUp(combo / 8);
-      ui.hint(combo === 8 ? "Combo! Double points" : "Super combo! Triple points", 1.8);
+    if (combo === 8 || combo === 16 || (hard && (combo === 24 || combo === 32))) {
+      audio.comboUp(Math.min(3, combo / 8));
+      ui.hint(combo === 8 ? "Combo! Double points" : combo === 16 ? "Super combo! Triple points" : combo === 24 ? "Mega combo! x4" : "ULTRA COMBO! x5", 1.8);
     }
     addExc(rate === 2 ? 0.035 : 0.015);
     playerTrick(n.lane);
@@ -717,7 +803,7 @@ export function createLevel(ctx) {
     if (n.id >= 0) ui.beat.resolve(n.id, false);
     ui.setCombo(0);
     audio.showMusic.sting("miss");
-    addExc(-0.03);
+    addExc(hard ? -0.045 : -0.03);
     phraseNote(n, 0);
   }
   // lane 0..3 = that trick key; -1 = the easy key (Space / jump button / click): any lane, GOOD at best
@@ -756,7 +842,7 @@ export function createLevel(ctx) {
       if (!n.pipDone && b >= n.pipBeat) { n.pipDone = true; pipPlay(n); }
       if (n.judged) { if (i === act.first && n.pipDone) act.first++; continue; }
       const ahead = n.beat - b;
-      if (!n.spawned && ahead <= LEAD) { n.spawned = true; if (ahead > 0.4) n.id = ui.beat.spawn(n.lane, ahead * BEAT); }
+      if (!n.spawned && ahead <= LEAD) { n.spawned = true; if (ahead > (hard ? 0.2 : 0.4)) n.id = ui.beat.spawn(n.lane, ahead * BEAT); }
       if (-ahead * BEAT > WIN) { judgeMiss(n); continue; }
       if (next < 0 && n.pipDone && ahead < 1.3) next = n.lane;
       if (ahead > LEAD + 4.5) break;
@@ -770,7 +856,7 @@ export function createLevel(ctx) {
       if (bar !== act.bar && bar >= 0 && bar < DUET.length * 2) {
         act.bar = bar;
         if (bar % 2 === 0) { ui.setObjective("Watch Pip..."); friend.lookAt(null); }
-        else { ui.setObjective("Your turn! Copy Pip", ctx.touch ? "tap the tricks" : "1 2 3 4"); friend.lookAt(platypus.group); }
+        else { ui.setObjective("Your turn! Copy Pip", ctx.touch ? "tap the tricks" : hard ? "keys 1 - 8" : "1 2 3 4"); friend.lookAt(platypus.group); }
       }
     }
     if (b >= act.t0 + act.len) endAct();
@@ -1024,9 +1110,10 @@ export function createLevel(ctx) {
       popV.set(player.x + 0.7, 0.6, player.z);
       fx.confetti(popV, null, 90, 0);
       // the bonus for the hoop rains down within reach of the magnet
-      const big = bonus >= 15, n = big ? bonus / 3 : bonus;
+      const pay = hard ? bonus * 2 : bonus;
+      const big = pay >= 15, n = big ? pay / 3 : pay;
       props.coins.rain(player.x, player.z, 1.1, n, big ? 3 : 1);
-      owed += bonus;
+      owed += pay;
       audio.payout(8);
     } else if (bows.phase === 2 && bows.t > 4.6) {
       bows.phase = 3;
@@ -1036,7 +1123,8 @@ export function createLevel(ctx) {
       props.coins.clear();
       owed = got;
       if (rest > 0) { coins = ui.addCoins(rest); audio.payout(Math.min(10, rest)); }
-      stars = score >= MAX_SCORE * 0.8 ? 3 : score >= MAX_SCORE * 0.55 ? 2 : 1;
+      const ms = hard ? MAX_SCORE_H : MAX_SCORE;
+      stars = score >= ms * 0.8 ? 3 : score >= ms * 0.55 ? 2 : 1;
       ui.setObjective(null);
       ui.banner(stars === 3 ? "★ ★ ★" : stars === 2 ? "★ ★ ☆" : "★ ☆ ☆", "You earned " + coins + " coins", 5);
       audio.questDone();
@@ -1207,7 +1295,7 @@ export function createLevel(ctx) {
   // =================================================================================== start / update / input
   function start() {
     const g = gen;
-    cinema.titleCard({ kicker: "LEVEL 4", title: "THE SHOW" }, () => { if (g === gen && step === "backstage") beginBackstage(); });
+    cinema.titleCard({ kicker: hard ? "LEVEL 4  -  HARD MODE" : "LEVEL 4", title: "THE SHOW" }, () => { if (g === gen && step === "backstage") beginBackstage(); });
   }
 
   function update(dt, time) {
@@ -1275,8 +1363,9 @@ export function createLevel(ctx) {
   }
   function state() {
     return {
-      step, score, maxScore: MAX_SCORE, excitement: exc, combo, bestCombo, coins, stars,
-      hits, perfects, misses, notes: NOTE_COUNT, bonus,
+      step, score, maxScore: hard ? MAX_SCORE_H : MAX_SCORE, excitement: exc, combo, bestCombo, coins, stars,
+      hits, perfects, misses, notes: hard ? NOTE_COUNT_H : NOTE_COUNT, bonus, hard, hitCoins, bpm: 60 / BEAT, leadSec: LEAD * BEAT,
+      charts: hard ? [CHART1H.length, CHART2H.length, CHART3H.length] : [CHART1.length, CHART2.length, CHART3.length],
       act: act.live ? act.n : 0, actBeat: act.live ? songBeat() - act.t0 : 0, rolling: roll.on, leaping: lp.on,
       music: musicOn, songBeat: songBeat(), clock: songFallback ? "fallback" : "audio",
       world: ctx.world ? ctx.world.name : "",

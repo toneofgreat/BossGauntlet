@@ -11,6 +11,10 @@ import { createProgress, LEVEL_COUNT } from "./progress.js";
 import { extendUI } from "./hud.js";
 import { createServices } from "./services.js";
 import { createMusic } from "./music.js";
+import { createRunTimer, formatMs } from "./runtimer.js";
+import { createOnline } from "./online.js";
+import { checkName, nameHint, randomName } from "./names.js";
+import { extendMenu } from "./ui.js";
 
 const LOADERS = [
   () => import("./levels/level1.js"),
@@ -24,14 +28,19 @@ const LOADERS = [
   () => import("./levels/level9.js"),
   () => import("./levels/level10.js"),
   () => import("./levels/level11.js"),
+  () => import("./levels/level12.js"),
+  () => import("./levels/level13.js"),
 ];
 
 const TAU = Math.PI * 2;
 const wrap = (a) => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
-const ui = extendUI(createUI());
 const progress = createProgress();
+const online = createOnline();
+const runTimer = createRunTimer();
+let menuClick = null; // the UI click sound, once the audio exists
+const ui = extendMenu(extendUI(createUI()), { progress, online, checkName, nameHint, randomName, formatMs, click() { if (menuClick) menuClick(); } });
 const canvas = document.getElementById("scene");
 const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
 if (coarse) ui.enableTouch();
@@ -369,6 +378,10 @@ function boot() {
     // camera-relative bearing of a world point for ui.setPing: 0 = ahead of the camera, + = to the right, PI = behind
     bearing(x, z) { return wrap(cam.yaw - Math.atan2(x - player.x, z - player.z)); },
     music,
+    // the speedrun clock (src/runtimer.js) and the online services (src/online.js); see LEVELS3.md A2 / A4
+    runTimer, online,
+    // options the level was started with: { hard } (Level 4 hard mode)
+    levelOpts: { hard: false },
     input: {
       // is this action's key / button down right now ("jump", "interact", "primary", "secondary", "tailSlap", "hold", "trick1".."trick4")
       held: (name) => !!held[name],
@@ -390,7 +403,11 @@ function boot() {
   ctx.input.aim = (out, planeY) => svc.abilities.mouseGround(out, planeY === undefined ? player.y : planeY);
   const inp = { sx: 0, sy: 0, jumpT: 0, jumpHeld: false, skipHeld: false };
   const KEY_ACTION = { KeyJ: "primary", KeyK: "secondary", KeyL: "tailSlap", KeyH: "hold", KeyQ: "potion", KeyR: "scream", KeyF: "fire", Digit1: "trick1", Digit2: "trick2", Digit3: "trick3", Digit4: "trick4",
-    Numpad1: "trick1", Numpad2: "trick2", Numpad3: "trick3", Numpad4: "trick4" };
+    Numpad1: "trick1", Numpad2: "trick2", Numpad3: "trick3", Numpad4: "trick4",
+    Digit5: "trick5", Digit6: "trick6", Digit7: "trick7", Digit8: "trick8", Numpad5: "trick5", Numpad6: "trick6", Numpad7: "trick7", Numpad8: "trick8" };
+  // typing in a text field (the name dialog) never drives the game; on the menu, keys on its buttons work as normal
+  const typing = (e) => { const t = e.target; return !!(t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)); };
+  const onMenuControl = (e) => !running && e.target && e.target.closest && !!e.target.closest("button, .modal, #l4pick");
   function gesture() { audio.resume(); }
   function canAct() { return running && mode === "level" && active && !cinema.playing; }
   // deliver a named action to the active level. Names: "primary" (J / left mouse / green button), "secondary"
@@ -410,7 +427,8 @@ function boot() {
   function doInteract() { if (!ui.advance()) act("interact"); }
 
   window.addEventListener("keydown", (e) => {
-    if (e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
+    if (typing(e)) return;
+    if ((e.code === "Space" || e.code.startsWith("Arrow")) && !onMenuControl(e)) e.preventDefault();
     if (e.repeat) return;
     keys[e.code] = true;
     gesture();
@@ -425,6 +443,7 @@ function boot() {
     else if (e.code === "KeyM") { muted = !muted; audio.setListenerMuted(muted); ui.hint(muted ? "Sound off" : "Sound on", 1.2); }
   });
   window.addEventListener("keyup", (e) => {
+    if (typing(e)) return;
     keys[e.code] = false;
     const a = KEY_ACTION[e.code];
     if (a) { held[a] = false; svc.release(a); }
@@ -445,10 +464,17 @@ function boot() {
     mouseDrag = false; stickId = -1; lookId = -1;
     homeStick();
   }
-  window.addEventListener("blur", releaseInput);
+  let pauseHidden = false, pauseBlur = false;
+  function setRunPause(kind, on) {
+    if (kind === "hidden") { if (on === pauseHidden) return; pauseHidden = on; } else { if (on === pauseBlur) return; pauseBlur = on; }
+    if (on) runTimer.pause(); else runTimer.resume();
+  }
+  window.addEventListener("blur", () => { releaseInput(); setRunPause("blur", true); });
+  window.addEventListener("focus", () => setRunPause("blur", false));
   document.addEventListener("visibilitychange", () => {
     audio.setListenerMuted(document.hidden || muted);
     if (document.hidden) releaseInput();
+    setRunPause("hidden", !!document.hidden);
   });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   function tryPick(e) {
@@ -570,7 +596,7 @@ function boot() {
   bindButton(ui.el.btnDown, () => {}, "down");
   bindButton(ui.el.btnJump, () => { inp.jumpHeld = true; doJump(); }, "jump");
   bindButton(ui.el.action, doInteract, "interact");
-  for (let i = 0; i < 4; i++) bindButton(ui.el.trk[i], () => act("trick" + (i + 1)), "trick" + (i + 1));
+  for (let i = 0; i < ui.el.trk.length; i++) bindButton(ui.el.trk[i], () => act("trick" + (i + 1)), "trick" + (i + 1));
   bindButton(cinema.skipEl, () => { inp.skipHeld = true; }, "skip", true);
   ui.el.menuBtn.addEventListener("click", () => { if (mode === "level") { audio.uiClick(); leave(false); } });
 
@@ -829,6 +855,7 @@ function boot() {
     let raw = (now - last) / 1000;
     last = now;
     if (!(raw > 0)) raw = 0.016;
+    if (running && mode === "level") { runTimer.tick(raw); ui.setRunClock(runTimer.ms); }
     if (raw < 0.5) fps += (1 / raw - fps) * 0.05;
     if (raw > 0.05) raw = 0.05;
     time.real += raw;
@@ -905,16 +932,80 @@ function boot() {
     fx.clear(true);
     if (audio.stopAll) audio.stopAll(); else audio.stopAmbience();
     ui.resetHud();
+    ui.showRunClock(false);
     cinema.reset();
     setTimeScale(1, 0);
     camCtl.taken = false; camCtl.blend = 0;
     if (camera.fov !== baseFov) { camera.fov = baseFov; camera.updateProjectionMatrix(); }
     setWorld(null);
   }
-  // n: 1..LEVEL_COUNT. Returns a promise that resolves true once the level is running (false if it was refused).
-  function startLevel(n) {
+  // ---- the run (LEVELS3.md A2): timer, personal best, leaderboard submission ----
+  let runBegan = false, resultOnCard = false, deferredSubmit = null, runResult = null;
+  function submitRun(r) {
+    const go = () => {
+      const p = r.l4 ? online.submitCoins(r.coins, r.hard) : online.submitTime(r.level, r.ms);
+      return p.then((a) => {
+        if (a.ok) { ui.invalidateBoards(r.level); ui.patchRunResult({ rank: a.rank || 0 }); return; }
+        if (a.reason === "noname") { deferredSubmit = go; return; }
+        ui.patchRunResult({ rank: 0 });
+      });
+    };
+    if (online.claimed) { go(); return; }
+    // no confirmed name yet: try the one saved on this device, else ask for one on the main screen
+    const p = online.name ? online.claimName(online.name) : Promise.resolve({ ok: false });
+    p.then((c) => { if (c.ok) go(); else deferredSubmit = go; });
+  }
+  function finishRun() {
+    if (!runTimer.running || (mode !== "level" && mode !== "leaving") || runTimer.level !== activeN) return;
+    const n = activeN, ms = runTimer.stop(), practice = runTimer.assisted, hard = runTimer.hard;
+    const live = online.enabled && !practice && online.hasRun(n);
+    let r;
+    if (n === 4) {
+      let coins = 0;
+      try { coins = (active && active.state ? active.state().coins : ui.coins) | 0; } catch (e) { coins = ui.coins | 0; }
+      const unlockedNow = progress.addL4Win(hard);
+      const best = !practice && progress.setL4Coins(coins, hard);
+      r = { level: 4, l4: true, coins, hard, ms, pb: best, practice, rank: live ? undefined : 0, hardUnlocked: unlockedNow };
+    } else {
+      const pb = !practice && progress.setBest(n, ms);
+      r = { level: n, ms, pb, practice, rank: live ? undefined : 0 };
+    }
+    runResult = r;
+    ui.setRunResult(r);
+    if (r.pb) { audio.coin(); if (music.stinger) music.stinger("discover"); }
+    if (r.hardUnlocked) { setTimeout(() => { if (music.stinger) music.stinger("discover"); (audio.levelUnlock || audio.objective).call(audio); }, 1400); }
+    if (live) submitRun(r);
+  }
+  // the stop points: the level's end card, or (levels without one) the moment it completes
+  const showComplete0 = ui.showComplete;
+  ui.showComplete = (o, cb) => { if (mode === "level") { finishRun(); resultOnCard = !!runResult; } else ui.setRunResult(null); showComplete0(o, cb); };
+  ui.showVictory = (cb) => ui.showComplete(null, cb);
+  const endCard0 = cinema.endCard;
+  cinema.endCard = (text, o, cb) => { if (mode === "level") finishRun(); return endCard0(text, o, cb); };
+  const titleCard0 = cinema.titleCard;
+  // the clock (re)starts from 0 when the level's title card has finished and control is first given
+  cinema.titleCard = (o, cb) => titleCard0(o, () => {
+    if (mode === "level" && runTimer.running && !runBegan) { runBegan = true; runTimer.restart(); }
+    if (cb) cb();
+  });
+  function afterMenu() {
+    const r = runResult;
+    if (r) ui.showRunCard(true, r.hardUnlocked ? 12 : 10);
+    if (deferredSubmit) {
+      const go = deferredSubmit;
+      deferredSubmit = null;
+      ui.after(0.9, () => ui.openNameDialog({ message: "Pick a name to go on the leaderboard", onDone(nm) { if (nm && online.claimed) go(); else ui.patchRunResult({ rank: 0 }); } }));
+    }
+  }
+
+  // n: 1..LEVEL_COUNT. o: { hard } (Level 4 only). Returns a promise that resolves true once the level is running
+  // (false if it was refused).
+  function startLevel(n, o) {
     n |= 0;
     if (mode !== "menu" || n < 1 || n > LEVEL_COUNT || !progress.isUnlocked(n)) return Promise.resolve(false);
+    const hard = n === 4 && !!(o && o.hard) && progress.l4hardUnlocked;
+    ctx.levelOpts.hard = hard;
+    ui.closeBoards(); ui.closeNameDialog(); ui.closePick(); ui.showRunCard(false);
     mode = "loading";
     audio.resume();
     audio.uiClick();
@@ -941,6 +1032,14 @@ function boot() {
       running = true;
       sinceEnter = 0; last = performance.now();
       canvas.focus();
+      runTimer.start(n, { hard });
+      runBegan = false; resultOnCard = false; runResult = null; deferredSubmit = null;
+      ui.setRunResult(null);
+      if (pauseHidden) runTimer.pause();
+      if (pauseBlur) runTimer.pause();
+      if (online.enabled) online.startRun(n, hard);
+      ui.showRunClock(n !== 4, progress.best(n));
+      ui.setRunClock(0);
       L.start();
       return true;
     }).catch((e) => { fail(e); return false; });
@@ -949,6 +1048,7 @@ function boot() {
     if (mode !== "level") return;
     mode = "leaving";
     const n = activeN;
+    if (beaten) finishRun(); else { runTimer.discard(); runResult = null; deferredSubmit = null; ui.setRunResult(null); }
     const un = beaten ? progress.beat(n) : 0;
     // Nothing else may own the fade from here: stop the respawn and any cutscene, then finish on a real-time
     // timer (a fade callback is replaced by any later fade call, which would strand the game in "leaving").
@@ -964,10 +1064,22 @@ function boot() {
       ui.showMenu(progress, { unlock: un, onUnlock() { (audio.levelUnlock || audio.objective).call(audio); } });
       // let the black cover paint once before it fades off the level select
       ui.after(0.12, () => ui.setBlack(false));
+      if (beaten) afterMenu();
     });
   }
-  ui.onLevel((n) => { startLevel(n); });
+  // circle 4 with hard mode unlocked asks NORMAL or HARD first
+  ui.onLevel((n) => {
+    if (n === 4 && progress.l4hardUnlocked) { audio.resume(); audio.uiClick(); ui.chooseL4((hard) => startLevel(4, { hard })); return; }
+    startLevel(n);
+  });
   ui.onLocked(() => { audio.resume(); audio.uiClick(); });
+  menuClick = () => { audio.resume(); audio.uiClick(); };
+  // names / leaderboards: claim a name saved while offline, retry queued scores; a name that turned out to be
+  // taken asks for a new one
+  online.ready().then(() => {
+    ui.refreshMenu();
+    if (online.needsName === "taken" && mode === "menu") ui.openNameDialog({ message: "That name is taken now - pick a new one" });
+  });
 
   ui.setReady();
   requestAnimationFrame(frame);
@@ -985,6 +1097,9 @@ function boot() {
       s.cinema = { playing: cinema.playing, faded: cinema.faded, eye: cinema.eye.openness };
       s.svc = svc.state();
       s.music = { state: music.state, intensity: music.intensity, bpm: music.bpm };
+      s.run = { ms: runTimer.ms, running: runTimer.running, stopped: runTimer.stopped, paused: runTimer.paused, assisted: runTimer.assisted, hard: runTimer.hard, level: runTimer.level, result: runResult };
+      s.online = { enabled: online.enabled, name: online.name, id: online.id, claimed: online.claimed };
+      s.levelOpts = { hard: ctx.levelOpts.hard };
       s.timeScale = time.scale;
       s.fps = fps;
       s.pixelRatio = pr;
@@ -992,17 +1107,17 @@ function boot() {
       s.render = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, programs: renderer.info.programs ? renderer.info.programs.length : 0 };
       return s;
     },
-    skipTo(name) { return active && active.skipTo ? active.skipTo(name) : false; },
-    win() { if (active && active.win) active.win(); },
+    skipTo(name) { runTimer.markAssisted(); return active && active.skipTo ? active.skipTo(name) : false; },
+    win() { runTimer.markAssisted(); if (active && active.win) active.win(); },
     startLevel,
-    unlock(n) { progress.unlock(n); if (mode === "menu") ui.showMenu(progress); },
-    unlockAll() { progress.unlock(LEVEL_COUNT); if (mode === "menu") ui.showMenu(progress); },
+    unlock(n) { runTimer.markAssisted(); progress.unlock(n); if (mode === "menu") ui.showMenu(progress); },
+    unlockAll() { runTimer.markAssisted(); progress.unlock(LEVEL_COUNT); if (mode === "menu") ui.showMenu(progress); },
     resetProgress() { progress.reset(); if (mode === "menu") ui.showMenu(progress); },
     level() { return active; },
     quit() { leave(false); },
-    tp(x, z, yaw) { player.teleport(x, z, yaw === undefined ? player.yaw : yaw); },
+    tp(x, z, yaw) { runTimer.markAssisted(); player.teleport(x, z, yaw === undefined ? player.yaw : yaw); },
     look(yaw, pitch, dist) { cam.yaw = yaw; if (pitch !== undefined) cam.pitch = pitch; if (dist !== undefined) cam.wantDist = cam.dist = dist; cam.manualT = 1e9; },
-    ctx, player, cam, renderer, scene, camera, platypus, fx, audio, sun, hemi, ui, cinema, progress, music, svc,
+    ctx, player, cam, renderer, scene, camera, platypus, fx, audio, sun, hemi, ui, cinema, progress, music, svc, runTimer, online,
     get world() { return world; },
   };
   ctx.debug = dbg; // levels may hang their own handles here (level 1 adds game, cushions, wizard, human, dummies)
