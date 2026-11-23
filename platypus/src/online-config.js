@@ -1,5 +1,5 @@
-// online-config.js - where the leaderboards live. The owner fills these two in (see supabase/SETUP.md).
-// Both empty = the game is fully offline: names save on this device and the boards say "coming soon".
-// The anon key is PUBLIC by design (it can only read the top-100 views and call the checked functions).
-export const SUPABASE_URL = "";      // "https://xxxx.supabase.co"
-export const SUPABASE_ANON_KEY = ""; // the "anon public" key from Settings -> API
+// online-config.js - where the leaderboards live: the OofWorld relay (a Cloudflare worker, /api/platypus/*).
+// Empty = the game is fully offline: names save on this device and the boards say "coming soon".
+// While the server does not have the platypus endpoints yet (they answer 404), the game behaves exactly like
+// offline mode too; it switches itself on the first time the server answers.
+export const PLATY_API = "https://relay.platyfy.com";

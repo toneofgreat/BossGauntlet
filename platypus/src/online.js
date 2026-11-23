@@ -1,10 +1,13 @@
-// online.js - names and leaderboards over Supabase's plain REST API (PostgREST; no SDK). LEVELS3.md A4.
+// online.js - names and leaderboards on the OofWorld relay (Cloudflare worker, /api/platypus/*). LEVELS3.md A4.
 // Every promise resolves (never rejects, never throws); every failure is { ok: false, reason }. With an empty
 // online-config.js nothing is ever fetched and every call resolves { ok: false, offline: true, reason: "offline" }.
+// With a config the game stays OFFLINE until one probe (GET /api/platypus/top?level=1) answers. A 404 (a server
+// without the platypus endpoints, e.g. not deployed yet) keeps it offline for the session, exactly as if the
+// config were empty; any later 404 switches it off the same way.
 //
 // Identity: a 32-byte random token (hex) in localStorage["platypus.online.v1"] = { token, id, name }. The server keeps
 // only sha256(token). The token travels only inside POST bodies, never in a URL.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./online-config.js";
+import { PLATY_API } from "./online-config.js";
 import { checkName, cleanName } from "./names.js";
 
 const ID_KEY = "platypus.online.v1";
@@ -26,11 +29,13 @@ function newToken() {
   return s;
 }
 
-// cfg (tests / tools only): { url, key }
+// cfg (tests / tools only): { url }
 export function createOnline(cfg) {
-  const URL0 = ((cfg && cfg.url) || SUPABASE_URL || "").replace(/\/+$/, "");
-  const KEY = (cfg && cfg.key) || SUPABASE_ANON_KEY || "";
-  const enabled = !!(URL0 && KEY && typeof fetch === "function");
+  const URL0 = ((cfg && cfg.url) || PLATY_API || "").replace(/\/+$/, "");
+  const configured = !!(URL0 && typeof fetch === "function");
+  // "unknown" until the probe answers; "yes" = the server has the endpoints; "no" = it answered 404
+  let live = "unknown", probeP = null;
+  const isOn = () => configured && live === "yes";
   const OFF = Object.freeze({ ok: false, offline: true, reason: "offline" });
 
   const me = lsGet(ID_KEY) || {};
@@ -47,7 +52,7 @@ export function createOnline(cfg) {
   function setLocalName(n) { localName = n || ""; lsSet(NAME_KEY, localName); }
 
   // ---- transport ----
-  // -> { ok: true, data } | { ok: false, reason: "network" | "http", status }
+  // -> { ok: true, data } | { ok: false, reason: "offline" (404) | "network" | "http", status }
   async function req(method, path, body) {
     for (let attempt = 0; attempt < 2; attempt++) {
       let ctl = null, timer = 0;
@@ -56,12 +61,13 @@ export function createOnline(cfg) {
         if (ctl) timer = setTimeout(() => ctl.abort(), TIMEOUT);
         const r = await fetch(URL0 + path, {
           method,
-          headers: { apikey: KEY, Authorization: "Bearer " + KEY, "Content-Type": "application/json", Accept: "application/json" },
+          headers: body === undefined ? { Accept: "application/json" } : { "Content-Type": "application/json", Accept: "application/json" },
           body: body === undefined ? undefined : JSON.stringify(body),
           signal: ctl ? ctl.signal : undefined,
           cache: "no-store",
         });
         clearTimeout(timer);
+        if (r.status === 404) { live = "no"; quiet(method, path, "404: no platypus endpoints here; offline"); return { ok: false, reason: "offline", status: 404 }; }
         if (r.status >= 400 && r.status < 500) { quiet(method, path, r.status); return { ok: false, reason: "http", status: r.status }; }
         if (!r.ok) throw new Error("status " + r.status);
         const txt = await r.text();
@@ -76,12 +82,26 @@ export function createOnline(cfg) {
     }
     return { ok: false, reason: "network" };
   }
+  // POST /api/platypus/<fn> -> the server's { ok: true, ... } | { ok: false, reason }
   async function rpc(fn, args) {
-    const r = await req("POST", "/rest/v1/rpc/" + fn, args);
+    const r = await req("POST", "/api/platypus/" + fn, args);
     if (!r.ok) return { ok: false, reason: r.reason };
     const d = r.data;
     if (!d || typeof d !== "object") return { ok: false, reason: "network" };
     return d;
+  }
+  // one GET: does this server have the platypus endpoints? (never rejects)
+  function probe() {
+    if (!configured || live !== "unknown") return Promise.resolve();
+    if (probeP) return probeP;
+    probeP = (async () => {
+      try {
+        const r = await req("GET", "/api/platypus/top?level=1");
+        if (r.ok && r.data && r.data.ok === true && Array.isArray(r.data.rows)) live = "yes";
+      } catch (e) { quiet("probe", e); }
+      probeP = null;
+    })();
+    return probeP;
   }
 
   // ---- the queue of submissions that could not reach the server ----
@@ -94,9 +114,9 @@ export function createOnline(cfg) {
     const keep = [];
     for (const it of q) {
       const r = it.kind === "coins"
-        ? await rpc("submit_coins", { p_token: token(), p_run: it.run, p_coins: it.coins })
-        : await rpc("submit_time", { p_token: token(), p_run: it.run, p_ms: it.ms });
-      if (!r.ok && r.reason === "network") keep.push(it);
+        ? await rpc("coins", { token: token(), run: it.run, coins: it.coins })
+        : await rpc("time", { token: token(), run: it.run, ms: it.ms });
+      if (!r.ok && (r.reason === "network" || r.reason === "offline")) keep.push(it);
     }
     if (keep.length) { const q2 = queue().concat(keep); lsSet(QUEUE_KEY, q2.slice(-QUEUE_MAX)); }
   }
@@ -114,61 +134,84 @@ export function createOnline(cfg) {
     if (r && r.id && !ident.id) { ident.id = String(r.id); saveIdent(); }
     return { ok: false, reason };
   }
-  async function sendName(fn, raw) {
+  // one endpoint claims a first name and renames (the server knows which this token needs)
+  async function sendName(raw) {
     const c = checkName(raw);
     if (!c.ok) return { ok: false, reason: c.reason === "rude" ? "rude" : "invalid" };
-    if (!enabled) { setLocalName(c.name); return { ok: false, offline: true, reason: "offline", name: c.name }; }
-    const r = await rpc(fn, { p_token: token(), p_name: c.name });
+    if (!isOn()) { setLocalName(c.name); return { ok: false, offline: true, reason: "offline", name: c.name }; }
+    const r = await rpc("name", { token: token(), name: c.name });
+    if (!r.ok && r.reason === "offline") { setLocalName(c.name); return { ok: false, offline: true, reason: "offline", name: c.name }; }
     if (!r.ok && r.reason === "network") { setLocalName(c.name); return { ok: false, reason: "network", name: c.name }; }
     return applyNameResult(r, c.name);
   }
 
+  // level 4 = the coins board. One POST: the top 100 and (when this device has a name) the caller's own row.
+  async function board(level) {
+    if (!isOn()) return { ok: false, offline: true, reason: "offline", rows: [] };
+    try {
+      const d = await rpc("top", ident.id || ident.name ? { token: token(), level } : { level });
+      if (!d.ok || !Array.isArray(d.rows)) return { ok: false, reason: d.reason || "network", rows: [] };
+      const coins = level === 4;
+      const rows = d.rows.map((r) => (coins
+        ? { rank: r.rank | 0, name: String(r.name || ""), coins: r.coins | 0, hard: !!r.hard }
+        : { rank: r.rank | 0, name: String(r.name || ""), ms: r.ms | 0 }));
+      const out = { ok: true, rows };
+      if (d.me && d.me.rank) out.me = coins ? { rank: d.me.rank | 0, coins: d.me.coins | 0, hard: !!d.me.hard } : { rank: d.me.rank | 0, ms: d.me.ms | 0 };
+      return out;
+    } catch (e) { return { ok: false, reason: "network", rows: [] }; }
+  }
+
   const api = {
-    enabled,
+    // false until the server has answered the probe (and for good after a 404): the game is then exactly offline
+    get enabled() { return isOn(); },
     get name() { return localName; },
     get id() { return ident.id; },
     // true when the server has confirmed the current name
     get claimed() { return !!ident.name && ident.name === localName; },
     // "taken": the name saved on this device belongs to someone else now (the dialog asks for a new one)
     get needsName() { return needsName; },
-    // loads / creates the identity, claims a name saved while offline, retries queued submissions. Never rejects.
+    // probes the server, then loads / creates the identity, claims a name saved while offline, retries queued
+    // submissions. Never rejects.
     ready() {
-      if (!enabled) return Promise.resolve();
+      if (!configured) return Promise.resolve();
       if (readyP) return readyP;
       readyP = (async () => {
         try {
-          token();
-          if (localName && ident.name !== localName) {
-            const r = await rpc(ident.name ? "rename_player" : "claim_name", { p_token: ident.token, p_name: localName });
-            const a = applyNameResult(r, localName);
-            if (!a.ok && a.reason === "taken") needsName = "taken";
+          await probe();
+          if (isOn()) {
+            token();
+            if (localName && ident.name !== localName) {
+              const r = await rpc("name", { token: ident.token, name: localName });
+              const a = applyNameResult(r, localName);
+              if (!a.ok && a.reason === "taken") needsName = "taken";
+            }
+            if (isOn()) await flush();
           }
-          await flush();
         } catch (e) { quiet("ready", e); }
         readyP = null;
       })();
       return readyP;
     },
-    claimName(name) { return sendName(ident.name ? "rename_player" : "claim_name", name).catch(() => ({ ok: false, reason: "network" })); },
-    rename(name) { return sendName(ident.name ? "rename_player" : "claim_name", name).catch(() => ({ ok: false, reason: "network" })); },
+    claimName(name) { return sendName(name).catch(() => ({ ok: false, reason: "network" })); },
+    rename(name) { return sendName(name).catch(() => ({ ok: false, reason: "network" })); },
     // saves a name on this device only (offline mode)
     setLocalName(name) { const c = checkName(name); if (c.ok) setLocalName(c.name); return c; },
     async startRun(level, hard) {
       delete runs[level];
-      if (!enabled) return OFF;
+      if (!isOn()) return OFF;
       try {
-        const r = await rpc("start_run", { p_token: token(), p_level: level | 0, p_hard: !!hard });
+        const r = await rpc("run", { token: token(), level: level | 0, hard: !!hard });
         if (r.ok && r.run) { runs[level] = { id: String(r.run), hard: !!hard }; return { ok: true, runId: runs[level].id }; }
         return { ok: false, reason: r.reason || "invalid" };
       } catch (e) { return { ok: false, reason: "network" }; }
     },
     hasRun(level) { return !!runs[level]; },
     async submitTime(level, ms) {
-      if (!enabled) return OFF;
+      if (!isOn()) return OFF;
       try {
         const run = runs[level];
         if (!run) return { ok: false, reason: "norun" };
-        const r = await rpc("submit_time", { p_token: token(), p_run: run.id, p_ms: Math.round(ms) });
+        const r = await rpc("time", { token: token(), run: run.id, ms: Math.round(ms) });
         if (r.ok) { delete runs[level]; return { ok: true, rank: r.rank | 0, best: r.best | 0 }; }
         if (r.reason === "network") { enqueue({ kind: "time", level, run: run.id, ms: Math.round(ms) }); delete runs[level]; return { ok: false, reason: "network", queued: true }; }
         if (r.reason !== "noname") delete runs[level];
@@ -176,46 +219,19 @@ export function createOnline(cfg) {
       } catch (e) { return { ok: false, reason: "network" }; }
     },
     async submitCoins(coins, hard) {
-      if (!enabled) return OFF;
+      if (!isOn()) return OFF;
       try {
         const run = runs[4];
         if (!run) return { ok: false, reason: "norun" };
-        const r = await rpc("submit_coins", { p_token: token(), p_run: run.id, p_coins: Math.max(0, Math.floor(coins)) });
+        const r = await rpc("coins", { token: token(), run: run.id, coins: Math.max(0, Math.floor(coins)) });
         if (r.ok) { delete runs[4]; return { ok: true, rank: r.rank | 0, best: r.best | 0 }; }
         if (r.reason === "network") { enqueue({ kind: "coins", run: run.id, coins: Math.floor(coins), hard: !!hard }); delete runs[4]; return { ok: false, reason: "network", queued: true }; }
         if (r.reason !== "noname") delete runs[4];
         return { ok: false, reason: r.reason || "invalid" };
       } catch (e) { return { ok: false, reason: "network" }; }
     },
-    async topTimes(level) {
-      if (!enabled) return { ok: false, offline: true, reason: "offline", rows: [] };
-      try {
-        level |= 0;
-        const [b, m] = await Promise.all([
-          req("GET", "/rest/v1/top_times?select=rank,name,ms&level=eq." + level + "&order=rank.asc&limit=100"),
-          ident.id || ident.name ? rpc("my_rank", { p_token: token(), p_level: level }) : Promise.resolve(null),
-        ]);
-        if (!b.ok || !Array.isArray(b.data)) return { ok: false, reason: b.reason || "network", rows: [] };
-        const rows = b.data.map((r) => ({ rank: r.rank | 0, name: String(r.name || ""), ms: r.ms | 0 }));
-        const out = { ok: true, rows };
-        if (m && m.ok && m.rank) out.me = { rank: m.rank | 0, ms: m.ms | 0 };
-        return out;
-      } catch (e) { return { ok: false, reason: "network", rows: [] }; }
-    },
-    async topCoins() {
-      if (!enabled) return { ok: false, offline: true, reason: "offline", rows: [] };
-      try {
-        const [b, m] = await Promise.all([
-          req("GET", "/rest/v1/top_coins?select=rank,name,coins,hard&order=rank.asc&limit=100"),
-          ident.id || ident.name ? rpc("my_rank", { p_token: token(), p_level: 4 }) : Promise.resolve(null),
-        ]);
-        if (!b.ok || !Array.isArray(b.data)) return { ok: false, reason: b.reason || "network", rows: [] };
-        const rows = b.data.map((r) => ({ rank: r.rank | 0, name: String(r.name || ""), coins: r.coins | 0, hard: !!r.hard }));
-        const out = { ok: true, rows };
-        if (m && m.ok && m.rank) out.me = { rank: m.rank | 0, coins: m.coins | 0, hard: !!m.hard };
-        return out;
-      } catch (e) { return { ok: false, reason: "network", rows: [] }; }
-    },
+    topTimes(level) { return board(level | 0); },
+    topCoins() { return board(4); },
   };
   return api;
 }

@@ -1,6 +1,7 @@
 // playtest-online.cjs - the ONLINE + ENGINE side of LEVELS3.md Part A, in a real (headless) browser.
 //   node tools/playtest-online.cjs            everything
-//   node tools/playtest-online.cjs --only=offline|names|timer|migrate|online|hard
+//   node tools/playtest-online.cjs --only=offline|names|timer|migrate|notdeployed|online|hard
+// The server is the OofWorld relay (OofCubes worker, /api/platypus/*), mocked here; "notdeployed" = it answers 404.
 // Covers: 13 circles and their layouts; the name rules (60 bad / 60 good + more) and JS/SQL fold parity; the name
 // dialog offline; the run timer (start, pause on blur, PB, practice runs); old saves loading; the boards offline
 // ("coming soon", no fetch at all); then online against a MOCKED Supabase (page.setRequestInterception): claim,
@@ -24,7 +25,8 @@ const ONLY = arg("only");
 const want = (k) => !ONLY || ONLY.split(",").includes(k);
 // --head=src/audio.js,src/music.js serves those files from git HEAD (when another builder's copy is mid-edit)
 const HEAD = (arg("head") || "").split(",").filter(Boolean).map((f) => ["/" + f, require("child_process").execSync("git show HEAD:platypus/" + f, { cwd: ROOT, maxBuffer: 64 << 20 }).toString()]);
-const MOCK = "https://mock-platy.supabase.co";
+// the mocked OofWorld relay (/api/platypus/*); the real one is src/online-config.js PLATY_API
+const MOCK = "https://mock-relay.platyfy.test";
 
 function serve() {
   return new Promise((resolve) => {
@@ -180,25 +182,38 @@ function createMock(names) {
     for (const [pid, c] of M.coins) rows.push({ rank: 5, name: M.players.get(pid).name, coins: c.coins, hard: c.hard });
     return rows;
   };
+  // the worker's routes (OofCubes tools/platypus.js) onto the functions above; M.fail keys keep the old names
+  const ROUTE = { name: "claim_name", run: "start_run", time: "submit_time", coins: "submit_coins" };
+  const ARGS = {
+    name: (b) => ({ p_token: b.token, p_name: b.name }),
+    run: (b) => ({ p_token: b.token, p_level: b.level, p_hard: b.hard }),
+    time: (b) => ({ p_token: b.token, p_run: b.run, p_ms: b.ms }),
+    coins: (b) => ({ p_token: b.token, p_run: b.run, p_coins: b.coins }),
+  };
+  // seed(): server-side state set up by the test itself (not logged as a call from the page)
+  M.seed = (fn, b) => rpc[ROUTE[fn]](ARGS[fn](b));
   M.handle = (method, url, body) => {
     const u = new URL(url);
-    M.calls.push(method + " " + u.pathname + u.search);
-    if (u.pathname.startsWith("/rest/v1/rpc/")) {
-      const fn = u.pathname.slice(13);
-      if (M.fail[fn]) return { status: M.fail[fn], body: { message: "boom" } };
-      if (!rpc[fn]) return { status: 404, body: { message: "no fn" } };
-      return { status: 200, body: rpc[fn](body ? JSON.parse(body) : {}) };
+    const m = u.pathname.match(/^\/api\/platypus\/(\w+)$/);
+    const fn = m ? m[1] : "";
+    // the tag keeps the old function name in the log: "POST /api/platypus/time [submit_time]"
+    M.calls.push(method + " " + u.pathname + u.search + (ROUTE[fn] ? " [" + ROUTE[fn] + "]" : ""));
+    if (M.notDeployed || !m) return { status: 404, body: { error: "No such endpoint" } };
+    const b = body ? JSON.parse(body) : {};
+    if (ROUTE[fn] && method === "POST") {
+      if (M.fail[ROUTE[fn]]) return { status: M.fail[ROUTE[fn]], body: { error: "boom" } };
+      return { status: 200, body: rpc[ROUTE[fn]](ARGS[fn](b)) };
     }
-    if (u.pathname === "/rest/v1/top_times") {
-      if (M.fail.top_times) return { status: M.fail.top_times, body: { message: "boom" } };
-      const lv = +(u.searchParams.get("level") || "").replace("eq.", "");
-      return { status: 200, body: M.empty ? [] : M.fakeTimes(lv).map(({ rank, name, ms }) => ({ rank, name, ms })) };
+    if (fn === "top") {
+      const lv = method === "GET" ? +u.searchParams.get("level") : b.level;
+      const key = lv === 4 ? "top_coins" : "top_times";
+      if (M.fail[key]) return { status: M.fail[key], body: { error: "boom" } };
+      const rows = lv === 4 ? M.fakeCoins() : M.empty ? [] : M.fakeTimes(lv).map(({ rank, name, ms }) => ({ rank, name, ms }));
+      let me = null;
+      if (method === "POST" && b.token) { const r = rpc.my_rank({ p_token: b.token, p_level: lv }); if (r.ok && r.rank) { me = Object.assign({}, r); delete me.ok; } }
+      return { status: 200, body: { ok: true, level: lv, rows, me, total: rows.length } };
     }
-    if (u.pathname === "/rest/v1/top_coins") {
-      if (M.fail.top_coins) return { status: M.fail.top_coins, body: { message: "boom" } };
-      return { status: 200, body: M.fakeCoins() };
-    }
-    return { status: 404, body: { message: "nf" } };
+    return { status: 404, body: { error: "No such endpoint" } };
   };
   return M;
 }
@@ -247,9 +262,10 @@ function createMock(names) {
       const u = req.url();
       try {
         if (u.startsWith(BASE)) {
-          if (onlineCfg && u.includes("/src/online-config.js")) {
+          // offline suites: an empty config (no request may leave the page); online suites: the mocked relay
+          if (u.includes("/src/online-config.js")) {
             return req.respond({ status: 200, contentType: "text/javascript", headers: { "Cache-Control": "no-store" },
-              body: 'export const SUPABASE_URL = "' + MOCK + '";\nexport const SUPABASE_ANON_KEY = "test-anon-key";\n' });
+              body: 'export const PLATY_API = "' + (onlineCfg ? MOCK : "") + '";\n' });
           }
           // level 12 is real now: the timer / board checks still need a level that ends on one E, so serve the placeholder
           if (u.split("?")[0].endsWith("/src/levels/level12.js")) {
@@ -260,11 +276,10 @@ function createMock(names) {
           return req.continue();
         }
         if (u.startsWith(MOCK) && mock) {
-          const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "apikey, authorization, content-type, accept", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
+          // the same CORS the worker sends (OofCubes worker/src/index.js)
+          const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type", "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS" };
           if (req.method() === "OPTIONS") return req.respond({ status: 204, headers: cors, body: "" });
           if (mock.delay) await sleep(mock.delay);
-          const h = req.headers();
-          if (h.apikey !== "test-anon-key" || h.authorization !== "Bearer test-anon-key") return req.respond({ status: 401, headers: cors, contentType: "application/json", body: "{}" });
           if (/[0-9a-f]{64}/.test(u)) mock.tokenInUrl = true;
           const r = mock.handle(req.method(), u, req.postData());
           return req.respond({ status: r.status, headers: cors, contentType: "application/json", body: JSON.stringify(r.body) });
@@ -493,18 +508,63 @@ function createMock(names) {
       check(errors.length === 0, "no console errors " + JSON.stringify(errors.slice(0, 3)));
     }
 
+    // ======================================================================================== NOT DEPLOYED YET
+    // the config points at the relay but every /api/platypus/* answers 404 (an old worker): exactly offline
+    if (want("notdeployed")) {
+      log("NOT DEPLOYED: the relay answers 404, the game behaves exactly like offline");
+      mock = createMock(names);
+      mock.notDeployed = true;
+      onlineCfg = true;
+      // a browser logs every 404 response as "Failed to load resource"; that line is the network panel, not a script error
+      allowedErr.push("Failed to load resource");
+      await newPage({ unlock: true });
+      await sleep(600);
+      let s = await S();
+      check(!s.online.enabled, "online.enabled is false once the probe gets a 404");
+      check(mock.calls.length >= 1 && mock.calls.every((c) => c.startsWith("GET /api/platypus/top")), "only the probe was sent " + JSON.stringify(mock.calls));
+      // name: saved on this device, closes like offline
+      await page.click("#nameBtn"); await sleep(250);
+      const sub = await page.$eval("#nameSub", (e) => e.textContent).catch(() => "");
+      check(/Saved on this device/.test(sub), "the name dialog says 'Saved on this device' (" + sub + ")");
+      await type("#nameIn", "Quiet Quokka");
+      await page.click("#nameSave");
+      await until(() => !document.getElementById("nameDlg").classList.contains("on"), 5000, "name saved");
+      s = await S();
+      check(s.online.name === "Quiet Quokka" && !s.online.claimed, "the name saves locally (" + s.online.name + ")");
+      // a run: local best, no server rank, nothing posted
+      await playPlaceholder(12);
+      const rr = (await S()).run.result;
+      check(rr && rr.rank === 0 && rr.pb, "a run sets a local personal best and asks the server for nothing");
+      check(!/in the world/.test(lastCard) && !/See leaderboard/.test(lastCard), "the run card has no rank and no 'See leaderboard' (" + lastCard.replace(/\s+/g, " ").slice(0, 80) + ")");
+      check(!mock.calls.some((c) => c.startsWith("POST")), "no POST ever left the page " + JSON.stringify(mock.calls));
+      // boards: coming soon + your own best
+      await page.click("#trophyBtn"); await sleep(250);
+      await page.click("#boards .btab:nth-child(12)"); await sleep(250);
+      const nd = await page.evaluate(() => ({ body: document.querySelector("#boards .bbody").textContent, foot: document.querySelector("#boards .bfoot .mine").textContent }));
+      check(/coming soon/i.test(nd.body) && /Your best: \d+:\d\d\.\d\d/.test(nd.foot), "boards: 'coming soon' and your own best " + JSON.stringify(nd));
+      await shot("boards-notdeployed");
+      await page.keyboard.press("Escape"); await sleep(150);
+      await page.evaluate(() => window.__platy.online.ready());
+      await sleep(300);
+      check(!mock.calls.some((c) => c.startsWith("POST")), "ready() again sends nothing once the server said 404");
+      check(errors.length === 0 && external.length === 0, "no console errors, no other requests " + JSON.stringify(errors.slice(0, 3).concat(external.slice(0, 3))));
+      allowedErr = [];
+      mock = null;
+    }
+
     // ======================================================================================== ONLINE (mocked)
     if (want("online")) {
-      log("ONLINE: mocked Supabase");
+      log("ONLINE: mocked relay (/api/platypus/*)");
       const OPEN = JSON.stringify({ unlocked: 13, beaten: [] });
       mock = createMock(names);
       onlineCfg = true;
       // someone else already owns "TakenName"
-      mock.handle("POST", MOCK + "/rest/v1/rpc/claim_name", JSON.stringify({ p_token: "a".repeat(64), p_name: "TakenName" }));
+      mock.seed("name", { token: "a".repeat(64), name: "TakenName" });
       await newPage({ unlock: true });
+      await until(() => window.__platy.state().online.enabled, 6000, "probe");
       let s = await S();
       check(s.online.enabled && !s.online.claimed, "online.enabled with a config, no name yet");
-      check(!mock.calls.some((c) => c.includes("claim") && !c.includes("rpc/claim_name")), "nothing claimed at boot without a name");
+      check(!mock.calls.some((c) => c.includes("/api/platypus/name")), "nothing claimed at boot without a name");
       await page.click("#nameBtn"); await sleep(250);
       await type("#nameIn", "TakenName");
       await page.click("#nameSave");
@@ -533,7 +593,7 @@ function createMock(names) {
       await page.click("#nameSave");
       await until(() => !document.getElementById("nameDlg").classList.contains("on"), 5000, "renamed");
       check((await S()).online.name === "Speedy Pip Two", "rename works");
-      const other = mock.handle("POST", MOCK + "/rest/v1/rpc/claim_name", JSON.stringify({ p_token: "b".repeat(64), p_name: "Speedy Pip" })).body;
+      const other = mock.seed("name", { token: "b".repeat(64), name: "Speedy Pip" });
       check(other.ok === false && other.reason === "taken", "after a rename, the old name is still reserved for everyone else");
       // score: implausible first (server says no; no rank, no error), then a good one with a rank
       mock.minMs = 10 * 60 * 1000;
@@ -590,7 +650,7 @@ function createMock(names) {
       await shot("boards-coins");
       await page.keyboard.press("Escape"); await sleep(150);
       // a name saved while offline is claimed when the game goes online; a taken one asks for a new name
-      mock.handle("POST", MOCK + "/rest/v1/rpc/claim_name", JSON.stringify({ p_token: "c".repeat(64), p_name: "Offline Otter" }));
+      mock.seed("name", { token: "c".repeat(64), name: "Offline Otter" });
       await newPage({ unlock: true, storage: { "platypus.name.v1": '"Offline Otter"' } });
       await until(() => document.getElementById("nameDlg").classList.contains("on"), 6000, "taken dialog");
       check(/taken now/.test(await hint()), "a locally saved name that is taken online asks for a new one ('That name is taken now')");
