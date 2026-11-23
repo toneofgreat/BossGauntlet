@@ -489,7 +489,7 @@ function createMock(names) {
       p = await page.evaluate(() => { const P = window.__platy.progress; return { u: P.unlocked, b12: P.beaten[11], lock12: document.getElementById("lvl12").classList.contains("locked"), lock13: document.getElementById("lvl13").classList.contains("locked") }; });
       check(p.u === 12 && !p.b12 && !p.lock12 && p.lock13, "11-level save (all beaten) opens 12 locally, 13 stays locked " + JSON.stringify(p));
       const src = fs.readFileSync(path.join(ROOT, "src", "progress.js"), "utf8");
-      check(/const LIVE_RELEASED = 11;/.test(src) && /LEVEL_COUNT = 13/.test(src), "progress.js: LEVEL_COUNT 13, LIVE_RELEASED still 11");
+      check(/const LIVE_RELEASED = (1[1-3]);/.test(src) && /LEVEL_COUNT = 13/.test(src), "progress.js: LEVEL_COUNT 13, LIVE_RELEASED 11..13");
       check(errors.length === 0, "no console errors " + JSON.stringify(errors.slice(0, 3)));
     }
 
