@@ -39,6 +39,7 @@ const BOSS_OBJ = [
   (n) => ["Freeze the vents " + n + "/3 (Q)", "throw the potion into the open vent · blue flowers refill it"],
   (n) => ["Ride the wind — scream into its heart " + n + "/3", "stand in a wind column and jump · then hold R and let go"],
 ];
+const BOSS_NOW = ["Hit the glowing crystal now! Sting (J) or Slap (L)", "Throw the potion (Q) into the glowing vent now!", "Scream (R) into its glowing heart now! Hold, then let go"];
 const LANES = ["spin", "flip", "dive", "wave"];
 const LANE_TRICK = ["spin", "backflip", "tailSplash", "wave"];
 // the wind duet: Pip calls a phrase of four, you answer it. Three sets, faster each time.
@@ -883,6 +884,7 @@ export function createLevel(ctx) {
   }
   function restoreBoss(id) {
     const n = Math.max(0, BOSS_STEP.indexOf(id));
+    const kept = magmor.progress();
     gen++;
     ctx.clearTimers();
     ctx.setTimeScale(1, 0);
@@ -894,6 +896,10 @@ export function createLevel(ctx) {
     placeOnArena(n);
     if (music && music.state !== "inferno" && music.pending !== "inferno") M("play", "inferno", { at: "now", intensity: 0.85 });
     beginBoss(n);
+    magmor.restoreProgress(kept);
+    ui.boss.set(clamp(magmor.hp, 0, 1));
+    objKey = ""; bossObjective();
+    if (bossCount() > 0) later(0.8, () => ui.hint("Your hits are saved! Keep going!", 2.5));
   }
   // the first island, wherever the lava ring has carried it: the start of every phase
   function placeOnArena(n) {
@@ -911,12 +917,12 @@ export function createLevel(ctx) {
     ctx.health.onHurt = onHurt;
     ctx.health.onDeath = null;
     if (n === 1) {
-      ab.potion.enable({ count: 2, max: 3, cooldown: 0.8, range: [2, 40], flight: [0.6, 1.15], assist: 5, splash: 1.5, targets: magmor.targets });
+      ab.potion.enable({ count: 3, max: 3, cooldown: 0.8, range: [2, 40], flight: [0.6, 1.15], assist: 5, splash: 1.5, targets: magmor.targets });
       ab.potion.onThrow = onThrow;
       ab.potion.onEmpty = () => ui.hint("No potion! Grab a glowing blue ice flower on an island.", 3);
     }
     if (n === 2) {
-      ab.scream.enable({ chargeTime: 0.8, minCharge: 0.2, cooldown: 1.0 });
+      ab.scream.enable({ chargeTime: 0.5, minCharge: 0.05, cooldown: 0.6 });
       ab.scream.onStart = () => { if (platypus.screamCharge) platypus.screamCharge(0.02); };
       ab.scream.onCharge = (f) => { if (platypus.screamCharge) platypus.screamCharge(f); A("screamCharge", f); };
       ab.scream.onCancel = ab.scream.onFizzle = () => { if (platypus.screamCharge) platypus.screamCharge(0); A("screamCharge", 0); };
@@ -969,6 +975,15 @@ export function createLevel(ctx) {
     lastAttack = name; atk.name = name; atk.x = x; atk.z = z; atk.t = t; atk.at = ctx.time.now;
     if ((name === "slam" || name === "double" || name === "grab") && dist2(player.x, player.z, x, z) < 6.5) { dashT = t + 0.35; walkSpeed(1.75); }
   }
+  // is the boss open to an attack right now? (a glowing crystal / an open vent / the open heart while you ride)
+  let winWas = false, restockT = 0, landSafeT = 0;
+  function bossWindow() {
+    if (!bossOn) return false;
+    if (bossN === 0) return magmor.crystals.some((c) => c.glowing && !c.broken);
+    if (bossN === 1) return magmor.vents.some((v) => v.open && !v.plugged);
+    if (bossN === 2) return !!(ride && ride.stage !== "down" && magmor.core.open);
+    return false;
+  }
   function bossCount() {
     if (bossN === 0) { let k = 0; for (const c of magmor.crystals) if (c.broken) k++; return k; }
     if (bossN === 1) { let k = 0; for (const v of magmor.vents) if (v.plugged) k++; return k; }
@@ -977,8 +992,11 @@ export function createLevel(ctx) {
   }
   function bossObjective() {
     if (bossN < 0) return;
-    const k = bossCount(), o = BOSS_OBJ[bossN](k);
-    objective("b" + bossN + "-" + k, o[0], o[1]);
+    const k = bossCount(), o = BOSS_OBJ[bossN](k), w = bossWindow();
+    objective("b" + bossN + "-" + k + (w ? "-w" : ""), o[0], w ? BOSS_NOW[bossN] : o[1]);
+    // the moment a window opens: say it once, big
+    if (w && !winWas) { ui.call(["HIT IT!", "THROW!", "SCREAM!"][bossN], forTouch(BOSS_NOW[bossN]), "perfect"); A("windGust", 0.25); }
+    winWas = w;
   }
   function onHurt(amount, src) {
     const k = src && src.kind === "fall" ? "lava" : lastAttack || (src && src.kind) || "?";
@@ -1041,6 +1059,7 @@ export function createLevel(ctx) {
     ui.boss.set(clamp(magmor.hp, 0, 1));
     bossObjective();
     if (ride) updateRide(dt);
+    else if ((landSafeT -= dt) > 0) { /* just landed from the wind */ }
     else if (player.enabled && !ctx.checkpoint.respawning && !ctx.health.dead && player.grounded && inLava(player.x, player.z)) {
       FX("lavaSplash", player.x, player.y, player.z, 0.8);
       hurtBy.lava = (hurtBy.lava || 0) + 1;
@@ -1055,6 +1074,8 @@ export function createLevel(ctx) {
       if (c) { if (atk.name === "slam") setGoal(atk.x, volcano.heightAt(atk.x, atk.z) + 3.4, atk.z, 0xffb050); else setGoal(c.x, c.y + 1.2, c.z, 0xffb050); } else clearGoal();
     } else if (bossN === 1) {
       if (magmor.takeFlower(player.x, player.z, 1.3)) { ab.potion.add(1); progressed(); ui.hint("Ice potion +1!", 1.6); }
+      // never stuck without a potion: an empty slot refills by itself after a moment
+      if (ab.potion.count === 0) { restockT += dt; if (restockT > 1.2) { restockT = 0; ab.potion.add(1); ui.hint("A fresh ice potion! +1", 1.6); } } else restockT = 0;
       let v = null;
       for (const q of magmor.vents) if (q.open && !q.plugged) v = q;
       if (v) setGoal(v.x, v.y + 2, v.z, 0x9adfff);
@@ -1070,7 +1091,7 @@ export function createLevel(ctx) {
   }
   // sting / slap at a glowing crystal
   function attack(kind) {
-    if (!player.enabled || platypus.acting || cd[kind] > 0 || ride) return true;
+    if (!player.enabled || cd[kind] > 0 || ride) return true;   // (not platypus.acting: a press in the window always swings)
     const t = (kind === "slap" ? platypus.slapHitTime : platypus.stingHitTime) || 0.25;
     if (kind === "slap") platypus.tailSlap(); else { platypus.sting(); A("sting"); }
     cd[kind] = CD[kind];
@@ -1080,14 +1101,15 @@ export function createLevel(ctx) {
       let hit = false;
       for (const c of magmor.crystals) {
         if (!c.glowing || c.broken) continue;
-        const atFist = atk.name === "slam" && dist2(player.x, player.z, atk.x, atk.z) < 4.2;   // anywhere on the resting fist
-        if ((atFist || dist2(player.x, player.z, c.x, c.z) < 6.0) && magmor.hit("crystal", c.i, kind === "sting" ? 1.5 : 1)) { hit = true; progressed(); cinema.shake(0.02, 0.2); }
+        const atFist = atk.name === "slam" && dist2(player.x, player.z, atk.x, atk.z) < 7.5;   // anywhere near the resting fist
+        if ((atFist || dist2(player.x, player.z, c.x, c.z) < 9.0) && magmor.hit("crystal", c.i, kind === "sting" ? 1.5 : 1)) { hit = true; progressed(); cinema.shake(0.02, 0.2); }
       }
       if (kind === "slap") A(hit ? "tailSlapHit" : "tailSlap");
       if (!hit) {
         let near = false;
         for (const c of magmor.crystals) if (!c.broken && dist2(player.x, player.z, c.x, c.z) < 6) near = true;
         if (near) ui.hint("Only a GLOWING crystal cracks. Wait for the fist to rest!", 2);
+        else if (magmor.crystals.some((q) => q.glowing && !q.broken)) ui.hint("Closer! Run to the glowing crystal on the fist.", 2);
       }
     });
     return true;
@@ -1173,7 +1195,7 @@ export function createLevel(ctx) {
       r.hx = clamp(r.hx + ctx.input.x * dt * 2.5, -2.5, 2.5); r.hz = clamp(r.hz + ctx.input.y * dt * 2.5, -2.5, 2.5);
       r.x = u.x + r.hx; r.z = u.z + r.hz;
       player.y = top + Math.sin(r.t * 2.2) * 0.25;
-      if (r.t > 5.2) { r.stage = "down"; r.t = 0; r.dest = r.i; r.sx = player.x; r.sz = player.z; r.sy = player.y; ui.hint("The wind fades... wait for its chest to open next time.", 2.4); }
+      if (r.t > 11) { r.stage = "down"; r.t = 0; r.dest = r.i; r.sx = player.x; r.sz = player.z; r.sy = player.y; ui.hint("The wind fades... wait for its chest to open next time.", 2.4); }
     } else {
       // a long glide down onto the island of the next column (or back home)
       const d = volcano.updrafts[r.dest === undefined ? r.i : r.dest];
@@ -1207,7 +1229,7 @@ export function createLevel(ctx) {
     props.windU.uK.value = 0;
     platypus.group.rotation.set(0, 0, 0);
     // land on solid ground: a step from the column toward its island's middle
-    if (u) { const o = volcano.islands[u.island] || u, k = 0.45; player.teleport(lerp(u.x, o.x, k), lerp(u.z, o.z, k), player.yaw); }
+    if (u) { const o = volcano.islands[u.island] || u; player.teleport(o.x, o.z, player.yaw); landSafeT = 1.2; }
   }
 
   // =====================================================================================================

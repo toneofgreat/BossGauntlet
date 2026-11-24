@@ -305,7 +305,7 @@ export function createMagmor(ctx, volcano) {
   function flare(s) { flareT = Math.max(flareT, s || 1); sfx("magmorRoar", 0.35); }
   function playerFloor() { const p = pl(); return V.heightAt(p.x, p.z); }
   function airborne() { const p = pl(); return !p.grounded || p.y - playerFloor() > 0.45; }
-  function hurt(x, z, kind, knock) { if (!ctx.health || !ctx.health.on) return false; return ctx.health.damage(1, { x, z, kind: kind || "blast", knock: knock || 5 }); }
+  function hurt(x, z, kind, knock) { if (!ctx.health || !ctx.health.on) return false; if (pl().scripted) return false; /* never while riding the wind */ return ctx.health.damage(1, { x, z, kind: kind || "blast", knock: knock || 5 }); }
   function playerIsland() {
     const p = pl(); let best = -1, bd = 1e9;
     for (const o of V.islands) { const d = Math.hypot(p.x - o.x, p.z - o.z) - o.r; if (d < bd) { bd = d; best = o.i; } }
@@ -324,7 +324,7 @@ export function createMagmor(ctx, volcano) {
   function pickPhase0() {
     const p = pl(), r = R();
     const left = crystals.filter((c) => !c.broken).length;
-    if (attackN % 3 === 0 || r < 0.45) {
+    if (attackN % 2 === 0 || r < 0.6) {   // slams (the attack window) come often
       let S = sideFor(p.x, p.z);
       // a hand with no crystals left would rest with nothing to hit: slam with the other one
       if (!crystals.some((c) => c.hand === S && !c.broken)) S = S === "L" ? "R" : "L";
@@ -341,8 +341,8 @@ export function createMagmor(ctx, volcano) {
       if (!a.z0) { a.z0 = 1; a.id = zone({ shape: "circle", x: a.x, z: a.z, r: 5, seconds: a.T, colorHex: 0xff4a12 }); flare(a.T); sfx("bossWindup"); emit("slam", a.x, a.z, a.T); }
       if (a.t < a.T) aimArm(a.S, a.x + (BX - a.x) * 0.08, y0 + 12 - a.t * 2, a.z + (BZ - a.z) * 0.08, 1, 2.2);
       else if (!a.hit) { aimArm(a.S, a.x, y0 + 2.6, a.z, 1, 14); if (a.t > a.T + 0.12) { a.hit = 1; impact(a.x, y0, a.z, 5); if (Math.hypot(p.x - a.x, p.z - a.z) < 5) hurt(a.x, a.z, "melee", 7); crackNear(a.x, a.z); } }
-      else if (a.t < a.T + 2.6) {
-        // the fist rests: one crystal on that hand glows
+      else if (a.t < a.T + REST0 + assist * 1.5) {
+        // the fist rests (a long, clear window): one crystal on that hand glows
         const ci = crystals.find((c) => c.hand === a.S && !c.broken);
         for (const c of crystals) c.glowing = c === ci;
         arm[a.S].fist = 1;
@@ -385,6 +385,7 @@ export function createMagmor(ctx, volcano) {
     sfx("bossSlam"); sfx("magmorStep");
     V.quake(0.55, 0.6);
   }
+  const REST0 = 5.5;   // seconds the fist rests after a slam with its crystal glowing
   function endAct(rest) { act = null; nextT = rest * (1 + assist * 0.3); }
 
   // ERUPTION -------------------------------------------------------------------------------
@@ -428,8 +429,8 @@ export function createMagmor(ctx, volcano) {
       const left = vents.filter((v) => !v.plugged);
       if (!left.length) return;
       ventCycle = (ventCycle + 1) % 2;
-      if (ventCycle === 1) { ventIdx = left[(attackN + left.length) % left.length].i; vents[ventIdx].open = true; ventT = 5.5 + assist * 1.5; sfx("eruption", vents[ventIdx].x, vents[ventIdx].z, 0.4); }
-      else ventT = 1.5;
+      if (ventCycle === 1) { ventIdx = left[(attackN + left.length) % left.length].i; vents[ventIdx].open = true; ventT = 8.5 + assist * 2; sfx("eruption", vents[ventIdx].x, vents[ventIdx].z, 0.4); }
+      else ventT = 1.0;
     }
     for (const v of vents) if (v.open && R() < dt * 10) V.puff(v.x, v.y + 1, v.z, 1.4, 0x3a2a24, 5, 1.6);
   }
@@ -503,7 +504,7 @@ export function createMagmor(ctx, volcano) {
   function updateCore(dt) {
     const p = pl();
     // ridden up an updraft to chest height -> the plates open for 3 s
-    if (!core.open && p && p.y > V.lavaY + 9 && Math.hypot(p.x - BX, p.z - BZ) < 24) boss.openCore(3);
+    if (!core.open && p && p.y > V.lavaY + 9 && Math.hypot(p.x - BX, p.z - BZ) < 24) boss.openCore(6);
     if (core.open) { core.openT -= dt; if (core.openT <= 0) { core.open = false; } }
     pose.plate += ((core.open ? 1 : 0) - pose.plate) * Math.min(1, dt * 5);
     partU.value[9] = 0.4 + pose.plate * 1.6 + (core.open ? Math.sin(clock * 14) * 0.2 : 0);
@@ -545,6 +546,14 @@ export function createMagmor(ctx, volcano) {
       phase = n; hp = 1; defeated = false; stunned = false;
       updateParts(0);
     },
+    // partial progress inside a phase (kept across a death so a hit is never lost)
+    progress() { return { phase, crystals: crystals.map((c) => [c.hp, c.broken]), vents: vents.map((v) => v.plugged), drafts: usedDrafts.slice() }; },
+    restoreProgress(g) {
+      if (!g || g.phase !== phase) return;
+      if (phase === 0) { g.crystals.forEach((q, i) => { crystals[i].hp = q[0]; crystals[i].broken = q[1]; }); hp = crystals.filter((c) => !c.broken).length / 4; }
+      if (phase === 1) { g.vents.forEach((q, i) => { vents[i].plugged = q; }); hp = vents.filter((v) => !v.plugged).length / 3; }
+      if (phase === 2) { usedDrafts.length = 0; usedDrafts.push(...g.drafts); hp = 1 - usedDrafts.length / 3; }
+    },
     setAssist(k) { assist = clamp(k, 0, 1); V.bombs.setSpeed(1 - assist * 0.3); },
     noteDeath() { deaths[phase]++; boss.setAssist(deaths[phase] >= 4 ? 1 : 0); },
     // the intro: rises out of the lake over `seconds`
@@ -582,9 +591,7 @@ export function createMagmor(ctx, volcano) {
       }
       if (part === "core" && phase === 2) {
         if (!core.open) return false;
-        const d = i | 0;
-        if (usedDrafts.indexOf(d) >= 0 && i !== undefined && i !== null && i >= 0) return false;
-        usedDrafts.push(d);
+        usedDrafts.push(i | 0);   // any column counts (a repeat ride too)
         core.open = false; core.openT = 0;
         vfx("screamWave", core.x, core.y, core.z, 6); vfx("sparks", core.x, core.y, core.z, 30, 0xffe0a0);
         sfx("magmorRoar", 1.2); pose.roar = 1; roarT = 2; V.quake(0.8, 1.2);
