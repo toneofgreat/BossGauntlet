@@ -120,7 +120,7 @@ async function cleanupOnline() {
     await sleep(500); await shot("03-areas-locked");
     const locks = await page.$$eval(".area", (els) => els.map((e) => e.classList.contains("locked")));
     ok(JSON.stringify(locks) === "[false,true,true]", "fresh save: area 2 and 3 locked " + JSON.stringify(locks));
-    ok(!!(await page.$(".bonus-card.locked")), "fresh save: the bonus level card is shown locked");
+    ok(!!(await page.$(".bonus-card:not(.locked) [data-b=start]")), "fresh save: the bonus level card is free (Start)");
     const badges = await page.$$eval(".area .acb-badge b", (els) => els.map((e) => +e.textContent));
     ok(badges.length === 3 && badges[0] <= 3 && badges[1] >= 4 && badges[1] <= 6 && badges[2] >= 8 && badges[2] <= 9, "AI difficulty badges shown " + JSON.stringify(badges));
     await page.click(".area[data-id=area2]"); await sleep(300);

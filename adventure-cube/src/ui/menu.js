@@ -84,7 +84,7 @@ export function createTitleScreen(app) {
           <h1 class="logo">Adventure <span>Cube</span></h1></div>
         <p class="tagline">A forest platformer. Three wild areas, a level builder, and levels rated by an AI.</p>
         <div class="menu">
-          <button data-a="play" class="primary big-btn">Play <small>${cleared ? cleared + " / 3 areas cleared" + (bonusUnlocked(prog) ? " &middot; Bonus unlocked!" : "") : "Start the adventure"}</small></button>
+          <button data-a="play" class="primary big-btn">Play <small>${cleared ? cleared + " / 3 areas cleared" + "" : "Start the adventure"}</small></button>
           <button data-a="builder">Build a level</button>
           <button data-a="browse">Community levels</button>
           <button data-a="settings">Settings</button>
@@ -124,7 +124,7 @@ export function createAreasScreen(app) {
       key: id, progressId: id, title: "Area " + info.num, sub: "Area " + info.num, difficulty: areaRating(id), exitLabel: "Area select",
       next: nextInfo ? { label: "Next: Area " + nextInfo.num, go: () => play(nextInfo.id) }
         : { label: "Play the bonus level", go: () => playBonus(app) },
-      unlock: nextInfo ? null : { title: "Bonus level unlocked: " + BONUS_NAME, text: "A survival sandbox: chop, mine, craft, hunt, and build a house you can level up 20 times. Find it on the area select screen." },
+      unlock: nextInfo ? null : { title: "Bonus level: " + BONUS_NAME, text: "A survival sandbox: chop, mine, craft, hunt, and build a house you can level up 20 times. Find it on the area select screen." },
       onExit: () => app.show("areas"),
     }, extra));
   }

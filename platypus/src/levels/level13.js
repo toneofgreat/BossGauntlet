@@ -850,7 +850,7 @@ export function createLevel(ctx) {
     walkSpeed(1.1);
     ab.buttons({ sting: true, slap: true });
     ctx.health.enable({ max: n || 5, hearts: true, regen: 0.25, regenDelay: 5, label: "Health" });
-    ab.scream.enable({ chargeTime: 0.8, minCharge: 0.2, cooldown: 2.2 });
+    ab.scream.enable({ chargeTime: 0.8, minCharge: 0.2, cooldown: 2.2, tap: true }); // owner: one click screams at full power (like level 11)
     ab.scream.onStart = () => { if (platypus.screamCharge) platypus.screamCharge(0.02); };
     ab.scream.onCharge = (f) => { if (platypus.screamCharge) platypus.screamCharge(f); A("screamCharge", f); };
     ab.scream.onCancel = ab.scream.onFizzle = () => { if (platypus.screamCharge) platypus.screamCharge(0); A("screamCharge", 0); };
@@ -943,7 +943,7 @@ export function createLevel(ctx) {
     A("wolfGrowl");
     objective("amb0", "Drive off the wolves 0/3", ambKeys());
     setHints(keyHint("Scream to scare them (R)! Then Sting (J) or Tail Slap (L).", "Scream to scare them! Then Sting or Slap."), "Watch the red line: a wolf crouches, then lunges along it. Step aside, then hit back.");
-    later(0.8, () => ui.hint(keyHint("Scream to scare them (hold R, let go)!", "Scream to scare them (hold Scream)!"), 4));
+    later(0.8, () => ui.hint(keyHint("Scream to scare them (press R)!", "Scream to scare them (tap Scream)!"), 4));
   }
   function ambKeys() { return keyHint("Scream (R) · Sting (J) · Slap (L) · dodge the red lines", "Scream · Sting · Slap · dodge the red lines"); }
   function ambushWon() {
@@ -1365,7 +1365,7 @@ export function createLevel(ctx) {
     friend.do("idle");
     ctx.checkpoint.set("puzzle", { x: 0, z: G.centre.z - 4, yaw: 0, silent: true });
     ab.buttons({ slap: true });
-    ab.scream.enable({ chargeTime: 0.8, minCharge: 0.2, cooldown: 1.2 });
+    ab.scream.enable({ chargeTime: 0.8, minCharge: 0.2, cooldown: 1.2, tap: true }); // owner: one click screams at full power (like level 11)
     ab.scream.onCharge = (f) => { if (platypus.screamCharge) platypus.screamCharge(f); A("screamCharge", f); };
     ab.scream.onCancel = ab.scream.onFizzle = () => { if (platypus.screamCharge) platypus.screamCharge(0); A("screamCharge", 0); };
     ab.scream.onRelease = onScream;
@@ -1398,7 +1398,7 @@ export function createLevel(ctx) {
         ui.objectiveDone(); ui.setQuests(null);
         grove.allLines(1); grove.centre(0.8);
         M("stinger", "discover");
-        later(1.0, () => { objective("scream", "Stand in the centre and SCREAM", keyHint("hold R, let go", "hold Scream, let go")); setGoal(0, gy(0, G.centre.z), G.centre.z, 0xc8a0ff); setHints("Stand on the round stone in the middle, then hold R and let go.", "The middle of the court: the glowing ring. Scream there!"); });
+        later(1.0, () => { objective("scream", "Stand in the centre and SCREAM", keyHint("press R", "tap Scream")); setGoal(0, gy(0, G.centre.z), G.centre.z, 0xc8a0ff); setHints("Stand on the round stone in the middle, then press R.", "The middle of the court: the glowing ring. Scream there!"); });
       }
     } else if (step === "close") {
       if (!closeTurned[s.i]) { closeTurned[s.i] = true; let n = 0; for (const t of closeTurned) if (t) n++; grove.lines(s.i, 0); grove.portal.dim(1 - n * 0.2); A("stoneTurn"); objective("close" + n, "Close the portal: turn the stones back " + n + "/4", keyHint("Tail Slap (L) or E", "Slap or tap a stone")); if (n >= 4) { closeReady = true; ui.objectiveDone(); later(0.8, () => { objective("slap", "Tail Slap the rock to close it", keyHint("L", "Slap")); setGoal(G.rock.x, gy(G.rock.x, G.rock.z), G.rock.z - 1.6, 0xc8a0ff); }); } }

@@ -37,9 +37,9 @@ const BOSS_STEP = ["boss1", "boss2", "boss3"];
 const BOSS_OBJ = [
   (n) => ["Shatter the crystals " + n + "/4", "dodge the fist · when it rests, Sting (J) the glowing crystal"],
   (n) => ["Freeze the vents " + n + "/3 (Q)", "throw the potion into the open vent · blue flowers refill it"],
-  (n) => ["Ride the wind — scream into its heart " + n + "/3", "stand in a wind column and jump · then hold R and let go"],
+  (n) => ["Ride the wind — scream into its heart " + n + "/3", "stand in a wind column and jump · then press R"],
 ];
-const BOSS_NOW = ["Hit the glowing crystal now! Sting (J) or Slap (L)", "Throw the potion (Q) into the glowing vent now!", "Scream (R) into its glowing heart now! Hold, then let go"];
+const BOSS_NOW = ["Hit the glowing crystal now! Sting (J) or Slap (L)", "Throw the potion (Q) into the glowing vent now!", "Scream (R) into its glowing heart now!"];
 const LANES = ["spin", "flip", "dive", "wave"];
 const LANE_TRICK = ["spin", "backflip", "tailSplash", "wave"];
 // the wind duet: Pip calls a phrase of four, you answer it. Three sets, faster each time.
@@ -922,7 +922,7 @@ export function createLevel(ctx) {
       ab.potion.onEmpty = () => ui.hint("No potion! Grab a glowing blue ice flower on an island.", 3);
     }
     if (n === 2) {
-      ab.scream.enable({ chargeTime: 0.5, minCharge: 0.05, cooldown: 0.6 });
+      ab.scream.enable({ chargeTime: 0.5, minCharge: 0.05, cooldown: 0.6, tap: true }); // owner: one click screams at full power (like level 11)
       ab.scream.onStart = () => { if (platypus.screamCharge) platypus.screamCharge(0.02); };
       ab.scream.onCharge = (f) => { if (platypus.screamCharge) platypus.screamCharge(f); A("screamCharge", f); };
       ab.scream.onCancel = ab.scream.onFizzle = () => { if (platypus.screamCharge) platypus.screamCharge(0); A("screamCharge", 0); };
@@ -950,10 +950,10 @@ export function createLevel(ctx) {
     bossObjective();
     if (n === 0) setHints("When the fist lands and rests, a crystal glows on it: run up and Sting (J) it twice!", "Red circle = a fist is coming: step out! Red line = an arm sweeps: JUMP it.");
     if (n === 1) setHints("Hold Q to aim the potion at the glowing vent on its shoulder, let go to throw.", "No potion? Walk into a blue ice flower. Jump the lava waves; strafe the fireballs.");
-    if (n === 2) setHints("Stand in a column of wind and press Space: it lifts you up to its chest.", "Up high, when its chest opens, hold R and let go to SCREAM into its heart. Use a different wind each time.");
+    if (n === 2) setHints("Stand in a column of wind and press Space: it lifts you up to its chest.", "Up high, when its chest opens, press R to SCREAM into its heart. Use a different wind each time.");
     if (n === 0) later(1.5, () => ui.hint("Step out of the red circles! Then Sting (J) the glowing crystal.", 4.5));
     if (n === 1) later(1.5, () => ui.hint(keyHint("Hold Q to aim at the open vent, let go to throw!", "Hold Potion, aim at the open vent, let go!"), 4.5));
-    if (n === 2) later(1.5, () => ui.hint(keyHint("Stand in the wind and JUMP. Then hold R and let go into its heart!", "Stand in the wind and JUMP. Then hold Scream into its heart!"), 5));
+    if (n === 2) later(1.5, () => ui.hint(keyHint("Stand in the wind and JUMP. Then press R to scream into its heart!", "Stand in the wind and JUMP. Then tap Scream into its heart!"), 5));
   }
   // a fist aimed at you: a burst of speed to get out from under it (a fair chance, never announced)
   // while the islands drift apart into the ring, the one you stand on carries you with it
@@ -1177,7 +1177,7 @@ export function createLevel(ctx) {
     setAct(null);
     clearGoal();
     progressed();
-    ui.hint(keyHint("Up you go! When its chest glows open: hold R... let go!", "Up you go! When its chest glows open: hold Scream... let go!"), 3.5);
+    ui.hint(keyHint("Up you go! When its chest glows open: press R!", "Up you go! When its chest glows open: tap Scream!"), 3.5);
   }
   function updateRide(dt) {
     const r = ride;

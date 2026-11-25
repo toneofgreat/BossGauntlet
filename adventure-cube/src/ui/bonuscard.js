@@ -10,7 +10,7 @@ const HOUSE_NAMES = ["Empty plot", "Lean-to", "Hide tent", "Camp", "Log hut", "L
   "Stone foundation", "Stone cottage", "Glass-window cottage", "Upper floor frame", "Two-storey house", "Workshop wing", "Watchtower",
   "Manor", "Courtyard walls", "Great hall", "Castle keep", "Castle towers", "Crystal citadel"];
 
-export const bonusUnlocked = (prog) => !!(prog && (prog.done.area3 || prog.unlockAll));
+export const bonusUnlocked = () => true; // owner: the bonus level is free for everyone, no need to clear Area 3
 // a short summary of the saved world (or null): { day, house, houseName, at }
 export function bonusSummary(app) {
   const s = app.storage.get(BONUS_SAVE_KEY, null);
@@ -30,7 +30,7 @@ export function bonusCardHtml(app, prog) {
     : `<button data-b="start" class="primary">Start</button>`;
   return `<div class="bonus-card ${open ? "" : "locked"}" data-bonus="1" role="button" tabindex="0" ${open ? "" : `aria-disabled="true"`}>
     <span class="bonus-pic"><canvas width="640" height="300" aria-hidden="true"></canvas></span>
-    <span class="bonus-body"><span class="area-num">Bonus level${prog.done.area3 ? ` <em class="ok">Unlocked</em>` : ""}</span>
+    <span class="bonus-body"><span class="area-num">Bonus level <em class="ok">Free</em></span>
       <b class="area-title">${BONUS_NAME}</b>
       <span class="bonus-tag">Chop trees, mine stone and ore, craft tools from wood to steel, hunt for food and survive the night.
         Build a house and level it up 20 times, from a lean-to to a crystal citadel.</span>

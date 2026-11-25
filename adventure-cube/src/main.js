@@ -164,8 +164,7 @@ window.__cube = {
   if (q.has("bonus") || aid === "bonus") {
     const p = app.progress.get();
     if (q.has("debug")) { app.show("bonus", { seed: q.get("seed") || undefined, fresh: q.has("new"), onExit: () => app.show("areas") }); return; }
-    if (p.done.area3 || p.unlockAll) { app.show("title"); playBonus(app, false); return; }
-    app.show("areas"); return;   // locked: the area select shows the locked bonus card
+    app.show("title"); playBonus(app, false); return;   // the bonus level is free
   }
   if (lid && /^[a-z0-9]{8}$/.test(lid)) {
     app.show("title");

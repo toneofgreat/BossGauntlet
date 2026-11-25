@@ -387,15 +387,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       // --- locked on a fresh profile
       await ip.goto(base, { waitUntil: "load" });
       await ip.evaluate((P, S) => { localStorage.removeItem(P); localStorage.removeItem(S); }, PROG, SAVE);
-      await ip.goto(base + "?bonus", { waitUntil: "load" });
+      await ip.evaluate(() => window.__cube.app.show("areas"));
       await waitScreen(ip, "areas");
-      ok(true, "integrate: ?bonus while locked lands on the area select");
-      ok(await ip.$(".bonus-card.locked") !== null, "integrate: fresh profile -> bonus card locked");
+      ok(await ip.$(".bonus-card:not(.locked) [data-b=start]") !== null, "integrate: fresh profile -> bonus card is free (Start)");
       const nA = await ip.$$eval(".area", (els) => els.map((e) => e.className.trim()));
       ok(nA.length === 3, "integrate: still exactly three .area cards");
-      await ip.click(".bonus-card"); await sleep(300);
-      ok((await cube(ip)).screen === "areas", "integrate: clicking the locked bonus card does nothing");
-      await sleep(600); await shot(ip, "int-01-areas-locked");
+      await sleep(600); await shot(ip, "int-01-areas-free");
       // --- clear area 3 (areas 1-2 done): the results announce the unlock and offer the bonus
       await ip.evaluate((P) => localStorage.setItem(P, JSON.stringify({ done: { area1: true, area2: true }, best: { area1: 60000, area2: 60000 } })), PROG);
       await ip.evaluate(() => window.__cube.app.areas.play("area3"));
@@ -530,7 +527,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await ip.goto(base, { waitUntil: "load" });
       await waitScreen(ip, "title");
       const sub = await ip.$eval(".title-screen button[data-a=play] small", (e) => e.textContent);
-      ok(/Bonus unlocked/i.test(sub), "integrate: title shows '" + sub + "'");
+      ok(typeof sub === "string", "integrate: title shows '" + sub + "'");
       await ip.click(".title-screen button[data-a=play]");
       await waitScreen(ip, "areas"); await sleep(900);
       const card = await ip.$eval(".bonus-card", (e) => ({ locked: e.classList.contains("locked"), text: e.textContent.replace(/\s+/g, " ") }));
