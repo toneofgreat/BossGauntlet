@@ -70,6 +70,22 @@ const CSS = `
 .bh-rep i{display:block;height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:3px}
 .bh-rep i s{display:block;height:100%;border-radius:2px;background:#e0a33a}
 .bh-done{padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(140,210,255,.18),rgba(255,210,122,.16));border:1px solid rgba(180,230,255,.3)}
+.bh-allbtn{width:100%;margin:0 0 10px}
+.bh-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:0 0 10px}
+@media (max-width:480px){.bh-gal{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+.bh-card{position:relative;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(255,230,190,.14);display:flex;flex-direction:column}
+.bh-card.built{border-color:rgba(167,227,138,.45)}
+.bh-card.next{border-color:rgba(255,210,122,.75);box-shadow:0 0 0 2px rgba(255,210,122,.25)}
+.bh-card canvas{width:100%;aspect-ratio:16/10;display:block;background:#24331f}
+.bh-card.future canvas{filter:saturate(.75) brightness(.9)}
+.bh-card .bh-lvl{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.55);border-radius:8px;padding:2px 8px;font:800 12px system-ui}
+.bh-card .bh-st{position:absolute;right:6px;top:6px;border-radius:8px;padding:2px 8px;font:700 11px system-ui;background:rgba(0,0,0,.55)}
+.bh-card.built .bh-st{background:rgba(90,160,70,.85)}.bh-card.next .bh-st{background:rgba(227,146,44,.92);color:#2b1a05}
+.bh-card .bh-cb{padding:7px 9px 9px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.bh-card h4{margin:0;font:800 14px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bh-card .bh-ct{font-size:11.5px;color:#ffd27a;font-weight:700}
+.bh-card p{margin:0;font-size:12px;color:#d8f0b8;line-height:1.3}
+.bh-card .bh-cc{font-size:11px;opacity:.72;line-height:1.3}
 .bh-cele{position:fixed;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:20px;border-radius:16px;background:radial-gradient(circle at 50% 40%,rgba(60,70,110,.96),rgba(18,16,30,.98))}
 .bh-cele canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .bh-cele h2{position:relative;margin:44px 0 0;font:900 26px system-ui;color:#ffe19a;text-shadow:0 2px 12px rgba(255,200,90,.5)}
@@ -132,7 +148,9 @@ export function createHouseUI(ctx) {
       <div class="bh-track">${Array.from({ length: HOUSE_MAX }, (_, i) => `<i class="${i < lv ? "done" : i === lv ? "next" : ""}${HOUSE_MILESTONES.includes(i + 1) ? " ms" : ""}" title="${houseLevel(i + 1).name}"></i>`).join("")}</div>
       <div class="bh-trackl"><span>Lean-to</span><span>Cabin</span><span>Cottage</span><span>Manor</span><span>Citadel</span></div>`;
     if (view === "repair") s += repairHtml(G, near);
+    else if (view === "all") s += allHtml(lv);
     else {
+      s += `<button class="bh-allbtn" data-a="all">See all ${HOUSE_MAX} houses</button>`;
       s += `<div class="bh-main"><div class="bh-prev"><canvas></canvas>
         <div class="bh-seg">${lv > 0 ? `<button data-a="tab" data-t="now" class="${tab === "now" ? "on" : ""}">Now</button>` : ""}${!isMax ? `<button data-a="tab" data-t="next" class="${tab === "next" ? "on" : ""}">Next</button>` : ""}</div>
         <div class="bh-tag">${tab === "now" ? (cur ? "Lv " + lv : "Empty plot") : "Lv " + (lv + 1) + " preview"}</div></div><div class="bh-info">`;
@@ -176,8 +194,38 @@ export function createHouseUI(ctx) {
     panel.scrollTop = scroll;
     panel.querySelectorAll("canvas[data-icon]").forEach((cv) => icon(cv, cv.dataset.icon, cv.closest(".bh-rep") ? 34 : 30));
     prevCanvas = panel.querySelector(".bh-prev canvas");
+    if (view === "all") drawGallery();
     drawPreview(0);
     if (cele) panel.appendChild(cele.el);
+  }
+  // every house, built or not: a picture, its name, title, what it gives and what it costs
+  function allHtml(lv) {
+    let s = `<p class="bh-sub">Every house you can build &middot; ${lv} of ${HOUSE_MAX} built</p><div class="bh-gal">`;
+    for (let i = 1; i <= HOUSE_MAX; i++) {
+      const L = houseLevel(i), st = i <= lv ? "built" : i === lv + 1 ? "next" : "future";
+      const cost = Object.keys(L.cost).map((id) => L.cost[id] + " " + (ITEMS[id] ? ITEMS[id].name.toLowerCase() : id)).join(", ");
+      const ham = L.hammer ? " · needs a " + ITEMS[hammerId(L.hammer)].name.toLowerCase() : "";
+      s += `<div class="bh-card ${st}"><canvas data-house="${i}"></canvas><span class="bh-lvl">Lv ${i}</span>
+        <span class="bh-st">${st === "built" ? "Built" : st === "next" ? "Next" : "Future"}</span>
+        <div class="bh-cb"><h4>${L.name}</h4><span class="bh-ct">${L.title}</span><p>${L.perkText}</p>
+        <span class="bh-cc">${st === "built" ? "Done!" : "Costs " + cost + ham}</span></div></div>`;
+    }
+    return s + `</div><button data-a="back" style="width:100%">Back</button>`;
+  }
+  function drawGallery() {
+    const night = Math.max(0.15, sun(ctx.G)) < 0.5;
+    panel.querySelectorAll("canvas[data-house]").forEach((cv) => {
+      const k = dpr(), W = cv.clientWidth || 200, H = cv.clientHeight || 125;
+      cv.width = Math.round(W * k); cv.height = Math.round(H * k);
+      const g = cv.getContext("2d"); g.setTransform(k, 0, 0, k, 0, 0);
+      const sky = g.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, night ? "#0f1838" : "#6fb3e8"); sky.addColorStop(1, night ? "#2a3560" : "#cfe8f4");
+      g.fillStyle = sky; g.fillRect(0, 0, W, H);
+      g.fillStyle = night ? "#1d2a3a" : "#8fb59a";
+      g.beginPath(); g.moveTo(0, H * 0.72); for (let x = 0; x <= W; x += 12) g.lineTo(x, H * 0.66 - Math.sin(x * 0.03) * 6); g.lineTo(W, H); g.lineTo(0, H); g.fill();
+      g.fillStyle = night ? "#22351f" : "#5f9a3c"; g.fillRect(0, H * 0.86, W, H * 0.14);
+      try { ctx.renderer.drawHouse(g, +cv.dataset.house, 6, 5, W - 12, H * 0.86 - 3, { preview: true, night, time: 0 }); } catch (e) { /* renderer swap */ }
+    });
   }
   function damagedTools(G) {
     const out = [];
@@ -327,6 +375,7 @@ export function createHouseUI(ctx) {
     if (a === "chest") { ctx.openPanel("chest", { house: true }); return; }
     if (a === "garden") { harvestGarden(G); ctx.save(); render(); return; }
     if (a === "repair") { view = "repair"; render(); return; }
+    if (a === "all") { view = "all"; panel.scrollTop = 0; render(); panel.scrollTop = 0; return; }
     if (a === "back") { view = "main"; render(); return; }
     if (a === "fix") { if (repair(G, +b.dataset.i)) ctx.toast("Repaired!", 1200); render(); return; }
     if (a === "fixall") { let n = 0; for (const i of damagedTools(G)) if (repair(G, i)) n++; ctx.toast(n ? "Repaired " + n + " tool" + (n > 1 ? "s" : "") : "Not enough materials", 1500); render(); return; }
