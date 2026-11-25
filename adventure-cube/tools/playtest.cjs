@@ -120,6 +120,7 @@ async function cleanupOnline() {
     await sleep(500); await shot("03-areas-locked");
     const locks = await page.$$eval(".area", (els) => els.map((e) => e.classList.contains("locked")));
     ok(JSON.stringify(locks) === "[false,true,true]", "fresh save: area 2 and 3 locked " + JSON.stringify(locks));
+    ok(!!(await page.$(".bonus-card.locked")), "fresh save: the bonus level card is shown locked");
     const badges = await page.$$eval(".area .acb-badge b", (els) => els.map((e) => +e.textContent));
     ok(badges.length === 3 && badges[0] <= 3 && badges[1] >= 4 && badges[1] <= 6 && badges[2] >= 8 && badges[2] <= 9, "AI difficulty badges shown " + JSON.stringify(badges));
     await page.click(".area[data-id=area2]"); await sleep(300);
@@ -129,6 +130,8 @@ async function cleanupOnline() {
     await page.click(".area[data-id=area1]");
     await waitFor((s) => s.screen === "play" && s.frame > 5, 6000, "play area1");
     ok(!!(await page.$(".banner")), "area intro banner shown");
+    // the engine sets currentSong once the song has loaded + prewarmed (async): give it a moment
+    await page.waitForFunction(() => window.__cube.app.audio.currentSong === "area1", { timeout: 4000 }).catch(() => {});
     ok(await page.evaluate(() => window.__cube.app.audio.currentSong) === "area1", "area 1 plays its song (area1)");
     const x0 = (await st()).x;
     await page.keyboard.down("ArrowRight"); await sleep(700);
@@ -148,6 +151,7 @@ async function cleanupOnline() {
       const inp = route(id);
       await page.evaluate((id, inp) => window.__cube.app.areas.play(id, { replay: Uint8Array.from(inp), speed: 1 }), id, inp);
       await waitFor((s) => s.screen === "play" && s.frame > 30, 8000, "replay " + id);
+      await page.waitForFunction((id) => window.__cube.app.audio.currentSong === id, { timeout: 4000 }, id).catch(() => {});
       ok(await page.evaluate(() => window.__cube.app.audio.currentSong) === id, `area ${n} plays its own song (${id})`);
       await fpsSample(id + " (real time)", 5000);
       await shot(`06-${id}-run`);
@@ -211,8 +215,11 @@ async function cleanupOnline() {
       await shot("11-area3-results");
       const pr = await page.evaluate(() => window.__cube.app.progress.get());
       ok(pr.done.area1 && pr.done.area2 && pr.done.area3, "all three areas complete, best times saved " + JSON.stringify(pr.best));
+      ok(!!(await page.$(".results .res-unlock")) && /bonus/i.test(await page.$eval(".results button[data-a=next]", (e) => e.textContent)), "area 3 results announce the bonus level + offer it");
       await page.click(".results button[data-a=exit]");
       await waitFor((s) => s.screen === "areas", 3000, "areas at the end");
+      ok(!!(await page.$(".bonus-card:not(.locked) [data-b=start]")), "clearing area 3 unlocks the bonus level card (Start)");
+      await sleep(600); await shot("11b-areas-bonus-unlocked");
     }
 
     // ------------------------------------------------------------------ builder: create -> test -> rate -> publish

@@ -7,6 +7,12 @@ import { badge, ensureCss, esc, drawMinimap, makeThumbCanvas } from "../builder/
 import { RATINGS } from "./ratings.js";
 import { ATTRACT_ROUTE, decodeRoute } from "./attract.js";
 import { fmt } from "../game.js";
+import { bonusCardHtml, bonusSummary, bonusUnlocked, paintBonusPreview, BONUS_NAME } from "./bonuscard.js";
+
+// start the bonus level (Wildwood Homestead): continue the saved world, or a fresh one with fresh = true
+export function playBonus(app, fresh = false) {
+  app.show("bonus", { fresh: !!fresh, onExit: () => app.show("areas") });
+}
 
 export const MENU_SONG = "campfire";
 const AREA_TAG = {
@@ -78,7 +84,7 @@ export function createTitleScreen(app) {
           <h1 class="logo">Adventure <span>Cube</span></h1></div>
         <p class="tagline">A forest platformer. Three wild areas, a level builder, and levels rated by an AI.</p>
         <div class="menu">
-          <button data-a="play" class="primary big-btn">Play <small>${cleared ? cleared + " / 3 areas cleared" : "Start the adventure"}</small></button>
+          <button data-a="play" class="primary big-btn">Play <small>${cleared ? cleared + " / 3 areas cleared" + (bonusUnlocked(prog) ? " &middot; Bonus unlocked!" : "") : "Start the adventure"}</small></button>
           <button data-a="builder">Build a level</button>
           <button data-a="browse">Community levels</button>
           <button data-a="settings">Settings</button>
@@ -116,7 +122,9 @@ export function createAreasScreen(app) {
     const nextInfo = AREAS[i + 1];
     app.playLevel(level, Object.assign({
       key: id, progressId: id, title: "Area " + info.num, sub: "Area " + info.num, difficulty: areaRating(id), exitLabel: "Area select",
-      next: nextInfo ? { label: "Next: Area " + nextInfo.num, go: () => play(nextInfo.id) } : null,
+      next: nextInfo ? { label: "Next: Area " + nextInfo.num, go: () => play(nextInfo.id) }
+        : { label: "Play the bonus level", go: () => playBonus(app) },
+      unlock: nextInfo ? null : { title: "Bonus level unlocked: " + BONUS_NAME, text: "A survival sandbox: chop, mine, craft, hunt, and build a house you can level up 20 times. Find it on the area select screen." },
       onExit: () => app.show("areas"),
     }, extra));
   }
@@ -138,9 +146,26 @@ export function createAreasScreen(app) {
             <span class="area-meta">${d ? badge(d) : ""}</span>
             <span class="area-times">${open ? `<span>Best <b>${best ? fmt(best) : "--"}</b></span><span class="wr" data-wr="${a.id}">Record <b>...</b></span>`
               : `<span class="lock">&#128274; Clear Area ${AREAS[i - 1].num} to unlock</span>`}</span></span></button>`;
-        }).join("")}</div>
+        }).join("")}${bonusCardHtml(app, prog)}</div>
         <p class="muted small">Difficulty is measured by an AI that plays every level: 1 easy &middot; 5 hard &middot; 10 impossible.</p></div>`, "overlay areas-screen");
+      const bonusGo = (card, btn) => {
+        app.audio.unlock();
+        if (card.classList.contains("locked")) { app.audio.sfx("bonk"); card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); return; }
+        const act = btn ? btn.dataset.b : bonusSummary(app) ? "continue" : "start";
+        app.audio.sfx("click");
+        if (act === "new") {
+          if (!btn.dataset.sure) { btn.dataset.sure = "1"; btn.textContent = "Tap again: replaces your world"; return; }
+          return playBonus(app, true);
+        }
+        playBonus(app, false);
+      };
+      root.addEventListener("keydown", (e) => {
+        const card = e.target.closest && e.target.closest(".bonus-card");
+        if (card && e.target === card && (e.code === "Enter" || e.code === "Space")) { e.preventDefault(); bonusGo(card, null); }
+      });
       root.addEventListener("click", (e) => {
+        const card = e.target.closest(".bonus-card");
+        if (card) return bonusGo(card, e.target.closest("button[data-b]"));
         const b = e.target.closest("button"); if (!b) return;
         app.audio.unlock();
         if (b.dataset.a === "back") { app.audio.sfx("click"); return app.show("title"); }
@@ -157,6 +182,9 @@ export function createAreasScreen(app) {
           host.appendChild(cv);
         }).catch(() => {});
       }
+      // the bonus card's painted preview (the player's own house once it has grown a bit)
+      { const cv = root.querySelector(".bonus-pic canvas"), sum = bonusSummary(app);
+        if (cv) paintBonusPreview(cv, sum && sum.house >= 3 ? sum.house : 12).catch(() => {}); }
       // world records (top 1 per area), cached per session
       for (const a of AREAS) {
         const slot = root.querySelector(`[data-wr="${a.id}"] b`); if (!slot) continue;

@@ -4,7 +4,7 @@
 // params: { level, key (leaderboard id or null), onWin(result), onExit(result),
 //           optional (INTEGRATE additions): title (banner text), sub (banner subtitle), progressId (local progress id:
 //           completes it on a win), next ({ label, go() }: "next area" button), difficulty (1..10 badge),
-//           exitLabel (quit button text), replay (Uint8Array of inputs to play instead of the devices),
+//           exitLabel (quit button text), unlock ({ title, text }: shown on the results the first time it is cleared), replay (Uint8Array of inputs to play instead of the devices),
 //           speed (sim steps per real step, debug/test only) }
 import { createSim, STEP_MS, PW, PH } from "./sim/index.js";
 import { createCamera } from "./render/camera.js";
@@ -101,6 +101,7 @@ export function createPlayScreen(app) {
     done = true; app.input.setActive(false); winAt = performance.now();
     const r = result();
     let improved = false, prevBest = 0;
+    const wasDone = !!(params.progressId && app.progress.get().done[params.progressId]);
     if (params.progressId) {
       prevBest = (app.progress.get().best || {})[params.progressId] || 0;
       improved = !prevBest || r.ms < prevBest;
@@ -117,6 +118,7 @@ export function createPlayScreen(app) {
       <div class="res-stats"><div><small>Time</small><b class="big">${fmt(r.ms)}</b></div>
         <div><small>Deaths</small><b>${s.deaths}</b></div>
         ${params.progressId ? `<div><small>${improved ? "Personal best" : "Your best"}</small><b class="${improved ? "pb" : ""}">${improved ? (prevBest ? "NEW!" : "First clear!") : fmt(prevBest)}</b></div>` : ""}</div>
+      ${params.unlock && !wasDone ? `<div class="res-unlock"><b>${escapeHtml(params.unlock.title)}</b><span>${escapeHtml(params.unlock.text || "")}</span></div>` : ""}
       <div class="board">${params.key ? `<p class="muted">Loading leaderboard...</p>` : `<p class="muted">No leaderboard for test plays.</p>`}</div>
       <div class="res-btns">
         ${nx ? `<button data-a="next" class="primary">${escapeHtml(nx.label)}</button>` : ""}

@@ -7,6 +7,12 @@ peaks, very very hard). **Build mode**: build levels, publish them, play other p
 difficulty **1-10** (1 = easy, 5 = hard, 10 = impossible = the AI could not beat it). Music: 3 area songs + 5 extra
 songs; builders can pick any of the 8.
 
+**Bonus level ("Wildwood Homestead")**: a 2D survival/crafting sandbox unlocked by clearing Area 3 lives in
+`src/bonus/` and has its own contract, **[BONUS.md](BONUS.md)** (files, ownership, APIs, events, tests). Entry points
+here: the bonus card on the area select (`src/ui/bonuscard.js`, `playBonus(app, fresh)` in `src/ui/menu.js`), the
+Area 3 results unlock note (`params.unlock` in `src/game.js`), the lazy `app.screens.bonus` in `src/main.js`, deep
+links `?area=bonus` / `?bonus` (locked -> area select; `?bonus&debug[&new][&seed=N]` for tests), `window.__cube.bonus`.
+
 This file is the source of truth. If something you need is missing, make the **smallest compatible addition** inside
 files you own, and write it in your final summary under "contract changes". Never edit files you do not own.
 

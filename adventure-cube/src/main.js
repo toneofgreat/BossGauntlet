@@ -1,14 +1,16 @@
 // main.js - boot, the `app` context, screen switching, the rAF loop and the window.__cube debug seam. INTEGRATE owns.
 // The `app` shape is frozen (CONTRACT.md section 10). INTEGRATE additions: app.attract (the living title backdrop),
 // app.forceTouch (settings: always show touch buttons), app.areas (area select screen: app.areas.play(id)).
-// Deep links: ?level=<community level id> plays that level; ?area=area1|area2|area3 plays an unlocked area.
+// Deep links: ?level=<community level id> plays that level; ?area=area1|area2|area3 plays an unlocked area;
+// ?area=bonus (or ?bonus) continues the bonus level once Area 3 is cleared. Debug/test only: ?bonus&debug[&new][&seed=N]
+// opens the bonus level even while it is locked.
 import { createRenderer } from "./render/renderer.js";
 import { createAudio } from "./audio/engine.js";
 import { createInput } from "./input.js";
 import * as online from "./online.js";
 import { rateAsync } from "./ai/rate-client.js";
 import { createPlayScreen } from "./game.js";
-import { createTitleScreen, createAreasScreen, createAttract, applySettings } from "./ui/menu.js";
+import { createTitleScreen, createAreasScreen, createAttract, applySettings, playBonus } from "./ui/menu.js";
 import { createBuilderScreen } from "./builder/editor.js";
 import { createBrowseScreen } from "./builder/browse.js";
 import { AREAS, loadArea } from "./levels/index.js";
@@ -63,6 +65,24 @@ app.screens.areas = app.areas = createAreasScreen(app);
 app.screens.play = createPlayScreen(app);
 app.screens.builder = createBuilderScreen(app);
 app.screens.browse = createBrowseScreen(app);
+// BONUS level (src/bonus/, BONUS.md): loaded lazily so nothing in it can break the main game's boot.
+// app.show("bonus", { seed?, fresh? }) works before the module has loaded; the real screen takes over once it has.
+app.screens.bonus = (() => {
+  let real = null, want = null, live = false;
+  return {
+    enter(p) {
+      live = true; want = p || {};
+      import("./bonus/index.js").then((m) => {
+        if (!real) real = m.createBonusScreen(app);
+        if (live && app.current === app.screens.bonus && !real.active) real.enter(want);
+      }).catch((e) => { console.error("bonus failed to load", e); if (live) app.show("title"); });
+    },
+    exit() { live = false; if (real && real.active) real.exit(); },
+    frame(dt, now) { if (real && real.active) real.frame(dt, now); else app.drawBackdrop(dt, now); },
+    resize() { if (real && real.active) real.resize(); },
+    get real() { return real; },
+  };
+})();
 applySettings(app);
 
 function resize() {
@@ -86,10 +106,14 @@ app.renderer.onFlash = (strength) => {
   app.audio.sfx("thunder", { vol: 0.35 + s * 0.6, at: 0.25 + (1 - s) * 1.4, impact: s });
 };
 
+let loops = 0, lastLoop = 0;
 let last = performance.now(), fps = 60, fpsAcc = 0, fpsN = 0, worst = 0, worstShown = 0;
-function loop(now) {
+function loop() {
+  // real elapsed time, not the rAF timestamp: in some tabs (headless/emulated, resumed) the frame timestamp lags or
+  // stands still while frames keep coming, which froze every screen that accumulates dt. Never step backwards either.
+  const now = performance.now(); loops++; lastLoop = now;
   const raw = (now - last) / 1000; last = now;
-  const dt = Math.min(0.25, raw);
+  const dt = Math.max(0, Math.min(0.25, raw));
   fpsAcc += dt; fpsN++; if (raw > worst) worst = raw;
   if (fpsAcc >= 0.5) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; worstShown = worst; worst = 0; }
   try { if (app.current && app.current.frame) app.current.frame(dt, now); }
@@ -105,7 +129,7 @@ window.__cube = {
   get sim() { return app.sim; },
   state() {
     const s = app.sim && app.sim.state;
-    const base = { screen: app.currentName, fps: Math.round(fps), worstMs: Math.round(worstShown * 1000) };
+    const base = { screen: app.currentName, fps: Math.round(fps), worstMs: Math.round(worstShown * 1000), loops, loopAgoMs: Math.round(performance.now() - lastLoop) };
     if (!s) return base;
     return Object.assign(base, {
       level: app.sim.level.name, frame: s.frame, x: s.x, y: s.y, tx: Math.floor((s.x + PW / 2) / T), ty: Math.floor((s.y + PH / 2) / T),
@@ -129,6 +153,7 @@ window.__cube = {
     return true;
   },
   playArea: (id) => app.areas.play(id),
+  playBonus: (fresh) => playBonus(app, fresh),
   show: (name, params) => app.show(name, params),
 };
 
@@ -136,6 +161,12 @@ window.__cube = {
 (async () => {
   const q = new URLSearchParams(location.search);
   const lid = q.get("level"), aid = q.get("area");
+  if (q.has("bonus") || aid === "bonus") {
+    const p = app.progress.get();
+    if (q.has("debug")) { app.show("bonus", { seed: q.get("seed") || undefined, fresh: q.has("new"), onExit: () => app.show("areas") }); return; }
+    if (p.done.area3 || p.unlockAll) { app.show("title"); playBonus(app, false); return; }
+    app.show("areas"); return;   // locked: the area select shows the locked bonus card
+  }
   if (lid && /^[a-z0-9]{8}$/.test(lid)) {
     app.show("title");
     const r = await app.online.getLevel(lid);
