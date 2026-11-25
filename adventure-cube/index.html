@@ -7,6 +7,27 @@
 <meta name="description" content="Adventure Cube - a 2D platformer through a realistic forest. Three areas, a level builder, and community levels rated by an AI.">
 <meta name="theme-color" content="#1d2b1f">
 <link rel="stylesheet" href="style.css">
+<script>
+// No browser zoom, ever: double-click / double-tap, pinch, trackpad pinch (ctrl+wheel) and ctrl +/- would
+// otherwise zoom the whole page in on some devices (iOS Safari ignores user-scalable=no).
+(function () {
+  var opt = { passive: false }, last = 0;
+  function typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); }
+  document.addEventListener("dblclick", function (e) { if (!typing(e.target)) e.preventDefault(); }, opt);
+  document.addEventListener("touchend", function (e) {
+    var now = e.timeStamp || Date.now();
+    if (now - last < 350 && e.changedTouches.length === 1 && !typing(e.target)) e.preventDefault();
+    last = now;
+  }, opt);
+  document.addEventListener("touchstart", function (e) { if (e.touches.length > 1) e.preventDefault(); }, opt);
+  document.addEventListener("touchmove", function (e) { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, opt);
+  ["gesturestart", "gesturechange", "gestureend"].forEach(function (n) { document.addEventListener(n, function (e) { e.preventDefault(); }, opt); });
+  window.addEventListener("wheel", function (e) { if (e.ctrlKey) e.preventDefault(); }, opt);
+  window.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_" || e.key === "0")) e.preventDefault();
+  });
+})();
+</script>
 </head>
 <body>
 <canvas id="game" aria-label="Adventure Cube game"></canvas>
