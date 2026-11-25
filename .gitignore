@@ -1,3 +1,5 @@
 node_modules/
 .claude/
 platypus/tools/shots/
+adventure-cube/tools/shots/
+adventure-cube/tools/.browser.lock

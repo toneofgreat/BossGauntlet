@@ -20,8 +20,10 @@ function serve() {
     const srv = http.createServer((req, res) => {
       let p = decodeURIComponent(req.url.split("?")[0]);
       if (p.endsWith("/")) p += "index.html";
-      const file = path.join(ROOT, p);
-      if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
+      // the site root's shared online module (../platyfy-online.js and the names.js it imports) as GitHub Pages serves it
+      const shared = p === "/platyfy-online.js" || p === "/platypus/src/names.js";
+      const file = shared ? path.join(ROOT, "..", p) : path.join(ROOT, p);
+      if (!shared && !file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
       fs.readFile(file, (err, buf) => {
         if (err) { res.writeHead(404); res.end("nf"); return; }
         res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream", "Cache-Control": "no-store" });

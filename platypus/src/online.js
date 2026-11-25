@@ -5,9 +5,15 @@
 // without the platypus endpoints, e.g. not deployed yet) keeps it offline for the session, exactly as if the
 // config were empty; any later 404 switches it off the same way.
 //
+// FALLBACK (online-config.js PLATY_FALLBACK): when the relay answers that 404 (the live worker is an old deploy and
+// cannot be redeployed), the game loads ../../platyfy-online.js instead - real shared boards and unique names kept as
+// private records on the same relay's published-games API (see that file). Same UI, same name rules, same results;
+// the run's time is checked against the wall clock since startRun on this device instead of on a server.
+// Without PLATY_FALLBACK (the tests' mocked config) a 404 still means exactly offline.
+//
 // Identity: a 32-byte random token (hex) in localStorage["platypus.online.v1"] = { token, id, name }. The server keeps
 // only sha256(token). The token travels only inside POST bodies, never in a URL.
-import { PLATY_API } from "./online-config.js";
+import * as CFG from "./online-config.js";
 import { checkName, cleanName } from "./names.js";
 
 const ID_KEY = "platypus.online.v1";
@@ -15,6 +21,10 @@ const NAME_KEY = "platypus.name.v1";
 const QUEUE_KEY = "platypus.online.queue.v1";
 const QUEUE_MAX = 20;
 const TIMEOUT = 8000, RETRY_AFTER = 1500;
+const PLATY_API = CFG.PLATY_API || "";
+const FALLBACK = typeof CFG.PLATY_FALLBACK === "string" ? CFG.PLATY_FALLBACK : "";
+const RUN_MAX_MS = 6 * 3600 * 1000, COINS_MAX = 1000000;
+const fbBoard = (level) => (level === 4 ? "platypus-coins" : "platypus-l" + (level | 0));
 
 function lsGet(k) { try { const v = window.localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
 function lsSet(k, v) { try { window.localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
@@ -33,9 +43,11 @@ function newToken() {
 export function createOnline(cfg) {
   const URL0 = ((cfg && cfg.url) || PLATY_API || "").replace(/\/+$/, "");
   const configured = !!(URL0 && typeof fetch === "function");
-  // "unknown" until the probe answers; "yes" = the server has the endpoints; "no" = it answered 404
-  let live = "unknown", probeP = null;
-  const isOn = () => configured && live === "yes";
+  // "unknown" until the probe answers; "yes" = the server has the endpoints; "no" = it answered 404;
+  // "fb" = it answered 404 and the platyfy-online.js fallback answers instead
+  let live = "unknown", probeP = null, fb = null;
+  const fallback = cfg && "fallback" in cfg ? cfg.fallback || "" : FALLBACK;
+  const isOn = () => configured && (live === "yes" || (live === "fb" && !!fb));
   const OFF = Object.freeze({ ok: false, offline: true, reason: "offline" });
 
   const me = lsGet(ID_KEY) || {};
@@ -98,6 +110,11 @@ export function createOnline(cfg) {
       try {
         const r = await req("GET", "/api/platypus/top?level=1");
         if (r.ok && r.data && r.data.ok === true && Array.isArray(r.data.rows)) live = "yes";
+        if (live === "no" && fallback) {
+          const m = await import(new URL(fallback, import.meta.url).href);
+          const p = await m.ping();
+          if (p && p.ok) { fb = m; live = "fb"; quiet("relay has no platypus endpoints: using platyfy-online.js"); }
+        }
       } catch (e) { quiet("probe", e); }
       probeP = null;
     })();
@@ -108,6 +125,7 @@ export function createOnline(cfg) {
   function queue() { const q = lsGet(QUEUE_KEY); return Array.isArray(q) ? q : []; }
   function enqueue(item) { const q = queue(); q.push(item); while (q.length > QUEUE_MAX) q.shift(); lsSet(QUEUE_KEY, q); }
   async function flush() {
+    if (live === "fb") { if (fb) await fb.flush(); return; }
     const q = queue();
     if (!q.length) return;
     lsSet(QUEUE_KEY, []);
@@ -134,12 +152,18 @@ export function createOnline(cfg) {
     if (r && r.id && !ident.id) { ident.id = String(r.id); saveIdent(); }
     return { ok: false, reason };
   }
+  // the fallback's claim, in the relay's answer shape
+  async function fbName(name) {
+    const r = await fb.claimName(name);
+    if (r && r.ok) return { ok: true, id: fb.getId(), name: r.name };
+    return { ok: false, reason: (r && r.reason) || "network" };
+  }
   // one endpoint claims a first name and renames (the server knows which this token needs)
   async function sendName(raw) {
     const c = checkName(raw);
     if (!c.ok) return { ok: false, reason: c.reason === "rude" ? "rude" : "invalid" };
     if (!isOn()) { setLocalName(c.name); return { ok: false, offline: true, reason: "offline", name: c.name }; }
-    const r = await rpc("name", { token: token(), name: c.name });
+    const r = live === "fb" ? await fbName(c.name) : await rpc("name", { token: token(), name: c.name });
     if (!r.ok && r.reason === "offline") { setLocalName(c.name); return { ok: false, offline: true, reason: "offline", name: c.name }; }
     if (!r.ok && r.reason === "network") { setLocalName(c.name); return { ok: false, reason: "network", name: c.name }; }
     return applyNameResult(r, c.name);
@@ -148,6 +172,19 @@ export function createOnline(cfg) {
   // level 4 = the coins board. One POST: the top 100 and (when this device has a name) the caller's own row.
   async function board(level) {
     if (!isOn()) return { ok: false, offline: true, reason: "offline", rows: [] };
+    if (live === "fb") {
+      try {
+        const coins = level === 4;
+        const d = await fb.getTop(fbBoard(level), 50, { lowerIsBetter: !coins });
+        if (!d.ok || !Array.isArray(d.rows)) return { ok: false, reason: d.reason || "network", rows: [] };
+        const rows = d.rows.map((r) => (coins
+          ? { rank: r.rank | 0, name: String(r.name || ""), coins: r.value | 0, hard: !!(r.extra && r.extra.h) }
+          : { rank: r.rank | 0, name: String(r.name || ""), ms: r.value | 0 }));
+        const out = { ok: true, rows };
+        if (d.me && d.me.rank) out.me = coins ? { rank: d.me.rank | 0, coins: d.me.value | 0, hard: !!(d.me.extra && d.me.extra.h) } : { rank: d.me.rank | 0, ms: d.me.value | 0 };
+        return out;
+      } catch (e) { return { ok: false, reason: "network", rows: [] }; }
+    }
     try {
       const d = await rpc("top", ident.id || ident.name ? { token: token(), level } : { level });
       if (!d.ok || !Array.isArray(d.rows)) return { ok: false, reason: d.reason || "network", rows: [] };
@@ -159,6 +196,21 @@ export function createOnline(cfg) {
       if (d.me && d.me.rank) out.me = coins ? { rank: d.me.rank | 0, coins: d.me.coins | 0, hard: !!d.me.hard } : { rank: d.me.rank | 0, ms: d.me.ms | 0 };
       return out;
     } catch (e) { return { ok: false, reason: "network", rows: [] }; }
+  }
+
+  // the fallback's submission: plausibility on this device (the clock ran no longer than the wall did), then the board
+  async function fbSubmit(level, run, value, hard) {
+    const coins = level === 4;
+    const wall = Date.now() - run.t0 + 3000;
+    if (coins ? value > COINS_MAX : (value < 1000 || value > RUN_MAX_MS || value > wall)) { delete runs[level]; return { ok: false, reason: "implausible" }; }
+    if (!api.claimed) return { ok: false, reason: "noname" };
+    const r = await fb.submitScore(fbBoard(level), value, coins
+      ? { lowerIsBetter: false, name: localName, min: 0, max: COINS_MAX, extra: { h: hard ? 1 : 0 } }
+      : { lowerIsBetter: true, name: localName, min: 1000, max: RUN_MAX_MS });
+    if (r.ok) { delete runs[level]; return { ok: true, rank: r.rank | 0, best: r.best | 0 }; }
+    if (r.reason === "taken") { needsName = "taken"; return { ok: false, reason: "noname" }; }
+    delete runs[level];
+    return { ok: false, reason: r.reason || "network", queued: !!r.queued };
   }
 
   const api = {
@@ -181,7 +233,7 @@ export function createOnline(cfg) {
           if (isOn()) {
             token();
             if (localName && ident.name !== localName) {
-              const r = await rpc("name", { token: ident.token, name: localName });
+              const r = live === "fb" ? await fbName(localName) : await rpc("name", { token: ident.token, name: localName });
               const a = applyNameResult(r, localName);
               if (!a.ok && a.reason === "taken") needsName = "taken";
             }
@@ -199,6 +251,7 @@ export function createOnline(cfg) {
     async startRun(level, hard) {
       delete runs[level];
       if (!isOn()) return OFF;
+      if (live === "fb") { runs[level] = { id: "fb" + Date.now(), hard: !!hard, t0: Date.now() }; return { ok: true, runId: runs[level].id }; }
       try {
         const r = await rpc("run", { token: token(), level: level | 0, hard: !!hard });
         if (r.ok && r.run) { runs[level] = { id: String(r.run), hard: !!hard }; return { ok: true, runId: runs[level].id }; }
@@ -211,6 +264,7 @@ export function createOnline(cfg) {
       try {
         const run = runs[level];
         if (!run) return { ok: false, reason: "norun" };
+        if (live === "fb") return await fbSubmit(level, run, Math.round(ms));
         const r = await rpc("time", { token: token(), run: run.id, ms: Math.round(ms) });
         if (r.ok) { delete runs[level]; return { ok: true, rank: r.rank | 0, best: r.best | 0 }; }
         if (r.reason === "network") { enqueue({ kind: "time", level, run: run.id, ms: Math.round(ms) }); delete runs[level]; return { ok: false, reason: "network", queued: true }; }
@@ -223,6 +277,7 @@ export function createOnline(cfg) {
       try {
         const run = runs[4];
         if (!run) return { ok: false, reason: "norun" };
+        if (live === "fb") return await fbSubmit(4, run, Math.max(0, Math.floor(coins)), !!hard);
         const r = await rpc("coins", { token: token(), run: run.id, coins: Math.max(0, Math.floor(coins)) });
         if (r.ok) { delete runs[4]; return { ok: true, rank: r.rank | 0, best: r.best | 0 }; }
         if (r.reason === "network") { enqueue({ kind: "coins", run: run.id, coins: Math.floor(coins), hard: !!hard }); delete runs[4]; return { ok: false, reason: "network", queued: true }; }

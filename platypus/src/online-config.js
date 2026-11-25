@@ -3,3 +3,6 @@
 // While the server does not have the platypus endpoints yet (they answer 404), the game behaves exactly like
 // offline mode too; it switches itself on the first time the server answers.
 export const PLATY_API = "https://relay.platyfy.com";
+// When the relay answers 404 for /api/platypus/* (it does: the live worker predates them), load this shared module
+// (relative to src/online.js) and keep the boards on the relay's private published-games records instead.
+export const PLATY_FALLBACK = "../../platyfy-online.js";
