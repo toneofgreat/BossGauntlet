@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events Viewer</title>
+<style>
+  :root { --bg: #0b0b0d; --fg: #ddd; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px system-ui, sans-serif; overflow: hidden; }
+  #hud { position: fixed; left: 8px; top: 8px; background: rgba(0,0,0,.5); padding: 6px 8px; border-radius: 4px; max-width: 360px; }
+  a { color: #9cf; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div id="hud">EVENTS dev viewer:
+  <a href="?s=creature">creature</a><a href="?s=crawl">crawl</a><a href="?s=armored">armored</a><a href="?s=giant">giant</a>
+  <a href="?s=sword">sword</a><a href="?s=girl">girl</a><a href="?s=collapse">collapse</a><a href="?s=throne">throne</a><a href="?s=fx">fx</a>
+  <div id="info"></div></div>
+<script type="module" src="./view.js"></script>
+</body>
+</html>

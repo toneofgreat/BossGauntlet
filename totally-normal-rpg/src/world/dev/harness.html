@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WORLD dev harness</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#000}canvas{display:block}</style>
+<script>window.__errs=[];addEventListener("error",e=>window.__errs.push(String(e.message)));addEventListener("unhandledrejection",e=>window.__errs.push(String(e.reason&&e.reason.stack||e.reason)));;window.__cv={n:0,px:0,big:[]};const _ce=document.createElement.bind(document);document.createElement=function(t,o){const e=_ce(t,o);if(String(t).toLowerCase()==="canvas"){window.__cv.n++;let w=300,h=150;Object.defineProperty(e,"width",{get(){return w},set(v){window.__cv.px+=v*h-w*h;w=v;HTMLCanvasElement.prototype.__lookupSetter__?0:0;Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,"width").set.call(e,v)}});Object.defineProperty(e,"height",{get(){return h},set(v){window.__cv.px+=w*v-w*h;h=v;Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype,"height").set.call(e,v)}});window.__cv.px+=w*h}return e};</script>
+</head><body><script type="module" src="./harness.js"></script></body></html>

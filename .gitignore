@@ -3,3 +3,5 @@ node_modules/
 platypus/tools/shots/
 adventure-cube/tools/shots/
 adventure-cube/tools/.browser.lock
+totally-normal-rpg/**/shots/
+totally-normal-rpg/**/.browser.lock

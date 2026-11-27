@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>Totally a Normal RPG</title>
+<meta name="description" content="A totally normal fantasy adventure. Nothing strange happens.">
+<link rel="stylesheet" href="style.css">
+<script>
+// No browser zoom, ever: double-click / double-tap, pinch, trackpad pinch (ctrl+wheel) and ctrl +/- would
+// otherwise zoom the whole page in on some devices (iOS Safari ignores user-scalable=no).
+(function () {
+  var opt = { passive: false }, last = 0;
+  function typing(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); }
+  document.addEventListener("dblclick", function (e) { if (!typing(e.target)) e.preventDefault(); }, opt);
+  document.addEventListener("touchend", function (e) {
+    var now = e.timeStamp || Date.now();
+    if (now - last < 350 && e.changedTouches.length === 1 && !typing(e.target)) e.preventDefault();
+    last = now;
+  }, opt);
+  document.addEventListener("touchstart", function (e) { if (e.touches.length > 1) e.preventDefault(); }, opt);
+  document.addEventListener("touchmove", function (e) { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, opt);
+  ["gesturestart", "gesturechange", "gestureend"].forEach(function (n) { document.addEventListener(n, function (e) { e.preventDefault(); }, opt); });
+  window.addEventListener("wheel", function (e) { if (e.ctrlKey) e.preventDefault(); }, opt);
+  window.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_" || e.key === "0")) e.preventDefault();
+  });
+})();
+</script>
+</head>
+<body>
+<canvas id="game" aria-label="Totally a Normal RPG"></canvas>
+<div id="touch"></div>
+<div id="ui"></div>
+<div id="boot" role="status"><div class="boot-bar"><i></i></div><p>Loading a totally normal world&hellip;</p></div>
+<noscript><p style="color:#fff;padding:20px">Totally a Normal RPG needs JavaScript.</p></noscript>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

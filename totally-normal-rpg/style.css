@@ -1,0 +1,57 @@
+/* style.css - page shell, canvas, boot indicator, touch controls (ENGINE). UI injects its own styles. */
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0d10; color: #eee;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; outline: none; touch-action: none; }
+#ui { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+#touch { position: fixed; inset: 0; z-index: 10; display: none; pointer-events: none; }
+#fps {
+  position: fixed; left: 8px; bottom: 8px; z-index: 60; font: 12px/1.2 ui-monospace, Consolas, monospace; color: #cfe;
+  background: rgba(0,0,0,0.45); padding: 3px 6px; border-radius: 4px; pointer-events: none;
+}
+
+/* boot */
+#boot {
+  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: #0b0d10; transition: opacity 0.6s ease; pointer-events: none;
+}
+#boot.done { opacity: 0; }
+#boot p { margin: 14px 16px 0; font-size: 14px; color: #9aa3ad; text-align: center; letter-spacing: 0.02em; }
+#boot .boot-bar { width: min(260px, 70vw); height: 3px; background: #22272e; border-radius: 2px; overflow: hidden; }
+#boot .boot-bar i { display: block; height: 100%; width: 30%; background: #c9b27a; animation: bootslide 1.3s ease-in-out infinite; }
+#boot.err p { color: #e0a0a0; }
+@keyframes bootslide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+
+/* touch layer */
+#touch .tz-zone { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
+#touch .tz-joy {
+  position: absolute; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.28); background: rgba(20,22,26,0.18); opacity: 0; transition: opacity 0.15s;
+  pointer-events: none; left: 90px; top: 70%;
+}
+#touch .tz-joy.on { opacity: 1; }
+#touch .tz-knob {
+  position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; border-radius: 50%;
+  background: rgba(255,255,255,0.42); transform: translate(-50%,-50%);
+}
+#touch .tz-btn {
+  position: absolute; pointer-events: auto; touch-action: none; border: 2px solid rgba(255,255,255,0.35);
+  background: rgba(16,18,22,0.38); color: rgba(255,255,255,0.92); font: 600 12px/1 system-ui, sans-serif;
+  letter-spacing: 0.04em; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center;
+  -webkit-user-select: none; user-select: none;
+}
+#touch .tz-btn.on { background: rgba(255,255,255,0.3); }
+#touch .tz-attack { width: 78px; height: 78px; right: calc(22px + env(safe-area-inset-right)); bottom: calc(34px + env(safe-area-inset-bottom)); font-size: 13px; }
+#touch .tz-jump { width: 60px; height: 60px; right: calc(112px + env(safe-area-inset-right)); bottom: calc(26px + env(safe-area-inset-bottom)); }
+#touch .tz-dodge { width: 58px; height: 58px; right: calc(34px + env(safe-area-inset-right)); bottom: calc(124px + env(safe-area-inset-bottom)); }
+#touch .tz-interact {
+  border-radius: 22px; height: 44px; min-width: 96px; padding: 0 14px; right: calc(112px + env(safe-area-inset-right));
+  bottom: calc(104px + env(safe-area-inset-bottom)); background: rgba(201,178,122,0.38); max-width: 160px; white-space: nowrap; overflow: hidden;
+}
+#touch .tz-menu {
+  width: 42px; height: 42px; border-radius: 10px; font-size: 18px; top: calc(10px + env(safe-area-inset-top));
+  right: calc(10px + env(safe-area-inset-right));
+}

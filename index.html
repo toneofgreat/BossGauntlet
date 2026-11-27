@@ -146,6 +146,8 @@ h1{font-size:clamp(28px,5vw,48px);letter-spacing:6px;margin-bottom:8px;backgroun
 /* Adventure Cube card */
 .bg-acube{background:linear-gradient(180deg,#8fc8ee 0%,#d9eef0 45%,#4a7d33 78%,#3a2a1a 100%)}
 .bg-acube canvas{width:100%;height:100%}
+.bg-tnrpg{background:#000}
+.bg-tnrpg canvas{width:100%;height:100%}
 footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 </style>
 </head>
@@ -153,6 +155,14 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <h1>PLATYFY</h1>
 <div class="sub">GAMES</div>
 <div class="games">
+  <a href="totally-normal-rpg/" class="card" data-launched="2026-11-26">
+    <div class="card-img bg-tnrpg"><canvas id="c46"></canvas></div>
+    <div class="card-body">
+      <h2>TOTALLY A NORMAL RPG</h2>
+      <p>A perfectly ordinary 3D fantasy adventure. Punch rats until you find a sword, level up into the millions, cross the bridge, beat the Rat King, the guards and the King, and claim your crown in a cosy valley with a village and a castle. Nothing strange happens after that. Nothing at all. Twenty-six secrets, six endings, a secrets leaderboard, works on phones. Contains jump scares and flashes (there is a Reduce flashing setting).</p>
+      <span class="tag" style="background:#111;color:#e8e8e8;border:1px solid #5a1015">3D RPG &middot; 6 ENDINGS &middot; 26 SECRETS</span>
+    </div>
+  </a>
   <a href="platypus/" class="card">
     <div class="card-img bg-platy"><canvas id="c44"></canvas></div>
     <div class="card-body">
@@ -503,6 +513,32 @@ footer{margin-top:50px;color:#333;font-size:11px;letter-spacing:1px}
 <script>
 // Animated preview canvases
 const PI=Math.PI,sin=Math.sin,cos=Math.cos,rand=Math.random;
+
+// ---- Totally a Normal RPG preview: black, drifting white particles, and (sometimes) a faint pair of red eyes ----
+(function(){
+  const c=document.getElementById('c46'); if(!c) return;
+  const ctx=c.getContext('2d');let w,h,t=0;const P=[];
+  function resize(){const r=c.parentElement.getBoundingClientRect();c.width=r.width;c.height=r.height;w=c.width;h=c.height;}
+  resize();window.addEventListener('resize',resize);
+  for(let i=0;i<90;i++)P.push({x:rand(),y:rand(),z:.3+rand()*.7,s:.4+rand()*1.4,p:rand()*PI*2});
+  function draw(){
+    t+=1/60;ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+    // particles drift up and sway, the nearer ones brighter and faster
+    for(const q of P){q.y-=.0009*q.z;if(q.y<-.02){q.y=1.02;q.x=rand();}
+      const x=(q.x+sin(t*.4+q.p)*.012)*w,y=q.y*h,a=(.25+.6*q.z)*(.65+.35*sin(t*1.7+q.p*3));
+      ctx.fillStyle='rgba(255,255,255,'+a.toFixed(3)+')';ctx.beginPath();ctx.arc(x,y,q.s*q.z*Math.max(1,h/220),0,PI*2);ctx.fill();}
+    // the title, thin and quiet
+    ctx.fillStyle='rgba(235,235,235,.85)';ctx.font='300 '+Math.round(h*.085)+'px Georgia,serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Totally a Normal RPG',w/2,h*.5);
+    // two red eyes far back in the dark: fade in, blink, fade out, every ~7 s
+    const k=(t%7)/7,fade=k<.55?0:k<.7?(k-.55)/.15:k<.9?1:1-(k-.9)/.1,blink=(k>.79&&k<.81)?.1:1,ea=.32*fade*blink;
+    if(ea>0.005){const ex=w*.74,ey=h*.24,d=h*.05,r=Math.max(1.2,h*.011);
+      for(const sx of [-1,1]){const g=ctx.createRadialGradient(ex+sx*d,ey,0,ex+sx*d,ey,r*5);g.addColorStop(0,'rgba(200,20,28,'+ea+')');g.addColorStop(1,'rgba(200,20,28,0)');
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(ex+sx*d,ey,r*5,0,PI*2);ctx.fill();
+        ctx.fillStyle='rgba(255,60,60,'+(ea*1.6).toFixed(3)+')';ctx.beginPath();ctx.ellipse(ex+sx*d,ey,r*1.3,r*.8,0,0,PI*2);ctx.fill();}}
+    requestAnimationFrame(draw);}
+  draw();
+})();
 
 // ---- Adventure Cube preview: a cube with a face hopping over rocks and logs in a sunny forest ----
 (function(){
